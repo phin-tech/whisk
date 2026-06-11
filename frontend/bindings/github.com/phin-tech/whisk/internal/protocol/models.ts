@@ -5,6 +5,10 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as session$0 from "../domain/session/models.js";
+
 export class CreateSessionRequest {
     "name": string;
     "workingDir": string;
@@ -35,6 +39,35 @@ export class CreateSessionRequest {
     static createFrom($$source: any = {}): CreateSessionRequest {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new CreateSessionRequest($$parsedSource as Partial<CreateSessionRequest>);
+    }
+}
+
+export class CreatedSession {
+    "session": session$0.Session;
+    "mainPtyId": string;
+
+    /** Creates a new CreatedSession instance. */
+    constructor($$source: Partial<CreatedSession> = {}) {
+        if (!("session" in $$source)) {
+            this["session"] = (new session$0.Session());
+        }
+        if (!("mainPtyId" in $$source)) {
+            this["mainPtyId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CreatedSession instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CreatedSession {
+        const $$createField0_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("session" in $$parsedSource) {
+            $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
+        }
+        return new CreatedSession($$parsedSource as Partial<CreatedSession>);
     }
 }
 
@@ -158,6 +191,39 @@ export class SplitPaneRequest {
     }
 }
 
+export class SplitPaneResult {
+    "session": session$0.Session;
+    "paneId": string;
+    "ptyId": string;
+
+    /** Creates a new SplitPaneResult instance. */
+    constructor($$source: Partial<SplitPaneResult> = {}) {
+        if (!("session" in $$source)) {
+            this["session"] = (new session$0.Session());
+        }
+        if (!("paneId" in $$source)) {
+            this["paneId"] = "";
+        }
+        if (!("ptyId" in $$source)) {
+            this["ptyId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SplitPaneResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SplitPaneResult {
+        const $$createField0_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("session" in $$parsedSource) {
+            $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
+        }
+        return new SplitPaneResult($$parsedSource as Partial<SplitPaneResult>);
+    }
+}
+
 export class WritePTYRequest {
     "ptyId": string;
     "data": string;
@@ -182,3 +248,6 @@ export class WritePTYRequest {
         return new WritePTYRequest($$parsedSource as Partial<WritePTYRequest>);
     }
 }
+
+// Private type creation functions
+const $$createType0 = session$0.Session.createFrom;

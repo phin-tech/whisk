@@ -1,0 +1,150 @@
+# Whisk Agent Instructions
+
+## Core Invariant
+
+Whisk has one runtime owner: `whiskd`.
+
+The desktop app is always a client. It must never own, persist, or directly
+mutate runtime state. If the daemon is not available, the desktop starts it,
+waits for it, reconnects to it, or reports that it cannot connect. It must not
+fall back to a desktop-local runtime.
+
+No split brain is allowed.
+
+## Runtime Ownership
+
+Daemon-owned state:
+
+- sessions
+- PTYs
+- agent processes
+- projects
+- kanban/work items
+- mailbox/events, if added
+- runtime process state
+- durable runtime storage
+
+Client-owned state:
+
+- native window state
+- selected/focused UI state
+- xterm instances and rendering lifecycle
+- client-specific visual preferences
+- pane layout only if explicitly treated as per-client view state
+
+If pane layout must reconnect consistently across machines, it is daemon-owned.
+Do not partially own layout on both sides.
+
+## Required Architecture
+
+Use this dependency direction:
+
+```text
+internal/domain      pure state transitions and validation
+internal/runtime     daemon-side imperative shell around PTYs/processes/storage
+internal/protocol    command, response, and event DTOs
+internal/server      exposes runtime through the protocol
+internal/client      typed client for local or remote daemon
+internal/wailsapp    Wails adapter over the client only
+cmd/whiskd           daemon entrypoint
+```
+
+Forbidden dependency:
+
+```text
+internal/wailsapp -> internal/runtime
+internal/wailsapp -> internal/adapters/pty
+```
+
+The Wails app may spawn or supervise `whiskd`, but all runtime commands must go
+through `internal/client`.
+
+## Protocol Boundary
+
+Runtime mutations happen only through protocol commands.
+
+Frontend and Wails code render daemon read models and send protocol commands.
+They do not directly construct PTYs, update session stores, or persist runtime
+state.
+
+When changing the protocol, update together:
+
+- protocol DTOs
+- daemon server handler
+- typed client
+- Wails adapter
+- integration tests
+
+Prefer a small stable protocol over capability negotiation. Avoid Roux-style
+"who owns this right now?" branches.
+
+## Streaming And Events
+
+PTY output should use a streaming path for interactive latency. Snapshot/replay
+APIs are still required for attach, reconnect, and recovery.
+
+Recommended PTY shape:
+
+- `AttachPTY` streams output/events.
+- `Output(fromOffset)` returns retained replay.
+- `WritePTY` writes input.
+- `ResizePTY` updates the daemon-owned PTY size.
+
+Do not use frontend polling as the primary terminal transport after streaming
+exists.
+
+## Internal Bus
+
+If NATS or another bus is added, keep it narrow.
+
+Allowed:
+
+- ephemeral fanout inside `whiskd`
+- decoupling daemon services
+- broadcasting daemon events to subscribed clients
+
+Forbidden:
+
+- source of truth
+- persistence layer
+- client protocol
+- cross-machine federation by default
+
+Durability belongs in storage. Client API belongs in the protocol. The bus is
+only internal fanout.
+
+## TDD And Testing
+
+Use functional-core, imperative-shell design.
+
+Functional core tests:
+
+- pure input/output tests
+- no mocks
+- state-based assertions
+
+Imperative shell tests:
+
+- in-memory fakes where useful
+- real integration tests for PTY/server/client paths
+- no mocking frameworks by default
+
+For daemon/client work, prefer tests that exercise the typed client against a
+real in-process server. This catches protocol drift without booting the full
+desktop app.
+
+## Current Technical Debt
+
+The initial prototype currently has Wails directly constructing `app.Runtime`.
+That is temporary scaffolding and violates the target invariant. Remove this
+before adding substantial new runtime features.
+
+The next architectural move should be:
+
+1. Add `internal/protocol`.
+2. Add `internal/client`.
+3. Make `internal/wailsapp` depend on the client interface only.
+4. Add `internal/server`.
+5. Add `cmd/whiskd`.
+6. Switch Wails to spawn/connect to `whiskd`.
+7. Delete direct Wails-to-runtime ownership.

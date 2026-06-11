@@ -7,16 +7,12 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as app$0 from "../app/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
 import * as session$0 from "../domain/session/models.js";
-
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as $models from "./models.js";
+import * as protocol$0 from "../protocol/models.js";
 
-export function CreateSession(req: $models.CreateSessionRequest): $CancellablePromise<app$0.CreatedSession> {
+export function CreateSession(req: protocol$0.CreateSessionRequest): $CancellablePromise<protocol$0.CreatedSession> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.CreateSession", req).then(($result: any) => {
         return $$createType0($result);
     });
@@ -28,29 +24,29 @@ export function ListSessions(): $CancellablePromise<session$0.Session[]> {
     });
 }
 
-export function Output(req: $models.OutputRequest): $CancellablePromise<$models.OutputSnapshot> {
+export function Output(req: protocol$0.OutputRequest): $CancellablePromise<protocol$0.OutputSnapshot> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.Output", req).then(($result: any) => {
         return $$createType3($result);
     });
 }
 
-export function ResizePTY(req: $models.ResizePTYRequest): $CancellablePromise<void> {
+export function ResizePTY(req: protocol$0.ResizePTYRequest): $CancellablePromise<void> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ResizePTY", req);
 }
 
-export function SplitPane(req: $models.SplitPaneRequest): $CancellablePromise<app$0.SplitPaneResult> {
+export function SplitPane(req: protocol$0.SplitPaneRequest): $CancellablePromise<protocol$0.SplitPaneResult> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SplitPane", req).then(($result: any) => {
         return $$createType4($result);
     });
 }
 
-export function WritePTY(req: $models.WritePTYRequest): $CancellablePromise<void> {
+export function WritePTY(req: protocol$0.WritePTYRequest): $CancellablePromise<void> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.WritePTY", req);
 }
 
 // Private type creation functions
-const $$createType0 = app$0.CreatedSession.createFrom;
+const $$createType0 = protocol$0.CreatedSession.createFrom;
 const $$createType1 = session$0.Session.createFrom;
 const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = $models.OutputSnapshot.createFrom;
-const $$createType4 = app$0.SplitPaneResult.createFrom;
+const $$createType3 = protocol$0.OutputSnapshot.createFrom;
+const $$createType4 = protocol$0.SplitPaneResult.createFrom;

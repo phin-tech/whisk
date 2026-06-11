@@ -45,9 +45,9 @@
         cols: 100,
         rows: 28,
       });
-      sessions = [created.Session, ...sessions.filter((session) => session.id !== created.Session.id)];
-      activeSessionId = created.Session.id;
-      activePaneId = created.Session.focusedPaneId;
+      sessions = [created.session, ...sessions.filter((session) => session.id !== created.session.id)];
+      activeSessionId = created.session.id;
+      activePaneId = created.session.focusedPaneId;
       await pollOnce();
     } catch (err) {
       error = backendError(err);
@@ -68,9 +68,9 @@
         rows: 28,
       });
       sessions = sessions.map((session) =>
-        session.id === result.Session.id ? result.Session : session,
+        session.id === result.session.id ? result.session : session,
       );
-      activePaneId = result.PaneID;
+      activePaneId = result.paneId;
       await pollOnce();
     } catch (err) {
       error = backendError(err);

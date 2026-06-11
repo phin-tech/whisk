@@ -3,6 +3,7 @@ version: "3"
 vars:
   APP_NAME: "whisk"
   BIN_DIR: "bin"
+  DAEMON_ADDR: '{{.WHISKD_ADDR | default "127.0.0.1:8787"}}'
   PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
   VITE_PORT: "{{.WAILS_VITE_PORT | default 9245}}"
 
@@ -43,9 +44,24 @@ tasks:
     cmds:
       - wails3 generate bindings -ts -names -d frontend/bindings ./...
 
+  build:daemon:
+    desc: Builds the whiskd sidecar daemon
+    summary: Builds the whiskd sidecar daemon
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build -o {{.BIN_DIR}}/whiskd ./cmd/whiskd
+
+  dev:daemon:
+    desc: Runs the whiskd sidecar daemon in the foreground
+    summary: Runs the whiskd sidecar daemon in the foreground
+    cmds:
+      - task: build:daemon
+      - "{{.BIN_DIR}}/whiskd -addr {{.DAEMON_ADDR}}"
+
   build:
     summary: Builds the application
     cmds:
+      - task: build:daemon
       - task: "{{OS}}:build"
 
   package:
@@ -68,7 +84,10 @@ tasks:
     desc: Runs the macOS application in Wails development mode
     summary: Runs the macOS application in Wails development mode
     cmds:
+      - task: build:daemon
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+    env:
+      WHISKD_URL: "http://{{.DAEMON_ADDR}}"
 
   setup:docker:
     summary: Builds Docker image for cross-compilation

@@ -5,12 +5,3 @@ import * as Service from "./service.js";
 export {
     Service
 };
-
-export {
-    CreateSessionRequest,
-    OutputRequest,
-    OutputSnapshot,
-    ResizePTYRequest,
-    SplitPaneRequest,
-    WritePTYRequest
-} from "./models.js";
