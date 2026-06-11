@@ -114,6 +114,58 @@ func (s *Service) RemoveWorktree(ctx context.Context, req protocol.RemoveWorktre
 	return s.client.RemoveWorktree(ctx, req)
 }
 
+func (s *Service) ListProjects(ctx context.Context) ([]protocol.Project, error) {
+	return s.client.ListProjects(ctx)
+}
+
+func (s *Service) CreateProject(ctx context.Context, req protocol.CreateProjectRequest) (protocol.Project, error) {
+	return s.client.CreateProject(ctx, req)
+}
+
+func (s *Service) ListWorkflowTemplates(ctx context.Context) ([]protocol.WorkflowTemplate, error) {
+	return s.client.ListWorkflowTemplates(ctx)
+}
+
+func (s *Service) ListPromptTemplates(ctx context.Context) ([]protocol.PromptTemplate, error) {
+	return s.client.ListPromptTemplates(ctx)
+}
+
+func (s *Service) ListWorkItems(ctx context.Context, projectID string) ([]protocol.WorkItem, error) {
+	return s.client.ListWorkItems(ctx, projectID)
+}
+
+func (s *Service) CreateWorkItem(ctx context.Context, req protocol.CreateWorkItemRequest) (protocol.WorkItem, error) {
+	return s.client.CreateWorkItem(ctx, req)
+}
+
+func (s *Service) MoveWorkItem(ctx context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error) {
+	return s.client.MoveWorkItem(ctx, req)
+}
+
+func (s *Service) BindWorkItemWorktree(ctx context.Context, req protocol.BindWorkItemWorktreeRequest) (protocol.WorkItem, error) {
+	return s.client.BindWorkItemWorktree(ctx, req)
+}
+
+func (s *Service) AddWorkItemAttachment(ctx context.Context, req protocol.AddWorkItemAttachmentRequest) (protocol.WorkItem, error) {
+	return s.client.AddWorkItemAttachment(ctx, req)
+}
+
+func (s *Service) DeleteWorkItem(ctx context.Context, req protocol.DeleteWorkItemRequest) (protocol.WorkItem, error) {
+	return s.client.DeleteWorkItem(ctx, req)
+}
+
+func (s *Service) ListWorkItemRuns(ctx context.Context, workItemID string) ([]protocol.WorkItemRun, error) {
+	return s.client.ListWorkItemRuns(ctx, workItemID)
+}
+
+func (s *Service) StartWorkItemRun(ctx context.Context, req protocol.StartWorkItemRunRequest) (protocol.WorkItemRun, error) {
+	return s.client.StartWorkItemRun(ctx, req)
+}
+
+func (s *Service) CancelWorkItemRun(ctx context.Context, req protocol.CancelWorkItemRunRequest) (protocol.WorkItemRun, error) {
+	return s.client.CancelWorkItemRun(ctx, req)
+}
+
 func (s *Service) ListHTTPForwards(ctx context.Context) ([]protocol.HTTPForward, error) {
 	return s.client.ListHTTPForwards(ctx)
 }

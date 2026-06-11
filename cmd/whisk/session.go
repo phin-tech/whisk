@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"os"
@@ -144,15 +145,17 @@ func runSessionClose(args []string) error {
 
 func runSessionPTY(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk session pty <list|kill>")
+		return fmt.Errorf("usage: whisk session pty <list|output|kill>")
 	}
 	switch args[0] {
 	case "list":
 		return runSessionPTYList(args[1:])
+	case "output":
+		return runSessionPTYOutput(args[1:])
 	case "kill":
 		return runSessionPTYKill(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk session pty <list|kill>")
+		return fmt.Errorf("usage: whisk session pty <list|output|kill>")
 	}
 }
 
@@ -187,6 +190,43 @@ func runSessionPTYList(args []string) error {
 		ptys = filtered
 	}
 	printPTYs(ptys)
+	return nil
+}
+
+func runSessionPTYOutput(args []string) error {
+	flags := flag.NewFlagSet("session pty output", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	fromOffset := flags.Uint64("from", 0, "replay from byte offset")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return fmt.Errorf("usage: whisk session pty output [-url http://127.0.0.1:8787] [-from offset] [-json] <pty-id>")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	snapshot, err := client.NewHTTP(*baseURL, nil).Output(ctx, protocol.OutputRequest{
+		PtyID:      flags.Arg(0),
+		FromOffset: *fromOffset,
+	})
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(snapshot)
+	}
+	if snapshot.OutputBase64 != "" {
+		decoded, err := base64.StdEncoding.DecodeString(snapshot.OutputBase64)
+		if err != nil {
+			return err
+		}
+		_, err = os.Stdout.Write(decoded)
+		return err
+	}
+	fmt.Print(snapshot.Output)
 	return nil
 }
 

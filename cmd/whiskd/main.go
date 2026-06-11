@@ -16,6 +16,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/adapters/sessionstore"
 	"github.com/phin-tech/whisk/internal/adapters/transcriptstore"
+	"github.com/phin-tech/whisk/internal/adapters/workitemstore"
 	"github.com/phin-tech/whisk/internal/adapters/worktrunk"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/events"
@@ -47,6 +48,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	workItems, err := workitemstore.NewJSONStore("")
+	if err != nil {
+		log.Fatal(err)
+	}
 	runtime, err := app.NewRuntimeWithError(app.RuntimeConfig{
 		PTYBackend:      native.NewBackend(),
 		Worktrees:       worktrunk.NewBackend(nil),
@@ -54,6 +59,7 @@ func main() {
 		SessionStore:    store,
 		TranscriptStore: transcripts,
 		BookmarkStore:   bookmarks,
+		WorkItemStore:   workItems,
 	})
 	if err != nil {
 		log.Fatal(err)

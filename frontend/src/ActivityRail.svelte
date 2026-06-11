@@ -1,15 +1,17 @@
 <script lang="ts">
   import FolderTree from "@lucide/svelte/icons/folder-tree";
+  import ListTodo from "@lucide/svelte/icons/list-todo";
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import TerminalSquare from "@lucide/svelte/icons/square-terminal";
 
-  export let activeSidebar: "sessions" | "ptys" | null;
+  export let activeSidebar: "sessions" | "ptys" | "work" | null;
   export let settingsOpen = false;
-  export let onSidebar: (id: "sessions" | "ptys") => void;
+  export let onSidebar: (id: "sessions" | "ptys" | "work") => void;
   export let onSettings: () => void;
 
   const items = [
     { id: "sessions" as const, label: "Sessions", icon: FolderTree },
+    { id: "work" as const, label: "Work", icon: ListTodo },
     { id: "ptys" as const, label: "PTYs", icon: TerminalSquare },
   ];
 </script>

@@ -1,0 +1,99 @@
+package client
+
+import (
+	"context"
+	"net/url"
+
+	"github.com/phin-tech/whisk/internal/protocol"
+)
+
+func (c *HTTPClient) ListProjects(ctx context.Context) ([]protocol.Project, error) {
+	var projects []protocol.Project
+	err := c.get(ctx, "/v1/projects", nil, &projects)
+	return projects, err
+}
+
+func (c *HTTPClient) CreateProject(ctx context.Context, req protocol.CreateProjectRequest) (protocol.Project, error) {
+	var project protocol.Project
+	err := c.post(ctx, "/v1/projects", req, &project)
+	return project, err
+}
+
+func (c *HTTPClient) ListWorkflowTemplates(ctx context.Context) ([]protocol.WorkflowTemplate, error) {
+	var templates []protocol.WorkflowTemplate
+	err := c.get(ctx, "/v1/workflow-templates", nil, &templates)
+	return templates, err
+}
+
+func (c *HTTPClient) ListPromptTemplates(ctx context.Context) ([]protocol.PromptTemplate, error) {
+	var templates []protocol.PromptTemplate
+	err := c.get(ctx, "/v1/prompt-templates", nil, &templates)
+	return templates, err
+}
+
+func (c *HTTPClient) ListWorkItems(ctx context.Context, projectID string) ([]protocol.WorkItem, error) {
+	query := url.Values{}
+	if projectID != "" {
+		query.Set("projectId", projectID)
+	}
+	var items []protocol.WorkItem
+	err := c.get(ctx, "/v1/work-items", query, &items)
+	return items, err
+}
+
+func (c *HTTPClient) CreateWorkItem(ctx context.Context, req protocol.CreateWorkItemRequest) (protocol.WorkItem, error) {
+	var item protocol.WorkItem
+	err := c.post(ctx, "/v1/work-items", req, &item)
+	return item, err
+}
+
+func (c *HTTPClient) MoveWorkItem(ctx context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error) {
+	var item protocol.WorkItem
+	path := "/v1/work-items/" + url.PathEscape(req.ID) + "/move"
+	err := c.post(ctx, path, req, &item)
+	return item, err
+}
+
+func (c *HTTPClient) BindWorkItemWorktree(ctx context.Context, req protocol.BindWorkItemWorktreeRequest) (protocol.WorkItem, error) {
+	var item protocol.WorkItem
+	path := "/v1/work-items/" + url.PathEscape(req.ID) + "/bind-worktree"
+	err := c.post(ctx, path, req, &item)
+	return item, err
+}
+
+func (c *HTTPClient) AddWorkItemAttachment(ctx context.Context, req protocol.AddWorkItemAttachmentRequest) (protocol.WorkItem, error) {
+	var item protocol.WorkItem
+	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/attachments"
+	err := c.post(ctx, path, req, &item)
+	return item, err
+}
+
+func (c *HTTPClient) DeleteWorkItem(ctx context.Context, req protocol.DeleteWorkItemRequest) (protocol.WorkItem, error) {
+	var item protocol.WorkItem
+	path := "/v1/work-items/" + url.PathEscape(req.ID) + "/delete"
+	err := c.post(ctx, path, req, &item)
+	return item, err
+}
+
+func (c *HTTPClient) ListWorkItemRuns(ctx context.Context, workItemID string) ([]protocol.WorkItemRun, error) {
+	query := url.Values{}
+	if workItemID != "" {
+		query.Set("workItemId", workItemID)
+	}
+	var runs []protocol.WorkItemRun
+	err := c.get(ctx, "/v1/work-item-runs", query, &runs)
+	return runs, err
+}
+
+func (c *HTTPClient) StartWorkItemRun(ctx context.Context, req protocol.StartWorkItemRunRequest) (protocol.WorkItemRun, error) {
+	var run protocol.WorkItemRun
+	err := c.post(ctx, "/v1/work-item-runs", req, &run)
+	return run, err
+}
+
+func (c *HTTPClient) CancelWorkItemRun(ctx context.Context, req protocol.CancelWorkItemRunRequest) (protocol.WorkItemRun, error) {
+	var run protocol.WorkItemRun
+	path := "/v1/work-item-runs/" + url.PathEscape(req.ID) + "/cancel"
+	err := c.post(ctx, path, req, &run)
+	return run, err
+}

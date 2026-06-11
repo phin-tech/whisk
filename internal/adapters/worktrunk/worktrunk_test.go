@@ -81,6 +81,25 @@ func TestDetectWtUsesOverrideAndVersionFloor(t *testing.T) {
 	if ok {
 		t.Fatalf("Detect accepted version below floor")
 	}
+
+	dir := t.TempDir()
+	runner = &fakeRunner{}
+	_, ok, err = Detect(ctx, runner, DetectOptions{OverridePath: dir})
+	if err != nil {
+		t.Fatalf("Detect directory override error: %v", err)
+	}
+	if ok || len(runner.commands) != 0 {
+		t.Fatalf("Detect accepted directory override, ok=%v commands=%#v", ok, runner.commands)
+	}
+
+	runner = &fakeRunner{outputs: []Output{{StatusCode: 1, Stderr: []byte("bad version")}}}
+	_, ok, err = Detect(ctx, runner, DetectOptions{OverridePath: bin})
+	if err != nil {
+		t.Fatalf("Detect nonzero version error: %v", err)
+	}
+	if ok {
+		t.Fatalf("Detect accepted nonzero version command")
+	}
 }
 
 func TestDetectWtUsesPathLookup(t *testing.T) {
@@ -131,6 +150,72 @@ func TestListRunsFullJSONList(t *testing.T) {
 	}
 }
 
+func TestListAcceptsBooleanWorkingTreeCounts(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{
+		outputs: []Output{{
+			StatusCode: 0,
+			Stdout: []byte(`[
+				{
+					"branch":"feature",
+					"path":"/repo/.worktrees/feature",
+					"kind":"worktree",
+					"working_tree":{
+						"dirty":true,
+						"untracked":false,
+						"modified":true,
+						"deleted":true
+					}
+				}
+			]`),
+		}},
+	}
+	client := NewClient(Binary{Path: "/bin/wt", Version: "0.44.0"}, runner)
+
+	items, err := client.List(ctx, "/repo")
+	if err != nil {
+		t.Fatalf("List error: %v", err)
+	}
+	if len(items) != 1 || !items[0].WorkingTree.Dirty || items[0].WorkingTree.Modified != 1 || items[0].WorkingTree.Deleted != 1 || items[0].WorkingTree.Untracked != 0 {
+		t.Fatalf("items = %#v", items)
+	}
+}
+
+func TestListAcceptsPartialWorktreeJSON(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{
+		outputs: []Output{{
+			StatusCode: 0,
+			Stdout: []byte(`[
+				{
+					"branch":"feature",
+					"path":"/repo/.worktrees/feature",
+					"kind":"worktree",
+					"worktree":null,
+					"unknown_future_field":{"nested":true}
+				},
+				{
+					"branch":"missing-path",
+					"kind":"worktree",
+					"working_tree":{"dirty":false}
+				}
+			]`),
+		}},
+	}
+	client := NewClient(Binary{Path: "/bin/wt", Version: "0.44.0"}, runner)
+
+	items, err := client.List(ctx, "/repo")
+	if err != nil {
+		t.Fatalf("List error: %v", err)
+	}
+	if len(items) != 2 || items[0].Branch != "feature" || items[0].Path != "/repo/.worktrees/feature" {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].Worktree.Locked || items[1].Path != "" {
+		t.Fatalf("partial items parsed incorrectly: %#v", items)
+	}
+}
+
 func TestListMapsExitAndParseErrors(t *testing.T) {
 	ctx := context.Background()
 	client := NewClient(Binary{Path: "/bin/wt"}, &fakeRunner{
@@ -174,6 +259,29 @@ func TestCreateReturnsExistingBranchWorktree(t *testing.T) {
 	}
 	if len(runner.commands) != 1 {
 		t.Fatalf("commands = %#v", runner.commands)
+	}
+}
+
+func TestCreateIgnoresListedBranchWithoutPath(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{
+		outputs: []Output{
+			{StatusCode: 0, Stdout: []byte(`[{"branch":"feature"}]`)},
+			{StatusCode: 0},
+			{StatusCode: 0, Stdout: []byte(`[{"branch":"feature","path":"/repo/.worktrees/feature"}]`)},
+		},
+	}
+	client := NewClient(Binary{Path: "/bin/wt"}, runner)
+
+	path, err := client.Create(ctx, CreateRequest{RepoPath: "/repo", Branch: "feature"})
+	if err != nil {
+		t.Fatalf("Create error: %v", err)
+	}
+	if path != "/repo/.worktrees/feature" {
+		t.Fatalf("path = %q", path)
+	}
+	if !reflect.DeepEqual(runner.commands[1].Args, []string{"switch", "--create", "--no-cd", "feature"}) {
+		t.Fatalf("create args = %#v", runner.commands[1].Args)
 	}
 }
 
@@ -223,6 +331,96 @@ func TestCreateSwitchesAndRelistsForCreatedPath(t *testing.T) {
 	wantArgs := []string{"switch", "--create", "--no-cd", "--base", "main", "feature"}
 	if !reflect.DeepEqual(runner.commands[1].Args, wantArgs) {
 		t.Fatalf("switch args = %#v, want %#v", runner.commands[1].Args, wantArgs)
+	}
+}
+
+func TestCreateSwitchesExistingBranchWhenCreateReportsBranchExists(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{
+		outputs: []Output{
+			{StatusCode: 0, Stdout: []byte(`[{"branch":"main","path":"/repo"}]`)},
+			{StatusCode: 1, Stderr: []byte("✗ Branch whisk/test-project-1-test already exists\n↳ To switch to the existing branch, run without --create: wt switch whisk/test-project-1-test")},
+			{StatusCode: 0, Stdout: []byte("switched")},
+			{StatusCode: 0, Stdout: []byte(`[{"branch":"whisk/test-project-1-test","path":"/repo/.worktrees/test"}]`)},
+		},
+	}
+	client := NewClient(Binary{Path: "/bin/wt"}, runner)
+
+	path, err := client.Create(ctx, CreateRequest{RepoPath: "/repo", Branch: "whisk/test-project-1-test", Base: "main"})
+	if err != nil {
+		t.Fatalf("Create error: %v", err)
+	}
+	if path != "/repo/.worktrees/test" {
+		t.Fatalf("path = %q", path)
+	}
+	if !reflect.DeepEqual(runner.commands[1].Args, []string{"switch", "--create", "--no-cd", "--base", "main", "whisk/test-project-1-test"}) {
+		t.Fatalf("create args = %#v", runner.commands[1].Args)
+	}
+	if !reflect.DeepEqual(runner.commands[2].Args, []string{"switch", "--no-cd", "whisk/test-project-1-test"}) {
+		t.Fatalf("fallback args = %#v", runner.commands[2].Args)
+	}
+}
+
+func TestCreateExistingBranchFallbackReportsRelistFailure(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{
+		outputs: []Output{
+			{StatusCode: 0, Stdout: []byte(`[{"branch":"main","path":"/repo"}]`)},
+			{StatusCode: 1, Stderr: []byte("Branch feature already exists")},
+			{StatusCode: 0, Stdout: []byte("switched")},
+			{StatusCode: 0, Stdout: []byte(`[{"branch":"main","path":"/repo"}]`)},
+		},
+	}
+	client := NewClient(Binary{Path: "/bin/wt"}, runner)
+
+	_, err := client.Create(ctx, CreateRequest{RepoPath: "/repo", Branch: "feature"})
+	var notFound *NotFoundError
+	if !errors.As(err, &notFound) {
+		t.Fatalf("Create error = %T %[1]v, want NotFoundError", err)
+	}
+	if !reflect.DeepEqual(runner.commands[2].Args, []string{"switch", "--no-cd", "feature"}) {
+		t.Fatalf("fallback args = %#v", runner.commands[2].Args)
+	}
+}
+
+func TestCreateExistingBranchFallbackPreservesFallbackFailure(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{
+		outputs: []Output{
+			{StatusCode: 0, Stdout: []byte(`[{"branch":"main","path":"/repo"}]`)},
+			{StatusCode: 1, Stderr: []byte("Branch feature already exists")},
+			{StatusCode: 2, Stderr: []byte("cannot switch: dirty worktree")},
+		},
+	}
+	client := NewClient(Binary{Path: "/bin/wt"}, runner)
+
+	_, err := client.Create(ctx, CreateRequest{RepoPath: "/repo", Branch: "feature"})
+	var exitError *ExitError
+	if !errors.As(err, &exitError) || exitError.StatusCode != 2 || exitError.Stderr != "cannot switch: dirty worktree" {
+		t.Fatalf("Create error = %T %[1]v", err)
+	}
+	if len(runner.commands) != 3 {
+		t.Fatalf("commands = %#v", runner.commands)
+	}
+}
+
+func TestCreateDoesNotFallbackForUnrelatedAlreadyExistsError(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{
+		outputs: []Output{
+			{StatusCode: 0, Stdout: []byte(`[{"branch":"main","path":"/repo"}]`)},
+			{StatusCode: 1, Stderr: []byte("Branch other already exists")},
+		},
+	}
+	client := NewClient(Binary{Path: "/bin/wt"}, runner)
+
+	_, err := client.Create(ctx, CreateRequest{RepoPath: "/repo", Branch: "feature"})
+	var exitError *ExitError
+	if !errors.As(err, &exitError) || exitError.Stderr != "Branch other already exists" {
+		t.Fatalf("Create error = %T %[1]v", err)
+	}
+	if len(runner.commands) != 2 {
+		t.Fatalf("unexpected fallback commands = %#v", runner.commands)
 	}
 }
 
@@ -287,6 +485,65 @@ func TestRemoveReportsMissingAndDetachedWorktrees(t *testing.T) {
 	}
 }
 
+func TestRemoveRejectsMainAndCurrentWorktreesBeforeCallingWtRemove(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		json string
+	}{
+		{
+			name: "main",
+			json: `[{"branch":"main","path":"/repo","is_main":true}]`,
+		},
+		{
+			name: "current",
+			json: `[{"branch":"feature","path":"/repo/.worktrees/feature","is_current":true}]`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &fakeRunner{
+				outputs: []Output{{StatusCode: 0, Stdout: []byte(tt.json)}},
+			}
+			client := NewClient(Binary{Path: "/bin/wt"}, runner)
+
+			err := client.Remove(ctx, RemoveRequest{RepoPath: "/repo", WorktreePath: firstPathForRemove(tt.name)})
+			var protected *ProtectedWorktreeError
+			if !errors.As(err, &protected) {
+				t.Fatalf("Remove error = %T %[1]v, want ProtectedWorktreeError", err)
+			}
+			if len(runner.commands) != 1 {
+				t.Fatalf("remove command should not run: %#v", runner.commands)
+			}
+		})
+	}
+}
+
+func firstPathForRemove(name string) string {
+	if name == "main" {
+		return "/repo"
+	}
+	return "/repo/.worktrees/feature"
+}
+
+func TestRemoveMatchesCleanedWorktreePath(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{
+		outputs: []Output{
+			{StatusCode: 0, Stdout: []byte(`[{"branch":"feature","path":"/repo/.worktrees/feature"}]`)},
+			{StatusCode: 0},
+		},
+	}
+	client := NewClient(Binary{Path: "/bin/wt"}, runner)
+
+	if err := client.Remove(ctx, RemoveRequest{RepoPath: "/repo", WorktreePath: "/repo/.worktrees/feature/."}); err != nil {
+		t.Fatalf("Remove error: %v", err)
+	}
+	if !reflect.DeepEqual(runner.commands[1].Args, []string{"remove", "--no-delete-branch", "feature"}) {
+		t.Fatalf("remove args = %#v", runner.commands[1].Args)
+	}
+}
+
 func TestRemoveCanDeleteBranchAndForceWithoutMappingDirtyError(t *testing.T) {
 	ctx := context.Background()
 	runner := &fakeRunner{
@@ -322,6 +579,9 @@ func TestRemoveMapsLockedAndDirtyFailures(t *testing.T) {
 	}{
 		{name: "locked", err: "worktree is locked by hook", want: "locked"},
 		{name: "dirty", err: "refusing: uncommitted changes", want: "dirty"},
+		{name: "dirty uppercase", err: "Refusing: DIRTY worktree", want: "dirty"},
+		{name: "local changes", err: "cannot remove with local changes", want: "dirty"},
+		{name: "locked by", err: "Locked by another process", want: "locked"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -385,6 +645,7 @@ func TestErrorStrings(t *testing.T) {
 		&ExitError{StatusCode: 1, Stderr: "x"},
 		&LockedError{Reason: "locked"},
 		&DirtyError{Reason: "dirty"},
+		&ProtectedWorktreeError{Path: "/repo", Reason: "main worktree"},
 	}
 	for _, err := range errs {
 		if err.Error() == "" {

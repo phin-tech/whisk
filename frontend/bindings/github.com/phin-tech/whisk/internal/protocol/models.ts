@@ -11,6 +11,9 @@ import * as ptybookmark$0 from "../domain/ptybookmark/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as session$0 from "../domain/session/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as workitem$0 from "../domain/workitem/models.js";
 
 export class AddPTYBookmarkRequest {
     "ptyId": string;
@@ -42,6 +45,89 @@ export class AddPTYBookmarkRequest {
     static createFrom($$source: any = {}): AddPTYBookmarkRequest {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new AddPTYBookmarkRequest($$parsedSource as Partial<AddPTYBookmarkRequest>);
+    }
+}
+
+export class AddWorkItemAttachmentRequest {
+    "workItemId": string;
+    "kind": string;
+    "scope"?: string;
+    "path"?: string;
+    "url"?: string;
+    "note"?: string;
+    "actor"?: string;
+
+    /** Creates a new AddWorkItemAttachmentRequest instance. */
+    constructor($$source: Partial<AddWorkItemAttachmentRequest> = {}) {
+        if (!("workItemId" in $$source)) {
+            this["workItemId"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AddWorkItemAttachmentRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AddWorkItemAttachmentRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AddWorkItemAttachmentRequest($$parsedSource as Partial<AddWorkItemAttachmentRequest>);
+    }
+}
+
+export class BindWorkItemWorktreeRequest {
+    "id": string;
+    "branch": string;
+    "base"?: string;
+    "worktreePath": string;
+    "actor"?: string;
+
+    /** Creates a new BindWorkItemWorktreeRequest instance. */
+    constructor($$source: Partial<BindWorkItemWorktreeRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("branch" in $$source)) {
+            this["branch"] = "";
+        }
+        if (!("worktreePath" in $$source)) {
+            this["worktreePath"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new BindWorkItemWorktreeRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): BindWorkItemWorktreeRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new BindWorkItemWorktreeRequest($$parsedSource as Partial<BindWorkItemWorktreeRequest>);
+    }
+}
+
+export class CancelWorkItemRunRequest {
+    "id": string;
+    "actor"?: string;
+
+    /** Creates a new CancelWorkItemRunRequest instance. */
+    constructor($$source: Partial<CancelWorkItemRunRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CancelWorkItemRunRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CancelWorkItemRunRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CancelWorkItemRunRequest($$parsedSource as Partial<CancelWorkItemRunRequest>);
     }
 }
 
@@ -95,6 +181,33 @@ export class CloseSessionRequest {
     }
 }
 
+export class CreateProjectRequest {
+    "name": string;
+    "slug"?: string;
+    "rootDir": string;
+    "workflowId"?: string;
+
+    /** Creates a new CreateProjectRequest instance. */
+    constructor($$source: Partial<CreateProjectRequest> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("rootDir" in $$source)) {
+            this["rootDir"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CreateProjectRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CreateProjectRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CreateProjectRequest($$parsedSource as Partial<CreateProjectRequest>);
+    }
+}
+
 export class CreateSessionRequest {
     "name": string;
     "rootDir": string;
@@ -122,6 +235,34 @@ export class CreateSessionRequest {
             $$parsedSource["initialPty"] = $$createField2_0($$parsedSource["initialPty"]);
         }
         return new CreateSessionRequest($$parsedSource as Partial<CreateSessionRequest>);
+    }
+}
+
+export class CreateWorkItemRequest {
+    "projectId": string;
+    "title": string;
+    "bodyMarkdown"?: string;
+    "stageId"?: string;
+    "actor"?: string;
+
+    /** Creates a new CreateWorkItemRequest instance. */
+    constructor($$source: Partial<CreateWorkItemRequest> = {}) {
+        if (!("projectId" in $$source)) {
+            this["projectId"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CreateWorkItemRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CreateWorkItemRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CreateWorkItemRequest($$parsedSource as Partial<CreateWorkItemRequest>);
     }
 }
 
@@ -207,6 +348,28 @@ export class CreatedWorktree {
     static createFrom($$source: any = {}): CreatedWorktree {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new CreatedWorktree($$parsedSource as Partial<CreatedWorktree>);
+    }
+}
+
+export class DeleteWorkItemRequest {
+    "id": string;
+    "actor"?: string;
+
+    /** Creates a new DeleteWorkItemRequest instance. */
+    constructor($$source: Partial<DeleteWorkItemRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DeleteWorkItemRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DeleteWorkItemRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DeleteWorkItemRequest($$parsedSource as Partial<DeleteWorkItemRequest>);
     }
 }
 
@@ -364,6 +527,32 @@ export class ListWorktreesRequest {
     }
 }
 
+export class MoveWorkItemRequest {
+    "id": string;
+    "stageId": string;
+    "actor"?: string;
+
+    /** Creates a new MoveWorkItemRequest instance. */
+    constructor($$source: Partial<MoveWorkItemRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("stageId" in $$source)) {
+            this["stageId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MoveWorkItemRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): MoveWorkItemRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new MoveWorkItemRequest($$parsedSource as Partial<MoveWorkItemRequest>);
+    }
+}
+
 export class NextEventRequest {
     "timeoutMs": number;
 
@@ -507,6 +696,12 @@ export class PTYInfo {
         return new PTYInfo($$parsedSource as Partial<PTYInfo>);
     }
 }
+
+export const Project = workitem$0.Project;
+export type Project = workitem$0.Project;
+
+export const PromptTemplate = workitem$0.PromptTemplate;
+export type PromptTemplate = workitem$0.PromptTemplate;
 
 export class RemovePTYBookmarkRequest {
     "bookmarkId": string;
@@ -891,6 +1086,35 @@ export class StartPanePTYRequest {
     }
 }
 
+export class StartWorkItemRunRequest {
+    "workItemId": string;
+    "preset"?: string;
+    "promptTemplateId"?: string;
+    "sessionId"?: string;
+    "ptyId"?: string;
+    "launch"?: boolean;
+    "agentProfileId"?: string;
+    "systemPrompt"?: string;
+    "actor"?: string;
+
+    /** Creates a new StartWorkItemRunRequest instance. */
+    constructor($$source: Partial<StartWorkItemRunRequest> = {}) {
+        if (!("workItemId" in $$source)) {
+            this["workItemId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StartWorkItemRunRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): StartWorkItemRunRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new StartWorkItemRunRequest($$parsedSource as Partial<StartWorkItemRunRequest>);
+    }
+}
+
 export class StartedHTTPForward {
     "id": string;
     "localUrl": string;
@@ -952,6 +1176,15 @@ export class StartedPanePTY {
         return new StartedPanePTY($$parsedSource as Partial<StartedPanePTY>);
     }
 }
+
+export const WorkItem = workitem$0.WorkItem;
+export type WorkItem = workitem$0.WorkItem;
+
+export const WorkItemRun = workitem$0.WorkItemRun;
+export type WorkItemRun = workitem$0.WorkItemRun;
+
+export const WorkflowTemplate = workitem$0.WorkflowTemplate;
+export type WorkflowTemplate = workitem$0.WorkflowTemplate;
 
 export class Worktree {
     "branch": string;

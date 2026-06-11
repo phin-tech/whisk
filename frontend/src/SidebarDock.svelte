@@ -1,22 +1,43 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
+  import type { Project, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import type { PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import PtysPanel from "./PtysPanel.svelte";
   import SessionsPanel from "./SessionsPanel.svelte";
+  import WorkItemsPanel from "./WorkItemsPanel.svelte";
 
-  export let activePanel: "sessions" | "ptys" | null = "sessions";
+  export let activePanel: "sessions" | "ptys" | "work" | null = "sessions";
   export let sessions: Session[] = [];
   export let ptys: PTYInfo[] = [];
+  export let projects: Project[] = [];
+  export let workItems: WorkItem[] = [];
   export let activeSessionId = "";
+  export let activeProjectId = "";
   export let loadingSession = false;
   export let loadingPtys = false;
+  export let loadingWork = false;
   export let railSide: "left" | "right" = "right";
   export let onClose: () => void;
   export let onNewSession: () => void;
   export let onSelectSession: (session: Session) => void;
   export let onCloseSession: (session: Session) => void;
   export let onRefreshPtys: () => void;
+  export let onRefreshWork: () => void;
+  export let onNewProject: () => void;
+  export let onSelectProject: (projectId: string) => void;
+  export let onCreateWorkItem: (request: {
+    projectId: string;
+    title: string;
+    bodyMarkdown: string;
+  }) => void;
+  export let onMoveWorkItem: (workItemId: string, stageId: string) => void;
+  export let onGenerateWorktree: (request: {
+    workItemId: string;
+    branch: string;
+  }) => void;
+  export let onAttachFile: (workItemId: string, path: string) => void;
+  export let onDeleteWorkItem: (workItemId: string) => void;
 
   const minWidth = 240;
   const maxWidth = 800;
@@ -93,7 +114,25 @@
           {onCloseSession}
         />
       {:else}
-        <PtysPanel ptys={ptys} loading={loadingPtys} onclose={onClose} onRefresh={onRefreshPtys} />
+        {#if activePanel === "work"}
+          <WorkItemsPanel
+            {projects}
+            {workItems}
+            {activeProjectId}
+            loading={loadingWork}
+            onclose={onClose}
+            onRefresh={onRefreshWork}
+            {onNewProject}
+            {onSelectProject}
+            {onCreateWorkItem}
+            {onMoveWorkItem}
+            {onGenerateWorktree}
+            {onAttachFile}
+            {onDeleteWorkItem}
+          />
+        {:else}
+          <PtysPanel ptys={ptys} loading={loadingPtys} onclose={onClose} onRefresh={onRefreshPtys} />
+        {/if}
       {/if}
     </div>
     {#if railSide === "left"}

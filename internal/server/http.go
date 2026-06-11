@@ -49,6 +49,19 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("/v1/http-forwards/{forwardID}/proxy", server.proxyHTTPForward)
 	mux.HandleFunc("/v1/http-forwards/{forwardID}/proxy/", server.proxyHTTPForward)
 	mux.HandleFunc("GET /v1/events/next", server.nextEvent)
+	mux.HandleFunc("GET /v1/projects", server.listProjects)
+	mux.HandleFunc("POST /v1/projects", server.createProject)
+	mux.HandleFunc("GET /v1/workflow-templates", server.listWorkflowTemplates)
+	mux.HandleFunc("GET /v1/prompt-templates", server.listPromptTemplates)
+	mux.HandleFunc("GET /v1/work-items", server.listWorkItems)
+	mux.HandleFunc("POST /v1/work-items", server.createWorkItem)
+	mux.HandleFunc("POST /v1/work-items/{workItemID}/move", server.moveWorkItem)
+	mux.HandleFunc("POST /v1/work-items/{workItemID}/bind-worktree", server.bindWorkItemWorktree)
+	mux.HandleFunc("POST /v1/work-items/{workItemID}/attachments", server.addWorkItemAttachment)
+	mux.HandleFunc("POST /v1/work-items/{workItemID}/delete", server.deleteWorkItem)
+	mux.HandleFunc("GET /v1/work-item-runs", server.listWorkItemRuns)
+	mux.HandleFunc("POST /v1/work-item-runs", server.startWorkItemRun)
+	mux.HandleFunc("POST /v1/work-item-runs/{runID}/cancel", server.cancelWorkItemRun)
 	return mux
 }
 

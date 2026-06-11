@@ -3,9 +3,10 @@ package protocol
 import (
 	"github.com/phin-tech/whisk/internal/domain/ptybookmark"
 	"github.com/phin-tech/whisk/internal/domain/session"
+	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 1
+const DaemonAPIVersion = 4
 
 type CompatibilityResponse struct {
 	APIVersion int `json:"apiVersion"`
@@ -165,6 +166,75 @@ type RuntimeEvent struct {
 	Type   string `json:"type"`
 	PtyID  string `json:"ptyId,omitempty"`
 	Offset uint64 `json:"offset,omitempty"`
+}
+
+type Project = workitem.Project
+type WorkflowTemplate = workitem.WorkflowTemplate
+type PromptTemplate = workitem.PromptTemplate
+type WorkItem = workitem.WorkItem
+type WorkItemRun = workitem.WorkItemRun
+type WorktreeBinding = workitem.WorktreeBinding
+type Attachment = workitem.Attachment
+
+type CreateProjectRequest struct {
+	Name       string `json:"name"`
+	Slug       string `json:"slug,omitempty"`
+	RootDir    string `json:"rootDir"`
+	WorkflowID string `json:"workflowId,omitempty"`
+}
+
+type CreateWorkItemRequest struct {
+	ProjectID    string `json:"projectId"`
+	Title        string `json:"title"`
+	BodyMarkdown string `json:"bodyMarkdown,omitempty"`
+	StageID      string `json:"stageId,omitempty"`
+	Actor        string `json:"actor,omitempty"`
+}
+
+type MoveWorkItemRequest struct {
+	ID      string `json:"id"`
+	StageID string `json:"stageId"`
+	Actor   string `json:"actor,omitempty"`
+}
+
+type BindWorkItemWorktreeRequest struct {
+	ID           string `json:"id"`
+	Branch       string `json:"branch"`
+	Base         string `json:"base,omitempty"`
+	WorktreePath string `json:"worktreePath"`
+	Actor        string `json:"actor,omitempty"`
+}
+
+type AddWorkItemAttachmentRequest struct {
+	WorkItemID string `json:"workItemId"`
+	Kind       string `json:"kind"`
+	Scope      string `json:"scope,omitempty"`
+	Path       string `json:"path,omitempty"`
+	URL        string `json:"url,omitempty"`
+	Note       string `json:"note,omitempty"`
+	Actor      string `json:"actor,omitempty"`
+}
+
+type DeleteWorkItemRequest struct {
+	ID    string `json:"id"`
+	Actor string `json:"actor,omitempty"`
+}
+
+type StartWorkItemRunRequest struct {
+	WorkItemID       string `json:"workItemId"`
+	Preset           string `json:"preset,omitempty"`
+	PromptTemplateID string `json:"promptTemplateId,omitempty"`
+	SessionID        string `json:"sessionId,omitempty"`
+	PTYID            string `json:"ptyId,omitempty"`
+	Launch           bool   `json:"launch,omitempty"`
+	AgentProfileID   string `json:"agentProfileId,omitempty"`
+	SystemPrompt     string `json:"systemPrompt,omitempty"`
+	Actor            string `json:"actor,omitempty"`
+}
+
+type CancelWorkItemRunRequest struct {
+	ID    string `json:"id"`
+	Actor string `json:"actor,omitempty"`
 }
 
 type DetectWorktrunkRequest struct {

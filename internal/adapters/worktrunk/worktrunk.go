@@ -128,6 +128,55 @@ type WorkingTree struct {
 	Deleted   int  `json:"deleted"`
 }
 
+func (w *WorkingTree) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Clean     bool            `json:"clean"`
+		Dirty     bool            `json:"dirty"`
+		Untracked json.RawMessage `json:"untracked"`
+		Modified  json.RawMessage `json:"modified"`
+		Deleted   json.RawMessage `json:"deleted"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	untracked, err := decodeWorktreeCount(raw.Untracked)
+	if err != nil {
+		return fmt.Errorf("untracked: %w", err)
+	}
+	modified, err := decodeWorktreeCount(raw.Modified)
+	if err != nil {
+		return fmt.Errorf("modified: %w", err)
+	}
+	deleted, err := decodeWorktreeCount(raw.Deleted)
+	if err != nil {
+		return fmt.Errorf("deleted: %w", err)
+	}
+	w.Clean = raw.Clean
+	w.Dirty = raw.Dirty
+	w.Untracked = untracked
+	w.Modified = modified
+	w.Deleted = deleted
+	return nil
+}
+
+func decodeWorktreeCount(raw json.RawMessage) (int, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, nil
+	}
+	var count int
+	if err := json.Unmarshal(raw, &count); err == nil {
+		return count, nil
+	}
+	var changed bool
+	if err := json.Unmarshal(raw, &changed); err == nil {
+		if changed {
+			return 1, nil
+		}
+		return 0, nil
+	}
+	return 0, fmt.Errorf("expected integer or boolean, got %s", string(raw))
+}
+
 type Main struct {
 	Branch string `json:"branch"`
 	Ahead  int    `json:"ahead"`
@@ -200,6 +249,15 @@ type DirtyError struct {
 
 func (e *DirtyError) Error() string {
 	return "worktree has uncommitted changes: " + e.Reason
+}
+
+type ProtectedWorktreeError struct {
+	Path   string
+	Reason string
+}
+
+func (e *ProtectedWorktreeError) Error() string {
+	return "cannot remove protected worktree " + strconv.Quote(e.Path) + ": " + e.Reason
 }
 
 type Version struct {
@@ -281,7 +339,12 @@ func (c *Client) Create(ctx context.Context, req CreateRequest) (string, error) 
 	}
 	args = append(args, req.Branch)
 	if err := c.runWT(ctx, req.RepoPath, args, req.Env); err != nil {
-		return "", err
+		if !isBranchAlreadyExistsError(err, req.Branch) {
+			return "", err
+		}
+		if err := c.runWT(ctx, req.RepoPath, []string{"switch", "--no-cd", req.Branch}, req.Env); err != nil {
+			return "", err
+		}
 	}
 	items, err := c.list(ctx, req.RepoPath, false, req.Env)
 	if err != nil {
@@ -291,6 +354,17 @@ func (c *Client) Create(ctx context.Context, req CreateRequest) (string, error) 
 		return path, nil
 	}
 	return "", &NotFoundError{Path: "wt reported success but no worktree named " + strconv.Quote(req.Branch) + " is listed"}
+}
+
+func isBranchAlreadyExistsError(err error, branch string) bool {
+	var exitError *ExitError
+	if !errors.As(err, &exitError) {
+		return false
+	}
+	lower := strings.ToLower(exitError.Stderr)
+	return strings.Contains(lower, "branch") &&
+		strings.Contains(lower, strings.ToLower(branch)) &&
+		strings.Contains(lower, "already exists")
 }
 
 func (c *Client) Remove(ctx context.Context, req RemoveRequest) error {
@@ -304,6 +378,12 @@ func (c *Client) Remove(ctx context.Context, req RemoveRequest) error {
 	}
 	if item.Branch == "" {
 		return &NotFoundError{Path: req.WorktreePath + " (detached HEAD, cannot remove via wt)"}
+	}
+	if item.IsMain {
+		return &ProtectedWorktreeError{Path: req.WorktreePath, Reason: "main worktree"}
+	}
+	if item.IsCurrent {
+		return &ProtectedWorktreeError{Path: req.WorktreePath, Reason: "current worktree"}
 	}
 	args := []string{"remove"}
 	if !req.AlsoBranch {
@@ -325,7 +405,11 @@ func (c *Client) Remove(ctx context.Context, req RemoveRequest) error {
 	if strings.Contains(lower, "locked") {
 		return &LockedError{Reason: exitError.Stderr}
 	}
-	if strings.Contains(lower, "uncommitted changes") || strings.Contains(lower, "uncommitted change") {
+	if strings.Contains(lower, "uncommitted changes") ||
+		strings.Contains(lower, "uncommitted change") ||
+		strings.Contains(lower, "local changes") ||
+		strings.Contains(lower, "local change") ||
+		strings.Contains(lower, "dirty") {
 		return &DirtyError{Reason: exitError.Stderr}
 	}
 	return err
@@ -441,8 +525,8 @@ func minVersion() Version {
 }
 
 func pathExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func isWindowsTerminalAlias(path string) bool {

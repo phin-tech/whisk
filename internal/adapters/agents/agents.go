@@ -99,6 +99,11 @@ func BuiltinProfiles() map[string]Profile {
 			Provider: ProviderShell,
 			Command:  shell,
 		},
+		"prompt-capture": {
+			ID:       "prompt-capture",
+			Provider: ProviderShell,
+			Command:  "cat",
+		},
 		"claude": {
 			ID:       "claude",
 			Provider: ProviderClaude,

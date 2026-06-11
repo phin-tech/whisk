@@ -43,7 +43,7 @@ func TestBackendListWorktrees(t *testing.T) {
 		lookupPath: "/bin/wt",
 		outputs: []Output{
 			{StatusCode: 0, Stdout: []byte("wt 0.44.0\n")},
-			{StatusCode: 0, Stdout: []byte(`[{"branch":"feature","path":"/repo/.worktrees/feature","kind":"worktree","working_tree":{"dirty":true},"worktree":{"locked":true}}]`)},
+			{StatusCode: 0, Stdout: []byte(`[{"branch":"feature","path":"/repo/.worktrees/feature","kind":"worktree","is_main":false,"is_current":true,"working_tree":{"dirty":true},"worktree":{"locked":true}}]`)},
 		},
 	}
 	backend := NewBackend(runner)
@@ -52,7 +52,14 @@ func TestBackendListWorktrees(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListWorktrees error: %v", err)
 	}
-	if len(worktrees) != 1 || worktrees[0].Branch != "feature" || !worktrees[0].Dirty || !worktrees[0].Locked {
+	if len(worktrees) != 1 ||
+		worktrees[0].Branch != "feature" ||
+		worktrees[0].Path != "/repo/.worktrees/feature" ||
+		worktrees[0].Kind != "worktree" ||
+		worktrees[0].IsMain ||
+		!worktrees[0].IsCurrent ||
+		!worktrees[0].Dirty ||
+		!worktrees[0].Locked {
 		t.Fatalf("worktrees = %#v", worktrees)
 	}
 	if !reflect.DeepEqual(runner.commands[1].Args, []string{"list", "--full", "--format=json"}) {

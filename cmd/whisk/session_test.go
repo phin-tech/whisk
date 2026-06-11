@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -175,6 +176,34 @@ func TestRunSessionPTYKillUsesPTYKillEndpoint(t *testing.T) {
 	}
 }
 
+func TestRunSessionPTYOutputUsesPTYOutputEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/ptys/pty_01/output" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if r.URL.Query().Get("from") != "7" {
+			t.Fatalf("query = %s", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.OutputSnapshot{
+			PtyID:        "pty_01",
+			Offset:       19,
+			OutputBase64: base64.StdEncoding.EncodeToString([]byte("prompt text")),
+		})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"session", "pty", "output", "-url", server.URL, "-from", "7", "pty_01"})
+	})
+	if err != nil {
+		t.Fatalf("session pty output: %v", err)
+	}
+	if output != "prompt text" {
+		t.Fatalf("output = %q", output)
+	}
+}
+
 func TestRunSessionRejectsInvalidUsage(t *testing.T) {
 	if err := run([]string{"session", "create"}); err == nil {
 		t.Fatalf("expected create usage error")
@@ -187,5 +216,8 @@ func TestRunSessionRejectsInvalidUsage(t *testing.T) {
 	}
 	if err := run([]string{"session", "pty", "kill"}); err == nil {
 		t.Fatalf("expected pty kill usage error")
+	}
+	if err := run([]string{"session", "pty", "output"}); err == nil {
+		t.Fatalf("expected pty output usage error")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/httpforward"
 	"github.com/phin-tech/whisk/internal/domain/ptybookmark"
 	"github.com/phin-tech/whisk/internal/domain/session"
+	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
 type PTYEventKind string
@@ -117,6 +118,7 @@ type RuntimeConfig struct {
 	SessionStore    SessionStore
 	TranscriptStore TranscriptStore
 	BookmarkStore   BookmarkStore
+	WorkItemStore   WorkItemStore
 }
 
 type Runtime struct {
@@ -129,8 +131,10 @@ type Runtime struct {
 	sessionStore    SessionStore
 	transcriptStore TranscriptStore
 	bookmarkStore   BookmarkStore
+	workItemStore   WorkItemStore
 	ptyMeta         map[string]ptyMetadata
 	forwards        *httpforward.State
+	workItems       *workitem.State
 	nextID          int
 	eventSink       EventSink
 	watchCtx        context.Context
@@ -150,9 +154,10 @@ type ptyMetadata struct {
 type RuntimeEventType string
 
 const (
-	EventSessionChanged RuntimeEventType = "session.changed"
-	EventPTYChanged     RuntimeEventType = "pty.changed"
-	EventPTYOutput      RuntimeEventType = "pty.output"
+	EventSessionChanged   RuntimeEventType = "session.changed"
+	EventPTYChanged       RuntimeEventType = "pty.changed"
+	EventPTYOutput        RuntimeEventType = "pty.output"
+	EventWorkItemsChanged RuntimeEventType = "workitems.changed"
 )
 
 type RuntimeEvent struct {
@@ -183,6 +188,11 @@ type TranscriptStore interface {
 type BookmarkStore interface {
 	LoadBookmarks(ctx context.Context) ([]ptybookmark.Bookmark, error)
 	SaveBookmarks(ctx context.Context, bookmarks []ptybookmark.Bookmark) error
+}
+
+type WorkItemStore interface {
+	LoadWorkItems(ctx context.Context) (workitem.Snapshot, error)
+	SaveWorkItems(ctx context.Context, snapshot workitem.Snapshot) error
 }
 
 type PTYTranscriptMeta struct {
@@ -347,6 +357,19 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 			return nil, err
 		}
 	}
+	workItems := workitem.NewState()
+	if config.WorkItemStore != nil {
+		snapshot, err := config.WorkItemStore.LoadWorkItems(context.Background())
+		if err != nil {
+			watchCancel()
+			return nil, err
+		}
+		workItems, err = workitem.NewStateFromSnapshot(snapshot)
+		if err != nil {
+			watchCancel()
+			return nil, err
+		}
+	}
 	r := &Runtime{
 		ids:             ids,
 		ptys:            config.PTYBackend,
@@ -356,8 +379,10 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		sessionStore:    config.SessionStore,
 		transcriptStore: config.TranscriptStore,
 		bookmarkStore:   config.BookmarkStore,
+		workItemStore:   config.WorkItemStore,
 		ptyMeta:         map[string]ptyMetadata{},
 		forwards:        httpforward.NewState(),
+		workItems:       workItems,
 		eventSink:       config.EventSink,
 		watchCtx:        watchCtx,
 		watchCancel:     watchCancel,
@@ -915,6 +940,13 @@ func (r *Runtime) persistBookmarks(ctx context.Context) error {
 		return nil
 	}
 	return r.bookmarkStore.SaveBookmarks(ctx, r.bookmarks.List(""))
+}
+
+func (r *Runtime) persistWorkItems(ctx context.Context) error {
+	if r.workItemStore == nil {
+		return nil
+	}
+	return r.workItemStore.SaveWorkItems(ctx, r.workItems.Snapshot())
 }
 
 func (r *Runtime) registerPTYTranscript(ctx context.Context, record PTYRecord, sessionID string, windowID string, paneID string) error {

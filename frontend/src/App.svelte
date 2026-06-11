@@ -1,33 +1,54 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import type { PTYInfo, RuntimeEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { Project, PTYInfo, RuntimeEvent, WorkItem, WorkItemRun } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
+    AddWorkItemAttachment,
+    BindWorkItemWorktree,
+    CancelWorkItemRun,
     CloseSession,
+    CreateProject,
     CreateSession,
+    CreateWorkItem,
+    CreateWorktree,
+    DeleteWorkItem,
     ListPTYs,
+    ListProjects,
     ListSessions,
+    ListWorkItemRuns,
+    ListWorkItems,
+    MoveWorkItem,
     NextEvent,
     Output,
     SplitPane,
+    StartWorkItemRun,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
   import LayoutView from "./LayoutView.svelte";
+  import NewProjectDialog from "./NewProjectDialog.svelte";
   import NewSessionDialog from "./NewSessionDialog.svelte";
   import SettingsView from "./SettingsView.svelte";
   import SidebarDock from "./SidebarDock.svelte";
+  import WorkBoard from "./WorkBoard.svelte";
   import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
 
-  type SidebarId = "sessions" | "ptys";
+  type SidebarId = "sessions" | "ptys" | "work";
+  type MainView = "session" | "work";
   type RailSide = "left" | "right";
 
   const SETTINGS_KEY = "whisk.ui.settings";
 
   let sessions: Session[] = [];
   let ptys: PTYInfo[] = [];
+  let projects: Project[] = [];
+  let workItems: WorkItem[] = [];
+  let workItemRuns: WorkItemRun[] = [];
   let activeSessionId = "";
   let activePaneId = "";
+  let activeProjectId = "";
+  let activeMain: MainView = "session";
   let activeSidebar: SidebarId | null = "sessions";
+  let newProjectOpen = false;
   let newSessionOpen = false;
   let settingsOpen = false;
   let railSide: RailSide = "right";
@@ -36,6 +57,7 @@
   let error = "";
   let loadingSession = false;
   let loadingPtys = false;
+  let loadingWork = false;
   let outputChunks: Record<string, string[]> = {};
   let offsets: Record<string, number> = {};
   let reconcileTimer: number | undefined;
@@ -111,6 +133,35 @@
     }
   }
 
+  async function refreshProjects() {
+    loadingWork = true;
+    try {
+      projects = await ListProjects();
+      if (!activeProjectId && projects.length > 0) {
+        activeProjectId = projects[0].id;
+      }
+      if (activeProjectId && !projects.some((project) => project.id === activeProjectId)) {
+        activeProjectId = projects[0]?.id ?? "";
+      }
+      await refreshWorkItems();
+      await refreshWorkItemRuns();
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function refreshWorkItems() {
+    if (!activeProjectId) {
+      workItems = [];
+      return;
+    }
+    workItems = await ListWorkItems(activeProjectId);
+  }
+
+  async function refreshWorkItemRuns() {
+    workItemRuns = await ListWorkItemRuns("");
+  }
+
   async function refreshVisibleOutput() {
     const ids = visiblePtyIds(sessions, activeSessionId, activePaneId);
     await Promise.all(ids.map((ptyId) => refreshOutput(ptyId)));
@@ -153,6 +204,7 @@
   function openNewSession() {
     error = "";
     settingsOpen = false;
+    activeMain = "session";
     newSessionOpen = true;
   }
 
@@ -172,6 +224,7 @@
       sessions = [created.session, ...sessions.filter((session) => session.id !== created.session.id)];
       activeSessionId = created.session.id;
       activePaneId = created.paneId;
+      activeMain = "session";
       activeSidebar = "sessions";
       newSessionOpen = false;
       await refreshPTYs();
@@ -210,6 +263,7 @@
     if (targets.sessions) await refreshSessions();
     if (targets.ptys) await refreshPTYs();
     if (targets.outputPtyId) await refreshOutput(targets.outputPtyId);
+    if (event.type === "workitems.changed") await refreshProjects();
   }
 
   async function runEventLoop() {
@@ -228,11 +282,186 @@
   }
 
   function selectSession(session: Session) {
+    activeMain = "session";
     activeSessionId = session.id;
     activePaneId = firstPaneId(session);
     void refreshVisibleOutput().catch((err) => {
       error = backendError(err);
     });
+  }
+
+  function selectProject(projectId: string) {
+    activeMain = "work";
+    activeProjectId = projectId;
+    void Promise.all([refreshWorkItems(), refreshWorkItemRuns()]).catch((err) => {
+      error = backendError(err);
+    });
+  }
+
+  function openNewProject() {
+    activeMain = "work";
+    activeSidebar = "work";
+    newProjectOpen = true;
+  }
+
+  async function createProject(request: { name: string; rootDir: string }) {
+    error = "";
+    loadingWork = true;
+    try {
+      const project = await CreateProject({
+        name: request.name,
+        rootDir: request.rootDir,
+      });
+      activeProjectId = project.id;
+      await refreshProjects();
+      activeMain = "work";
+      activeSidebar = "work";
+      newProjectOpen = false;
+    } catch (err) {
+      error = `Create project failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function createWorkItem(request: {
+    projectId: string;
+    title: string;
+    bodyMarkdown: string;
+  }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await CreateWorkItem({
+        projectId: request.projectId,
+        title: request.title,
+        bodyMarkdown: request.bodyMarkdown,
+      });
+      await refreshWorkItems();
+      await refreshWorkItemRuns();
+    } catch (err) {
+      error = `Create work item failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function moveWorkItem(workItemId: string, stageId: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await MoveWorkItem({ id: workItemId, stageId });
+      await refreshWorkItems();
+      await refreshWorkItemRuns();
+    } catch (err) {
+      error = `Move work item failed: ${backendError(err)}`;
+      await refreshWorkItems().catch(() => undefined);
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function generateWorktree(request: {
+    workItemId: string;
+    branch: string;
+  }) {
+    error = "";
+    loadingWork = true;
+    try {
+      const item = workItems.find((candidate) => candidate.id === request.workItemId);
+      const project = projects.find((candidate) => candidate.id === item?.projectId);
+      if (!item || !project) {
+        throw new Error("work item project not found");
+      }
+      const created = await CreateWorktree({
+        repoPath: project.rootDir,
+        branch: request.branch,
+        base: "",
+      });
+      await BindWorkItemWorktree({
+        id: request.workItemId,
+        branch: request.branch,
+        worktreePath: created.path,
+      });
+      await refreshWorkItems();
+      await refreshWorkItemRuns();
+    } catch (err) {
+      error = `Generate worktree failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function attachFile(workItemId: string, path: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await AddWorkItemAttachment({
+        workItemId,
+        kind: "file",
+        scope: "external",
+        path,
+      });
+      await refreshWorkItems();
+      await refreshWorkItemRuns();
+    } catch (err) {
+      error = `Attach file failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function deleteWorkItem(workItemId: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await DeleteWorkItem({ id: workItemId });
+      await refreshWorkItems();
+      await refreshWorkItemRuns();
+    } catch (err) {
+      error = `Delete work item failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function startWorkItemRun(request: {
+    workItemId: string;
+    preset: string;
+    promptTemplateId: string;
+    agentProfileId: string;
+  }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await StartWorkItemRun({
+        workItemId: request.workItemId,
+        preset: request.preset,
+        promptTemplateId: request.promptTemplateId,
+        launch: true,
+        agentProfileId: request.agentProfileId,
+      });
+      await refreshWorkItems();
+      await refreshWorkItemRuns();
+    } catch (err) {
+      error = `Start run failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function cancelWorkItemRun(runId: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await CancelWorkItemRun({ id: runId });
+      await refreshWorkItems();
+      await refreshWorkItemRuns();
+    } catch (err) {
+      error = `Cancel run failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
   }
 
   async function closeSession(session: Session) {
@@ -254,6 +483,7 @@
   }
 
   function toggleSidebar(id: SidebarId) {
+    activeMain = id === "work" ? "work" : "session";
     activeSidebar = activeSidebar === id ? null : id;
     settingsOpen = false;
   }
@@ -267,6 +497,7 @@
     settingsLoaded = true;
     refreshSessions()
       .then(refreshPTYs)
+      .then(refreshProjects)
       .then(refreshVisibleOutput)
       .catch((err) => {
         error = backendError(err);
@@ -292,7 +523,7 @@
     {#if railSide === "left"}
       <div class="flex h-full w-[36px] shrink-0 flex-col border-r border-hairline bg-bg-base/96">
         <ActivityRail
-          {activeSidebar}
+          activeSidebar={activeSidebar ?? (activeMain === "work" ? "work" : null)}
           {settingsOpen}
           onSidebar={toggleSidebar}
           onSettings={toggleSettings}
@@ -302,15 +533,27 @@
         activePanel={activeSidebar}
         {sessions}
         {ptys}
+        {projects}
+        {workItems}
         {activeSessionId}
+        {activeProjectId}
         {loadingSession}
         {loadingPtys}
+        {loadingWork}
         {railSide}
         onClose={() => (activeSidebar = null)}
         onNewSession={openNewSession}
         onSelectSession={selectSession}
         onCloseSession={closeSession}
         onRefreshPtys={() => void refreshPTYs()}
+        onRefreshWork={() => void refreshProjects()}
+        onNewProject={openNewProject}
+        onSelectProject={selectProject}
+        onCreateWorkItem={createWorkItem}
+        onMoveWorkItem={moveWorkItem}
+        onGenerateWorktree={generateWorktree}
+        onAttachFile={attachFile}
+        onDeleteWorkItem={deleteWorkItem}
       />
     {/if}
 
@@ -318,17 +561,17 @@
       <header class="flex h-10 shrink-0 items-center justify-between border-b border-hairline bg-bg-base/80 px-3">
         <div class="min-w-0">
           <div class="truncate text-[13px] font-semibold text-text-primary">
-            {activeSession?.name ?? "No active session"}
+            {activeMain === "work" ? "Work" : (activeSession?.name ?? "No active session")}
           </div>
           <div class="truncate font-mono text-[10px] text-text-muted">
-            {activePaneId || "No pane selected"}
+            {activeMain === "work" ? (activeProjectId || "No project selected") : (activePaneId || "No pane selected")}
           </div>
         </div>
         <div class="flex items-center gap-1">
           <button
             type="button"
             class="rounded border border-border-subtle bg-bg-surface/60 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-            disabled={!activeSession}
+            disabled={!activeSession || activeMain === "work"}
             on:click={() => split("horizontal")}
           >
             Split right
@@ -336,7 +579,7 @@
           <button
             type="button"
             class="rounded border border-border-subtle bg-bg-surface/60 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-            disabled={!activeSession}
+            disabled={!activeSession || activeMain === "work"}
             on:click={() => split("vertical")}
           >
             Split down
@@ -353,7 +596,25 @@
       {/if}
 
       <div class="relative flex min-h-0 flex-1 flex-col">
-        {#if activeSession}
+        {#if activeMain === "work"}
+          <WorkBoard
+            {projects}
+            {workItems}
+            {workItemRuns}
+            {activeProjectId}
+            loading={loadingWork}
+            onRefresh={() => void refreshProjects()}
+            onNewProject={openNewProject}
+            onSelectProject={selectProject}
+            onCreateWorkItem={createWorkItem}
+            onMoveWorkItem={moveWorkItem}
+            onGenerateWorktree={generateWorktree}
+            onAttachFile={attachFile}
+            onDeleteWorkItem={deleteWorkItem}
+            onStartRun={startWorkItemRun}
+            onCancelRun={cancelWorkItemRun}
+          />
+        {:else if activeSession}
           {#if activeSessionWindow}
             <LayoutView
               node={activeSessionWindow.layout}
@@ -399,6 +660,13 @@
           oncreate={createSession}
         />
 
+        <NewProjectDialog
+          visible={newProjectOpen}
+          loading={loadingWork}
+          onclose={() => (newProjectOpen = false)}
+          oncreate={createProject}
+        />
+
         <SettingsView
           visible={settingsOpen}
           {railSide}
@@ -417,19 +685,31 @@
         activePanel={activeSidebar}
         {sessions}
         {ptys}
+        {projects}
+        {workItems}
         {activeSessionId}
+        {activeProjectId}
         {loadingSession}
         {loadingPtys}
+        {loadingWork}
         {railSide}
         onClose={() => (activeSidebar = null)}
         onNewSession={openNewSession}
         onSelectSession={selectSession}
         onCloseSession={closeSession}
         onRefreshPtys={() => void refreshPTYs()}
+        onRefreshWork={() => void refreshProjects()}
+        onNewProject={openNewProject}
+        onSelectProject={selectProject}
+        onCreateWorkItem={createWorkItem}
+        onMoveWorkItem={moveWorkItem}
+        onGenerateWorktree={generateWorktree}
+        onAttachFile={attachFile}
+        onDeleteWorkItem={deleteWorkItem}
       />
       <div class="flex h-full w-[36px] shrink-0 flex-col border-l border-hairline bg-bg-base/96">
         <ActivityRail
-          {activeSidebar}
+          activeSidebar={activeSidebar ?? (activeMain === "work" ? "work" : null)}
           {settingsOpen}
           onSidebar={toggleSidebar}
           onSettings={toggleSettings}

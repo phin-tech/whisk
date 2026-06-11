@@ -40,6 +40,20 @@ func TestCodexLaunchUsesInstructionsConfig(t *testing.T) {
 	}
 }
 
+func TestPromptCaptureLaunchEchoesPromptThroughCat(t *testing.T) {
+	launch, err := BuildLaunch(LaunchRequest{
+		ProfileID:  "prompt-capture",
+		WorkingDir: "/repo",
+		Prompt:     "Smoke prompt",
+	})
+	if err != nil {
+		t.Fatalf("BuildLaunch error: %v", err)
+	}
+	if launch.Command != "cat" || len(launch.Args) != 0 || launch.Stdin != "Smoke prompt" || launch.WorkingDir != "/repo" {
+		t.Fatalf("launch = %#v", launch)
+	}
+}
+
 func TestInlineProfileMergesArgsAndEnv(t *testing.T) {
 	launch, err := BuildLaunch(LaunchRequest{
 		Profile: &Profile{

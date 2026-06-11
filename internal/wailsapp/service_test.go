@@ -29,7 +29,12 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		createdWorktree: protocol.CreatedWorktree{
 			Path: "/repo/.worktrees/created",
 		},
-		httpForwards: []protocol.HTTPForward{{ID: "fwd_01", TargetURL: "http://127.0.0.1:4966"}},
+		projects:          []protocol.Project{{ID: "proj_01", Name: "App", RootDir: "/repo"}},
+		workflowTemplates: []protocol.WorkflowTemplate{{ID: "default", Name: "Default"}},
+		promptTemplates:   []protocol.PromptTemplate{{ID: "implement", Name: "Implement"}},
+		workItems:         []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
+		runs:              []protocol.WorkItemRun{{ID: "run_01", WorkItemID: "wi_01", Status: "queued", Preset: "writer"}},
+		httpForwards:      []protocol.HTTPForward{{ID: "fwd_01", TargetURL: "http://127.0.0.1:4966"}},
 	}
 	service := wailsapp.NewService(fake)
 	ctx := context.Background()
@@ -133,6 +138,58 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if fake.removeWorktreeReq.WorktreePath != "/repo/.worktrees/created" || fake.removeWorktreeReq.AlsoBranch {
 		t.Fatalf("remove worktree req = %#v", fake.removeWorktreeReq)
 	}
+	projects, err := service.ListProjects(ctx)
+	if err != nil || len(projects) != 1 || projects[0].ID != "proj_01" {
+		t.Fatalf("list projects = %#v, err = %v", projects, err)
+	}
+	project, err := service.CreateProject(ctx, protocol.CreateProjectRequest{Name: "App", RootDir: "/repo"})
+	if err != nil || project.ID != "proj_02" || fake.createProjectReq.Name != "App" {
+		t.Fatalf("create project = %#v, req = %#v, err = %v", project, fake.createProjectReq, err)
+	}
+	templates, err := service.ListWorkflowTemplates(ctx)
+	if err != nil || len(templates) != 1 || templates[0].ID != "default" {
+		t.Fatalf("list templates = %#v, err = %v", templates, err)
+	}
+	promptTemplates, err := service.ListPromptTemplates(ctx)
+	if err != nil || len(promptTemplates) != 1 || promptTemplates[0].ID != "implement" {
+		t.Fatalf("list prompt templates = %#v, err = %v", promptTemplates, err)
+	}
+	items, err := service.ListWorkItems(ctx, "proj_01")
+	if err != nil || len(items) != 1 || items[0].ID != "wi_01" || fake.listWorkItemsProjectID != "proj_01" {
+		t.Fatalf("list work items = %#v, project = %q, err = %v", items, fake.listWorkItemsProjectID, err)
+	}
+	item, err := service.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{ProjectID: "proj_01", Title: "Task"})
+	if err != nil || item.ID != "wi_02" || fake.createWorkItemReq.Title != "Task" {
+		t.Fatalf("create work item = %#v, req = %#v, err = %v", item, fake.createWorkItemReq, err)
+	}
+	item, err = service.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: "wi_02", StageID: "ready"})
+	if err != nil || item.StageID != "ready" || fake.moveWorkItemReq.StageID != "ready" {
+		t.Fatalf("move work item = %#v, req = %#v, err = %v", item, fake.moveWorkItemReq, err)
+	}
+	item, err = service.BindWorkItemWorktree(ctx, protocol.BindWorkItemWorktreeRequest{ID: "wi_02", Branch: "whisk/app-2-task", WorktreePath: "/repo/.worktrees/task"})
+	if err != nil || item.Worktree == nil || fake.bindWorkItemReq.Branch != "whisk/app-2-task" {
+		t.Fatalf("bind work item = %#v, req = %#v, err = %v", item, fake.bindWorkItemReq, err)
+	}
+	item, err = service.AddWorkItemAttachment(ctx, protocol.AddWorkItemAttachmentRequest{WorkItemID: "wi_02", Kind: "file", Path: "docs/spec.md"})
+	if err != nil || len(item.Attachments) != 1 || fake.addWorkItemAttachmentReq.Path != "docs/spec.md" {
+		t.Fatalf("add attachment = %#v, req = %#v, err = %v", item, fake.addWorkItemAttachmentReq, err)
+	}
+	deleted, err := service.DeleteWorkItem(ctx, protocol.DeleteWorkItemRequest{ID: "wi_02"})
+	if err != nil || deleted.ID != "wi_02" || fake.deleteWorkItemReq.ID != "wi_02" {
+		t.Fatalf("delete work item = %#v, req = %#v, err = %v", deleted, fake.deleteWorkItemReq, err)
+	}
+	runs, err := service.ListWorkItemRuns(ctx, "wi_01")
+	if err != nil || len(runs) != 1 || runs[0].ID != "run_01" || fake.listRunsWorkItemID != "wi_01" {
+		t.Fatalf("list runs = %#v, work item = %q, err = %v", runs, fake.listRunsWorkItemID, err)
+	}
+	run, err := service.StartWorkItemRun(ctx, protocol.StartWorkItemRunRequest{WorkItemID: "wi_01", Preset: "writer", PromptTemplateID: "implement"})
+	if err != nil || run.WorkItemID != "wi_01" || fake.startRunReq.Preset != "writer" {
+		t.Fatalf("start run = %#v, req = %#v, err = %v", run, fake.startRunReq, err)
+	}
+	run, err = service.CancelWorkItemRun(ctx, protocol.CancelWorkItemRunRequest{ID: "run_01", Actor: "agent"})
+	if err != nil || run.Status != "cancelled" || fake.cancelRunReq.Actor != "agent" {
+		t.Fatalf("cancel run = %#v, req = %#v, err = %v", run, fake.cancelRunReq, err)
+	}
 	httpForwards, err := service.ListHTTPForwards(ctx)
 	if err != nil || len(httpForwards) != 1 || httpForwards[0].ID != "fwd_01" {
 		t.Fatalf("list http forwards = %#v, err = %v", httpForwards, err)
@@ -146,16 +203,21 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 }
 
 type runtimeClientFake struct {
-	sessions        []session.Session
-	created         protocol.CreatedSession
-	split           protocol.SplitPaneResult
-	output          protocol.OutputSnapshot
-	ptys            []protocol.PTYInfo
-	event           protocol.RuntimeEvent
-	worktrunk       protocol.WorktrunkStatus
-	worktrees       []protocol.Worktree
-	createdWorktree protocol.CreatedWorktree
-	httpForwards    []protocol.HTTPForward
+	sessions          []session.Session
+	created           protocol.CreatedSession
+	split             protocol.SplitPaneResult
+	output            protocol.OutputSnapshot
+	ptys              []protocol.PTYInfo
+	event             protocol.RuntimeEvent
+	worktrunk         protocol.WorktrunkStatus
+	worktrees         []protocol.Worktree
+	createdWorktree   protocol.CreatedWorktree
+	projects          []protocol.Project
+	workflowTemplates []protocol.WorkflowTemplate
+	promptTemplates   []protocol.PromptTemplate
+	workItems         []protocol.WorkItem
+	runs              []protocol.WorkItemRun
+	httpForwards      []protocol.HTTPForward
 
 	createReq          protocol.CreateSessionRequest
 	splitReq           protocol.SplitPaneRequest
@@ -175,12 +237,22 @@ type runtimeClientFake struct {
 	outputReq          protocol.OutputRequest
 	nextEventReq       protocol.NextEventRequest
 
-	detectWorktrunkReq protocol.DetectWorktrunkRequest
-	listWorktreesReq   protocol.ListWorktreesRequest
-	createWorktreeReq  protocol.CreateWorktreeRequest
-	removeWorktreeReq  protocol.RemoveWorktreeRequest
-	createForwardReq   protocol.CreateHTTPForwardRequest
-	deleteForwardID    string
+	detectWorktrunkReq       protocol.DetectWorktrunkRequest
+	listWorktreesReq         protocol.ListWorktreesRequest
+	createWorktreeReq        protocol.CreateWorktreeRequest
+	removeWorktreeReq        protocol.RemoveWorktreeRequest
+	createProjectReq         protocol.CreateProjectRequest
+	listWorkItemsProjectID   string
+	createWorkItemReq        protocol.CreateWorkItemRequest
+	moveWorkItemReq          protocol.MoveWorkItemRequest
+	bindWorkItemReq          protocol.BindWorkItemWorktreeRequest
+	addWorkItemAttachmentReq protocol.AddWorkItemAttachmentRequest
+	deleteWorkItemReq        protocol.DeleteWorkItemRequest
+	listRunsWorkItemID       string
+	startRunReq              protocol.StartWorkItemRunRequest
+	cancelRunReq             protocol.CancelWorkItemRunRequest
+	createForwardReq         protocol.CreateHTTPForwardRequest
+	deleteForwardID          string
 }
 
 func (f *runtimeClientFake) ListSessions(context.Context) ([]session.Session, error) {
@@ -294,6 +366,68 @@ func (f *runtimeClientFake) CreateWorktree(_ context.Context, req protocol.Creat
 func (f *runtimeClientFake) RemoveWorktree(_ context.Context, req protocol.RemoveWorktreeRequest) error {
 	f.removeWorktreeReq = req
 	return nil
+}
+
+func (f *runtimeClientFake) ListProjects(context.Context) ([]protocol.Project, error) {
+	return f.projects, nil
+}
+
+func (f *runtimeClientFake) CreateProject(_ context.Context, req protocol.CreateProjectRequest) (protocol.Project, error) {
+	f.createProjectReq = req
+	return protocol.Project{ID: "proj_02", Name: req.Name, RootDir: req.RootDir}, nil
+}
+
+func (f *runtimeClientFake) ListWorkflowTemplates(context.Context) ([]protocol.WorkflowTemplate, error) {
+	return f.workflowTemplates, nil
+}
+
+func (f *runtimeClientFake) ListPromptTemplates(context.Context) ([]protocol.PromptTemplate, error) {
+	return f.promptTemplates, nil
+}
+
+func (f *runtimeClientFake) ListWorkItems(_ context.Context, projectID string) ([]protocol.WorkItem, error) {
+	f.listWorkItemsProjectID = projectID
+	return f.workItems, nil
+}
+
+func (f *runtimeClientFake) CreateWorkItem(_ context.Context, req protocol.CreateWorkItemRequest) (protocol.WorkItem, error) {
+	f.createWorkItemReq = req
+	return protocol.WorkItem{ID: "wi_02", ProjectID: req.ProjectID, Number: 2, Title: req.Title}, nil
+}
+
+func (f *runtimeClientFake) MoveWorkItem(_ context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error) {
+	f.moveWorkItemReq = req
+	return protocol.WorkItem{ID: req.ID, StageID: req.StageID}, nil
+}
+
+func (f *runtimeClientFake) BindWorkItemWorktree(_ context.Context, req protocol.BindWorkItemWorktreeRequest) (protocol.WorkItem, error) {
+	f.bindWorkItemReq = req
+	return protocol.WorkItem{ID: req.ID, Worktree: &protocol.WorktreeBinding{Branch: req.Branch, WorktreePath: req.WorktreePath}}, nil
+}
+
+func (f *runtimeClientFake) AddWorkItemAttachment(_ context.Context, req protocol.AddWorkItemAttachmentRequest) (protocol.WorkItem, error) {
+	f.addWorkItemAttachmentReq = req
+	return protocol.WorkItem{ID: req.WorkItemID, Attachments: []protocol.Attachment{{ID: "att_01", Kind: req.Kind, Path: req.Path}}}, nil
+}
+
+func (f *runtimeClientFake) DeleteWorkItem(_ context.Context, req protocol.DeleteWorkItemRequest) (protocol.WorkItem, error) {
+	f.deleteWorkItemReq = req
+	return protocol.WorkItem{ID: req.ID}, nil
+}
+
+func (f *runtimeClientFake) ListWorkItemRuns(_ context.Context, workItemID string) ([]protocol.WorkItemRun, error) {
+	f.listRunsWorkItemID = workItemID
+	return f.runs, nil
+}
+
+func (f *runtimeClientFake) StartWorkItemRun(_ context.Context, req protocol.StartWorkItemRunRequest) (protocol.WorkItemRun, error) {
+	f.startRunReq = req
+	return protocol.WorkItemRun{ID: "run_02", WorkItemID: req.WorkItemID, Status: "queued", Preset: req.Preset, PromptTemplateID: req.PromptTemplateID}, nil
+}
+
+func (f *runtimeClientFake) CancelWorkItemRun(_ context.Context, req protocol.CancelWorkItemRunRequest) (protocol.WorkItemRun, error) {
+	f.cancelRunReq = req
+	return protocol.WorkItemRun{ID: req.ID, Status: "cancelled"}, nil
 }
 
 func (f *runtimeClientFake) CreateHTTPForward(_ context.Context, req protocol.CreateHTTPForwardRequest) (protocol.HTTPForward, error) {

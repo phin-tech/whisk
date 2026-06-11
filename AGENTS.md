@@ -135,7 +135,11 @@ desktop app.
 
 ## Feature TDD Workflow
 
-For new runtime features, start at the daemon boundary.
+For new runtime features, start at the daemon boundary and establish the CLI
+contract before building GUI behavior. This matters especially for
+agent-management features such as projects, workflows, work items, runs, and
+kanban boards: agents must be able to drive the same daemon-owned behavior
+through `cmd/whisk` that the GUI later renders.
 
 Required order:
 
@@ -143,18 +147,35 @@ Required order:
 2. Write daemon protocol/client integration tests against a real in-process
    server.
 3. Implement the smallest runtime/server/client slice that passes.
-4. Add Wails adapter tests only after the daemon contract exists.
-5. Add frontend behavior last, as a projection of daemon state.
+4. Add CLI commands and CLI contract tests for agent-facing behavior, including
+   `--json` output for commands agents are expected to consume.
+5. Add Wails adapter tests only after the daemon and CLI contracts exist.
+6. Add frontend behavior last, as a projection of daemon state.
 
 For example, project management must start with tests for:
 
 - project domain state transitions
 - daemon create/list/update/delete project commands
 - typed client behavior against the daemon server
+- `cmd/whisk` commands that expose those project operations, with stable JSON
+  output where agents need to consume the result
 - persistence or replay behavior, if the feature is durable
 
 Do not start project work by adding Svelte state, Wails-only commands, or
 desktop-local persistence.
+
+For work item / board / agent-run features, the required implementation shape is:
+
+1. `internal/domain/...` first: pure project/workflow/work-item/run state
+   transitions and validation.
+2. Runtime storage and protocol next: daemon-owned durable state, HTTP handlers,
+   typed client methods, and in-process server/client tests.
+3. CLI next: agent-usable commands over the typed client, table output for
+   humans and `--json` for agents, with tests locking request and response
+   shapes.
+4. Wails bindings/service after that.
+5. GUI last: render daemon read models and invoke protocol/CLI-equivalent
+   actions; never invent frontend-only board state.
 
 ## Current Technical Debt
 
