@@ -1,0 +1,76 @@
+version: "3"
+
+vars:
+  APP_NAME: "whisk"
+  BIN_DIR: "bin"
+  PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
+  VITE_PORT: "{{.WAILS_VITE_PORT | default 9245}}"
+
+includes:
+  common: ./build/Taskfile.yml
+  windows: ./build/windows/Taskfile.yml
+  darwin: ./build/darwin/Taskfile.yml
+  linux: ./build/linux/Taskfile.yml
+  ios: ./build/ios/Taskfile.yml
+  android: ./build/android/Taskfile.yml
+
+tasks:
+  test:
+    cmds:
+      - go test ./...
+
+  check:
+    cmds:
+      - task: test
+      - task: frontend:check
+
+  frontend:install:
+    dir: frontend
+    cmds:
+      - npm install
+
+  frontend:check:
+    dir: frontend
+    cmds:
+      - npm run check
+
+  frontend:build:
+    dir: frontend
+    cmds:
+      - npm run build
+
+  bindings:
+    cmds:
+      - wails3 generate bindings -ts -names -d frontend/bindings ./...
+
+  build:
+    summary: Builds the application
+    cmds:
+      - task: "{{OS}}:build"
+
+  package:
+    summary: Packages a production build of the application
+    cmds:
+      - task: "{{OS}}:package"
+
+  run:
+    summary: Builds and runs the application
+    cmds:
+      - task: "{{OS}}:run"
+
+  dev:
+    desc: Alias for dev:app
+    summary: Alias for dev:app
+    cmds:
+      - task: dev:app
+
+  dev:app:
+    desc: Runs the macOS application in Wails development mode
+    summary: Runs the macOS application in Wails development mode
+    cmds:
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+
+  setup:docker:
+    summary: Builds Docker image for cross-compilation
+    cmds:
+      - task: common:setup:docker
