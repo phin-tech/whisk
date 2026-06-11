@@ -3,6 +3,7 @@ package gitcli
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -159,6 +160,47 @@ func TestStatusRejectsNonRepo(t *testing.T) {
 	var notRepo *NotRepoError
 	if !errors.As(err, &notRepo) {
 		t.Fatalf("Status error = %T %[1]v", err)
+	}
+}
+
+func TestOSRunnerRunCapturesSuccessAndExitError(t *testing.T) {
+	ctx := context.Background()
+	runner := OSRunner{}
+	output, err := runner.Run(ctx, Command{
+		Path: os.Args[0],
+		Args: []string{"-test.run=TestHelperProcess", "--", "ok"},
+	})
+	if err != nil {
+		t.Fatalf("Run success error: %v", err)
+	}
+	if output.StatusCode != 0 || string(output.Stdout) != "ok" {
+		t.Fatalf("success output = %#v", output)
+	}
+
+	output, err = runner.Run(ctx, Command{
+		Path: os.Args[0],
+		Args: []string{"-test.run=TestHelperProcess", "--", "fail"},
+	})
+	if err != nil {
+		t.Fatalf("Run failure error: %v", err)
+	}
+	if output.StatusCode != 7 || string(output.Stderr) != "bad" {
+		t.Fatalf("failure output = %#v", output)
+	}
+}
+
+func TestHelperProcess(t *testing.T) {
+	for i, arg := range os.Args {
+		if arg == "--" && i+1 < len(os.Args) {
+			switch os.Args[i+1] {
+			case "ok":
+				os.Stdout.WriteString("ok")
+				os.Exit(0)
+			case "fail":
+				os.Stderr.WriteString("bad")
+				os.Exit(7)
+			}
+		}
 	}
 }
 

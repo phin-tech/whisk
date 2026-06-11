@@ -117,6 +117,12 @@ func TestHTTPServerReportsBadRequests(t *testing.T) {
 	assertStatus(t, handler, http.MethodGet, "/v1/ptys/missing/output?from=nope", "", http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodPost, "/v1/ptys/missing/write", `{"data":"x"}`, http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodPost, "/v1/ptys/missing/resize", `{"cols":0,"rows":24}`, http.StatusBadRequest)
+
+	assertStatus(t, handler, http.MethodPost, "/v1/worktrunk/detect", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/worktrunk/detect", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/worktrees/list", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/worktrees/create", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/worktrees/remove", `{}`, http.StatusBadRequest)
 }
 
 type fakePTYBackend struct {

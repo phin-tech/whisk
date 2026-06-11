@@ -3,6 +3,7 @@ package ghcli
 import (
 	"context"
 	"errors"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -104,6 +105,48 @@ func TestValidationAndErrorStrings(t *testing.T) {
 	}
 	if got := truncate("short", 200); got != "short" {
 		t.Fatalf("truncate short = %q", got)
+	}
+}
+
+func TestOSRunnerRunCapturesSuccessAndExitError(t *testing.T) {
+	ctx := context.Background()
+	runner := OSRunner{}
+	output, err := runner.Run(ctx, Command{
+		Path: os.Args[0],
+		Args: []string{"-test.run=TestHelperProcess", "--", "ok"},
+	})
+	if err != nil {
+		t.Fatalf("Run success error: %v", err)
+	}
+	if string(output.Stdout) != "ok" || output.StatusCode != 0 {
+		t.Fatalf("success output = %#v", output)
+	}
+
+	output, err = runner.Run(ctx, Command{
+		Path: os.Args[0],
+		Args: []string{"-test.run=TestHelperProcess", "--", "fail"},
+	})
+	if err != nil {
+		t.Fatalf("Run failure error: %v", err)
+	}
+	if output.StatusCode != 7 || string(output.Stderr) != "bad" {
+		t.Fatalf("failure output = %#v", output)
+	}
+}
+
+func TestHelperProcess(t *testing.T) {
+	args := os.Args
+	for i, arg := range args {
+		if arg == "--" && i+1 < len(args) {
+			switch args[i+1] {
+			case "ok":
+				os.Stdout.WriteString("ok")
+				os.Exit(0)
+			case "fail":
+				os.Stderr.WriteString("bad")
+				os.Exit(7)
+			}
+		}
 	}
 }
 

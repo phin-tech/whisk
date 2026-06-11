@@ -1,0 +1,18 @@
+minimum_prek_version = "0.1.0"
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "whisk-check"
+name = "whisk check"
+language = "system"
+entry = "task check"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "whisk-coverage"
+name = "whisk coverage >= 85%"
+language = "system"
+entry = "task coverage:check"
+pass_filenames = false

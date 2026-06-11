@@ -350,6 +350,64 @@ func TestRemoveMapsLockedAndDirtyFailures(t *testing.T) {
 	}
 }
 
+func TestOSRunnerRunCapturesSuccessExitErrorAndEnv(t *testing.T) {
+	ctx := context.Background()
+	runner := OSRunner{}
+	output, err := runner.Run(ctx, Command{
+		Path: os.Args[0],
+		Args: []string{"-test.run=TestHelperProcess", "--", "ok"},
+		Env:  map[string]string{"WHISK_HELPER_VALUE": "env-ok"},
+	})
+	if err != nil {
+		t.Fatalf("Run success error: %v", err)
+	}
+	if output.StatusCode != 0 || string(output.Stdout) != "env-ok" {
+		t.Fatalf("success output = %#v", output)
+	}
+
+	output, err = runner.Run(ctx, Command{
+		Path: os.Args[0],
+		Args: []string{"-test.run=TestHelperProcess", "--", "fail"},
+	})
+	if err != nil {
+		t.Fatalf("Run failure error: %v", err)
+	}
+	if output.StatusCode != 7 || string(output.Stderr) != "bad" {
+		t.Fatalf("failure output = %#v", output)
+	}
+	if _, err := runner.LookPath(os.Args[0]); err != nil {
+		t.Fatalf("LookPath error: %v", err)
+	}
+}
+
+func TestErrorStrings(t *testing.T) {
+	errs := []error{
+		&ExitError{StatusCode: 1, Stderr: "x"},
+		&LockedError{Reason: "locked"},
+		&DirtyError{Reason: "dirty"},
+	}
+	for _, err := range errs {
+		if err.Error() == "" {
+			t.Fatalf("empty error string for %T", err)
+		}
+	}
+}
+
+func TestHelperProcess(t *testing.T) {
+	for i, arg := range os.Args {
+		if arg == "--" && i+1 < len(os.Args) {
+			switch os.Args[i+1] {
+			case "ok":
+				os.Stdout.WriteString(os.Getenv("WHISK_HELPER_VALUE"))
+				os.Exit(0)
+			case "fail":
+				os.Stderr.WriteString("bad")
+				os.Exit(7)
+			}
+		}
+	}
+}
+
 type fakeRunner struct {
 	lookupPath string
 	lookupErr  error
