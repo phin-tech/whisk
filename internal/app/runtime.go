@@ -78,15 +78,17 @@ type AttachPTYRequest struct {
 
 type RuntimeConfig struct {
 	PTYBackend  PTYBackend
+	Worktrees   WorktreeBackend
 	IDGenerator func() string
 }
 
 type Runtime struct {
-	mu     sync.Mutex
-	ids    func() string
-	ptys   PTYBackend
-	state  *session.State
-	nextID int
+	mu        sync.Mutex
+	ids       func() string
+	ptys      PTYBackend
+	worktrees WorktreeBackend
+	state     *session.State
+	nextID    int
 }
 
 type CreateSessionRequest struct {
@@ -118,9 +120,10 @@ type SplitPaneResult struct {
 func NewRuntime(config RuntimeConfig) *Runtime {
 	ids := config.IDGenerator
 	r := &Runtime{
-		ids:   ids,
-		ptys:  config.PTYBackend,
-		state: session.NewState(),
+		ids:       ids,
+		ptys:      config.PTYBackend,
+		worktrees: config.Worktrees,
+		state:     session.NewState(),
 	}
 	if r.ids == nil {
 		r.ids = r.generatedID

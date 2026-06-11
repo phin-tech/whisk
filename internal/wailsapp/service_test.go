@@ -18,6 +18,15 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		},
 		split:  protocol.SplitPaneResult{Session: session.Session{ID: "sess_02"}, PaneID: "pane_02", PtyID: "pty_02"},
 		output: protocol.OutputSnapshot{PtyID: "pty_01", Offset: 12, Output: "hello"},
+		worktrunk: protocol.WorktrunkStatus{
+			Available:   true,
+			ConfigFound: true,
+			Binary:      protocol.WorktrunkBinary{Path: "/bin/wt", Version: "0.44.0"},
+		},
+		worktrees: []protocol.Worktree{{Branch: "feature", Path: "/repo/.worktrees/feature"}},
+		createdWorktree: protocol.CreatedWorktree{
+			Path: "/repo/.worktrees/created",
+		},
 	}
 	service := wailsapp.NewService(fake)
 	ctx := context.Background()
@@ -50,19 +59,50 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || output.Offset != 12 || fake.outputReq.FromOffset != 7 {
 		t.Fatalf("output = %#v, req = %#v, err = %v", output, fake.outputReq, err)
 	}
+
+	worktrunk, err := service.DetectWorktrunk(ctx, protocol.DetectWorktrunkRequest{RepoPath: "/repo"})
+	if err != nil || !worktrunk.Available || fake.detectWorktrunkReq.RepoPath != "/repo" {
+		t.Fatalf("detect worktrunk = %#v, req = %#v, err = %v", worktrunk, fake.detectWorktrunkReq, err)
+	}
+	worktrees, err := service.ListWorktrees(ctx, protocol.ListWorktreesRequest{RepoPath: "/repo"})
+	if err != nil || len(worktrees) != 1 || worktrees[0].Branch != "feature" || fake.listWorktreesReq.RepoPath != "/repo" {
+		t.Fatalf("list worktrees = %#v, req = %#v, err = %v", worktrees, fake.listWorktreesReq, err)
+	}
+	createdWorktree, err := service.CreateWorktree(ctx, protocol.CreateWorktreeRequest{
+		RepoPath: "/repo",
+		Branch:   "created",
+		Base:     "main",
+	})
+	if err != nil || createdWorktree.Path != "/repo/.worktrees/created" || fake.createWorktreeReq.Base != "main" {
+		t.Fatalf("create worktree = %#v, req = %#v, err = %v", createdWorktree, fake.createWorktreeReq, err)
+	}
+	if err := service.RemoveWorktree(ctx, protocol.RemoveWorktreeRequest{RepoPath: "/repo", WorktreePath: "/repo/.worktrees/created"}); err != nil {
+		t.Fatalf("remove worktree: %v", err)
+	}
+	if fake.removeWorktreeReq.WorktreePath != "/repo/.worktrees/created" || fake.removeWorktreeReq.AlsoBranch {
+		t.Fatalf("remove worktree req = %#v", fake.removeWorktreeReq)
+	}
 }
 
 type runtimeClientFake struct {
-	sessions []session.Session
-	created  protocol.CreatedSession
-	split    protocol.SplitPaneResult
-	output   protocol.OutputSnapshot
+	sessions        []session.Session
+	created         protocol.CreatedSession
+	split           protocol.SplitPaneResult
+	output          protocol.OutputSnapshot
+	worktrunk       protocol.WorktrunkStatus
+	worktrees       []protocol.Worktree
+	createdWorktree protocol.CreatedWorktree
 
 	createReq protocol.CreateSessionRequest
 	splitReq  protocol.SplitPaneRequest
 	writeReq  protocol.WritePTYRequest
 	resizeReq protocol.ResizePTYRequest
 	outputReq protocol.OutputRequest
+
+	detectWorktrunkReq protocol.DetectWorktrunkRequest
+	listWorktreesReq   protocol.ListWorktreesRequest
+	createWorktreeReq  protocol.CreateWorktreeRequest
+	removeWorktreeReq  protocol.RemoveWorktreeRequest
 }
 
 func (f *runtimeClientFake) ListSessions(context.Context) ([]session.Session, error) {
@@ -92,4 +132,24 @@ func (f *runtimeClientFake) ResizePTY(_ context.Context, req protocol.ResizePTYR
 func (f *runtimeClientFake) Output(_ context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error) {
 	f.outputReq = req
 	return f.output, nil
+}
+
+func (f *runtimeClientFake) DetectWorktrunk(_ context.Context, req protocol.DetectWorktrunkRequest) (protocol.WorktrunkStatus, error) {
+	f.detectWorktrunkReq = req
+	return f.worktrunk, nil
+}
+
+func (f *runtimeClientFake) ListWorktrees(_ context.Context, req protocol.ListWorktreesRequest) ([]protocol.Worktree, error) {
+	f.listWorktreesReq = req
+	return f.worktrees, nil
+}
+
+func (f *runtimeClientFake) CreateWorktree(_ context.Context, req protocol.CreateWorktreeRequest) (protocol.CreatedWorktree, error) {
+	f.createWorktreeReq = req
+	return f.createdWorktree, nil
+}
+
+func (f *runtimeClientFake) RemoveWorktree(_ context.Context, req protocol.RemoveWorktreeRequest) error {
+	f.removeWorktreeReq = req
+	return nil
 }

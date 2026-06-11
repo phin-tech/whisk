@@ -50,6 +50,53 @@ type OutputSnapshot struct {
 	Output string `json:"output"`
 }
 
+type DetectWorktrunkRequest struct {
+	RepoPath     string `json:"repoPath"`
+	OverridePath string `json:"overridePath"`
+}
+
+type WorktrunkBinary struct {
+	Path    string `json:"path"`
+	Version string `json:"version"`
+}
+
+type WorktrunkStatus struct {
+	Available   bool            `json:"available"`
+	ConfigFound bool            `json:"configFound"`
+	Binary      WorktrunkBinary `json:"binary"`
+}
+
+type ListWorktreesRequest struct {
+	RepoPath string `json:"repoPath"`
+}
+
+type Worktree struct {
+	Branch    string `json:"branch"`
+	Path      string `json:"path"`
+	Kind      string `json:"kind"`
+	IsMain    bool   `json:"isMain"`
+	IsCurrent bool   `json:"isCurrent"`
+	Dirty     bool   `json:"dirty"`
+	Locked    bool   `json:"locked"`
+}
+
+type CreateWorktreeRequest struct {
+	RepoPath string `json:"repoPath"`
+	Branch   string `json:"branch"`
+	Base     string `json:"base"`
+}
+
+type CreatedWorktree struct {
+	Path string `json:"path"`
+}
+
+type RemoveWorktreeRequest struct {
+	RepoPath     string `json:"repoPath"`
+	WorktreePath string `json:"worktreePath"`
+	AlsoBranch   bool   `json:"alsoBranch"`
+	Force        bool   `json:"force"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }

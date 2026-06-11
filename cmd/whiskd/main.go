@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
+	"github.com/phin-tech/whisk/internal/adapters/worktrunk"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/server"
 )
@@ -24,7 +25,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend()})
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend: native.NewBackend(),
+		Worktrees:  worktrunk.NewBackend(nil),
+	})
 	defer func() { _ = runtime.Shutdown(context.Background()) }()
 
 	shutdown := make(chan struct{})

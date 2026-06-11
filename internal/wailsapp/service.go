@@ -39,3 +39,19 @@ func (s *Service) ResizePTY(ctx context.Context, req protocol.ResizePTYRequest) 
 func (s *Service) Output(ctx context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error) {
 	return s.client.Output(ctx, req)
 }
+
+func (s *Service) DetectWorktrunk(ctx context.Context, req protocol.DetectWorktrunkRequest) (protocol.WorktrunkStatus, error) {
+	return s.client.DetectWorktrunk(ctx, req)
+}
+
+func (s *Service) ListWorktrees(ctx context.Context, req protocol.ListWorktreesRequest) ([]protocol.Worktree, error) {
+	return s.client.ListWorktrees(ctx, req)
+}
+
+func (s *Service) CreateWorktree(ctx context.Context, req protocol.CreateWorktreeRequest) (protocol.CreatedWorktree, error) {
+	return s.client.CreateWorktree(ctx, req)
+}
+
+func (s *Service) RemoveWorktree(ctx context.Context, req protocol.RemoveWorktreeRequest) error {
+	return s.client.RemoveWorktree(ctx, req)
+}

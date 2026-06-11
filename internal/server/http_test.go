@@ -61,6 +61,53 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	}
 }
 
+func TestHTTPServerWorktreeFlow(t *testing.T) {
+	backend := &fakeWorktreeBackend{
+		status: app.WorktrunkStatus{
+			Available:   true,
+			ConfigFound: true,
+			Binary:      app.WorktrunkBinary{Path: "/bin/wt", Version: "0.44.0"},
+		},
+		worktrees: []app.Worktree{{Branch: "feature", Path: "/repo/.worktrees/feature", Kind: "worktree", Dirty: true, Locked: true}},
+		created:   app.CreatedWorktree{Path: "/repo/.worktrees/created"},
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{Worktrees: backend})
+	handler := server.NewHTTP(runtime)
+
+	status := postJSON[protocol.WorktrunkStatus](t, handler, "/v1/worktrunk/detect", protocol.DetectWorktrunkRequest{
+		RepoPath:     "/repo",
+		OverridePath: "/custom/wt",
+	}, http.StatusOK)
+	if !status.Available || !status.ConfigFound || status.Binary.Path != "/bin/wt" {
+		t.Fatalf("status = %#v", status)
+	}
+	if backend.detectReq.OverridePath != "/custom/wt" {
+		t.Fatalf("detect req = %#v", backend.detectReq)
+	}
+
+	worktrees := postJSON[[]protocol.Worktree](t, handler, "/v1/worktrees/list", protocol.ListWorktreesRequest{RepoPath: "/repo"}, http.StatusOK)
+	if len(worktrees) != 1 || worktrees[0].Branch != "feature" || !worktrees[0].Dirty || !worktrees[0].Locked {
+		t.Fatalf("worktrees = %#v", worktrees)
+	}
+
+	created := postJSON[protocol.CreatedWorktree](t, handler, "/v1/worktrees/create", protocol.CreateWorktreeRequest{
+		RepoPath: "/repo",
+		Branch:   "created",
+		Base:     "main",
+	}, http.StatusCreated)
+	if created.Path != "/repo/.worktrees/created" || backend.createReq.Base != "main" {
+		t.Fatalf("created = %#v req = %#v", created, backend.createReq)
+	}
+
+	postNoContent(t, handler, "/v1/worktrees/remove", protocol.RemoveWorktreeRequest{
+		RepoPath:     "/repo",
+		WorktreePath: "/repo/.worktrees/created",
+	})
+	if backend.removeReq.WorktreePath != "/repo/.worktrees/created" {
+		t.Fatalf("remove req = %#v", backend.removeReq)
+	}
+}
+
 func TestHTTPServerReportsBadRequests(t *testing.T) {
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: newFakePTYBackend()})
 	handler := server.NewHTTP(runtime)
@@ -143,6 +190,37 @@ type errNotFound string
 
 func (e errNotFound) Error() string {
 	return "pty " + string(e) + " not found"
+}
+
+type fakeWorktreeBackend struct {
+	status    app.WorktrunkStatus
+	worktrees []app.Worktree
+	created   app.CreatedWorktree
+
+	detectReq app.DetectWorktrunkRequest
+	listReq   app.ListWorktreesRequest
+	createReq app.CreateWorktreeRequest
+	removeReq app.RemoveWorktreeRequest
+}
+
+func (b *fakeWorktreeBackend) DetectWorktrunk(_ context.Context, req app.DetectWorktrunkRequest) (app.WorktrunkStatus, error) {
+	b.detectReq = req
+	return b.status, nil
+}
+
+func (b *fakeWorktreeBackend) ListWorktrees(_ context.Context, req app.ListWorktreesRequest) ([]app.Worktree, error) {
+	b.listReq = req
+	return b.worktrees, nil
+}
+
+func (b *fakeWorktreeBackend) CreateWorktree(_ context.Context, req app.CreateWorktreeRequest) (app.CreatedWorktree, error) {
+	b.createReq = req
+	return b.created, nil
+}
+
+func (b *fakeWorktreeBackend) RemoveWorktree(_ context.Context, req app.RemoveWorktreeRequest) error {
+	b.removeReq = req
+	return nil
 }
 
 func postJSON[T any](t *testing.T, handler http.Handler, path string, body any, wantStatus int) T {
