@@ -18,16 +18,38 @@ export function CreateSession(req: protocol$0.CreateSessionRequest): $Cancellabl
     });
 }
 
+export function CreateWorktree(req: protocol$0.CreateWorktreeRequest): $CancellablePromise<protocol$0.CreatedWorktree> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.CreateWorktree", req).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+export function DetectWorktrunk(req: protocol$0.DetectWorktrunkRequest): $CancellablePromise<protocol$0.WorktrunkStatus> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.DetectWorktrunk", req).then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
 export function ListSessions(): $CancellablePromise<session$0.Session[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListSessions").then(($result: any) => {
-        return $$createType2($result);
+        return $$createType4($result);
+    });
+}
+
+export function ListWorktrees(req: protocol$0.ListWorktreesRequest): $CancellablePromise<protocol$0.Worktree[]> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorktrees", req).then(($result: any) => {
+        return $$createType6($result);
     });
 }
 
 export function Output(req: protocol$0.OutputRequest): $CancellablePromise<protocol$0.OutputSnapshot> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.Output", req).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType7($result);
     });
+}
+
+export function RemoveWorktree(req: protocol$0.RemoveWorktreeRequest): $CancellablePromise<void> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.RemoveWorktree", req);
 }
 
 export function ResizePTY(req: protocol$0.ResizePTYRequest): $CancellablePromise<void> {
@@ -36,7 +58,7 @@ export function ResizePTY(req: protocol$0.ResizePTYRequest): $CancellablePromise
 
 export function SplitPane(req: protocol$0.SplitPaneRequest): $CancellablePromise<protocol$0.SplitPaneResult> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SplitPane", req).then(($result: any) => {
-        return $$createType4($result);
+        return $$createType8($result);
     });
 }
 
@@ -46,7 +68,11 @@ export function WritePTY(req: protocol$0.WritePTYRequest): $CancellablePromise<v
 
 // Private type creation functions
 const $$createType0 = protocol$0.CreatedSession.createFrom;
-const $$createType1 = session$0.Session.createFrom;
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = protocol$0.OutputSnapshot.createFrom;
-const $$createType4 = protocol$0.SplitPaneResult.createFrom;
+const $$createType1 = protocol$0.CreatedWorktree.createFrom;
+const $$createType2 = protocol$0.WorktrunkStatus.createFrom;
+const $$createType3 = session$0.Session.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = protocol$0.Worktree.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = protocol$0.OutputSnapshot.createFrom;
+const $$createType8 = protocol$0.SplitPaneResult.createFrom;

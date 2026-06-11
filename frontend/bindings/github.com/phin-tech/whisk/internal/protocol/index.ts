@@ -3,11 +3,19 @@
 
 export {
     CreateSessionRequest,
+    CreateWorktreeRequest,
     CreatedSession,
+    CreatedWorktree,
+    DetectWorktrunkRequest,
+    ListWorktreesRequest,
     OutputRequest,
     OutputSnapshot,
+    RemoveWorktreeRequest,
     ResizePTYRequest,
     SplitPaneRequest,
     SplitPaneResult,
+    Worktree,
+    WorktrunkBinary,
+    WorktrunkStatus,
     WritePTYRequest
 } from "./models.js";

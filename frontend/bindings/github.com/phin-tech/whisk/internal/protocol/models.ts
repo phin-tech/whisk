@@ -42,6 +42,35 @@ export class CreateSessionRequest {
     }
 }
 
+export class CreateWorktreeRequest {
+    "repoPath": string;
+    "branch": string;
+    "base": string;
+
+    /** Creates a new CreateWorktreeRequest instance. */
+    constructor($$source: Partial<CreateWorktreeRequest> = {}) {
+        if (!("repoPath" in $$source)) {
+            this["repoPath"] = "";
+        }
+        if (!("branch" in $$source)) {
+            this["branch"] = "";
+        }
+        if (!("base" in $$source)) {
+            this["base"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CreateWorktreeRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CreateWorktreeRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CreateWorktreeRequest($$parsedSource as Partial<CreateWorktreeRequest>);
+    }
+}
+
 export class CreatedSession {
     "session": session$0.Session;
     "mainPtyId": string;
@@ -68,6 +97,73 @@ export class CreatedSession {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
         }
         return new CreatedSession($$parsedSource as Partial<CreatedSession>);
+    }
+}
+
+export class CreatedWorktree {
+    "path": string;
+
+    /** Creates a new CreatedWorktree instance. */
+    constructor($$source: Partial<CreatedWorktree> = {}) {
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CreatedWorktree instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CreatedWorktree {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CreatedWorktree($$parsedSource as Partial<CreatedWorktree>);
+    }
+}
+
+export class DetectWorktrunkRequest {
+    "repoPath": string;
+    "overridePath": string;
+
+    /** Creates a new DetectWorktrunkRequest instance. */
+    constructor($$source: Partial<DetectWorktrunkRequest> = {}) {
+        if (!("repoPath" in $$source)) {
+            this["repoPath"] = "";
+        }
+        if (!("overridePath" in $$source)) {
+            this["overridePath"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DetectWorktrunkRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DetectWorktrunkRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DetectWorktrunkRequest($$parsedSource as Partial<DetectWorktrunkRequest>);
+    }
+}
+
+export class ListWorktreesRequest {
+    "repoPath": string;
+
+    /** Creates a new ListWorktreesRequest instance. */
+    constructor($$source: Partial<ListWorktreesRequest> = {}) {
+        if (!("repoPath" in $$source)) {
+            this["repoPath"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ListWorktreesRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ListWorktreesRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ListWorktreesRequest($$parsedSource as Partial<ListWorktreesRequest>);
     }
 }
 
@@ -122,6 +218,39 @@ export class OutputSnapshot {
     static createFrom($$source: any = {}): OutputSnapshot {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new OutputSnapshot($$parsedSource as Partial<OutputSnapshot>);
+    }
+}
+
+export class RemoveWorktreeRequest {
+    "repoPath": string;
+    "worktreePath": string;
+    "alsoBranch": boolean;
+    "force": boolean;
+
+    /** Creates a new RemoveWorktreeRequest instance. */
+    constructor($$source: Partial<RemoveWorktreeRequest> = {}) {
+        if (!("repoPath" in $$source)) {
+            this["repoPath"] = "";
+        }
+        if (!("worktreePath" in $$source)) {
+            this["worktreePath"] = "";
+        }
+        if (!("alsoBranch" in $$source)) {
+            this["alsoBranch"] = false;
+        }
+        if (!("force" in $$source)) {
+            this["force"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RemoveWorktreeRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RemoveWorktreeRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RemoveWorktreeRequest($$parsedSource as Partial<RemoveWorktreeRequest>);
     }
 }
 
@@ -224,6 +353,109 @@ export class SplitPaneResult {
     }
 }
 
+export class Worktree {
+    "branch": string;
+    "path": string;
+    "kind": string;
+    "isMain": boolean;
+    "isCurrent": boolean;
+    "dirty": boolean;
+    "locked": boolean;
+
+    /** Creates a new Worktree instance. */
+    constructor($$source: Partial<Worktree> = {}) {
+        if (!("branch" in $$source)) {
+            this["branch"] = "";
+        }
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("isMain" in $$source)) {
+            this["isMain"] = false;
+        }
+        if (!("isCurrent" in $$source)) {
+            this["isCurrent"] = false;
+        }
+        if (!("dirty" in $$source)) {
+            this["dirty"] = false;
+        }
+        if (!("locked" in $$source)) {
+            this["locked"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Worktree instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Worktree {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Worktree($$parsedSource as Partial<Worktree>);
+    }
+}
+
+export class WorktrunkBinary {
+    "path": string;
+    "version": string;
+
+    /** Creates a new WorktrunkBinary instance. */
+    constructor($$source: Partial<WorktrunkBinary> = {}) {
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("version" in $$source)) {
+            this["version"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorktrunkBinary instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorktrunkBinary {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorktrunkBinary($$parsedSource as Partial<WorktrunkBinary>);
+    }
+}
+
+export class WorktrunkStatus {
+    "available": boolean;
+    "configFound": boolean;
+    "binary": WorktrunkBinary;
+
+    /** Creates a new WorktrunkStatus instance. */
+    constructor($$source: Partial<WorktrunkStatus> = {}) {
+        if (!("available" in $$source)) {
+            this["available"] = false;
+        }
+        if (!("configFound" in $$source)) {
+            this["configFound"] = false;
+        }
+        if (!("binary" in $$source)) {
+            this["binary"] = (new WorktrunkBinary());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorktrunkStatus instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorktrunkStatus {
+        const $$createField2_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("binary" in $$parsedSource) {
+            $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
+        }
+        return new WorktrunkStatus($$parsedSource as Partial<WorktrunkStatus>);
+    }
+}
+
 export class WritePTYRequest {
     "ptyId": string;
     "data": string;
@@ -251,3 +483,4 @@ export class WritePTYRequest {
 
 // Private type creation functions
 const $$createType0 = session$0.Session.createFrom;
+const $$createType1 = WorktrunkBinary.createFrom;
