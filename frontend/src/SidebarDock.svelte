@@ -1,0 +1,112 @@
+<script lang="ts">
+  import { onDestroy } from "svelte";
+  import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
+  import type { PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import PtysPanel from "./PtysPanel.svelte";
+  import SessionsPanel from "./SessionsPanel.svelte";
+
+  export let activePanel: "sessions" | "ptys" | null = "sessions";
+  export let sessions: Session[] = [];
+  export let ptys: PTYInfo[] = [];
+  export let activeSessionId = "";
+  export let loadingSession = false;
+  export let loadingPtys = false;
+  export let railSide: "left" | "right" = "right";
+  export let onClose: () => void;
+  export let onNewSession: () => void;
+  export let onSelectSession: (session: Session) => void;
+  export let onRefreshPtys: () => void;
+
+  const minWidth = 240;
+  const maxWidth = 800;
+  let width = 320;
+  let dragging = false;
+  let teardown: (() => void) | null = null;
+
+  function clamp(value: number) {
+    return Math.max(minWidth, Math.min(maxWidth, value));
+  }
+
+  function endDrag() {
+    teardown?.();
+    teardown = null;
+    dragging = false;
+  }
+
+  function startDrag(event: MouseEvent) {
+    event.preventDefault();
+    endDrag();
+    dragging = true;
+    const startX = event.clientX;
+    const startWidth = width;
+    const sign = railSide === "left" ? 1 : -1;
+    const onMove = (moveEvent: MouseEvent) => {
+      width = clamp(startWidth + sign * (moveEvent.clientX - startX));
+    };
+    const onKey = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key === "Escape") endDrag();
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", endDrag);
+    window.addEventListener("blur", endDrag);
+    window.addEventListener("keydown", onKey);
+    teardown = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", endDrag);
+      window.removeEventListener("blur", endDrag);
+      window.removeEventListener("keydown", onKey);
+    };
+  }
+
+  onDestroy(endDrag);
+</script>
+
+{#if activePanel}
+  <div class="relative flex shrink-0">
+    {#if railSide === "right"}
+      <button
+        type="button"
+        aria-label="Resize sidebar"
+        class="group relative flex w-1 shrink-0 cursor-col-resize self-stretch flex-col items-center border-0 bg-transparent p-0"
+        on:mousedown={startDrag}
+      >
+        <div
+          class="min-h-0 max-w-[0.5px] min-w-[0.5px] flex-1 transition-all duration-150 {dragging
+            ? 'bg-white/30'
+            : 'bg-white/20 group-hover:bg-white/40'}"
+        ></div>
+      </button>
+    {/if}
+    <div
+      class="dock-panel relative h-full shrink-0 bg-bg-deep"
+      style="--dock-width: {width}px"
+    >
+      {#if activePanel === "sessions"}
+        <SessionsPanel
+          {sessions}
+          {activeSessionId}
+          loading={loadingSession}
+          onclose={onClose}
+          {onNewSession}
+          {onSelectSession}
+        />
+      {:else}
+        <PtysPanel ptys={ptys} loading={loadingPtys} onclose={onClose} onRefresh={onRefreshPtys} />
+      {/if}
+    </div>
+    {#if railSide === "left"}
+      <button
+        type="button"
+        aria-label="Resize sidebar"
+        class="group relative flex w-1 shrink-0 cursor-col-resize self-stretch flex-col items-center border-0 bg-transparent p-0"
+        on:mousedown={startDrag}
+      >
+        <div
+          class="min-h-0 max-w-[0.5px] min-w-[0.5px] flex-1 transition-all duration-150 {dragging
+            ? 'bg-white/30'
+            : 'bg-white/20 group-hover:bg-white/40'}"
+        ></div>
+      </button>
+    {/if}
+  </div>
+{/if}

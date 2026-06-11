@@ -36,21 +36,33 @@ export function ListHTTPForwards(): $CancellablePromise<protocol$0.HTTPForward[]
     });
 }
 
+export function ListPTYs(): $CancellablePromise<protocol$0.PTYInfo[]> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListPTYs").then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
 export function ListSessions(): $CancellablePromise<session$0.Session[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListSessions").then(($result: any) => {
-        return $$createType6($result);
+        return $$createType8($result);
     });
 }
 
 export function ListWorktrees(req: protocol$0.ListWorktreesRequest): $CancellablePromise<protocol$0.Worktree[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorktrees", req).then(($result: any) => {
-        return $$createType8($result);
+        return $$createType10($result);
+    });
+}
+
+export function NextEvent(req: protocol$0.NextEventRequest): $CancellablePromise<protocol$0.RuntimeEvent> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.NextEvent", req).then(($result: any) => {
+        return $$createType11($result);
     });
 }
 
 export function Output(req: protocol$0.OutputRequest): $CancellablePromise<protocol$0.OutputSnapshot> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.Output", req).then(($result: any) => {
-        return $$createType9($result);
+        return $$createType12($result);
     });
 }
 
@@ -64,13 +76,13 @@ export function ResizePTY(req: protocol$0.ResizePTYRequest): $CancellablePromise
 
 export function SplitPane(req: protocol$0.SplitPaneRequest): $CancellablePromise<protocol$0.SplitPaneResult> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SplitPane", req).then(($result: any) => {
-        return $$createType10($result);
+        return $$createType13($result);
     });
 }
 
 export function StartHTTPForward(req: protocol$0.StartHTTPForwardRequest): $CancellablePromise<protocol$0.StartedHTTPForward> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartHTTPForward", req).then(($result: any) => {
-        return $$createType11($result);
+        return $$createType14($result);
     });
 }
 
@@ -88,10 +100,13 @@ const $$createType1 = protocol$0.CreatedWorktree.createFrom;
 const $$createType2 = protocol$0.WorktrunkStatus.createFrom;
 const $$createType3 = protocol$0.HTTPForward.createFrom;
 const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = session$0.Session.createFrom;
+const $$createType5 = protocol$0.PTYInfo.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = protocol$0.Worktree.createFrom;
+const $$createType7 = session$0.Session.createFrom;
 const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = protocol$0.OutputSnapshot.createFrom;
-const $$createType10 = protocol$0.SplitPaneResult.createFrom;
-const $$createType11 = protocol$0.StartedHTTPForward.createFrom;
+const $$createType9 = protocol$0.Worktree.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = protocol$0.RuntimeEvent.createFrom;
+const $$createType12 = protocol$0.OutputSnapshot.createFrom;
+const $$createType13 = protocol$0.SplitPaneResult.createFrom;
+const $$createType14 = protocol$0.StartedHTTPForward.createFrom;

@@ -1,11 +1,15 @@
 package server
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/domain/session"
@@ -19,6 +23,7 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("GET /v1/sessions", server.listSessions)
 	mux.HandleFunc("POST /v1/sessions", server.createSession)
 	mux.HandleFunc("POST /v1/sessions/{sessionID}/split", server.splitPane)
+	mux.HandleFunc("GET /v1/ptys", server.listPTYs)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/write", server.writePTY)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/resize", server.resizePTY)
 	mux.HandleFunc("GET /v1/ptys/{ptyID}/output", server.output)
@@ -31,6 +36,7 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("DELETE /v1/http-forwards/{forwardID}", server.deleteHTTPForward)
 	mux.HandleFunc("/v1/http-forwards/{forwardID}/proxy", server.proxyHTTPForward)
 	mux.HandleFunc("/v1/http-forwards/{forwardID}/proxy/", server.proxyHTTPForward)
+	mux.HandleFunc("GET /v1/events/next", server.nextEvent)
 	return mux
 }
 
@@ -101,6 +107,27 @@ func (s *HTTPServer) splitPane(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *HTTPServer) listPTYs(w http.ResponseWriter, r *http.Request) {
+	ptys, err := s.runtime.ListPTYs(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	out := make([]protocol.PTYInfo, 0, len(ptys))
+	for _, pty := range ptys {
+		out = append(out, protocol.PTYInfo{
+			ID:         pty.ID,
+			WorkingDir: pty.WorkingDir,
+			Cols:       pty.Cols,
+			Rows:       pty.Rows,
+			Running:    pty.Running,
+			SessionID:  pty.SessionID,
+			PaneID:     pty.PaneID,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (s *HTTPServer) writePTY(w http.ResponseWriter, r *http.Request) {
 	var req protocol.WritePTYRequest
 	if !decodeJSON(w, r, &req) {
@@ -140,9 +167,42 @@ func (s *HTTPServer) output(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, protocol.OutputSnapshot{
-		PtyID:  snapshot.Record.ID,
-		Offset: snapshot.Offset + uint64(len(snapshot.OutputBytes)),
-		Output: string(snapshot.OutputBytes),
+		PtyID:        snapshot.Record.ID,
+		Offset:       snapshot.Offset + uint64(len(snapshot.OutputBytes)),
+		Output:       string(snapshot.OutputBytes),
+		OutputBase64: base64.StdEncoding.EncodeToString(snapshot.OutputBytes),
+	})
+}
+
+func (s *HTTPServer) nextEvent(w http.ResponseWriter, r *http.Request) {
+	timeoutMs := 30_000
+	if raw := r.URL.Query().Get("timeoutMs"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid timeoutMs"))
+			return
+		}
+		timeoutMs = parsed
+	}
+	ctx := r.Context()
+	if timeoutMs > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+		defer cancel()
+	}
+	event, err := s.runtime.NextEvent(ctx)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			writeJSON(w, http.StatusOK, protocol.RuntimeEvent{Type: protocol.RuntimeEventNone})
+			return
+		}
+		writeError(w, http.StatusRequestTimeout, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, protocol.RuntimeEvent{
+		Type:   string(event.Type),
+		PtyID:  event.PtyID,
+		Offset: event.Offset,
 	})
 }
 

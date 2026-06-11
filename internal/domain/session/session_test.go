@@ -168,6 +168,38 @@ func TestGetAndListReturnClones(t *testing.T) {
 	}
 }
 
+func TestPTYOwnersMapsPTYsToSessionPanes(t *testing.T) {
+	state := session.NewState()
+	created, err := state.CreateSession(session.CreateSession{
+		SessionID:  "sess_01",
+		PaneID:     "pane_01",
+		PtyID:      "pty_01",
+		Name:       "Whisk",
+		WorkingDir: "/repo",
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := state.SplitPane(session.SplitPane{
+		SessionID:    created.ID,
+		TargetPaneID: created.FocusedPaneID,
+		NewPaneID:    "pane_02",
+		NewPtyID:     "pty_02",
+		Direction:    session.SplitHorizontal,
+	}); err != nil {
+		t.Fatalf("split pane: %v", err)
+	}
+
+	owners := state.PTYOwners()
+
+	if owners["pty_01"].SessionID != "sess_01" || owners["pty_01"].PaneID != "pane_01" {
+		t.Fatalf("pty_01 owner = %#v", owners["pty_01"])
+	}
+	if owners["pty_02"].SessionID != "sess_01" || owners["pty_02"].PaneID != "pane_02" {
+		t.Fatalf("pty_02 owner = %#v", owners["pty_02"])
+	}
+}
+
 func TestCreateSessionRejectsInvalidInput(t *testing.T) {
 	tests := []struct {
 		name string

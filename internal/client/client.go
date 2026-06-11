@@ -14,6 +14,8 @@ type RuntimeClient interface {
 	WritePTY(ctx context.Context, req protocol.WritePTYRequest) error
 	ResizePTY(ctx context.Context, req protocol.ResizePTYRequest) error
 	Output(ctx context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error)
+	ListPTYs(ctx context.Context) ([]protocol.PTYInfo, error)
+	NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error)
 	DetectWorktrunk(ctx context.Context, req protocol.DetectWorktrunkRequest) (protocol.WorktrunkStatus, error)
 	ListWorktrees(ctx context.Context, req protocol.ListWorktreesRequest) ([]protocol.Worktree, error)
 	CreateWorktree(ctx context.Context, req protocol.CreateWorktreeRequest) (protocol.CreatedWorktree, error)

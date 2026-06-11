@@ -175,6 +175,16 @@ func (b *Backend) Output(_ context.Context, ptyID string, fromOffset uint64) (ap
 	}, nil
 }
 
+func (b *Backend) List(context.Context) ([]app.PTYRecord, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]app.PTYRecord, 0, len(b.ptys))
+	for _, p := range b.ptys {
+		out = append(out, p.record)
+	}
+	return out, nil
+}
+
 func (b *Backend) Shutdown(_ context.Context) error {
 	b.mu.Lock()
 	ptys := make([]*proc, 0, len(b.ptys))

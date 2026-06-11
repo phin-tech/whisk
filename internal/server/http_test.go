@@ -17,7 +17,8 @@ import (
 
 func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	backend := newFakePTYBackend()
-	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend})
+	eventBus := newFakeEventBus()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: eventBus})
 	handler := server.NewHTTP(runtime)
 
 	health := getJSON[map[string]bool](t, handler, "/v1/health", http.StatusOK)
@@ -47,7 +48,7 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 
 	postNoContent(t, handler, "/v1/ptys/"+created.MainPtyID+"/write", protocol.WritePTYRequest{Data: "hello"})
 	snapshot := getJSON[protocol.OutputSnapshot](t, handler, "/v1/ptys/"+created.MainPtyID+"/output?from=0", http.StatusOK)
-	if snapshot.Output != "hello" || snapshot.Offset != 5 {
+	if snapshot.Output != "hello" || snapshot.OutputBase64 != "aGVsbG8=" || snapshot.Offset != 5 {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
 
@@ -59,6 +60,37 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	}, http.StatusOK)
 	if split.PaneID == "" || split.PtyID == "" {
 		t.Fatalf("split = %#v", split)
+	}
+
+	ptys := getJSON[[]protocol.PTYInfo](t, handler, "/v1/ptys", http.StatusOK)
+	if len(ptys) != 2 {
+		t.Fatalf("ptys = %#v", ptys)
+	}
+	byID := map[string]protocol.PTYInfo{}
+	for _, pty := range ptys {
+		byID[pty.ID] = pty
+	}
+	if byID[created.MainPtyID].SessionID != created.Session.ID || byID[created.MainPtyID].PaneID != created.Session.FocusedPaneID {
+		t.Fatalf("main pty = %#v", byID[created.MainPtyID])
+	}
+
+	event := getJSON[protocol.RuntimeEvent](t, handler, "/v1/events/next?timeoutMs=10", http.StatusOK)
+	if event.Type != "session.changed" {
+		t.Fatalf("event = %#v", event)
+	}
+
+}
+
+func TestHTTPServerNextEventTimeoutReturnsNoop(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend: newFakePTYBackend(),
+		EventSink:  newFakeEventBus(),
+	})
+	handler := server.NewHTTP(runtime)
+
+	event := getJSON[protocol.RuntimeEvent](t, handler, "/v1/events/next?timeoutMs=1", http.StatusOK)
+	if event.Type != protocol.RuntimeEventNone {
+		t.Fatalf("event = %#v", event)
 	}
 }
 
@@ -215,7 +247,9 @@ func (b *fakePTYBackend) Resize(_ context.Context, ptyID string, size app.PTYSiz
 }
 
 func (b *fakePTYBackend) Attach(context.Context, app.AttachPTYRequest) (*app.PTYAttach, error) {
-	panic("not used")
+	ch := make(chan app.PTYEvent)
+	close(ch)
+	return &app.PTYAttach{Events: ch}, nil
 }
 
 func (b *fakePTYBackend) Output(_ context.Context, ptyID string, fromOffset uint64) (app.PTYOutputSnapshot, error) {
@@ -234,8 +268,38 @@ func (b *fakePTYBackend) Output(_ context.Context, ptyID string, fromOffset uint
 	}, nil
 }
 
+func (b *fakePTYBackend) List(context.Context) ([]app.PTYRecord, error) {
+	out := make([]app.PTYRecord, 0, len(b.records))
+	for _, record := range b.records {
+		out = append(out, record)
+	}
+	return out, nil
+}
+
 func (b *fakePTYBackend) Shutdown(context.Context) error {
 	return nil
+}
+
+type fakeEventBus struct {
+	ch chan app.RuntimeEvent
+}
+
+func newFakeEventBus() *fakeEventBus {
+	return &fakeEventBus{ch: make(chan app.RuntimeEvent, 64)}
+}
+
+func (b *fakeEventBus) Publish(_ context.Context, event app.RuntimeEvent) error {
+	b.ch <- event
+	return nil
+}
+
+func (b *fakeEventBus) Next(ctx context.Context) (app.RuntimeEvent, error) {
+	select {
+	case event := <-b.ch:
+		return event, nil
+	case <-ctx.Done():
+		return app.RuntimeEvent{}, ctx.Err()
+	}
 }
 
 type errNotFound string

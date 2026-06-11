@@ -46,6 +46,14 @@ func (s *Service) Output(ctx context.Context, req protocol.OutputRequest) (proto
 	return s.client.Output(ctx, req)
 }
 
+func (s *Service) ListPTYs(ctx context.Context) ([]protocol.PTYInfo, error) {
+	return s.client.ListPTYs(ctx)
+}
+
+func (s *Service) NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error) {
+	return s.client.NextEvent(ctx, req)
+}
+
 func (s *Service) DetectWorktrunk(ctx context.Context, req protocol.DetectWorktrunkRequest) (protocol.WorktrunkStatus, error) {
 	return s.client.DetectWorktrunk(ctx, req)
 }

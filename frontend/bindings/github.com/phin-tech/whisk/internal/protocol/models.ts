@@ -200,6 +200,27 @@ export class ListWorktreesRequest {
     }
 }
 
+export class NextEventRequest {
+    "timeoutMs": number;
+
+    /** Creates a new NextEventRequest instance. */
+    constructor($$source: Partial<NextEventRequest> = {}) {
+        if (!("timeoutMs" in $$source)) {
+            this["timeoutMs"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NextEventRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): NextEventRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NextEventRequest($$parsedSource as Partial<NextEventRequest>);
+    }
+}
+
 export class OutputRequest {
     "ptyId": string;
     "fromOffset": number;
@@ -229,6 +250,7 @@ export class OutputSnapshot {
     "ptyId": string;
     "offset": number;
     "output": string;
+    "outputBase64": string;
 
     /** Creates a new OutputSnapshot instance. */
     constructor($$source: Partial<OutputSnapshot> = {}) {
@@ -241,6 +263,9 @@ export class OutputSnapshot {
         if (!("output" in $$source)) {
             this["output"] = "";
         }
+        if (!("outputBase64" in $$source)) {
+            this["outputBase64"] = "";
+        }
 
         Object.assign(this, $$source);
     }
@@ -251,6 +276,51 @@ export class OutputSnapshot {
     static createFrom($$source: any = {}): OutputSnapshot {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new OutputSnapshot($$parsedSource as Partial<OutputSnapshot>);
+    }
+}
+
+export class PTYInfo {
+    "id": string;
+    "workingDir": string;
+    "cols": number;
+    "rows": number;
+    "running": boolean;
+    "sessionId": string;
+    "paneId": string;
+
+    /** Creates a new PTYInfo instance. */
+    constructor($$source: Partial<PTYInfo> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("workingDir" in $$source)) {
+            this["workingDir"] = "";
+        }
+        if (!("cols" in $$source)) {
+            this["cols"] = 0;
+        }
+        if (!("rows" in $$source)) {
+            this["rows"] = 0;
+        }
+        if (!("running" in $$source)) {
+            this["running"] = false;
+        }
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("paneId" in $$source)) {
+            this["paneId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PTYInfo instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PTYInfo {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PTYInfo($$parsedSource as Partial<PTYInfo>);
     }
 }
 
@@ -313,6 +383,29 @@ export class ResizePTYRequest {
     static createFrom($$source: any = {}): ResizePTYRequest {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ResizePTYRequest($$parsedSource as Partial<ResizePTYRequest>);
+    }
+}
+
+export class RuntimeEvent {
+    "type": string;
+    "ptyId"?: string;
+    "offset"?: number;
+
+    /** Creates a new RuntimeEvent instance. */
+    constructor($$source: Partial<RuntimeEvent> = {}) {
+        if (!("type" in $$source)) {
+            this["type"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RuntimeEvent instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RuntimeEvent {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RuntimeEvent($$parsedSource as Partial<RuntimeEvent>);
     }
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -16,8 +17,17 @@ import (
 
 func Ensure(ctx context.Context, baseURL string) error {
 	daemonClient := client.NewHTTP(baseURL, nil)
-	if healthCheck(ctx, daemonClient) == nil {
+	if compatibilityCheck(ctx, daemonClient) == nil {
 		return nil
+	}
+	if healthCheck(ctx, daemonClient) == nil {
+		if err := shutdownExisting(ctx, baseURL); err != nil {
+			log.Printf("shutdown incompatible whiskd: %v", err)
+		}
+		_ = StopPID(baseURL)
+		if err := waitUntilDown(ctx, daemonClient); err != nil {
+			return fmt.Errorf("stop incompatible whiskd: %w", err)
+		}
 	}
 
 	addr, err := addrFromURL(baseURL)
@@ -53,7 +63,7 @@ func Ensure(ctx context.Context, baseURL string) error {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		if err := healthCheck(ctx, daemonClient); err == nil {
+		if err := compatibilityCheck(ctx, daemonClient); err == nil {
 			return nil
 		}
 		select {
@@ -111,6 +121,51 @@ func healthCheck(ctx context.Context, daemonClient *client.HTTPClient) error {
 	checkCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
 	defer cancel()
 	return daemonClient.Health(checkCtx)
+}
+
+func compatibilityCheck(ctx context.Context, daemonClient *client.HTTPClient) error {
+	if err := healthCheck(ctx, daemonClient); err != nil {
+		return err
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+	defer cancel()
+	if _, err := daemonClient.ListPTYs(checkCtx); err != nil {
+		return fmt.Errorf("daemon is missing required PTY inventory API: %w", err)
+	}
+	return nil
+}
+
+func shutdownExisting(ctx context.Context, baseURL string) error {
+	shutdownCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(shutdownCtx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/v1/shutdown", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("shutdown status: %s", resp.Status)
+	}
+	return nil
+}
+
+func waitUntilDown(ctx context.Context, daemonClient *client.HTTPClient) error {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if healthCheck(ctx, daemonClient) != nil {
+			return nil
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 func addrFromURL(baseURL string) (string, error) {

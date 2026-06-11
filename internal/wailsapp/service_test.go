@@ -18,6 +18,8 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		},
 		split:  protocol.SplitPaneResult{Session: session.Session{ID: "sess_02"}, PaneID: "pane_02", PtyID: "pty_02"},
 		output: protocol.OutputSnapshot{PtyID: "pty_01", Offset: 12, Output: "hello"},
+		ptys:   []protocol.PTYInfo{{ID: "pty_01", SessionID: "sess_01", PaneID: "pane_01"}},
+		event:  protocol.RuntimeEvent{Type: "pty.changed", PtyID: "pty_01"},
 		worktrunk: protocol.WorktrunkStatus{
 			Available:   true,
 			ConfigFound: true,
@@ -60,6 +62,14 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || output.Offset != 12 || fake.outputReq.FromOffset != 7 {
 		t.Fatalf("output = %#v, req = %#v, err = %v", output, fake.outputReq, err)
 	}
+	ptys, err := service.ListPTYs(ctx)
+	if err != nil || ptys[0].ID != "pty_01" {
+		t.Fatalf("ptys = %#v, err = %v", ptys, err)
+	}
+	event, err := service.NextEvent(ctx, protocol.NextEventRequest{TimeoutMs: 25})
+	if err != nil || event.Type != "pty.changed" || fake.nextEventReq.TimeoutMs != 25 {
+		t.Fatalf("event = %#v, req = %#v, err = %v", event, fake.nextEventReq, err)
+	}
 
 	worktrunk, err := service.DetectWorktrunk(ctx, protocol.DetectWorktrunkRequest{RepoPath: "/repo"})
 	if err != nil || !worktrunk.Available || fake.detectWorktrunkReq.RepoPath != "/repo" {
@@ -100,16 +110,19 @@ type runtimeClientFake struct {
 	created         protocol.CreatedSession
 	split           protocol.SplitPaneResult
 	output          protocol.OutputSnapshot
+	ptys            []protocol.PTYInfo
+	event           protocol.RuntimeEvent
 	worktrunk       protocol.WorktrunkStatus
 	worktrees       []protocol.Worktree
 	createdWorktree protocol.CreatedWorktree
 	httpForwards    []protocol.HTTPForward
 
-	createReq protocol.CreateSessionRequest
-	splitReq  protocol.SplitPaneRequest
-	writeReq  protocol.WritePTYRequest
-	resizeReq protocol.ResizePTYRequest
-	outputReq protocol.OutputRequest
+	createReq    protocol.CreateSessionRequest
+	splitReq     protocol.SplitPaneRequest
+	writeReq     protocol.WritePTYRequest
+	resizeReq    protocol.ResizePTYRequest
+	outputReq    protocol.OutputRequest
+	nextEventReq protocol.NextEventRequest
 
 	detectWorktrunkReq protocol.DetectWorktrunkRequest
 	listWorktreesReq   protocol.ListWorktreesRequest
@@ -146,6 +159,15 @@ func (f *runtimeClientFake) ResizePTY(_ context.Context, req protocol.ResizePTYR
 func (f *runtimeClientFake) Output(_ context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error) {
 	f.outputReq = req
 	return f.output, nil
+}
+
+func (f *runtimeClientFake) ListPTYs(context.Context) ([]protocol.PTYInfo, error) {
+	return f.ptys, nil
+}
+
+func (f *runtimeClientFake) NextEvent(_ context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error) {
+	f.nextEventReq = req
+	return f.event, nil
 }
 
 func (f *runtimeClientFake) DetectWorktrunk(_ context.Context, req protocol.DetectWorktrunkRequest) (protocol.WorktrunkStatus, error) {

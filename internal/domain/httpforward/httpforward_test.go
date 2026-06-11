@@ -54,6 +54,37 @@ func TestStateRejectsInvalidForwardTargets(t *testing.T) {
 	}
 }
 
+func TestStateRejectsMissingForwardID(t *testing.T) {
+	state := NewState()
+	if _, err := state.Create(CreateRequest{TargetURL: "http://127.0.0.1:4966"}); err == nil {
+		t.Fatalf("expected missing id error")
+	}
+}
+
+func TestStateDeleteMissingReturnsFalse(t *testing.T) {
+	state := NewState()
+	if state.Delete("missing") {
+		t.Fatalf("delete missing returned true")
+	}
+}
+
+func TestValidateTargetAllowsLocalhostAndIPv6Loopback(t *testing.T) {
+	for _, targetURL := range []string{
+		"http://localhost:4966",
+		"http://[::1]:4966",
+	} {
+		t.Run(targetURL, func(t *testing.T) {
+			target, err := ValidateTarget(targetURL)
+			if err != nil {
+				t.Fatalf("validate: %v", err)
+			}
+			if target.String() != targetURL {
+				t.Fatalf("target = %q", target.String())
+			}
+		})
+	}
+}
+
 func TestProxyPathPreservesTargetBasePath(t *testing.T) {
 	path, err := ProxyPath("/ui/base", "/assets/app.js")
 	if err != nil {
@@ -69,5 +100,14 @@ func TestProxyPathPreservesTargetBasePath(t *testing.T) {
 	}
 	if root != "/" {
 		t.Fatalf("root = %q", root)
+	}
+}
+
+func TestProxyPathRejectsRelativePaths(t *testing.T) {
+	if _, err := ProxyPath("relative", "/request"); err == nil {
+		t.Fatalf("expected target base path error")
+	}
+	if _, err := ProxyPath("/base", "relative"); err == nil {
+		t.Fatalf("expected request path error")
 	}
 }
