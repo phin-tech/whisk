@@ -52,6 +52,20 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 		t.Fatalf("sessions = %#v", sessions)
 	}
 
+	split, err := daemon.SplitPane(ctx, protocol.SplitPaneRequest{
+		SessionID:    created.Session.ID,
+		TargetPaneID: created.Session.FocusedPaneID,
+		Direction:    "horizontal",
+		Cols:         80,
+		Rows:         24,
+	})
+	if err != nil {
+		t.Fatalf("split pane: %v", err)
+	}
+	if split.PaneID == "" || split.PtyID == "" || split.Session.FocusedPaneID != split.PaneID {
+		t.Fatalf("split result = %#v", split)
+	}
+
 	if err := daemon.ResizePTY(ctx, protocol.ResizePTYRequest{PtyID: created.MainPtyID, Cols: 73, Rows: 17}); err != nil {
 		t.Fatalf("resize pty: %v", err)
 	}

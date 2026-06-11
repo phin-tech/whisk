@@ -8,6 +8,7 @@ import (
 
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/app"
+	"github.com/phin-tech/whisk/internal/domain/session"
 )
 
 func TestRuntimeCreateSessionAttachAndReplayOutput(t *testing.T) {
@@ -28,6 +29,13 @@ func TestRuntimeCreateSessionAttachAndReplayOutput(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("create session: %v", err)
+	}
+	sessions, err := runtime.ListSessions(ctx)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].ID != created.Session.ID {
+		t.Fatalf("sessions = %#v", sessions)
 	}
 
 	attach, err := runtime.AttachPTY(ctx, app.AttachPTYRequest{
@@ -66,6 +74,52 @@ func TestRuntimeCreateSessionAttachAndReplayOutput(t *testing.T) {
 
 	if !strings.Contains(string(secondAttach.ReplayBytes), "hello-whisk") {
 		t.Fatalf("replay bytes missing output: %q", string(secondAttach.ReplayBytes))
+	}
+
+	snapshot, err := runtime.PTYOutput(ctx, created.MainPtyID, 0)
+	if err != nil {
+		t.Fatalf("pty output: %v", err)
+	}
+	if !strings.Contains(string(snapshot.OutputBytes), "hello-whisk") {
+		t.Fatalf("snapshot missing output: %q", string(snapshot.OutputBytes))
+	}
+}
+
+func TestRuntimeSplitPaneCreatesNewPTY(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend: native.NewBackend(),
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Whisk",
+		WorkingDir: ".",
+		Cols:       80,
+		Rows:       24,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	split, err := runtime.SplitPane(ctx, app.SplitPaneRequest{
+		SessionID:    created.Session.ID,
+		TargetPaneID: created.Session.FocusedPaneID,
+		Direction:    session.SplitHorizontal,
+		Cols:         80,
+		Rows:         24,
+	})
+	if err != nil {
+		t.Fatalf("split pane: %v", err)
+	}
+	if split.PaneID == "" || split.PtyID == "" {
+		t.Fatalf("split missing ids: %#v", split)
+	}
+	if split.Session.FocusedPaneID != split.PaneID {
+		t.Fatalf("focused pane = %q, split pane = %q", split.Session.FocusedPaneID, split.PaneID)
 	}
 }
 
