@@ -76,3 +76,94 @@ func TestSplitFocusedPaneCreatesNewFocusedPane(t *testing.T) {
 		t.Fatalf("children = %#v", updated.Layout.Children)
 	}
 }
+
+func TestSplitNestedPanePreservesExistingLayout(t *testing.T) {
+	state := session.NewState()
+	_, err := state.CreateSession(session.CreateSession{
+		SessionID:  "sess_01",
+		PaneID:     "pane_01",
+		PtyID:      "pty_01",
+		WorkingDir: "/repo",
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	_, err = state.SplitPane(session.SplitPane{
+		SessionID:    "sess_01",
+		TargetPaneID: "pane_01",
+		NewPaneID:    "pane_02",
+		NewPtyID:     "pty_02",
+		Direction:    session.SplitHorizontal,
+	})
+	if err != nil {
+		t.Fatalf("split pane: %v", err)
+	}
+
+	updated, err := state.SplitPane(session.SplitPane{
+		SessionID:    "sess_01",
+		TargetPaneID: "pane_01",
+		NewPaneID:    "pane_03",
+		NewPtyID:     "pty_03",
+		Direction:    session.SplitVertical,
+	})
+	if err != nil {
+		t.Fatalf("nested split pane: %v", err)
+	}
+
+	if updated.Layout.Kind != session.LayoutSplit || updated.Layout.Direction != session.SplitHorizontal {
+		t.Fatalf("root layout = %#v", updated.Layout)
+	}
+	if len(updated.Layout.Children) != 2 {
+		t.Fatalf("root children = %d", len(updated.Layout.Children))
+	}
+	left := updated.Layout.Children[0]
+	right := updated.Layout.Children[1]
+	if right.PaneID != "pane_02" {
+		t.Fatalf("right pane = %#v", right)
+	}
+	if left.Kind != session.LayoutSplit || left.Direction != session.SplitVertical {
+		t.Fatalf("left nested layout = %#v", left)
+	}
+	if len(left.Children) != 2 || left.Children[0].PaneID != "pane_01" || left.Children[1].PaneID != "pane_03" {
+		t.Fatalf("left nested children = %#v", left.Children)
+	}
+	if updated.FocusedPaneID != "pane_03" {
+		t.Fatalf("focused pane = %q", updated.FocusedPaneID)
+	}
+}
+
+func TestGetAndListReturnClones(t *testing.T) {
+	state := session.NewState()
+	created, err := state.CreateSession(session.CreateSession{
+		SessionID:  "sess_01",
+		PaneID:     "pane_01",
+		PtyID:      "pty_01",
+		WorkingDir: "/repo",
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	created.Name = "mutated"
+	created.Panes["pane_01"] = session.Pane{ID: "pane_01", PtyID: "mutated"}
+
+	got, ok := state.Get("sess_01")
+	if !ok {
+		t.Fatalf("session not found")
+	}
+	if got.Name == "mutated" || got.Panes["pane_01"].PtyID == "mutated" {
+		t.Fatalf("get leaked mutable state: %#v", got)
+	}
+
+	listed := state.List()
+	listed[0].Name = "listed-mutated"
+	listed[0].Panes["pane_01"] = session.Pane{ID: "pane_01", PtyID: "listed-mutated"}
+
+	got, ok = state.Get("sess_01")
+	if !ok {
+		t.Fatalf("session not found after list")
+	}
+	if got.Name == "listed-mutated" || got.Panes["pane_01"].PtyID == "listed-mutated" {
+		t.Fatalf("list leaked mutable state: %#v", got)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/phin-tech/whisk/internal/client"
@@ -29,10 +30,19 @@ func Ensure(ctx context.Context, baseURL string) error {
 	}
 
 	cmd := exec.CommandContext(context.Background(), path, "-addr", addr)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	logFile, err := os.OpenFile(filepath.Join(os.TempDir(), "whiskd.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("open whiskd log: %w", err)
+	}
+	defer logFile.Close()
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start whiskd: %w", err)
+	}
+	if err := writePIDFile(baseURL, cmd.Process.Pid); err != nil {
+		log.Printf("write whiskd pid file: %v", err)
 	}
 	go func() {
 		if err := cmd.Wait(); err != nil {
@@ -52,6 +62,49 @@ func Ensure(ctx context.Context, baseURL string) error {
 			return fmt.Errorf("wait for whiskd: %w", ctx.Err())
 		}
 	}
+}
+
+func StopPID(baseURL string) error {
+	pidPath, err := PIDPath(baseURL)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(pidPath)
+	if err != nil {
+		return err
+	}
+	pid := 0
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &pid); err != nil {
+		return err
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	if err := process.Signal(os.Interrupt); err != nil {
+		if killErr := process.Kill(); killErr != nil {
+			return err
+		}
+	}
+	_ = os.Remove(pidPath)
+	return nil
+}
+
+func PIDPath(baseURL string) (string, error) {
+	addr, err := addrFromURL(baseURL)
+	if err != nil {
+		return "", err
+	}
+	replacer := strings.NewReplacer(":", "_", ".", "_", "[", "", "]", "")
+	return filepath.Join(os.TempDir(), "whiskd-"+replacer.Replace(addr)+".pid"), nil
+}
+
+func writePIDFile(baseURL string, pid int) error {
+	pidPath, err := PIDPath(baseURL)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", pid)), 0o600)
 }
 
 func healthCheck(ctx context.Context, daemonClient *client.HTTPClient) error {

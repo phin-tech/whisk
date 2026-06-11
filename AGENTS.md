@@ -133,6 +133,29 @@ For daemon/client work, prefer tests that exercise the typed client against a
 real in-process server. This catches protocol drift without booting the full
 desktop app.
 
+## Feature TDD Workflow
+
+For new runtime features, start at the daemon boundary.
+
+Required order:
+
+1. Write pure domain tests for state transitions and validation.
+2. Write daemon protocol/client integration tests against a real in-process
+   server.
+3. Implement the smallest runtime/server/client slice that passes.
+4. Add Wails adapter tests only after the daemon contract exists.
+5. Add frontend behavior last, as a projection of daemon state.
+
+For example, project management must start with tests for:
+
+- project domain state transitions
+- daemon create/list/update/delete project commands
+- typed client behavior against the daemon server
+- persistence or replay behavior, if the feature is durable
+
+Do not start project work by adding Svelte state, Wails-only commands, or
+desktop-local persistence.
+
 ## Current Technical Debt
 
 The initial prototype currently has Wails directly constructing `app.Runtime`.

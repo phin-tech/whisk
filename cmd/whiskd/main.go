@@ -27,11 +27,21 @@ func main() {
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend()})
 	defer func() { _ = runtime.Shutdown(context.Background()) }()
 
+	shutdown := make(chan struct{})
+	mux := http.NewServeMux()
 	httpServer := &http.Server{
 		Addr:              *addr,
-		Handler:           server.NewHTTP(runtime),
+		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	mux.Handle("/", server.NewHTTP(runtime))
+	mux.HandleFunc("POST /v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		select {
+		case shutdown <- struct{}{}:
+		default:
+		}
+	})
 
 	go func() {
 		log.Printf("whiskd listening on http://%s", *addr)
@@ -42,7 +52,10 @@ func main() {
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-	<-signals
+	select {
+	case <-signals:
+	case <-shutdown:
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

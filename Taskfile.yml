@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  APP_NAME: "whisk"
+  APP_NAME: "whisk-app"
   BIN_DIR: "bin"
   DAEMON_ADDR: '{{.WHISKD_ADDR | default "127.0.0.1:8787"}}'
   PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
@@ -51,6 +51,13 @@ tasks:
       - mkdir -p {{.BIN_DIR}}
       - go build -o {{.BIN_DIR}}/whiskd ./cmd/whiskd
 
+  build:cli:
+    desc: Builds the whisk CLI
+    summary: Builds the whisk CLI
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build -o {{.BIN_DIR}}/whisk ./cmd/whisk
+
   dev:daemon:
     desc: Runs the whiskd sidecar daemon in the foreground
     summary: Runs the whiskd sidecar daemon in the foreground
@@ -62,6 +69,7 @@ tasks:
     summary: Builds the application
     cmds:
       - task: build:daemon
+      - task: build:cli
       - task: "{{OS}}:build"
 
   package:
