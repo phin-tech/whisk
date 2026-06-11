@@ -27,6 +27,7 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		createdWorktree: protocol.CreatedWorktree{
 			Path: "/repo/.worktrees/created",
 		},
+		httpForwards: []protocol.HTTPForward{{ID: "fwd_01", TargetURL: "http://127.0.0.1:4966"}},
 	}
 	service := wailsapp.NewService(fake)
 	ctx := context.Background()
@@ -82,6 +83,16 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if fake.removeWorktreeReq.WorktreePath != "/repo/.worktrees/created" || fake.removeWorktreeReq.AlsoBranch {
 		t.Fatalf("remove worktree req = %#v", fake.removeWorktreeReq)
 	}
+	httpForwards, err := service.ListHTTPForwards(ctx)
+	if err != nil || len(httpForwards) != 1 || httpForwards[0].ID != "fwd_01" {
+		t.Fatalf("list http forwards = %#v, err = %v", httpForwards, err)
+	}
+	if _, err := service.StartHTTPForward(ctx, protocol.StartHTTPForwardRequest{TargetURL: "http://127.0.0.1:4966"}); err == nil {
+		t.Fatalf("expected start error without HTTP client")
+	}
+	if err := service.StopHTTPForward(ctx, "fwd_01"); err == nil {
+		t.Fatalf("expected stop error without HTTP client")
+	}
 }
 
 type runtimeClientFake struct {
@@ -92,6 +103,7 @@ type runtimeClientFake struct {
 	worktrunk       protocol.WorktrunkStatus
 	worktrees       []protocol.Worktree
 	createdWorktree protocol.CreatedWorktree
+	httpForwards    []protocol.HTTPForward
 
 	createReq protocol.CreateSessionRequest
 	splitReq  protocol.SplitPaneRequest
@@ -103,6 +115,8 @@ type runtimeClientFake struct {
 	listWorktreesReq   protocol.ListWorktreesRequest
 	createWorktreeReq  protocol.CreateWorktreeRequest
 	removeWorktreeReq  protocol.RemoveWorktreeRequest
+	createForwardReq   protocol.CreateHTTPForwardRequest
+	deleteForwardID    string
 }
 
 func (f *runtimeClientFake) ListSessions(context.Context) ([]session.Session, error) {
@@ -151,5 +165,19 @@ func (f *runtimeClientFake) CreateWorktree(_ context.Context, req protocol.Creat
 
 func (f *runtimeClientFake) RemoveWorktree(_ context.Context, req protocol.RemoveWorktreeRequest) error {
 	f.removeWorktreeReq = req
+	return nil
+}
+
+func (f *runtimeClientFake) CreateHTTPForward(_ context.Context, req protocol.CreateHTTPForwardRequest) (protocol.HTTPForward, error) {
+	f.createForwardReq = req
+	return protocol.HTTPForward{ID: "fwd_02", TargetURL: req.TargetURL}, nil
+}
+
+func (f *runtimeClientFake) ListHTTPForwards(context.Context) ([]protocol.HTTPForward, error) {
+	return f.httpForwards, nil
+}
+
+func (f *runtimeClientFake) DeleteHTTPForward(_ context.Context, id string) error {
+	f.deleteForwardID = id
 	return nil
 }

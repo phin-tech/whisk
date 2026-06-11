@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -108,6 +109,46 @@ func TestHTTPServerWorktreeFlow(t *testing.T) {
 	}
 }
 
+func TestHTTPServerHTTPForwardFlow(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/base/nested" || r.URL.RawQuery != "q=1" {
+			t.Fatalf("target path = %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		body, _ := io.ReadAll(r.Body)
+		w.Header().Set("X-Forward-Test", "hit")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte("target:" + string(body)))
+	}))
+	t.Cleanup(target.Close)
+
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	handler := server.NewHTTP(runtime)
+
+	created := postJSON[protocol.HTTPForward](t, handler, "/v1/http-forwards", protocol.CreateHTTPForwardRequest{
+		Name:      "difit",
+		TargetURL: target.URL + "/base",
+		SessionID: "session_01",
+	}, http.StatusCreated)
+	if created.ID == "" || created.Name != "difit" || created.SessionID != "session_01" {
+		t.Fatalf("created = %#v", created)
+	}
+
+	forwards := getJSON[[]protocol.HTTPForward](t, handler, "/v1/http-forwards", http.StatusOK)
+	if len(forwards) != 1 || forwards[0].ID != created.ID {
+		t.Fatalf("forwards = %#v", forwards)
+	}
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/http-forwards/"+created.ID+"/proxy/nested?q=1", strings.NewReader("body"))
+	handler.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusAccepted || recorder.Header().Get("X-Forward-Test") != "hit" || recorder.Body.String() != "target:body" {
+		t.Fatalf("proxy status=%d header=%q body=%q", recorder.Code, recorder.Header().Get("X-Forward-Test"), recorder.Body.String())
+	}
+
+	deleteNoContent(t, handler, "/v1/http-forwards/"+created.ID)
+	assertStatus(t, handler, http.MethodGet, "/v1/http-forwards/"+created.ID+"/proxy", "", http.StatusNotFound)
+}
+
 func TestHTTPServerReportsBadRequests(t *testing.T) {
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: newFakePTYBackend()})
 	handler := server.NewHTTP(runtime)
@@ -123,6 +164,11 @@ func TestHTTPServerReportsBadRequests(t *testing.T) {
 	assertStatus(t, handler, http.MethodPost, "/v1/worktrees/list", `{}`, http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodPost, "/v1/worktrees/create", `{}`, http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodPost, "/v1/worktrees/remove", `{}`, http.StatusBadRequest)
+
+	assertStatus(t, handler, http.MethodPost, "/v1/http-forwards", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/http-forwards", `{"targetUrl":"http://example.com"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodDelete, "/v1/http-forwards/missing", "", http.StatusNotFound)
+	assertStatus(t, handler, http.MethodGet, "/v1/http-forwards/missing/proxy", "", http.StatusNotFound)
 }
 
 type fakePTYBackend struct {
@@ -255,6 +301,15 @@ func postNoContent(t *testing.T, handler http.Handler, path string, body any) {
 	}
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, bytes.NewReader(encoded)))
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("%s status = %d body = %s", path, recorder.Code, recorder.Body.String())
+	}
+}
+
+func deleteNoContent(t *testing.T, handler http.Handler, path string) {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, path, nil))
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("%s status = %d body = %s", path, recorder.Code, recorder.Body.String())
 	}

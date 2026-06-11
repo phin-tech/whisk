@@ -103,6 +103,14 @@ func (c *HTTPClient) post(ctx context.Context, path string, in any, out any) err
 	return c.do(req, out)
 }
 
+func (c *HTTPClient) delete(ctx context.Context, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	return c.do(req, nil)
+}
+
 func (c *HTTPClient) do(req *http.Request, out any) error {
 	httpClient := c.client
 	if httpClient == nil {

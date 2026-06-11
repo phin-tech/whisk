@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/phin-tech/whisk/internal/domain/httpforward"
 	"github.com/phin-tech/whisk/internal/domain/session"
 )
 
@@ -88,6 +89,7 @@ type Runtime struct {
 	ptys      PTYBackend
 	worktrees WorktreeBackend
 	state     *session.State
+	forwards  *httpforward.State
 	nextID    int
 }
 
@@ -124,6 +126,7 @@ func NewRuntime(config RuntimeConfig) *Runtime {
 		ptys:      config.PTYBackend,
 		worktrees: config.Worktrees,
 		state:     session.NewState(),
+		forwards:  httpforward.NewState(),
 	}
 	if r.ids == nil {
 		r.ids = r.generatedID

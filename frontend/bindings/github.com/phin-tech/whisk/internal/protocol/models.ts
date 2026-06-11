@@ -146,6 +146,39 @@ export class DetectWorktrunkRequest {
     }
 }
 
+export class HTTPForward {
+    "id": string;
+    "name": string;
+    "targetUrl": string;
+    "sessionId": string;
+
+    /** Creates a new HTTPForward instance. */
+    constructor($$source: Partial<HTTPForward> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("targetUrl" in $$source)) {
+            this["targetUrl"] = "";
+        }
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new HTTPForward instance from a string or object.
+     */
+    static createFrom($$source: any = {}): HTTPForward {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new HTTPForward($$parsedSource as Partial<HTTPForward>);
+    }
+}
+
 export class ListWorktreesRequest {
     "repoPath": string;
 
@@ -353,6 +386,68 @@ export class SplitPaneResult {
     }
 }
 
+export class StartHTTPForwardRequest {
+    "name": string;
+    "targetUrl": string;
+    "sessionId": string;
+
+    /** Creates a new StartHTTPForwardRequest instance. */
+    constructor($$source: Partial<StartHTTPForwardRequest> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("targetUrl" in $$source)) {
+            this["targetUrl"] = "";
+        }
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StartHTTPForwardRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): StartHTTPForwardRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new StartHTTPForwardRequest($$parsedSource as Partial<StartHTTPForwardRequest>);
+    }
+}
+
+export class StartedHTTPForward {
+    "id": string;
+    "localUrl": string;
+    "forward": HTTPForward;
+
+    /** Creates a new StartedHTTPForward instance. */
+    constructor($$source: Partial<StartedHTTPForward> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("localUrl" in $$source)) {
+            this["localUrl"] = "";
+        }
+        if (!("forward" in $$source)) {
+            this["forward"] = (new HTTPForward());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StartedHTTPForward instance from a string or object.
+     */
+    static createFrom($$source: any = {}): StartedHTTPForward {
+        const $$createField2_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("forward" in $$parsedSource) {
+            $$parsedSource["forward"] = $$createField2_0($$parsedSource["forward"]);
+        }
+        return new StartedHTTPForward($$parsedSource as Partial<StartedHTTPForward>);
+    }
+}
+
 export class Worktree {
     "branch": string;
     "path": string;
@@ -447,7 +542,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType1;
+        const $$createField2_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -483,4 +578,5 @@ export class WritePTYRequest {
 
 // Private type creation functions
 const $$createType0 = session$0.Session.createFrom;
-const $$createType1 = WorktrunkBinary.createFrom;
+const $$createType1 = HTTPForward.createFrom;
+const $$createType2 = WorktrunkBinary.createFrom;

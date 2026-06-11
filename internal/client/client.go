@@ -18,4 +18,7 @@ type RuntimeClient interface {
 	ListWorktrees(ctx context.Context, req protocol.ListWorktreesRequest) ([]protocol.Worktree, error)
 	CreateWorktree(ctx context.Context, req protocol.CreateWorktreeRequest) (protocol.CreatedWorktree, error)
 	RemoveWorktree(ctx context.Context, req protocol.RemoveWorktreeRequest) error
+	CreateHTTPForward(ctx context.Context, req protocol.CreateHTTPForwardRequest) (protocol.HTTPForward, error)
+	ListHTTPForwards(ctx context.Context) ([]protocol.HTTPForward, error)
+	DeleteHTTPForward(ctx context.Context, id string) error
 }

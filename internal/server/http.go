@@ -26,6 +26,11 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("POST /v1/worktrees/list", server.listWorktrees)
 	mux.HandleFunc("POST /v1/worktrees/create", server.createWorktree)
 	mux.HandleFunc("POST /v1/worktrees/remove", server.removeWorktree)
+	mux.HandleFunc("POST /v1/http-forwards", server.createHTTPForward)
+	mux.HandleFunc("GET /v1/http-forwards", server.listHTTPForwards)
+	mux.HandleFunc("DELETE /v1/http-forwards/{forwardID}", server.deleteHTTPForward)
+	mux.HandleFunc("/v1/http-forwards/{forwardID}/proxy", server.proxyHTTPForward)
+	mux.HandleFunc("/v1/http-forwards/{forwardID}/proxy/", server.proxyHTTPForward)
 	return mux
 }
 

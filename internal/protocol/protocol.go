@@ -97,6 +97,31 @@ type RemoveWorktreeRequest struct {
 	Force        bool   `json:"force"`
 }
 
+type HTTPForward struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	TargetURL string `json:"targetUrl"`
+	SessionID string `json:"sessionId"`
+}
+
+type CreateHTTPForwardRequest struct {
+	Name      string `json:"name"`
+	TargetURL string `json:"targetUrl"`
+	SessionID string `json:"sessionId"`
+}
+
+type StartHTTPForwardRequest struct {
+	Name      string `json:"name"`
+	TargetURL string `json:"targetUrl"`
+	SessionID string `json:"sessionId"`
+}
+
+type StartedHTTPForward struct {
+	ID       string      `json:"id"`
+	LocalURL string      `json:"localUrl"`
+	Forward  HTTPForward `json:"forward"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }

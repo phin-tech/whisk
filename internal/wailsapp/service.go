@@ -2,6 +2,7 @@ package wailsapp
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/domain/session"
@@ -9,11 +10,16 @@ import (
 )
 
 type Service struct {
-	client client.RuntimeClient
+	client    client.RuntimeClient
+	forwarder *client.LocalForwarder
 }
 
 func NewService(runtimeClient client.RuntimeClient) *Service {
-	return &Service{client: runtimeClient}
+	service := &Service{client: runtimeClient}
+	if httpClient, ok := runtimeClient.(*client.HTTPClient); ok {
+		service.forwarder = client.NewLocalForwarder(httpClient, nil)
+	}
+	return service
 }
 
 func (s *Service) ListSessions(ctx context.Context) ([]session.Session, error) {
@@ -54,4 +60,22 @@ func (s *Service) CreateWorktree(ctx context.Context, req protocol.CreateWorktre
 
 func (s *Service) RemoveWorktree(ctx context.Context, req protocol.RemoveWorktreeRequest) error {
 	return s.client.RemoveWorktree(ctx, req)
+}
+
+func (s *Service) ListHTTPForwards(ctx context.Context) ([]protocol.HTTPForward, error) {
+	return s.client.ListHTTPForwards(ctx)
+}
+
+func (s *Service) StartHTTPForward(ctx context.Context, req protocol.StartHTTPForwardRequest) (protocol.StartedHTTPForward, error) {
+	if s.forwarder == nil {
+		return protocol.StartedHTTPForward{}, fmt.Errorf("local HTTP forwarding requires an HTTP daemon client")
+	}
+	return s.forwarder.Start(ctx, req)
+}
+
+func (s *Service) StopHTTPForward(ctx context.Context, id string) error {
+	if s.forwarder == nil {
+		return fmt.Errorf("local HTTP forwarding requires an HTTP daemon client")
+	}
+	return s.forwarder.Stop(ctx, id)
 }

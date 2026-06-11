@@ -4,7 +4,7 @@ vars:
   APP_NAME: "whisk-app"
   BIN_DIR: "bin"
   COVERAGE_MIN: '{{.COVERAGE_MIN | default "85"}}'
-  COVERAGE_PACKAGES: "./internal/adapters/agents ./internal/adapters/ghcli ./internal/adapters/gitcli ./internal/adapters/hooks ./internal/adapters/processrunner ./internal/adapters/pty/native ./internal/adapters/worktrunk ./internal/app ./internal/client ./internal/daemon ./internal/domain/session ./internal/server ./internal/wailsapp"
+  COVERAGE_PACKAGES: "./internal/adapters/agents ./internal/adapters/ghcli ./internal/adapters/gitcli ./internal/adapters/hooks ./internal/adapters/processrunner ./internal/adapters/pty/native ./internal/adapters/worktrunk ./internal/app ./internal/client ./internal/daemon ./internal/domain/httpforward ./internal/domain/session ./internal/server ./internal/wailsapp"
   COVERAGE_PROFILE: '{{.COVERAGE_PROFILE | default "/tmp/whisk-internal-cover.out"}}'
   DAEMON_ADDR: '{{.WHISKD_ADDR | default "127.0.0.1:8787"}}'
   PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
