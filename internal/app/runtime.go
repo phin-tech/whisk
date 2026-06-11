@@ -229,8 +229,9 @@ type SplitPaneRequest struct {
 }
 
 type StartPTYOptions struct {
-	Cols int
-	Rows int
+	Cols    int
+	Rows    int
+	Command string
 }
 
 type SplitPaneResult struct {
@@ -406,6 +407,10 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 			Status:         PTYStatusRunning,
 		})
 		r.watchPTYOutput(record.ID)
+		if err := r.writeInitialCommand(ctx, record.ID, req.InitialPTY.Command); err != nil {
+			_, _ = r.ptys.Kill(ctx, record.ID)
+			return CreatedSession{}, err
+		}
 	}
 	created, err := r.state.CreateSession(session.CreateSession{
 		SessionID:    sessionID,
@@ -476,6 +481,10 @@ func (r *Runtime) SplitPane(ctx context.Context, req SplitPaneRequest) (SplitPan
 			Status:         PTYStatusRunning,
 		})
 		r.watchPTYOutput(record.ID)
+		if err := r.writeInitialCommand(ctx, record.ID, req.InitialPTY.Command); err != nil {
+			_, _ = r.ptys.Kill(ctx, record.ID)
+			return SplitPaneResult{}, err
+		}
 	}
 	updated, err := r.state.SplitPane(session.SplitPane{
 		SessionID:    req.SessionID,
@@ -592,6 +601,19 @@ func (r *Runtime) StartPanePTY(ctx context.Context, req StartPanePTYRequest) (St
 		_, _ = r.ptys.Kill(ctx, record.ID)
 		return StartedPanePTY{}, err
 	}
+	r.registerPTY(record.ID, ptyMetadata{
+		SessionID:      req.SessionID,
+		WindowID:       pane.WindowID,
+		PaneID:         req.PaneID,
+		OriginWindowID: pane.WindowID,
+		OriginPaneID:   req.PaneID,
+		Status:         PTYStatusRunning,
+	})
+	r.watchPTYOutput(record.ID)
+	if err := r.writeInitialCommand(ctx, record.ID, req.Options.Command); err != nil {
+		_, _ = r.ptys.Kill(ctx, record.ID)
+		return StartedPanePTY{}, err
+	}
 	updated, err := r.state.StartPanePTY(session.StartPanePTY{
 		SessionID: req.SessionID,
 		PaneID:    req.PaneID,
@@ -603,15 +625,6 @@ func (r *Runtime) StartPanePTY(ctx context.Context, req StartPanePTYRequest) (St
 	if err := r.persistSessions(ctx); err != nil {
 		return StartedPanePTY{}, err
 	}
-	r.registerPTY(record.ID, ptyMetadata{
-		SessionID:      req.SessionID,
-		WindowID:       pane.WindowID,
-		PaneID:         req.PaneID,
-		OriginWindowID: pane.WindowID,
-		OriginPaneID:   req.PaneID,
-		Status:         PTYStatusRunning,
-	})
-	r.watchPTYOutput(record.ID)
 	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
 	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: record.ID})
 	return StartedPanePTY{Session: updated, PTYID: record.ID}, nil
@@ -678,6 +691,19 @@ func (r *Runtime) RestartPanePTY(ctx context.Context, req RestartPanePTYRequest)
 		_, _ = r.ptys.Kill(ctx, record.ID)
 		return RestartedPanePTY{}, err
 	}
+	r.registerPTY(record.ID, ptyMetadata{
+		SessionID:      req.SessionID,
+		WindowID:       pane.WindowID,
+		PaneID:         req.PaneID,
+		OriginWindowID: pane.WindowID,
+		OriginPaneID:   req.PaneID,
+		Status:         PTYStatusRunning,
+	})
+	r.watchPTYOutput(record.ID)
+	if err := r.writeInitialCommand(ctx, record.ID, req.Options.Command); err != nil {
+		_, _ = r.ptys.Kill(ctx, record.ID)
+		return RestartedPanePTY{}, err
+	}
 	updated, oldPTYID, err := r.state.RestartPanePTY(session.RestartPanePTY{
 		SessionID: req.SessionID,
 		PaneID:    req.PaneID,
@@ -690,15 +716,6 @@ func (r *Runtime) RestartPanePTY(ctx context.Context, req RestartPanePTYRequest)
 		return RestartedPanePTY{}, err
 	}
 	r.detachPTY(oldPTYID, req.SessionID, pane.WindowID, req.PaneID)
-	r.registerPTY(record.ID, ptyMetadata{
-		SessionID:      req.SessionID,
-		WindowID:       pane.WindowID,
-		PaneID:         req.PaneID,
-		OriginWindowID: pane.WindowID,
-		OriginPaneID:   req.PaneID,
-		Status:         PTYStatusRunning,
-	})
-	r.watchPTYOutput(record.ID)
 	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
 	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: oldPTYID})
 	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: record.ID})
@@ -915,6 +932,13 @@ func (r *Runtime) registerPTYTranscript(ctx context.Context, record PTYRecord, s
 	})
 }
 
+func (r *Runtime) writeInitialCommand(ctx context.Context, ptyID string, command string) error {
+	if command == "" {
+		return nil
+	}
+	return r.ptys.Write(ctx, ptyID, []byte(command+"\n"))
+}
+
 func (r *Runtime) appendPTYTranscriptOutput(ctx context.Context, ptyID string, offset uint64, data []byte) {
 	if r.transcriptStore == nil || len(data) == 0 {
 		return
@@ -1031,11 +1055,11 @@ func (r *Runtime) watchPTYOutput(ptyID string) {
 	if r.ptys == nil || (r.eventSink == nil && r.transcriptStore == nil) {
 		return
 	}
+	attach, err := r.ptys.Attach(r.watchCtx, AttachPTYRequest{PtyID: ptyID})
+	if err != nil {
+		return
+	}
 	go func() {
-		attach, err := r.ptys.Attach(r.watchCtx, AttachPTYRequest{PtyID: ptyID})
-		if err != nil {
-			return
-		}
 		defer attach.Close()
 		if len(attach.ReplayBytes) > 0 {
 			r.appendPTYTranscriptOutput(r.watchCtx, ptyID, attach.ReplayOffset, attach.ReplayBytes)

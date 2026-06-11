@@ -135,10 +135,13 @@ func TestHTTPServerSessionLifecycleActions(t *testing.T) {
 	}
 
 	started := postJSON[protocol.StartedPanePTY](t, handler, "/v1/sessions/"+created.Session.ID+"/panes/"+created.PaneID+"/start-pty", protocol.StartPanePTYRequest{
-		Options: protocol.StartPTYOptions{Cols: 90, Rows: 30},
+		Options: protocol.StartPTYOptions{Cols: 90, Rows: 30, Command: "echo server-command"},
 	}, http.StatusCreated)
 	if started.PTYID == "" || backend.records[started.PTYID].WorkingDir != paneDir {
 		t.Fatalf("started = %#v record = %#v", started, backend.records[started.PTYID])
+	}
+	if string(backend.outputs[started.PTYID]) != "echo server-command\n" {
+		t.Fatalf("initial command output = %q", string(backend.outputs[started.PTYID]))
 	}
 	detached := postJSON[protocol.DetachedPanePTY](t, handler, "/v1/sessions/"+created.Session.ID+"/panes/"+created.PaneID+"/detach-pty", protocol.DetachPanePTYRequest{}, http.StatusOK)
 	if detached.PTYID != started.PTYID {

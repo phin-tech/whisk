@@ -835,6 +835,7 @@ export class StartHTTPForwardRequest {
 export class StartPTYOptions {
     "cols": number;
     "rows": number;
+    "command"?: string;
 
     /** Creates a new StartPTYOptions instance. */
     constructor($$source: Partial<StartPTYOptions> = {}) {

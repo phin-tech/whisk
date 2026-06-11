@@ -13,6 +13,7 @@
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
   import LayoutView from "./LayoutView.svelte";
+  import NewSessionDialog from "./NewSessionDialog.svelte";
   import SettingsView from "./SettingsView.svelte";
   import SidebarDock from "./SidebarDock.svelte";
   import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
@@ -27,6 +28,7 @@
   let activeSessionId = "";
   let activePaneId = "";
   let activeSidebar: SidebarId | null = "sessions";
+  let newSessionOpen = false;
   let settingsOpen = false;
   let railSide: RailSide = "right";
   let terminalFontSize = 13;
@@ -148,22 +150,30 @@
     }
   }
 
-  async function createSession() {
+  function openNewSession() {
+    error = "";
+    settingsOpen = false;
+    newSessionOpen = true;
+  }
+
+  async function createSession(request: {
+    name: string;
+    rootDir: string;
+    initialPty: { cols: number; rows: number; command: string } | null;
+  }) {
     error = "";
     loadingSession = true;
     try {
       const created = await CreateSession({
-        name: "Local shell",
-        rootDir: "/",
-        initialPty: {
-          cols: 100,
-          rows: 28,
-        },
+        name: request.name,
+        rootDir: request.rootDir,
+        initialPty: request.initialPty,
       });
       sessions = [created.session, ...sessions.filter((session) => session.id !== created.session.id)];
       activeSessionId = created.session.id;
       activePaneId = created.paneId;
       activeSidebar = "sessions";
+      newSessionOpen = false;
       await refreshPTYs();
       if (created.ptyId) await refreshOutput(created.ptyId);
     } catch (err) {
@@ -182,10 +192,7 @@
         windowId: activeSessionWindow?.id ?? "",
         targetPaneId: activePaneId,
         direction,
-        initialPty: {
-          cols: 100,
-          rows: 28,
-        },
+        initialPty: { cols: 0, rows: 0 },
       });
       sessions = sessions.map((session) =>
         session.id === result.session.id ? result.session : session,
@@ -300,7 +307,7 @@
         {loadingPtys}
         {railSide}
         onClose={() => (activeSidebar = null)}
-        onNewSession={createSession}
+        onNewSession={openNewSession}
         onSelectSession={selectSession}
         onCloseSession={closeSession}
         onRefreshPtys={() => void refreshPTYs()}
@@ -378,12 +385,19 @@
               type="button"
               class="rounded-lg border border-border-subtle bg-bg-surface/80 px-4 py-2 text-sm font-semibold text-text-primary shadow-[0_18px_40px_rgba(2,6,23,0.45)] transition-colors hover:border-accent hover:text-accent"
               disabled={loadingSession}
-              on:click={createSession}
+              on:click={openNewSession}
             >
               New Session
             </button>
           </div>
         {/if}
+
+        <NewSessionDialog
+          visible={newSessionOpen}
+          loading={loadingSession}
+          onclose={() => (newSessionOpen = false)}
+          oncreate={createSession}
+        />
 
         <SettingsView
           visible={settingsOpen}
@@ -408,7 +422,7 @@
         {loadingPtys}
         {railSide}
         onClose={() => (activeSidebar = null)}
-        onNewSession={createSession}
+        onNewSession={openNewSession}
         onSelectSession={selectSession}
         onCloseSession={closeSession}
         onRefreshPtys={() => void refreshPTYs()}

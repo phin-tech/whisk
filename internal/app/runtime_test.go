@@ -2,6 +2,9 @@ package app_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -75,6 +78,64 @@ func TestRuntimeCreateSessionAttachAndReplayOutput(t *testing.T) {
 	}
 	if !strings.Contains(string(snapshot.OutputBytes), "hello-whisk") {
 		t.Fatalf("snapshot missing output: %q", string(snapshot.OutputBytes))
+	}
+}
+
+func TestRuntimeCreateSessionRunsInitialCommand(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend: native.NewBackend(),
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rootDir := t.TempDir()
+	markerPath := filepath.Join(rootDir, "initial-command-marker")
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:    "Whisk",
+		RootDir: rootDir,
+		InitialPTY: &app.StartPTYOptions{
+			Command: "printf initial-command-ok > " + strconv.Quote(markerPath),
+		},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	attach, err := runtime.AttachPTY(ctx, app.AttachPTYRequest{
+		PtyID:            created.MainPtyID,
+		ReplayFromOffset: 0,
+	})
+	if err != nil {
+		t.Fatalf("attach pty: %v", err)
+	}
+	defer attach.Close()
+
+	var output strings.Builder
+	output.Write(attach.ReplayBytes)
+	for !strings.Contains(output.String(), "initial-command-ok") {
+		select {
+		case event := <-attach.Events:
+			if event.Kind == app.PTYOutput {
+				output.Write(event.Bytes)
+			}
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for initial command; got %q", output.String())
+		}
+	}
+
+	for {
+		bytes, err := os.ReadFile(markerPath)
+		if err == nil && string(bytes) == "initial-command-ok" {
+			return
+		}
+		select {
+		case <-time.After(10 * time.Millisecond):
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for initial command marker; content=%q err=%v", string(bytes), err)
+		}
 	}
 }
 

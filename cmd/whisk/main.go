@@ -44,15 +44,17 @@ func defaultRunDeps() runDeps {
 
 func runWithDeps(args []string, deps runDeps) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk <daemon|forward>")
+		return fmt.Errorf("usage: whisk <daemon|forward|session>")
 	}
 	switch args[0] {
 	case "daemon":
 		return runDaemon(args[1:])
 	case "forward":
 		return runForward(args[1:], deps)
+	case "session":
+		return runSession(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk <daemon|forward>")
+		return fmt.Errorf("usage: whisk <daemon|forward|session>")
 	}
 }
 

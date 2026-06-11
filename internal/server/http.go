@@ -343,7 +343,7 @@ func toAppStartPTYOptions(options *protocol.StartPTYOptions) *app.StartPTYOption
 	if options == nil {
 		return nil
 	}
-	return &app.StartPTYOptions{Cols: options.Cols, Rows: options.Rows}
+	return &app.StartPTYOptions{Cols: options.Cols, Rows: options.Rows, Command: options.Command}
 }
 
 func (s *HTTPServer) writePTY(w http.ResponseWriter, r *http.Request) {

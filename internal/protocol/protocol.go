@@ -34,8 +34,9 @@ type SplitPaneRequest struct {
 }
 
 type StartPTYOptions struct {
-	Cols int `json:"cols"`
-	Rows int `json:"rows"`
+	Cols    int    `json:"cols"`
+	Rows    int    `json:"rows"`
+	Command string `json:"command,omitempty"`
 }
 
 type SplitPaneResult struct {
