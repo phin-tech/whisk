@@ -167,3 +167,58 @@ func TestGetAndListReturnClones(t *testing.T) {
 		t.Fatalf("list leaked mutable state: %#v", got)
 	}
 }
+
+func TestCreateSessionRejectsInvalidInput(t *testing.T) {
+	tests := []struct {
+		name string
+		req  session.CreateSession
+	}{
+		{name: "missing session", req: session.CreateSession{PaneID: "pane", PtyID: "pty"}},
+		{name: "missing pane", req: session.CreateSession{SessionID: "session", PtyID: "pty"}},
+		{name: "missing pty", req: session.CreateSession{SessionID: "session", PaneID: "pane"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := session.NewState().CreateSession(test.req); err == nil {
+				t.Fatalf("expected error")
+			}
+		})
+	}
+
+	state := session.NewState()
+	_, err := state.CreateSession(session.CreateSession{SessionID: "session", PaneID: "pane", PtyID: "pty"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := state.CreateSession(session.CreateSession{SessionID: "session", PaneID: "pane_2", PtyID: "pty_2"}); err == nil {
+		t.Fatalf("expected duplicate session error")
+	}
+}
+
+func TestSplitPaneRejectsInvalidInput(t *testing.T) {
+	state := session.NewState()
+	if _, err := state.SplitPane(session.SplitPane{SessionID: "missing"}); err == nil {
+		t.Fatalf("expected missing session error")
+	}
+	_, err := state.CreateSession(session.CreateSession{SessionID: "session", PaneID: "pane", PtyID: "pty"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		req  session.SplitPane
+	}{
+		{name: "missing target", req: session.SplitPane{SessionID: "session", TargetPaneID: "missing", NewPaneID: "pane_2", NewPtyID: "pty_2"}},
+		{name: "missing new pane", req: session.SplitPane{SessionID: "session", TargetPaneID: "pane", NewPtyID: "pty_2"}},
+		{name: "missing new pty", req: session.SplitPane{SessionID: "session", TargetPaneID: "pane", NewPaneID: "pane_2"}},
+		{name: "duplicate pane", req: session.SplitPane{SessionID: "session", TargetPaneID: "pane", NewPaneID: "pane", NewPtyID: "pty_2"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := state.SplitPane(test.req); err == nil {
+				t.Fatalf("expected error")
+			}
+		})
+	}
+}

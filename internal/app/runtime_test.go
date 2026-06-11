@@ -123,6 +123,32 @@ func TestRuntimeSplitPaneCreatesNewPTY(t *testing.T) {
 	}
 }
 
+func TestRuntimeRejectsInvalidRequests(t *testing.T) {
+	ctx := context.Background()
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	if _, err := runtime.CreateSession(ctx, app.CreateSessionRequest{}); err == nil {
+		t.Fatalf("expected missing backend create error")
+	}
+	if _, err := runtime.SplitPane(ctx, app.SplitPaneRequest{}); err == nil {
+		t.Fatalf("expected missing backend split error")
+	}
+	if err := runtime.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown without backend: %v", err)
+	}
+
+	runtime = app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend()})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	if err := runtime.ResizePTY(ctx, "missing", app.PTYSize{Cols: 0, Rows: 1}); err == nil {
+		t.Fatalf("expected invalid cols error")
+	}
+	if err := runtime.ResizePTY(ctx, "missing", app.PTYSize{Cols: 1, Rows: 0}); err == nil {
+		t.Fatalf("expected invalid rows error")
+	}
+	if _, err := runtime.SplitPane(ctx, app.SplitPaneRequest{SessionID: "missing"}); err == nil {
+		t.Fatalf("expected missing session split error")
+	}
+}
+
 func TestRuntimeResizePTYChangesShellGrid(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	runtime := app.NewRuntime(app.RuntimeConfig{

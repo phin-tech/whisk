@@ -2,6 +2,7 @@ package client_test
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -90,5 +91,37 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 		case <-ctx.Done():
 			t.Fatalf("timed out waiting for output; got %q", output.String())
 		}
+	}
+}
+
+func TestHTTPClientReportsDaemonErrors(t *testing.T) {
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/health":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":false}`))
+		case "/v1/sessions":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":"bad session"}`))
+		default:
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`plain failure`))
+		}
+	}))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx := context.Background()
+
+	if err := daemon.Health(ctx); err == nil || !strings.Contains(err.Error(), "health") {
+		t.Fatalf("health error = %v", err)
+	}
+	if _, err := daemon.CreateSession(ctx, protocol.CreateSessionRequest{}); err == nil || !strings.Contains(err.Error(), "bad session") {
+		t.Fatalf("create error = %v", err)
+	}
+	if _, err := daemon.Output(ctx, protocol.OutputRequest{PtyID: "missing"}); err == nil || !strings.Contains(err.Error(), "plain failure") {
+		t.Fatalf("output error = %v", err)
 	}
 }

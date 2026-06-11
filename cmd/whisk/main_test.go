@@ -48,3 +48,36 @@ func TestRunRejectsUnknownCommand(t *testing.T) {
 		t.Fatalf("expected usage error")
 	}
 }
+
+func TestRunDaemonStatusReportsUnavailableDaemon(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`nope`))
+	}))
+	defer server.Close()
+
+	if err := run([]string{"daemon", "status", "-url", server.URL}); err == nil {
+		t.Fatalf("expected unavailable daemon error")
+	}
+}
+
+func TestRunDaemonStopReportsServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	if err := run([]string{"daemon", "stop", "-url", server.URL}); err == nil {
+		t.Fatalf("expected stop error")
+	}
+}
+
+func TestEnvOrDefault(t *testing.T) {
+	t.Setenv("WHISK_TEST_ENV", "set")
+	if got := envOrDefault("WHISK_TEST_ENV", "fallback"); got != "set" {
+		t.Fatalf("env value = %q", got)
+	}
+	if got := envOrDefault("WHISK_TEST_MISSING", "fallback"); got != "fallback" {
+		t.Fatalf("fallback = %q", got)
+	}
+}

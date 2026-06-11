@@ -19,6 +19,11 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend})
 	handler := server.NewHTTP(runtime)
 
+	health := getJSON[map[string]bool](t, handler, "/v1/health", http.StatusOK)
+	if !health["ok"] {
+		t.Fatalf("health = %#v", health)
+	}
+
 	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
 		Name:       "Whisk",
 		WorkingDir: ".",
@@ -44,6 +49,16 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	if snapshot.Output != "hello" || snapshot.Offset != 5 {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
+
+	split := postJSON[protocol.SplitPaneResult](t, handler, "/v1/sessions/"+created.Session.ID+"/split", protocol.SplitPaneRequest{
+		TargetPaneID: created.Session.FocusedPaneID,
+		Direction:    "vertical",
+		Cols:         80,
+		Rows:         24,
+	}, http.StatusOK)
+	if split.PaneID == "" || split.PtyID == "" {
+		t.Fatalf("split = %#v", split)
+	}
 }
 
 func TestHTTPServerReportsBadRequests(t *testing.T) {
@@ -54,6 +69,7 @@ func TestHTTPServerReportsBadRequests(t *testing.T) {
 	assertStatus(t, handler, http.MethodPost, "/v1/sessions/missing/split", `{"targetPaneId":"pane","direction":"diagonal"}`, http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodGet, "/v1/ptys/missing/output?from=nope", "", http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodPost, "/v1/ptys/missing/write", `{"data":"x"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/ptys/missing/resize", `{"cols":0,"rows":24}`, http.StatusBadRequest)
 }
 
 type fakePTYBackend struct {

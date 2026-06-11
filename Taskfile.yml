@@ -25,6 +25,13 @@ tasks:
       - task: test
       - task: frontend:check
 
+  coverage:
+    desc: Runs coverage for first-party daemon/runtime packages
+    summary: Runs coverage for first-party daemon/runtime packages
+    cmds:
+      - go test ./internal/adapters/pty/native ./internal/app ./internal/client ./internal/daemon ./internal/domain/session ./internal/server ./internal/wailsapp -coverprofile=/tmp/whisk-internal-cover.out
+      - go tool cover -func=/tmp/whisk-internal-cover.out
+
   frontend:install:
     dir: frontend
     cmds:

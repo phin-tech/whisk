@@ -115,11 +115,11 @@ func (c *HTTPClient) do(req *http.Request, out any) error {
 	defer response.Body.Close()
 
 	if response.StatusCode >= 400 {
+		body, _ := io.ReadAll(response.Body)
 		var errorResponse protocol.ErrorResponse
-		if err := json.NewDecoder(response.Body).Decode(&errorResponse); err == nil && errorResponse.Error != "" {
+		if err := json.NewDecoder(bytes.NewReader(body)).Decode(&errorResponse); err == nil && errorResponse.Error != "" {
 			return errors.New(errorResponse.Error)
 		}
-		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf("daemon request failed: %s: %s", response.Status, strings.TrimSpace(string(body)))
 	}
 	if out == nil {
