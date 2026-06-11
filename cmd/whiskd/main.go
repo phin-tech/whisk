@@ -12,7 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/adapters/bookmarkstore"
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
+	"github.com/phin-tech/whisk/internal/adapters/sessionstore"
+	"github.com/phin-tech/whisk/internal/adapters/transcriptstore"
 	"github.com/phin-tech/whisk/internal/adapters/worktrunk"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/events"
@@ -32,11 +35,29 @@ func main() {
 	}
 	defer eventBus.Close()
 
-	runtime := app.NewRuntime(app.RuntimeConfig{
-		PTYBackend: native.NewBackend(),
-		Worktrees:  worktrunk.NewBackend(nil),
-		EventSink:  eventBus,
+	store, err := sessionstore.NewJSONStore("")
+	if err != nil {
+		log.Fatal(err)
+	}
+	transcripts, err := transcriptstore.NewFileStore("")
+	if err != nil {
+		log.Fatal(err)
+	}
+	bookmarks, err := bookmarkstore.NewJSONStore("")
+	if err != nil {
+		log.Fatal(err)
+	}
+	runtime, err := app.NewRuntimeWithError(app.RuntimeConfig{
+		PTYBackend:      native.NewBackend(),
+		Worktrees:       worktrunk.NewBackend(nil),
+		EventSink:       eventBus,
+		SessionStore:    store,
+		TranscriptStore: transcripts,
+		BookmarkStore:   bookmarks,
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer func() { _ = runtime.Shutdown(context.Background()) }()
 
 	shutdown := make(chan struct{})

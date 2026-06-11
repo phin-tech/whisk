@@ -15,6 +15,7 @@
   export let onClose: () => void;
   export let onNewSession: () => void;
   export let onSelectSession: (session: Session) => void;
+  export let onCloseSession: (session: Session) => void;
   export let onRefreshPtys: () => void;
 
   const minWidth = 240;
@@ -89,6 +90,7 @@
           onclose={onClose}
           {onNewSession}
           {onSelectSession}
+          {onCloseSession}
         />
       {:else}
         <PtysPanel ptys={ptys} loading={loadingPtys} onclose={onClose} onRefresh={onRefreshPtys} />

@@ -123,6 +123,28 @@ func (b *Backend) Resize(_ context.Context, ptyID string, size app.PTYSize) erro
 	return pty.Setsize(master, &pty.Winsize{Cols: uint16(size.Cols), Rows: uint16(size.Rows)})
 }
 
+func (b *Backend) Kill(_ context.Context, ptyID string) (app.PTYRecord, error) {
+	b.mu.Lock()
+	p, ok := b.ptys[ptyID]
+	if !ok {
+		b.mu.Unlock()
+		return app.PTYRecord{}, fmt.Errorf("pty %s not found", ptyID)
+	}
+	p.record.Running = false
+	record := p.record
+	cmd := p.cmd
+	master := p.master
+	b.mu.Unlock()
+
+	if master != nil {
+		_ = master.Close()
+	}
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+	return record, nil
+}
+
 func (b *Backend) Attach(ctx context.Context, req app.AttachPTYRequest) (*app.PTYAttach, error) {
 	ch := make(chan app.PTYEvent, 64)
 	b.mu.Lock()

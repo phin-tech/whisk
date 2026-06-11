@@ -7,63 +7,106 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as ptybookmark$0 from "../domain/ptybookmark/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as session$0 from "../domain/session/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as protocol$0 from "../protocol/models.js";
 
+export function AddPTYBookmark(req: protocol$0.AddPTYBookmarkRequest): $CancellablePromise<protocol$0.PTYBookmark> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.AddPTYBookmark", req).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function ClosePane(req: protocol$0.ClosePaneRequest): $CancellablePromise<session$0.Session> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ClosePane", req).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+export function CloseSession(req: protocol$0.CloseSessionRequest): $CancellablePromise<session$0.Session[]> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.CloseSession", req).then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
 export function CreateSession(req: protocol$0.CreateSessionRequest): $CancellablePromise<protocol$0.CreatedSession> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.CreateSession", req).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType3($result);
     });
 }
 
 export function CreateWorktree(req: protocol$0.CreateWorktreeRequest): $CancellablePromise<protocol$0.CreatedWorktree> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.CreateWorktree", req).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType4($result);
+    });
+}
+
+export function DetachPanePTY(req: protocol$0.DetachPanePTYRequest): $CancellablePromise<protocol$0.DetachedPanePTY> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.DetachPanePTY", req).then(($result: any) => {
+        return $$createType5($result);
     });
 }
 
 export function DetectWorktrunk(req: protocol$0.DetectWorktrunkRequest): $CancellablePromise<protocol$0.WorktrunkStatus> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.DetectWorktrunk", req).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType6($result);
+    });
+}
+
+export function KillPTY(req: protocol$0.KillPTYRequest): $CancellablePromise<protocol$0.PTYInfo> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.KillPTY", req).then(($result: any) => {
+        return $$createType7($result);
     });
 }
 
 export function ListHTTPForwards(): $CancellablePromise<protocol$0.HTTPForward[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListHTTPForwards").then(($result: any) => {
-        return $$createType4($result);
+        return $$createType9($result);
+    });
+}
+
+export function ListPTYBookmarks(ptyID: string): $CancellablePromise<protocol$0.PTYBookmark[]> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListPTYBookmarks", ptyID).then(($result: any) => {
+        return $$createType10($result);
     });
 }
 
 export function ListPTYs(): $CancellablePromise<protocol$0.PTYInfo[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListPTYs").then(($result: any) => {
-        return $$createType6($result);
+        return $$createType11($result);
     });
 }
 
 export function ListSessions(): $CancellablePromise<session$0.Session[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListSessions").then(($result: any) => {
-        return $$createType8($result);
+        return $$createType2($result);
     });
 }
 
 export function ListWorktrees(req: protocol$0.ListWorktreesRequest): $CancellablePromise<protocol$0.Worktree[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorktrees", req).then(($result: any) => {
-        return $$createType10($result);
+        return $$createType13($result);
     });
 }
 
 export function NextEvent(req: protocol$0.NextEventRequest): $CancellablePromise<protocol$0.RuntimeEvent> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.NextEvent", req).then(($result: any) => {
-        return $$createType11($result);
+        return $$createType14($result);
     });
 }
 
 export function Output(req: protocol$0.OutputRequest): $CancellablePromise<protocol$0.OutputSnapshot> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.Output", req).then(($result: any) => {
-        return $$createType12($result);
+        return $$createType15($result);
     });
+}
+
+export function RemovePTYBookmark(req: protocol$0.RemovePTYBookmarkRequest): $CancellablePromise<void> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.RemovePTYBookmark", req);
 }
 
 export function RemoveWorktree(req: protocol$0.RemoveWorktreeRequest): $CancellablePromise<void> {
@@ -74,15 +117,39 @@ export function ResizePTY(req: protocol$0.ResizePTYRequest): $CancellablePromise
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ResizePTY", req);
 }
 
+export function RestartPanePTY(req: protocol$0.RestartPanePTYRequest): $CancellablePromise<protocol$0.RestartedPanePTY> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.RestartPanePTY", req).then(($result: any) => {
+        return $$createType16($result);
+    });
+}
+
+export function SetPaneWorkingDir(req: protocol$0.SetPaneWorkingDirRequest): $CancellablePromise<session$0.Session> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SetPaneWorkingDir", req).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+export function SetSessionRootDir(req: protocol$0.SetSessionRootDirRequest): $CancellablePromise<session$0.Session> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SetSessionRootDir", req).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
 export function SplitPane(req: protocol$0.SplitPaneRequest): $CancellablePromise<protocol$0.SplitPaneResult> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SplitPane", req).then(($result: any) => {
-        return $$createType13($result);
+        return $$createType17($result);
     });
 }
 
 export function StartHTTPForward(req: protocol$0.StartHTTPForwardRequest): $CancellablePromise<protocol$0.StartedHTTPForward> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartHTTPForward", req).then(($result: any) => {
-        return $$createType14($result);
+        return $$createType18($result);
+    });
+}
+
+export function StartPanePTY(req: protocol$0.StartPanePTYRequest): $CancellablePromise<protocol$0.StartedPanePTY> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartPanePTY", req).then(($result: any) => {
+        return $$createType19($result);
     });
 }
 
@@ -95,18 +162,23 @@ export function WritePTY(req: protocol$0.WritePTYRequest): $CancellablePromise<v
 }
 
 // Private type creation functions
-const $$createType0 = protocol$0.CreatedSession.createFrom;
-const $$createType1 = protocol$0.CreatedWorktree.createFrom;
-const $$createType2 = protocol$0.WorktrunkStatus.createFrom;
-const $$createType3 = protocol$0.HTTPForward.createFrom;
-const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = protocol$0.PTYInfo.createFrom;
-const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = session$0.Session.createFrom;
-const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = protocol$0.Worktree.createFrom;
-const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = protocol$0.RuntimeEvent.createFrom;
-const $$createType12 = protocol$0.OutputSnapshot.createFrom;
-const $$createType13 = protocol$0.SplitPaneResult.createFrom;
-const $$createType14 = protocol$0.StartedHTTPForward.createFrom;
+const $$createType0 = ptybookmark$0.Bookmark.createFrom;
+const $$createType1 = session$0.Session.createFrom;
+const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = protocol$0.CreatedSession.createFrom;
+const $$createType4 = protocol$0.CreatedWorktree.createFrom;
+const $$createType5 = protocol$0.DetachedPanePTY.createFrom;
+const $$createType6 = protocol$0.WorktrunkStatus.createFrom;
+const $$createType7 = protocol$0.PTYInfo.createFrom;
+const $$createType8 = protocol$0.HTTPForward.createFrom;
+const $$createType9 = $Create.Array($$createType8);
+const $$createType10 = $Create.Array($$createType0);
+const $$createType11 = $Create.Array($$createType7);
+const $$createType12 = protocol$0.Worktree.createFrom;
+const $$createType13 = $Create.Array($$createType12);
+const $$createType14 = protocol$0.RuntimeEvent.createFrom;
+const $$createType15 = protocol$0.OutputSnapshot.createFrom;
+const $$createType16 = protocol$0.RestartedPanePTY.createFrom;
+const $$createType17 = protocol$0.SplitPaneResult.createFrom;
+const $$createType18 = protocol$0.StartedHTTPForward.createFrom;
+const $$createType19 = protocol$0.StartedPanePTY.createFrom;

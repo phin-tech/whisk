@@ -7,27 +7,106 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as ptybookmark$0 from "../domain/ptybookmark/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as session$0 from "../domain/session/models.js";
+
+export class AddPTYBookmarkRequest {
+    "ptyId": string;
+    "offset": number;
+    "kind": string;
+    "label": string;
+
+    /** Creates a new AddPTYBookmarkRequest instance. */
+    constructor($$source: Partial<AddPTYBookmarkRequest> = {}) {
+        if (!("ptyId" in $$source)) {
+            this["ptyId"] = "";
+        }
+        if (!("offset" in $$source)) {
+            this["offset"] = 0;
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AddPTYBookmarkRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AddPTYBookmarkRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AddPTYBookmarkRequest($$parsedSource as Partial<AddPTYBookmarkRequest>);
+    }
+}
+
+export class ClosePaneRequest {
+    "sessionId": string;
+    "windowId": string;
+    "paneId": string;
+
+    /** Creates a new ClosePaneRequest instance. */
+    constructor($$source: Partial<ClosePaneRequest> = {}) {
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("windowId" in $$source)) {
+            this["windowId"] = "";
+        }
+        if (!("paneId" in $$source)) {
+            this["paneId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ClosePaneRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ClosePaneRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ClosePaneRequest($$parsedSource as Partial<ClosePaneRequest>);
+    }
+}
+
+export class CloseSessionRequest {
+    "sessionId": string;
+
+    /** Creates a new CloseSessionRequest instance. */
+    constructor($$source: Partial<CloseSessionRequest> = {}) {
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CloseSessionRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CloseSessionRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CloseSessionRequest($$parsedSource as Partial<CloseSessionRequest>);
+    }
+}
 
 export class CreateSessionRequest {
     "name": string;
-    "workingDir": string;
-    "cols": number;
-    "rows": number;
+    "rootDir": string;
+    "initialPty"?: StartPTYOptions | null;
 
     /** Creates a new CreateSessionRequest instance. */
     constructor($$source: Partial<CreateSessionRequest> = {}) {
         if (!("name" in $$source)) {
             this["name"] = "";
         }
-        if (!("workingDir" in $$source)) {
-            this["workingDir"] = "";
-        }
-        if (!("cols" in $$source)) {
-            this["cols"] = 0;
-        }
-        if (!("rows" in $$source)) {
-            this["rows"] = 0;
+        if (!("rootDir" in $$source)) {
+            this["rootDir"] = "";
         }
 
         Object.assign(this, $$source);
@@ -37,7 +116,11 @@ export class CreateSessionRequest {
      * Creates a new CreateSessionRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): CreateSessionRequest {
+        const $$createField2_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("initialPty" in $$parsedSource) {
+            $$parsedSource["initialPty"] = $$createField2_0($$parsedSource["initialPty"]);
+        }
         return new CreateSessionRequest($$parsedSource as Partial<CreateSessionRequest>);
     }
 }
@@ -73,15 +156,21 @@ export class CreateWorktreeRequest {
 
 export class CreatedSession {
     "session": session$0.Session;
-    "mainPtyId": string;
+    "windowId": string;
+    "paneId": string;
+    "ptyId"?: string | null;
+    "mainPtyId"?: string;
 
     /** Creates a new CreatedSession instance. */
     constructor($$source: Partial<CreatedSession> = {}) {
         if (!("session" in $$source)) {
             this["session"] = (new session$0.Session());
         }
-        if (!("mainPtyId" in $$source)) {
-            this["mainPtyId"] = "";
+        if (!("windowId" in $$source)) {
+            this["windowId"] = "";
+        }
+        if (!("paneId" in $$source)) {
+            this["paneId"] = "";
         }
 
         Object.assign(this, $$source);
@@ -91,7 +180,7 @@ export class CreatedSession {
      * Creates a new CreatedSession instance from a string or object.
      */
     static createFrom($$source: any = {}): CreatedSession {
-        const $$createField0_0 = $$createType0;
+        const $$createField0_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -118,6 +207,60 @@ export class CreatedWorktree {
     static createFrom($$source: any = {}): CreatedWorktree {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new CreatedWorktree($$parsedSource as Partial<CreatedWorktree>);
+    }
+}
+
+export class DetachPanePTYRequest {
+    "sessionId": string;
+    "paneId": string;
+
+    /** Creates a new DetachPanePTYRequest instance. */
+    constructor($$source: Partial<DetachPanePTYRequest> = {}) {
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("paneId" in $$source)) {
+            this["paneId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DetachPanePTYRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DetachPanePTYRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DetachPanePTYRequest($$parsedSource as Partial<DetachPanePTYRequest>);
+    }
+}
+
+export class DetachedPanePTY {
+    "session": session$0.Session;
+    "ptyId": string;
+
+    /** Creates a new DetachedPanePTY instance. */
+    constructor($$source: Partial<DetachedPanePTY> = {}) {
+        if (!("session" in $$source)) {
+            this["session"] = (new session$0.Session());
+        }
+        if (!("ptyId" in $$source)) {
+            this["ptyId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DetachedPanePTY instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DetachedPanePTY {
+        const $$createField0_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("session" in $$parsedSource) {
+            $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
+        }
+        return new DetachedPanePTY($$parsedSource as Partial<DetachedPanePTY>);
     }
 }
 
@@ -176,6 +319,27 @@ export class HTTPForward {
     static createFrom($$source: any = {}): HTTPForward {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new HTTPForward($$parsedSource as Partial<HTTPForward>);
+    }
+}
+
+export class KillPTYRequest {
+    "ptyId": string;
+
+    /** Creates a new KillPTYRequest instance. */
+    constructor($$source: Partial<KillPTYRequest> = {}) {
+        if (!("ptyId" in $$source)) {
+            this["ptyId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new KillPTYRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): KillPTYRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new KillPTYRequest($$parsedSource as Partial<KillPTYRequest>);
     }
 }
 
@@ -279,14 +443,22 @@ export class OutputSnapshot {
     }
 }
 
+export const PTYBookmark = ptybookmark$0.Bookmark;
+export type PTYBookmark = ptybookmark$0.Bookmark;
+
 export class PTYInfo {
     "id": string;
     "workingDir": string;
     "cols": number;
     "rows": number;
     "running": boolean;
+    "status": string;
+    "exitCode"?: number | null;
     "sessionId": string;
+    "windowId": string;
     "paneId": string;
+    "originWindowId": string;
+    "originPaneId": string;
 
     /** Creates a new PTYInfo instance. */
     constructor($$source: Partial<PTYInfo> = {}) {
@@ -305,11 +477,23 @@ export class PTYInfo {
         if (!("running" in $$source)) {
             this["running"] = false;
         }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
         if (!("sessionId" in $$source)) {
             this["sessionId"] = "";
         }
+        if (!("windowId" in $$source)) {
+            this["windowId"] = "";
+        }
         if (!("paneId" in $$source)) {
             this["paneId"] = "";
+        }
+        if (!("originWindowId" in $$source)) {
+            this["originWindowId"] = "";
+        }
+        if (!("originPaneId" in $$source)) {
+            this["originPaneId"] = "";
         }
 
         Object.assign(this, $$source);
@@ -321,6 +505,27 @@ export class PTYInfo {
     static createFrom($$source: any = {}): PTYInfo {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new PTYInfo($$parsedSource as Partial<PTYInfo>);
+    }
+}
+
+export class RemovePTYBookmarkRequest {
+    "bookmarkId": string;
+
+    /** Creates a new RemovePTYBookmarkRequest instance. */
+    constructor($$source: Partial<RemovePTYBookmarkRequest> = {}) {
+        if (!("bookmarkId" in $$source)) {
+            this["bookmarkId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RemovePTYBookmarkRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RemovePTYBookmarkRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RemovePTYBookmarkRequest($$parsedSource as Partial<RemovePTYBookmarkRequest>);
     }
 }
 
@@ -386,6 +591,72 @@ export class ResizePTYRequest {
     }
 }
 
+export class RestartPanePTYRequest {
+    "sessionId": string;
+    "paneId": string;
+    "options": StartPTYOptions;
+
+    /** Creates a new RestartPanePTYRequest instance. */
+    constructor($$source: Partial<RestartPanePTYRequest> = {}) {
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("paneId" in $$source)) {
+            this["paneId"] = "";
+        }
+        if (!("options" in $$source)) {
+            this["options"] = (new StartPTYOptions());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RestartPanePTYRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RestartPanePTYRequest {
+        const $$createField2_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("options" in $$parsedSource) {
+            $$parsedSource["options"] = $$createField2_0($$parsedSource["options"]);
+        }
+        return new RestartPanePTYRequest($$parsedSource as Partial<RestartPanePTYRequest>);
+    }
+}
+
+export class RestartedPanePTY {
+    "session": session$0.Session;
+    "ptyId": string;
+    "oldPtyId": string;
+
+    /** Creates a new RestartedPanePTY instance. */
+    constructor($$source: Partial<RestartedPanePTY> = {}) {
+        if (!("session" in $$source)) {
+            this["session"] = (new session$0.Session());
+        }
+        if (!("ptyId" in $$source)) {
+            this["ptyId"] = "";
+        }
+        if (!("oldPtyId" in $$source)) {
+            this["oldPtyId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RestartedPanePTY instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RestartedPanePTY {
+        const $$createField0_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("session" in $$parsedSource) {
+            $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
+        }
+        return new RestartedPanePTY($$parsedSource as Partial<RestartedPanePTY>);
+    }
+}
+
 export class RuntimeEvent {
     "type": string;
     "ptyId"?: string;
@@ -409,29 +680,80 @@ export class RuntimeEvent {
     }
 }
 
+export class SetPaneWorkingDirRequest {
+    "sessionId": string;
+    "paneId": string;
+    "workingDir": string;
+
+    /** Creates a new SetPaneWorkingDirRequest instance. */
+    constructor($$source: Partial<SetPaneWorkingDirRequest> = {}) {
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("paneId" in $$source)) {
+            this["paneId"] = "";
+        }
+        if (!("workingDir" in $$source)) {
+            this["workingDir"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SetPaneWorkingDirRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SetPaneWorkingDirRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SetPaneWorkingDirRequest($$parsedSource as Partial<SetPaneWorkingDirRequest>);
+    }
+}
+
+export class SetSessionRootDirRequest {
+    "sessionId": string;
+    "rootDir": string;
+
+    /** Creates a new SetSessionRootDirRequest instance. */
+    constructor($$source: Partial<SetSessionRootDirRequest> = {}) {
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("rootDir" in $$source)) {
+            this["rootDir"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SetSessionRootDirRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SetSessionRootDirRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SetSessionRootDirRequest($$parsedSource as Partial<SetSessionRootDirRequest>);
+    }
+}
+
 export class SplitPaneRequest {
     "sessionId": string;
+    "windowId": string;
     "targetPaneId": string;
     "direction": string;
-    "cols": number;
-    "rows": number;
+    "initialPty"?: StartPTYOptions | null;
 
     /** Creates a new SplitPaneRequest instance. */
     constructor($$source: Partial<SplitPaneRequest> = {}) {
         if (!("sessionId" in $$source)) {
             this["sessionId"] = "";
         }
+        if (!("windowId" in $$source)) {
+            this["windowId"] = "";
+        }
         if (!("targetPaneId" in $$source)) {
             this["targetPaneId"] = "";
         }
         if (!("direction" in $$source)) {
             this["direction"] = "";
-        }
-        if (!("cols" in $$source)) {
-            this["cols"] = 0;
-        }
-        if (!("rows" in $$source)) {
-            this["rows"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -441,7 +763,11 @@ export class SplitPaneRequest {
      * Creates a new SplitPaneRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): SplitPaneRequest {
+        const $$createField4_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("initialPty" in $$parsedSource) {
+            $$parsedSource["initialPty"] = $$createField4_0($$parsedSource["initialPty"]);
+        }
         return new SplitPaneRequest($$parsedSource as Partial<SplitPaneRequest>);
     }
 }
@@ -449,7 +775,8 @@ export class SplitPaneRequest {
 export class SplitPaneResult {
     "session": session$0.Session;
     "paneId": string;
-    "ptyId": string;
+    "ptyId"?: string | null;
+    "legacyPtyId"?: string;
 
     /** Creates a new SplitPaneResult instance. */
     constructor($$source: Partial<SplitPaneResult> = {}) {
@@ -459,9 +786,6 @@ export class SplitPaneResult {
         if (!("paneId" in $$source)) {
             this["paneId"] = "";
         }
-        if (!("ptyId" in $$source)) {
-            this["ptyId"] = "";
-        }
 
         Object.assign(this, $$source);
     }
@@ -470,7 +794,7 @@ export class SplitPaneResult {
      * Creates a new SplitPaneResult instance from a string or object.
      */
     static createFrom($$source: any = {}): SplitPaneResult {
-        const $$createField0_0 = $$createType0;
+        const $$createField0_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -508,6 +832,64 @@ export class StartHTTPForwardRequest {
     }
 }
 
+export class StartPTYOptions {
+    "cols": number;
+    "rows": number;
+
+    /** Creates a new StartPTYOptions instance. */
+    constructor($$source: Partial<StartPTYOptions> = {}) {
+        if (!("cols" in $$source)) {
+            this["cols"] = 0;
+        }
+        if (!("rows" in $$source)) {
+            this["rows"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StartPTYOptions instance from a string or object.
+     */
+    static createFrom($$source: any = {}): StartPTYOptions {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new StartPTYOptions($$parsedSource as Partial<StartPTYOptions>);
+    }
+}
+
+export class StartPanePTYRequest {
+    "sessionId": string;
+    "paneId": string;
+    "options": StartPTYOptions;
+
+    /** Creates a new StartPanePTYRequest instance. */
+    constructor($$source: Partial<StartPanePTYRequest> = {}) {
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("paneId" in $$source)) {
+            this["paneId"] = "";
+        }
+        if (!("options" in $$source)) {
+            this["options"] = (new StartPTYOptions());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StartPanePTYRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): StartPanePTYRequest {
+        const $$createField2_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("options" in $$parsedSource) {
+            $$parsedSource["options"] = $$createField2_0($$parsedSource["options"]);
+        }
+        return new StartPanePTYRequest($$parsedSource as Partial<StartPanePTYRequest>);
+    }
+}
+
 export class StartedHTTPForward {
     "id": string;
     "localUrl": string;
@@ -532,12 +914,41 @@ export class StartedHTTPForward {
      * Creates a new StartedHTTPForward instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedHTTPForward {
-        const $$createField2_0 = $$createType1;
+        const $$createField2_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("forward" in $$parsedSource) {
             $$parsedSource["forward"] = $$createField2_0($$parsedSource["forward"]);
         }
         return new StartedHTTPForward($$parsedSource as Partial<StartedHTTPForward>);
+    }
+}
+
+export class StartedPanePTY {
+    "session": session$0.Session;
+    "ptyId": string;
+
+    /** Creates a new StartedPanePTY instance. */
+    constructor($$source: Partial<StartedPanePTY> = {}) {
+        if (!("session" in $$source)) {
+            this["session"] = (new session$0.Session());
+        }
+        if (!("ptyId" in $$source)) {
+            this["ptyId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StartedPanePTY instance from a string or object.
+     */
+    static createFrom($$source: any = {}): StartedPanePTY {
+        const $$createField0_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("session" in $$parsedSource) {
+            $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
+        }
+        return new StartedPanePTY($$parsedSource as Partial<StartedPanePTY>);
     }
 }
 
@@ -635,7 +1046,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType2;
+        const $$createField2_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -670,6 +1081,8 @@ export class WritePTYRequest {
 }
 
 // Private type creation functions
-const $$createType0 = session$0.Session.createFrom;
-const $$createType1 = HTTPForward.createFrom;
-const $$createType2 = WorktrunkBinary.createFrom;
+const $$createType0 = StartPTYOptions.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = session$0.Session.createFrom;
+const $$createType3 = HTTPForward.createFrom;
+const $$createType4 = WorktrunkBinary.createFrom;

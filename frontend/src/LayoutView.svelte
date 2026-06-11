@@ -17,7 +17,7 @@
   {#if pane}
     <TerminalPane
       pane={pane}
-      outputChunks={outputChunks[pane.ptyId] ?? []}
+      outputChunks={pane.currentPtyId ? (outputChunks[pane.currentPtyId] ?? []) : []}
       focused={activePaneId === pane.id}
       fontSize={terminalFontSize}
       cursorBlink={terminalCursorBlink}

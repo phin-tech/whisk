@@ -13,14 +13,17 @@ import (
 	"time"
 
 	"github.com/phin-tech/whisk/internal/client"
+	"github.com/phin-tech/whisk/internal/protocol"
 )
 
 func Ensure(ctx context.Context, baseURL string) error {
 	daemonClient := client.NewHTTP(baseURL, nil)
-	if compatibilityCheck(ctx, daemonClient) == nil {
+	compatibilityErr := compatibilityCheck(ctx, daemonClient)
+	if compatibilityErr == nil {
 		return nil
 	}
 	if healthCheck(ctx, daemonClient) == nil {
+		log.Printf("whiskd at %s is incompatible (%v); shutting it down", baseURL, compatibilityErr)
 		if err := shutdownExisting(ctx, baseURL); err != nil {
 			log.Printf("shutdown incompatible whiskd: %v", err)
 		}
@@ -39,6 +42,7 @@ func Ensure(ctx context.Context, baseURL string) error {
 		return err
 	}
 
+	log.Printf("starting whiskd at %s from %s", baseURL, path)
 	cmd := exec.CommandContext(context.Background(), path, "-addr", addr)
 	logFile, err := os.OpenFile(filepath.Join(os.TempDir(), "whiskd.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -64,6 +68,7 @@ func Ensure(ctx context.Context, baseURL string) error {
 	defer ticker.Stop()
 	for {
 		if err := compatibilityCheck(ctx, daemonClient); err == nil {
+			log.Printf("whiskd ready at %s", baseURL)
 			return nil
 		}
 		select {
@@ -129,8 +134,12 @@ func compatibilityCheck(ctx context.Context, daemonClient *client.HTTPClient) er
 	}
 	checkCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
 	defer cancel()
-	if _, err := daemonClient.ListPTYs(checkCtx); err != nil {
-		return fmt.Errorf("daemon is missing required PTY inventory API: %w", err)
+	compatibility, err := daemonClient.Compatibility(checkCtx)
+	if err != nil {
+		return fmt.Errorf("daemon is missing required compatibility API: %w", err)
+	}
+	if compatibility.APIVersion != protocol.DaemonAPIVersion {
+		return fmt.Errorf("daemon api version %d does not match required %d", compatibility.APIVersion, protocol.DaemonAPIVersion)
 	}
 	return nil
 }

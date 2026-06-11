@@ -50,15 +50,20 @@ export class LayoutNode {
 
 export class Pane {
     "id": string;
-    "ptyId": string;
+    "windowId": string;
+    "currentPtyId"?: string | null;
+    "workingDir": string;
 
     /** Creates a new Pane instance. */
     constructor($$source: Partial<Pane> = {}) {
         if (!("id" in $$source)) {
             this["id"] = "";
         }
-        if (!("ptyId" in $$source)) {
-            this["ptyId"] = "";
+        if (!("windowId" in $$source)) {
+            this["windowId"] = "";
+        }
+        if (!("workingDir" in $$source)) {
+            this["workingDir"] = "";
         }
 
         Object.assign(this, $$source);
@@ -76,10 +81,9 @@ export class Pane {
 export class Session {
     "id": string;
     "name": string;
-    "workingDir": string;
-    "layout": LayoutNode;
+    "rootDir": string;
+    "windows": { [_ in string]?: SessionWindow };
     "panes": { [_ in string]?: Pane };
-    "focusedPaneId": string;
 
     /** Creates a new Session instance. */
     constructor($$source: Partial<Session> = {}) {
@@ -89,17 +93,14 @@ export class Session {
         if (!("name" in $$source)) {
             this["name"] = "";
         }
-        if (!("workingDir" in $$source)) {
-            this["workingDir"] = "";
+        if (!("rootDir" in $$source)) {
+            this["rootDir"] = "";
         }
-        if (!("layout" in $$source)) {
-            this["layout"] = (new LayoutNode());
+        if (!("windows" in $$source)) {
+            this["windows"] = {};
         }
         if (!("panes" in $$source)) {
             this["panes"] = {};
-        }
-        if (!("focusedPaneId" in $$source)) {
-            this["focusedPaneId"] = "";
         }
 
         Object.assign(this, $$source);
@@ -109,16 +110,53 @@ export class Session {
      * Creates a new Session instance from a string or object.
      */
     static createFrom($$source: any = {}): Session {
-        const $$createField3_0 = $$createType0;
-        const $$createField4_0 = $$createType4;
+        const $$createField3_0 = $$createType4;
+        const $$createField4_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("layout" in $$parsedSource) {
-            $$parsedSource["layout"] = $$createField3_0($$parsedSource["layout"]);
+        if ("windows" in $$parsedSource) {
+            $$parsedSource["windows"] = $$createField3_0($$parsedSource["windows"]);
         }
         if ("panes" in $$parsedSource) {
             $$parsedSource["panes"] = $$createField4_0($$parsedSource["panes"]);
         }
         return new Session($$parsedSource as Partial<Session>);
+    }
+}
+
+export class SessionWindow {
+    "id": string;
+    "sessionId": string;
+    "name": string;
+    "layout": LayoutNode;
+
+    /** Creates a new SessionWindow instance. */
+    constructor($$source: Partial<SessionWindow> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("layout" in $$source)) {
+            this["layout"] = (new LayoutNode());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SessionWindow instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SessionWindow {
+        const $$createField3_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("layout" in $$parsedSource) {
+            $$parsedSource["layout"] = $$createField3_0($$parsedSource["layout"]);
+        }
+        return new SessionWindow($$parsedSource as Partial<SessionWindow>);
     }
 }
 
@@ -136,5 +174,7 @@ export enum SplitDirection {
 const $$createType0 = LayoutNode.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = $Create.Array($Create.Any);
-const $$createType3 = Pane.createFrom;
+const $$createType3 = SessionWindow.createFrom;
 const $$createType4 = $Create.Map($Create.Any, $$createType3);
+const $$createType5 = Pane.createFrom;
+const $$createType6 = $Create.Map($Create.Any, $$createType5);

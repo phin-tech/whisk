@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/phin-tech/whisk/internal/daemon"
+	"github.com/phin-tech/whisk/internal/protocol"
 )
 
 func TestEnsureStartsDaemonWhenDown(t *testing.T) {
@@ -113,9 +114,9 @@ func TestWhiskdHelperProcess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
-	mux.HandleFunc("/v1/ptys", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/v1/compat", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[]`))
+		_, _ = fmt.Fprintf(w, `{"apiVersion":%d}`, protocol.DaemonAPIVersion)
 		doneOnce.Do(func() { close(done) })
 	})
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: time.Second}

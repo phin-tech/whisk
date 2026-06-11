@@ -34,12 +34,56 @@ func (s *Service) SplitPane(ctx context.Context, req protocol.SplitPaneRequest) 
 	return s.client.SplitPane(ctx, req)
 }
 
+func (s *Service) SetSessionRootDir(ctx context.Context, req protocol.SetSessionRootDirRequest) (session.Session, error) {
+	return s.client.SetSessionRootDir(ctx, req)
+}
+
+func (s *Service) SetPaneWorkingDir(ctx context.Context, req protocol.SetPaneWorkingDirRequest) (session.Session, error) {
+	return s.client.SetPaneWorkingDir(ctx, req)
+}
+
+func (s *Service) StartPanePTY(ctx context.Context, req protocol.StartPanePTYRequest) (protocol.StartedPanePTY, error) {
+	return s.client.StartPanePTY(ctx, req)
+}
+
+func (s *Service) RestartPanePTY(ctx context.Context, req protocol.RestartPanePTYRequest) (protocol.RestartedPanePTY, error) {
+	return s.client.RestartPanePTY(ctx, req)
+}
+
+func (s *Service) DetachPanePTY(ctx context.Context, req protocol.DetachPanePTYRequest) (protocol.DetachedPanePTY, error) {
+	return s.client.DetachPanePTY(ctx, req)
+}
+
+func (s *Service) CloseSession(ctx context.Context, req protocol.CloseSessionRequest) ([]session.Session, error) {
+	return s.client.CloseSession(ctx, req)
+}
+
+func (s *Service) ClosePane(ctx context.Context, req protocol.ClosePaneRequest) (session.Session, error) {
+	return s.client.ClosePane(ctx, req)
+}
+
 func (s *Service) WritePTY(ctx context.Context, req protocol.WritePTYRequest) error {
 	return s.client.WritePTY(ctx, req)
 }
 
 func (s *Service) ResizePTY(ctx context.Context, req protocol.ResizePTYRequest) error {
 	return s.client.ResizePTY(ctx, req)
+}
+
+func (s *Service) KillPTY(ctx context.Context, req protocol.KillPTYRequest) (protocol.PTYInfo, error) {
+	return s.client.KillPTY(ctx, req)
+}
+
+func (s *Service) AddPTYBookmark(ctx context.Context, req protocol.AddPTYBookmarkRequest) (protocol.PTYBookmark, error) {
+	return s.client.AddPTYBookmark(ctx, req)
+}
+
+func (s *Service) ListPTYBookmarks(ctx context.Context, ptyID string) ([]protocol.PTYBookmark, error) {
+	return s.client.ListPTYBookmarks(ctx, ptyID)
+}
+
+func (s *Service) RemovePTYBookmark(ctx context.Context, req protocol.RemovePTYBookmarkRequest) error {
+	return s.client.RemovePTYBookmark(ctx, req)
 }
 
 func (s *Service) Output(ctx context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error) {

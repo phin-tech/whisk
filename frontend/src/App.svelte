@@ -3,6 +3,7 @@
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import type { PTYInfo, RuntimeEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
+    CloseSession,
     CreateSession,
     ListPTYs,
     ListSessions,
@@ -14,7 +15,7 @@
   import LayoutView from "./LayoutView.svelte";
   import SettingsView from "./SettingsView.svelte";
   import SidebarDock from "./SidebarDock.svelte";
-  import { runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
+  import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
 
   type SidebarId = "sessions" | "ptys";
   type RailSide = "left" | "right";
@@ -44,7 +45,10 @@
   const outputFetchAgain = new Set<string>();
 
   $: activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
-  $: if (activeSession && !activePaneId) activePaneId = activeSession.focusedPaneId;
+  $: activeSessionWindow = activeWindow(activeSession, activePaneId);
+  $: if (activeSession && (!activePaneId || !activeSession.panes[activePaneId])) {
+    activePaneId = firstPaneId(activeSession);
+  }
 
   function backendError(err: unknown): string {
     const message = err instanceof Error ? err.message : String(err);
@@ -88,11 +92,11 @@
     sessions = await ListSessions();
     if (!activeSessionId && sessions.length > 0) {
       activeSessionId = sessions[0].id;
-      activePaneId = sessions[0].focusedPaneId;
+      activePaneId = firstPaneId(sessions[0]);
     }
     if (activeSessionId && !sessions.some((session) => session.id === activeSessionId)) {
       activeSessionId = sessions[0]?.id ?? "";
-      activePaneId = sessions[0]?.focusedPaneId ?? "";
+      activePaneId = firstPaneId(sessions[0]);
     }
   }
 
@@ -150,16 +154,18 @@
     try {
       const created = await CreateSession({
         name: "Local shell",
-        workingDir: ".",
-        cols: 100,
-        rows: 28,
+        rootDir: "/",
+        initialPty: {
+          cols: 100,
+          rows: 28,
+        },
       });
       sessions = [created.session, ...sessions.filter((session) => session.id !== created.session.id)];
       activeSessionId = created.session.id;
-      activePaneId = created.session.focusedPaneId;
+      activePaneId = created.paneId;
       activeSidebar = "sessions";
       await refreshPTYs();
-      await refreshOutput(created.mainPtyId);
+      if (created.ptyId) await refreshOutput(created.ptyId);
     } catch (err) {
       error = backendError(err);
     } finally {
@@ -173,17 +179,20 @@
     try {
       const result = await SplitPane({
         sessionId: activeSession.id,
+        windowId: activeSessionWindow?.id ?? "",
         targetPaneId: activePaneId,
         direction,
-        cols: 100,
-        rows: 28,
+        initialPty: {
+          cols: 100,
+          rows: 28,
+        },
       });
       sessions = sessions.map((session) =>
         session.id === result.session.id ? result.session : session,
       );
       activePaneId = result.paneId;
       await refreshPTYs();
-      await refreshOutput(result.ptyId);
+      if (result.ptyId) await refreshOutput(result.ptyId);
     } catch (err) {
       error = backendError(err);
     }
@@ -213,10 +222,28 @@
 
   function selectSession(session: Session) {
     activeSessionId = session.id;
-    activePaneId = session.focusedPaneId;
+    activePaneId = firstPaneId(session);
     void refreshVisibleOutput().catch((err) => {
       error = backendError(err);
     });
+  }
+
+  async function closeSession(session: Session) {
+    error = "";
+    loadingSession = true;
+    try {
+      sessions = await CloseSession({ sessionId: session.id });
+      if (activeSessionId === session.id) {
+        activeSessionId = sessions[0]?.id ?? "";
+        activePaneId = firstPaneId(sessions[0]);
+      }
+      await refreshPTYs();
+      await refreshVisibleOutput();
+    } catch (err) {
+      error = `Close session failed: ${backendError(err)}`;
+    } finally {
+      loadingSession = false;
+    }
   }
 
   function toggleSidebar(id: SidebarId) {
@@ -275,6 +302,7 @@
         onClose={() => (activeSidebar = null)}
         onNewSession={createSession}
         onSelectSession={selectSession}
+        onCloseSession={closeSession}
         onRefreshPtys={() => void refreshPTYs()}
       />
     {/if}
@@ -319,16 +347,18 @@
 
       <div class="relative flex min-h-0 flex-1 flex-col">
         {#if activeSession}
-          <LayoutView
-            node={activeSession.layout}
-            panes={activeSession.panes}
-            {outputChunks}
-            {activePaneId}
-            {terminalFontSize}
-            {terminalCursorBlink}
-            onFocus={(paneId) => (activePaneId = paneId)}
-            onInput={() => refreshVisibleOutput().catch((err) => (error = backendError(err)))}
-          />
+          {#if activeSessionWindow}
+            <LayoutView
+              node={activeSessionWindow.layout}
+              panes={activeSession.panes}
+              {outputChunks}
+              {activePaneId}
+              {terminalFontSize}
+              {terminalCursorBlink}
+              onFocus={(paneId) => (activePaneId = paneId)}
+              onInput={() => refreshVisibleOutput().catch((err) => (error = backendError(err)))}
+            />
+          {/if}
         {:else}
           <div class="flex flex-1 flex-col items-center justify-center gap-4 text-center text-text-secondary">
             <div
@@ -380,6 +410,7 @@
         onClose={() => (activeSidebar = null)}
         onNewSession={createSession}
         onSelectSession={selectSession}
+        onCloseSession={closeSession}
         onRefreshPtys={() => void refreshPTYs()}
       />
       <div class="flex h-full w-[36px] shrink-0 flex-col border-l border-hairline bg-bg-base/96">

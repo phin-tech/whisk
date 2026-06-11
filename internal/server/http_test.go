@@ -25,14 +25,17 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	if !health["ok"] {
 		t.Fatalf("health = %#v", health)
 	}
+	compatibility := getJSON[protocol.CompatibilityResponse](t, handler, "/v1/compat", http.StatusOK)
+	if compatibility.APIVersion != protocol.DaemonAPIVersion {
+		t.Fatalf("compatibility = %#v", compatibility)
+	}
 
 	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
 		Name:       "Whisk",
-		WorkingDir: ".",
-		Cols:       80,
-		Rows:       24,
+		RootDir:    t.TempDir(),
+		InitialPTY: &protocol.StartPTYOptions{Cols: 80, Rows: 24},
 	}, http.StatusCreated)
-	if created.Session.ID == "" || created.MainPtyID == "" {
+	if created.Session.ID == "" || created.WindowID == "" || created.PaneID == "" || created.PTYID == nil || created.MainPtyID == "" {
 		t.Fatalf("created session missing ids: %#v", created)
 	}
 
@@ -51,14 +54,31 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	if snapshot.Output != "hello" || snapshot.OutputBase64 != "aGVsbG8=" || snapshot.Offset != 5 {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
+	bookmark := postJSON[protocol.PTYBookmark](t, handler, "/v1/ptys/"+created.MainPtyID+"/bookmarks", protocol.AddPTYBookmarkRequest{
+		Offset: 3,
+		Kind:   "prompt",
+		Label:  "Prompt",
+	}, http.StatusCreated)
+	if bookmark.ID == "" || bookmark.PTYID != created.MainPtyID || bookmark.Offset != 3 {
+		t.Fatalf("bookmark = %#v", bookmark)
+	}
+	bookmarks := getJSON[[]protocol.PTYBookmark](t, handler, "/v1/ptys/"+created.MainPtyID+"/bookmarks", http.StatusOK)
+	if len(bookmarks) != 1 || bookmarks[0].ID != bookmark.ID {
+		t.Fatalf("bookmarks = %#v", bookmarks)
+	}
+	deleteNoContent(t, handler, "/v1/pty-bookmarks/"+bookmark.ID)
+	bookmarks = getJSON[[]protocol.PTYBookmark](t, handler, "/v1/ptys/"+created.MainPtyID+"/bookmarks", http.StatusOK)
+	if len(bookmarks) != 0 {
+		t.Fatalf("bookmarks after delete = %#v", bookmarks)
+	}
 
 	split := postJSON[protocol.SplitPaneResult](t, handler, "/v1/sessions/"+created.Session.ID+"/split", protocol.SplitPaneRequest{
-		TargetPaneID: created.Session.FocusedPaneID,
+		WindowID:     created.WindowID,
+		TargetPaneID: created.PaneID,
 		Direction:    "vertical",
-		Cols:         80,
-		Rows:         24,
+		InitialPTY:   &protocol.StartPTYOptions{Cols: 80, Rows: 24},
 	}, http.StatusOK)
-	if split.PaneID == "" || split.PtyID == "" {
+	if split.PaneID == "" || split.PTYID == nil || split.PtyID == "" {
 		t.Fatalf("split = %#v", split)
 	}
 
@@ -70,7 +90,7 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	for _, pty := range ptys {
 		byID[pty.ID] = pty
 	}
-	if byID[created.MainPtyID].SessionID != created.Session.ID || byID[created.MainPtyID].PaneID != created.Session.FocusedPaneID {
+	if byID[created.MainPtyID].SessionID != created.Session.ID || byID[created.MainPtyID].WindowID != created.WindowID || byID[created.MainPtyID].PaneID != created.PaneID {
 		t.Fatalf("main pty = %#v", byID[created.MainPtyID])
 	}
 
@@ -79,6 +99,108 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 		t.Fatalf("event = %#v", event)
 	}
 
+}
+
+func TestHTTPServerSessionLifecycleActions(t *testing.T) {
+	backend := newFakePTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend})
+	handler := server.NewHTTP(runtime)
+
+	rootDir := t.TempDir()
+	nextRoot := t.TempDir()
+	paneDir := t.TempDir()
+
+	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:    "Empty",
+		RootDir: rootDir,
+	}, http.StatusCreated)
+	if created.PTYID != nil {
+		t.Fatalf("created should be empty: %#v", created)
+	}
+
+	updated := postJSON[map[string]any](t, handler, "/v1/sessions/"+created.Session.ID+"/set-root-dir", protocol.SetSessionRootDirRequest{
+		RootDir: nextRoot,
+	}, http.StatusOK)
+	if updated["rootDir"] != nextRoot {
+		t.Fatalf("updated root = %#v", updated)
+	}
+
+	updated = postJSON[map[string]any](t, handler, "/v1/sessions/"+created.Session.ID+"/panes/"+created.PaneID+"/set-working-dir", protocol.SetPaneWorkingDirRequest{
+		WorkingDir: paneDir,
+	}, http.StatusOK)
+	panes := updated["panes"].(map[string]any)
+	pane := panes[created.PaneID].(map[string]any)
+	if pane["workingDir"] != paneDir {
+		t.Fatalf("pane = %#v", pane)
+	}
+
+	started := postJSON[protocol.StartedPanePTY](t, handler, "/v1/sessions/"+created.Session.ID+"/panes/"+created.PaneID+"/start-pty", protocol.StartPanePTYRequest{
+		Options: protocol.StartPTYOptions{Cols: 90, Rows: 30},
+	}, http.StatusCreated)
+	if started.PTYID == "" || backend.records[started.PTYID].WorkingDir != paneDir {
+		t.Fatalf("started = %#v record = %#v", started, backend.records[started.PTYID])
+	}
+	detached := postJSON[protocol.DetachedPanePTY](t, handler, "/v1/sessions/"+created.Session.ID+"/panes/"+created.PaneID+"/detach-pty", protocol.DetachPanePTYRequest{}, http.StatusOK)
+	if detached.PTYID != started.PTYID {
+		t.Fatalf("detached = %#v", detached)
+	}
+	ptys := getJSON[[]protocol.PTYInfo](t, handler, "/v1/ptys", http.StatusOK)
+	byPTY := map[string]protocol.PTYInfo{}
+	for _, pty := range ptys {
+		byPTY[pty.ID] = pty
+	}
+	if byPTY[started.PTYID].SessionID != created.Session.ID || byPTY[started.PTYID].PaneID != "" || byPTY[started.PTYID].OriginPaneID != created.PaneID || byPTY[started.PTYID].Status != "running" {
+		t.Fatalf("detached pty = %#v", byPTY[started.PTYID])
+	}
+
+	restartSession := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:       "Restart",
+		RootDir:    rootDir,
+		InitialPTY: &protocol.StartPTYOptions{Cols: 80, Rows: 24},
+	}, http.StatusCreated)
+	killed := postJSON[protocol.PTYInfo](t, handler, "/v1/ptys/"+restartSession.MainPtyID+"/kill", protocol.KillPTYRequest{}, http.StatusOK)
+	if killed.Status != "killed" || killed.Running {
+		t.Fatalf("killed = %#v", killed)
+	}
+	restarted := postJSON[protocol.RestartedPanePTY](t, handler, "/v1/sessions/"+restartSession.Session.ID+"/panes/"+restartSession.PaneID+"/restart-pty", protocol.RestartPanePTYRequest{
+		Options: protocol.StartPTYOptions{Cols: 100, Rows: 40},
+	}, http.StatusCreated)
+	if restarted.PTYID == "" || restarted.OldPTYID != restartSession.MainPtyID || backend.records[restarted.PTYID].Cols != 100 {
+		t.Fatalf("restarted = %#v record = %#v", restarted, backend.records[restarted.PTYID])
+	}
+
+	closeSession := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:    "Close",
+		RootDir: rootDir,
+	}, http.StatusCreated)
+	split := postJSON[protocol.SplitPaneResult](t, handler, "/v1/sessions/"+closeSession.Session.ID+"/split", protocol.SplitPaneRequest{
+		WindowID:     closeSession.WindowID,
+		TargetPaneID: closeSession.PaneID,
+		Direction:    "horizontal",
+	}, http.StatusOK)
+	closed := postJSON[map[string]any](t, handler, "/v1/sessions/"+closeSession.Session.ID+"/windows/"+closeSession.WindowID+"/panes/"+split.PaneID+"/close", protocol.ClosePaneRequest{}, http.StatusOK)
+	closedPanes := closed["panes"].(map[string]any)
+	if _, ok := closedPanes[split.PaneID]; ok {
+		t.Fatalf("closed pane still present: %#v", closedPanes)
+	}
+
+	sessionToClose := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:       "Close session",
+		RootDir:    rootDir,
+		InitialPTY: &protocol.StartPTYOptions{Cols: 80, Rows: 24},
+	}, http.StatusCreated)
+	remaining := deleteJSON[[]map[string]any](t, handler, "/v1/sessions/"+sessionToClose.Session.ID, http.StatusOK)
+	for _, candidate := range remaining {
+		if candidate["id"] == sessionToClose.Session.ID {
+			t.Fatalf("closed session still present: %#v", remaining)
+		}
+	}
+	ptys = getJSON[[]protocol.PTYInfo](t, handler, "/v1/ptys", http.StatusOK)
+	for _, pty := range ptys {
+		if pty.SessionID == sessionToClose.Session.ID && pty.Status != "killed" {
+			t.Fatalf("closed session pty not killed: %#v", pty)
+		}
+	}
 }
 
 func TestHTTPServerNextEventTimeoutReturnsNoop(t *testing.T) {
@@ -246,6 +368,16 @@ func (b *fakePTYBackend) Resize(_ context.Context, ptyID string, size app.PTYSiz
 	return nil
 }
 
+func (b *fakePTYBackend) Kill(_ context.Context, ptyID string) (app.PTYRecord, error) {
+	record, ok := b.records[ptyID]
+	if !ok {
+		return app.PTYRecord{}, errNotFound(ptyID)
+	}
+	record.Running = false
+	b.records[ptyID] = record
+	return record, nil
+}
+
 func (b *fakePTYBackend) Attach(context.Context, app.AttachPTYRequest) (*app.PTYAttach, error) {
 	ch := make(chan app.PTYEvent)
 	close(ch)
@@ -377,6 +509,20 @@ func deleteNoContent(t *testing.T, handler http.Handler, path string) {
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("%s status = %d body = %s", path, recorder.Code, recorder.Body.String())
 	}
+}
+
+func deleteJSON[T any](t *testing.T, handler http.Handler, path string, wantStatus int) T {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, path, nil))
+	if recorder.Code != wantStatus {
+		t.Fatalf("%s status = %d body = %s", path, recorder.Code, recorder.Body.String())
+	}
+	var out T
+	if err := json.Unmarshal(recorder.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return out
 }
 
 func getJSON[T any](t *testing.T, handler http.Handler, path string, wantStatus int) T {

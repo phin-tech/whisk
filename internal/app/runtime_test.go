@@ -22,15 +22,7 @@ func TestRuntimeCreateSessionAttachAndReplayOutput(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
-		Name:       "Whisk",
-		WorkingDir: ".",
-		Cols:       80,
-		Rows:       24,
-	})
-	if err != nil {
-		t.Fatalf("create session: %v", err)
-	}
+	created := createRuntimeSession(t, runtime, ctx, 80, 24)
 	sessions, err := runtime.ListSessions(ctx)
 	if err != nil {
 		t.Fatalf("list sessions: %v", err)
@@ -96,22 +88,14 @@ func TestRuntimeSplitPaneCreatesNewPTY(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
-		Name:       "Whisk",
-		WorkingDir: ".",
-		Cols:       80,
-		Rows:       24,
-	})
-	if err != nil {
-		t.Fatalf("create session: %v", err)
-	}
+	created := createRuntimeSession(t, runtime, ctx, 80, 24)
 
 	split, err := runtime.SplitPane(ctx, app.SplitPaneRequest{
 		SessionID:    created.Session.ID,
-		TargetPaneID: created.Session.FocusedPaneID,
+		WindowID:     created.WindowID,
+		TargetPaneID: created.PaneID,
 		Direction:    session.SplitHorizontal,
-		Cols:         80,
-		Rows:         24,
+		InitialPTY:   &app.StartPTYOptions{Cols: 80, Rows: 24},
 	})
 	if err != nil {
 		t.Fatalf("split pane: %v", err)
@@ -119,8 +103,8 @@ func TestRuntimeSplitPaneCreatesNewPTY(t *testing.T) {
 	if split.PaneID == "" || split.PtyID == "" {
 		t.Fatalf("split missing ids: %#v", split)
 	}
-	if split.Session.FocusedPaneID != split.PaneID {
-		t.Fatalf("focused pane = %q, split pane = %q", split.Session.FocusedPaneID, split.PaneID)
+	if split.PTYID == nil || *split.PTYID != split.PtyID {
+		t.Fatalf("split pty mismatch: %#v", split)
 	}
 }
 
@@ -134,21 +118,13 @@ func TestRuntimeListPTYsIncludesSessionOwnership(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
-		Name:       "Whisk",
-		WorkingDir: ".",
-		Cols:       80,
-		Rows:       24,
-	})
-	if err != nil {
-		t.Fatalf("create session: %v", err)
-	}
+	created := createRuntimeSession(t, runtime, ctx, 80, 24)
 	split, err := runtime.SplitPane(ctx, app.SplitPaneRequest{
 		SessionID:    created.Session.ID,
-		TargetPaneID: created.Session.FocusedPaneID,
+		WindowID:     created.WindowID,
+		TargetPaneID: created.PaneID,
 		Direction:    session.SplitVertical,
-		Cols:         100,
-		Rows:         30,
+		InitialPTY:   &app.StartPTYOptions{Cols: 100, Rows: 30},
 	})
 	if err != nil {
 		t.Fatalf("split pane: %v", err)
@@ -163,10 +139,10 @@ func TestRuntimeListPTYsIncludesSessionOwnership(t *testing.T) {
 	for _, pty := range ptys {
 		byID[pty.ID] = pty
 	}
-	if byID[created.MainPtyID].SessionID != created.Session.ID || byID[created.MainPtyID].PaneID != created.Session.FocusedPaneID {
+	if byID[created.MainPtyID].SessionID != created.Session.ID || byID[created.MainPtyID].WindowID != created.WindowID || byID[created.MainPtyID].PaneID != created.PaneID {
 		t.Fatalf("main pty info = %#v", byID[created.MainPtyID])
 	}
-	if byID[split.PtyID].SessionID != created.Session.ID || byID[split.PtyID].PaneID != split.PaneID {
+	if byID[split.PtyID].SessionID != created.Session.ID || byID[split.PtyID].WindowID != created.WindowID || byID[split.PtyID].PaneID != split.PaneID {
 		t.Fatalf("split pty info = %#v", byID[split.PtyID])
 	}
 	if !byID[split.PtyID].Running || byID[split.PtyID].Cols != 100 || byID[split.PtyID].Rows != 30 {
@@ -186,15 +162,7 @@ func TestRuntimePublishesSessionPTYAndOutputEvents(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
-		Name:       "Whisk",
-		WorkingDir: ".",
-		Cols:       80,
-		Rows:       24,
-	})
-	if err != nil {
-		t.Fatalf("create session: %v", err)
-	}
+	created := createRuntimeSession(t, runtime, ctx, 80, 24)
 
 	sink.waitFor(t, ctx, app.EventSessionChanged, "")
 	sink.waitFor(t, ctx, app.EventPTYChanged, created.MainPtyID)
@@ -212,10 +180,7 @@ func TestRuntimeRejectsInvalidRequests(t *testing.T) {
 	ctx := context.Background()
 	runtime := app.NewRuntime(app.RuntimeConfig{})
 	if _, err := runtime.CreateSession(ctx, app.CreateSessionRequest{}); err == nil {
-		t.Fatalf("expected missing backend create error")
-	}
-	if _, err := runtime.SplitPane(ctx, app.SplitPaneRequest{}); err == nil {
-		t.Fatalf("expected missing backend split error")
+		t.Fatalf("expected missing root create error")
 	}
 	if err := runtime.Shutdown(ctx); err != nil {
 		t.Fatalf("shutdown without backend: %v", err)
@@ -244,15 +209,7 @@ func TestRuntimeResizePTYChangesShellGrid(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
-		Name:       "Whisk",
-		WorkingDir: ".",
-		Cols:       80,
-		Rows:       24,
-	})
-	if err != nil {
-		t.Fatalf("create session: %v", err)
-	}
+	created := createRuntimeSession(t, runtime, ctx, 80, 24)
 	if err := runtime.ResizePTY(ctx, created.MainPtyID, app.PTYSize{Cols: 73, Rows: 17}); err != nil {
 		t.Fatalf("resize pty: %v", err)
 	}
@@ -291,6 +248,25 @@ type recordingEventSink struct {
 
 func newRecordingEventSink() *recordingEventSink {
 	return &recordingEventSink{ch: make(chan app.RuntimeEvent, 64)}
+}
+
+func createRuntimeSession(t *testing.T, runtime *app.Runtime, ctx context.Context, cols int, rows int) app.CreatedSession {
+	t.Helper()
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:    "Whisk",
+		RootDir: t.TempDir(),
+		InitialPTY: &app.StartPTYOptions{
+			Cols: cols,
+			Rows: rows,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if created.PTYID == nil || created.MainPtyID == "" || *created.PTYID != created.MainPtyID {
+		t.Fatalf("created pty mismatch: %#v", created)
+	}
+	return created
 }
 
 func (s *recordingEventSink) Publish(_ context.Context, event app.RuntimeEvent) error {

@@ -20,12 +20,24 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	server := &HTTPServer{runtime: runtime}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", server.health)
+	mux.HandleFunc("GET /v1/compat", server.compatibility)
 	mux.HandleFunc("GET /v1/sessions", server.listSessions)
 	mux.HandleFunc("POST /v1/sessions", server.createSession)
+	mux.HandleFunc("DELETE /v1/sessions/{sessionID}", server.closeSession)
 	mux.HandleFunc("POST /v1/sessions/{sessionID}/split", server.splitPane)
+	mux.HandleFunc("POST /v1/sessions/{sessionID}/set-root-dir", server.setSessionRootDir)
+	mux.HandleFunc("POST /v1/sessions/{sessionID}/panes/{paneID}/set-working-dir", server.setPaneWorkingDir)
+	mux.HandleFunc("POST /v1/sessions/{sessionID}/panes/{paneID}/start-pty", server.startPanePTY)
+	mux.HandleFunc("POST /v1/sessions/{sessionID}/panes/{paneID}/restart-pty", server.restartPanePTY)
+	mux.HandleFunc("POST /v1/sessions/{sessionID}/panes/{paneID}/detach-pty", server.detachPanePTY)
+	mux.HandleFunc("POST /v1/sessions/{sessionID}/windows/{windowID}/panes/{paneID}/close", server.closePane)
 	mux.HandleFunc("GET /v1/ptys", server.listPTYs)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/write", server.writePTY)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/resize", server.resizePTY)
+	mux.HandleFunc("POST /v1/ptys/{ptyID}/kill", server.killPTY)
+	mux.HandleFunc("POST /v1/ptys/{ptyID}/bookmarks", server.addPTYBookmark)
+	mux.HandleFunc("GET /v1/ptys/{ptyID}/bookmarks", server.listPTYBookmarks)
+	mux.HandleFunc("DELETE /v1/pty-bookmarks/{bookmarkID}", server.removePTYBookmark)
 	mux.HandleFunc("GET /v1/ptys/{ptyID}/output", server.output)
 	mux.HandleFunc("POST /v1/worktrunk/detect", server.detectWorktrunk)
 	mux.HandleFunc("POST /v1/worktrees/list", server.listWorktrees)
@@ -40,12 +52,216 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	return mux
 }
 
+func (s *HTTPServer) addPTYBookmark(w http.ResponseWriter, r *http.Request) {
+	var req protocol.AddPTYBookmarkRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.PTYID = pathValue(r, "ptyID", req.PTYID)
+	bookmark, err := s.runtime.AddPTYBookmark(r.Context(), app.AddPTYBookmarkRequest{
+		PTYID:  req.PTYID,
+		Offset: req.Offset,
+		Kind:   req.Kind,
+		Label:  req.Label,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, bookmark)
+}
+
+func (s *HTTPServer) listPTYBookmarks(w http.ResponseWriter, r *http.Request) {
+	bookmarks, err := s.runtime.ListPTYBookmarks(r.Context(), pathValue(r, "ptyID", ""))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, bookmarks)
+}
+
+func (s *HTTPServer) removePTYBookmark(w http.ResponseWriter, r *http.Request) {
+	req := app.RemovePTYBookmarkRequest{BookmarkID: pathValue(r, "bookmarkID", "")}
+	if err := s.runtime.RemovePTYBookmark(r.Context(), req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *HTTPServer) closeSession(w http.ResponseWriter, r *http.Request) {
+	req := protocol.CloseSessionRequest{SessionID: pathValue(r, "sessionID", "")}
+	sessions, err := s.runtime.CloseSession(r.Context(), app.CloseSessionRequest{SessionID: req.SessionID})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sessions)
+}
+
+func (s *HTTPServer) restartPanePTY(w http.ResponseWriter, r *http.Request) {
+	var req protocol.RestartPanePTYRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.SessionID = pathValue(r, "sessionID", req.SessionID)
+	req.PaneID = pathValue(r, "paneID", req.PaneID)
+	restarted, err := s.runtime.RestartPanePTY(r.Context(), app.RestartPanePTYRequest{
+		SessionID: req.SessionID,
+		PaneID:    req.PaneID,
+		Options:   *toAppStartPTYOptions(&req.Options),
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, protocol.RestartedPanePTY{
+		Session:  restarted.Session,
+		PTYID:    restarted.PTYID,
+		OldPTYID: restarted.OldPTYID,
+	})
+}
+
+func (s *HTTPServer) killPTY(w http.ResponseWriter, r *http.Request) {
+	var req protocol.KillPTYRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.PTYID = pathValue(r, "ptyID", req.PTYID)
+	killed, err := s.runtime.KillPTY(r.Context(), app.KillPTYRequest{PTYID: req.PTYID})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolPTYInfo(killed))
+}
+
+func toProtocolPTYInfo(pty app.PTYInfo) protocol.PTYInfo {
+	return protocol.PTYInfo{
+		ID:             pty.ID,
+		WorkingDir:     pty.WorkingDir,
+		Cols:           pty.Cols,
+		Rows:           pty.Rows,
+		Running:        pty.Running,
+		Status:         string(pty.Status),
+		ExitCode:       pty.ExitCode,
+		SessionID:      pty.SessionID,
+		WindowID:       pty.WindowID,
+		PaneID:         pty.PaneID,
+		OriginWindowID: pty.OriginWindowID,
+		OriginPaneID:   pty.OriginPaneID,
+	}
+}
+
+func (s *HTTPServer) setSessionRootDir(w http.ResponseWriter, r *http.Request) {
+	var req protocol.SetSessionRootDirRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.SessionID = pathValue(r, "sessionID", req.SessionID)
+	updated, err := s.runtime.SetSessionRootDir(r.Context(), app.SetSessionRootDirRequest{
+		SessionID: req.SessionID,
+		RootDir:   req.RootDir,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *HTTPServer) setPaneWorkingDir(w http.ResponseWriter, r *http.Request) {
+	var req protocol.SetPaneWorkingDirRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.SessionID = pathValue(r, "sessionID", req.SessionID)
+	req.PaneID = pathValue(r, "paneID", req.PaneID)
+	updated, err := s.runtime.SetPaneWorkingDir(r.Context(), app.SetPaneWorkingDirRequest{
+		SessionID:  req.SessionID,
+		PaneID:     req.PaneID,
+		WorkingDir: req.WorkingDir,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *HTTPServer) startPanePTY(w http.ResponseWriter, r *http.Request) {
+	var req protocol.StartPanePTYRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.SessionID = pathValue(r, "sessionID", req.SessionID)
+	req.PaneID = pathValue(r, "paneID", req.PaneID)
+	started, err := s.runtime.StartPanePTY(r.Context(), app.StartPanePTYRequest{
+		SessionID: req.SessionID,
+		PaneID:    req.PaneID,
+		Options:   *toAppStartPTYOptions(&req.Options),
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, protocol.StartedPanePTY{
+		Session: started.Session,
+		PTYID:   started.PTYID,
+	})
+}
+
+func (s *HTTPServer) detachPanePTY(w http.ResponseWriter, r *http.Request) {
+	var req protocol.DetachPanePTYRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.SessionID = pathValue(r, "sessionID", req.SessionID)
+	req.PaneID = pathValue(r, "paneID", req.PaneID)
+	detached, err := s.runtime.DetachPanePTY(r.Context(), app.DetachPanePTYRequest{
+		SessionID: req.SessionID,
+		PaneID:    req.PaneID,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, protocol.DetachedPanePTY{
+		Session: detached.Session,
+		PTYID:   detached.PTYID,
+	})
+}
+
+func (s *HTTPServer) closePane(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ClosePaneRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.SessionID = pathValue(r, "sessionID", req.SessionID)
+	req.WindowID = pathValue(r, "windowID", req.WindowID)
+	req.PaneID = pathValue(r, "paneID", req.PaneID)
+	updated, err := s.runtime.ClosePane(r.Context(), app.ClosePaneRequest{
+		SessionID: req.SessionID,
+		WindowID:  req.WindowID,
+		PaneID:    req.PaneID,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
 type HTTPServer struct {
 	runtime *app.Runtime
 }
 
 func (s *HTTPServer) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *HTTPServer) compatibility(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, protocol.CompatibilityResponse{APIVersion: protocol.DaemonAPIVersion})
 }
 
 func (s *HTTPServer) listSessions(w http.ResponseWriter, r *http.Request) {
@@ -64,9 +280,8 @@ func (s *HTTPServer) createSession(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := s.runtime.CreateSession(r.Context(), app.CreateSessionRequest{
 		Name:       req.Name,
-		WorkingDir: req.WorkingDir,
-		Cols:       req.Cols,
-		Rows:       req.Rows,
+		RootDir:    req.RootDir,
+		InitialPTY: toAppStartPTYOptions(req.InitialPTY),
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -74,6 +289,9 @@ func (s *HTTPServer) createSession(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, protocol.CreatedSession{
 		Session:   created.Session,
+		WindowID:  created.WindowID,
+		PaneID:    created.PaneID,
+		PTYID:     created.PTYID,
 		MainPtyID: created.MainPtyID,
 	})
 }
@@ -91,10 +309,10 @@ func (s *HTTPServer) splitPane(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.runtime.SplitPane(r.Context(), app.SplitPaneRequest{
 		SessionID:    req.SessionID,
+		WindowID:     req.WindowID,
 		TargetPaneID: req.TargetPaneID,
 		Direction:    direction,
-		Cols:         req.Cols,
-		Rows:         req.Rows,
+		InitialPTY:   toAppStartPTYOptions(req.InitialPTY),
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -103,6 +321,7 @@ func (s *HTTPServer) splitPane(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, protocol.SplitPaneResult{
 		Session: result.Session,
 		PaneID:  result.PaneID,
+		PTYID:   result.PTYID,
 		PtyID:   result.PtyID,
 	})
 }
@@ -115,17 +334,16 @@ func (s *HTTPServer) listPTYs(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]protocol.PTYInfo, 0, len(ptys))
 	for _, pty := range ptys {
-		out = append(out, protocol.PTYInfo{
-			ID:         pty.ID,
-			WorkingDir: pty.WorkingDir,
-			Cols:       pty.Cols,
-			Rows:       pty.Rows,
-			Running:    pty.Running,
-			SessionID:  pty.SessionID,
-			PaneID:     pty.PaneID,
-		})
+		out = append(out, toProtocolPTYInfo(pty))
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func toAppStartPTYOptions(options *protocol.StartPTYOptions) *app.StartPTYOptions {
+	if options == nil {
+		return nil
+	}
+	return &app.StartPTYOptions{Cols: options.Cols, Rows: options.Rows}
 }
 
 func (s *HTTPServer) writePTY(w http.ResponseWriter, r *http.Request) {

@@ -7,8 +7,13 @@ type LayoutNodeLike = {
 
 type SessionLike = {
   id: string;
+  windows: { [_ in string]?: WindowLike };
+  panes: { [_ in string]?: { id?: string; currentPtyId?: string | null } };
+};
+
+type WindowLike = {
+  id: string;
   layout: LayoutNodeLike;
-  panes: { [_ in string]?: { id?: string; ptyId: string } };
 };
 
 type PtyInfoLike = {
@@ -33,6 +38,29 @@ export function paneIds(node: LayoutNodeLike | undefined): string[] {
   return (node.children ?? []).flatMap(paneIds);
 }
 
+export function sessionWindows<T extends WindowLike>(
+  session: { windows: { [_ in string]?: T } } | null | undefined,
+): T[] {
+  return Object.values(session?.windows ?? {}).filter((window): window is T => Boolean(window));
+}
+
+export function firstPaneId(session: SessionLike | null | undefined): string {
+  for (const window of sessionWindows(session)) {
+    const [paneId] = paneIds(window.layout);
+    if (paneId) return paneId;
+  }
+  return "";
+}
+
+export function activeWindow<T extends WindowLike>(
+  session: { windows: { [_ in string]?: T } } | null | undefined,
+  paneId: string,
+): T | null {
+  const windows = sessionWindows(session);
+  const containing = windows.find((window) => paneIds(window.layout).includes(paneId));
+  return containing ?? windows[0] ?? null;
+}
+
 export function visiblePtyIds(
   sessions: SessionLike[],
   activeSessionId: string,
@@ -41,17 +69,19 @@ export function visiblePtyIds(
   const ptys: string[] = [];
   const seen = new Set<string>();
   const activeSession = sessions.find((session) => session.id === activeSessionId);
-  const activePtyID = activeSession?.panes[activePaneId]?.ptyId;
+  const activePtyID = activeSession?.panes[activePaneId]?.currentPtyId;
   if (activePtyID) {
     ptys.push(activePtyID);
     seen.add(activePtyID);
   }
   for (const session of sessions) {
-    for (const paneID of paneIds(session.layout)) {
-      const ptyID = session.panes[paneID]?.ptyId;
-      if (ptyID && !seen.has(ptyID)) {
-        ptys.push(ptyID);
-        seen.add(ptyID);
+    for (const window of sessionWindows(session)) {
+      for (const paneID of paneIds(window.layout)) {
+        const ptyID = session.panes[paneID]?.currentPtyId;
+        if (ptyID && !seen.has(ptyID)) {
+          ptys.push(ptyID);
+          seen.add(ptyID);
+        }
       }
     }
   }

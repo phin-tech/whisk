@@ -46,6 +46,31 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || split.PaneID != "pane_02" || fake.splitReq.SessionID != "sess_02" {
 		t.Fatalf("split = %#v, req = %#v, err = %v", split, fake.splitReq, err)
 	}
+	if _, err := service.SetSessionRootDir(ctx, protocol.SetSessionRootDirRequest{SessionID: "sess_02", RootDir: "/repo"}); err != nil || fake.setRootReq.RootDir != "/repo" {
+		t.Fatalf("set root req = %#v, err = %v", fake.setRootReq, err)
+	}
+	if _, err := service.SetPaneWorkingDir(ctx, protocol.SetPaneWorkingDirRequest{SessionID: "sess_02", PaneID: "pane_02", WorkingDir: "/repo/frontend"}); err != nil || fake.setPaneDirReq.WorkingDir != "/repo/frontend" {
+		t.Fatalf("set pane working dir req = %#v, err = %v", fake.setPaneDirReq, err)
+	}
+	started, err := service.StartPanePTY(ctx, protocol.StartPanePTYRequest{SessionID: "sess_02", PaneID: "pane_02", Options: protocol.StartPTYOptions{Cols: 80, Rows: 24}})
+	if err != nil || started.PTYID != "pty_03" || fake.startPanePTYReq.PaneID != "pane_02" {
+		t.Fatalf("start pane pty = %#v, req = %#v, err = %v", started, fake.startPanePTYReq, err)
+	}
+	restarted, err := service.RestartPanePTY(ctx, protocol.RestartPanePTYRequest{SessionID: "sess_02", PaneID: "pane_02", Options: protocol.StartPTYOptions{Cols: 80, Rows: 24}})
+	if err != nil || restarted.PTYID != "pty_04" || restarted.OldPTYID != "pty_03" || fake.restartPanePTYReq.PaneID != "pane_02" {
+		t.Fatalf("restart pane pty = %#v, req = %#v, err = %v", restarted, fake.restartPanePTYReq, err)
+	}
+	detached, err := service.DetachPanePTY(ctx, protocol.DetachPanePTYRequest{SessionID: "sess_02", PaneID: "pane_02"})
+	if err != nil || detached.PTYID != "pty_03" || fake.detachPanePTYReq.PaneID != "pane_02" {
+		t.Fatalf("detach pane pty = %#v, req = %#v, err = %v", detached, fake.detachPanePTYReq, err)
+	}
+	remaining, err := service.CloseSession(ctx, protocol.CloseSessionRequest{SessionID: "sess_02"})
+	if err != nil || len(remaining) != 1 || fake.closeSessionReq.SessionID != "sess_02" {
+		t.Fatalf("close session = %#v, req = %#v, err = %v", remaining, fake.closeSessionReq, err)
+	}
+	if _, err := service.ClosePane(ctx, protocol.ClosePaneRequest{SessionID: "sess_02", WindowID: "win_01", PaneID: "pane_02"}); err != nil || fake.closePaneReq.PaneID != "pane_02" {
+		t.Fatalf("close pane req = %#v, err = %v", fake.closePaneReq, err)
+	}
 	if err := service.WritePTY(ctx, protocol.WritePTYRequest{PtyID: "pty_01", Data: "x"}); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -57,6 +82,21 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	}
 	if fake.resizeReq.Cols != 80 || fake.resizeReq.Rows != 24 {
 		t.Fatalf("resize req = %#v", fake.resizeReq)
+	}
+	killed, err := service.KillPTY(ctx, protocol.KillPTYRequest{PTYID: "pty_01"})
+	if err != nil || killed.ID != "pty_01" || fake.killReq.PTYID != "pty_01" {
+		t.Fatalf("kill = %#v, req = %#v, err = %v", killed, fake.killReq, err)
+	}
+	bookmark, err := service.AddPTYBookmark(ctx, protocol.AddPTYBookmarkRequest{PTYID: "pty_01", Offset: 12, Kind: "prompt"})
+	if err != nil || bookmark.PTYID != "pty_01" || fake.addBookmarkReq.Offset != 12 {
+		t.Fatalf("add bookmark = %#v, req = %#v, err = %v", bookmark, fake.addBookmarkReq, err)
+	}
+	bookmarks, err := service.ListPTYBookmarks(ctx, "pty_01")
+	if err != nil || len(bookmarks) != 1 || fake.listBookmarksPTYID != "pty_01" {
+		t.Fatalf("list bookmarks = %#v, pty = %q, err = %v", bookmarks, fake.listBookmarksPTYID, err)
+	}
+	if err := service.RemovePTYBookmark(ctx, protocol.RemovePTYBookmarkRequest{BookmarkID: "bm_01"}); err != nil || fake.removeBookmarkReq.BookmarkID != "bm_01" {
+		t.Fatalf("remove bookmark req = %#v, err = %v", fake.removeBookmarkReq, err)
 	}
 	output, err := service.Output(ctx, protocol.OutputRequest{PtyID: "pty_01", FromOffset: 7})
 	if err != nil || output.Offset != 12 || fake.outputReq.FromOffset != 7 {
@@ -117,12 +157,23 @@ type runtimeClientFake struct {
 	createdWorktree protocol.CreatedWorktree
 	httpForwards    []protocol.HTTPForward
 
-	createReq    protocol.CreateSessionRequest
-	splitReq     protocol.SplitPaneRequest
-	writeReq     protocol.WritePTYRequest
-	resizeReq    protocol.ResizePTYRequest
-	outputReq    protocol.OutputRequest
-	nextEventReq protocol.NextEventRequest
+	createReq          protocol.CreateSessionRequest
+	splitReq           protocol.SplitPaneRequest
+	setRootReq         protocol.SetSessionRootDirRequest
+	setPaneDirReq      protocol.SetPaneWorkingDirRequest
+	startPanePTYReq    protocol.StartPanePTYRequest
+	restartPanePTYReq  protocol.RestartPanePTYRequest
+	detachPanePTYReq   protocol.DetachPanePTYRequest
+	closeSessionReq    protocol.CloseSessionRequest
+	closePaneReq       protocol.ClosePaneRequest
+	writeReq           protocol.WritePTYRequest
+	resizeReq          protocol.ResizePTYRequest
+	killReq            protocol.KillPTYRequest
+	addBookmarkReq     protocol.AddPTYBookmarkRequest
+	listBookmarksPTYID string
+	removeBookmarkReq  protocol.RemovePTYBookmarkRequest
+	outputReq          protocol.OutputRequest
+	nextEventReq       protocol.NextEventRequest
 
 	detectWorktrunkReq protocol.DetectWorktrunkRequest
 	listWorktreesReq   protocol.ListWorktreesRequest
@@ -146,6 +197,41 @@ func (f *runtimeClientFake) SplitPane(_ context.Context, req protocol.SplitPaneR
 	return f.split, nil
 }
 
+func (f *runtimeClientFake) SetSessionRootDir(_ context.Context, req protocol.SetSessionRootDirRequest) (session.Session, error) {
+	f.setRootReq = req
+	return session.Session{ID: req.SessionID, RootDir: req.RootDir}, nil
+}
+
+func (f *runtimeClientFake) SetPaneWorkingDir(_ context.Context, req protocol.SetPaneWorkingDirRequest) (session.Session, error) {
+	f.setPaneDirReq = req
+	return session.Session{ID: req.SessionID}, nil
+}
+
+func (f *runtimeClientFake) StartPanePTY(_ context.Context, req protocol.StartPanePTYRequest) (protocol.StartedPanePTY, error) {
+	f.startPanePTYReq = req
+	return protocol.StartedPanePTY{Session: session.Session{ID: req.SessionID}, PTYID: "pty_03"}, nil
+}
+
+func (f *runtimeClientFake) RestartPanePTY(_ context.Context, req protocol.RestartPanePTYRequest) (protocol.RestartedPanePTY, error) {
+	f.restartPanePTYReq = req
+	return protocol.RestartedPanePTY{Session: session.Session{ID: req.SessionID}, PTYID: "pty_04", OldPTYID: "pty_03"}, nil
+}
+
+func (f *runtimeClientFake) DetachPanePTY(_ context.Context, req protocol.DetachPanePTYRequest) (protocol.DetachedPanePTY, error) {
+	f.detachPanePTYReq = req
+	return protocol.DetachedPanePTY{Session: session.Session{ID: req.SessionID}, PTYID: "pty_03"}, nil
+}
+
+func (f *runtimeClientFake) CloseSession(_ context.Context, req protocol.CloseSessionRequest) ([]session.Session, error) {
+	f.closeSessionReq = req
+	return []session.Session{{ID: "sess_01"}}, nil
+}
+
+func (f *runtimeClientFake) ClosePane(_ context.Context, req protocol.ClosePaneRequest) (session.Session, error) {
+	f.closePaneReq = req
+	return session.Session{ID: req.SessionID}, nil
+}
+
 func (f *runtimeClientFake) WritePTY(_ context.Context, req protocol.WritePTYRequest) error {
 	f.writeReq = req
 	return nil
@@ -153,6 +239,26 @@ func (f *runtimeClientFake) WritePTY(_ context.Context, req protocol.WritePTYReq
 
 func (f *runtimeClientFake) ResizePTY(_ context.Context, req protocol.ResizePTYRequest) error {
 	f.resizeReq = req
+	return nil
+}
+
+func (f *runtimeClientFake) KillPTY(_ context.Context, req protocol.KillPTYRequest) (protocol.PTYInfo, error) {
+	f.killReq = req
+	return protocol.PTYInfo{ID: req.PTYID, Status: "killed"}, nil
+}
+
+func (f *runtimeClientFake) AddPTYBookmark(_ context.Context, req protocol.AddPTYBookmarkRequest) (protocol.PTYBookmark, error) {
+	f.addBookmarkReq = req
+	return protocol.PTYBookmark{ID: "bm_01", PTYID: req.PTYID, Offset: req.Offset, Kind: req.Kind}, nil
+}
+
+func (f *runtimeClientFake) ListPTYBookmarks(_ context.Context, ptyID string) ([]protocol.PTYBookmark, error) {
+	f.listBookmarksPTYID = ptyID
+	return []protocol.PTYBookmark{{ID: "bm_01", PTYID: ptyID}}, nil
+}
+
+func (f *runtimeClientFake) RemovePTYBookmark(_ context.Context, req protocol.RemovePTYBookmarkRequest) error {
+	f.removeBookmarkReq = req
 	return nil
 }
 

@@ -41,6 +41,12 @@ func (c *HTTPClient) Health(ctx context.Context) error {
 	return nil
 }
 
+func (c *HTTPClient) Compatibility(ctx context.Context) (protocol.CompatibilityResponse, error) {
+	var response protocol.CompatibilityResponse
+	err := c.get(ctx, "/v1/compat", nil, &response)
+	return response, err
+}
+
 func (c *HTTPClient) ListSessions(ctx context.Context) ([]session.Session, error) {
 	var sessions []session.Session
 	err := c.get(ctx, "/v1/sessions", nil, &sessions)
@@ -56,6 +62,81 @@ func (c *HTTPClient) CreateSession(ctx context.Context, req protocol.CreateSessi
 func (c *HTTPClient) SplitPane(ctx context.Context, req protocol.SplitPaneRequest) (protocol.SplitPaneResult, error) {
 	var result protocol.SplitPaneResult
 	path := "/v1/sessions/" + url.PathEscape(req.SessionID) + "/split"
+	err := c.post(ctx, path, req, &result)
+	return result, err
+}
+
+func (c *HTTPClient) SetSessionRootDir(ctx context.Context, req protocol.SetSessionRootDirRequest) (session.Session, error) {
+	var result session.Session
+	path := "/v1/sessions/" + url.PathEscape(req.SessionID) + "/set-root-dir"
+	err := c.post(ctx, path, req, &result)
+	return result, err
+}
+
+func (c *HTTPClient) SetPaneWorkingDir(ctx context.Context, req protocol.SetPaneWorkingDirRequest) (session.Session, error) {
+	var result session.Session
+	path := "/v1/sessions/" + url.PathEscape(req.SessionID) + "/panes/" + url.PathEscape(req.PaneID) + "/set-working-dir"
+	err := c.post(ctx, path, req, &result)
+	return result, err
+}
+
+func (c *HTTPClient) StartPanePTY(ctx context.Context, req protocol.StartPanePTYRequest) (protocol.StartedPanePTY, error) {
+	var result protocol.StartedPanePTY
+	path := "/v1/sessions/" + url.PathEscape(req.SessionID) + "/panes/" + url.PathEscape(req.PaneID) + "/start-pty"
+	err := c.post(ctx, path, req, &result)
+	return result, err
+}
+
+func (c *HTTPClient) RestartPanePTY(ctx context.Context, req protocol.RestartPanePTYRequest) (protocol.RestartedPanePTY, error) {
+	var result protocol.RestartedPanePTY
+	path := "/v1/sessions/" + url.PathEscape(req.SessionID) + "/panes/" + url.PathEscape(req.PaneID) + "/restart-pty"
+	err := c.post(ctx, path, req, &result)
+	return result, err
+}
+
+func (c *HTTPClient) DetachPanePTY(ctx context.Context, req protocol.DetachPanePTYRequest) (protocol.DetachedPanePTY, error) {
+	var result protocol.DetachedPanePTY
+	path := "/v1/sessions/" + url.PathEscape(req.SessionID) + "/panes/" + url.PathEscape(req.PaneID) + "/detach-pty"
+	err := c.post(ctx, path, req, &result)
+	return result, err
+}
+
+func (c *HTTPClient) KillPTY(ctx context.Context, req protocol.KillPTYRequest) (protocol.PTYInfo, error) {
+	var result protocol.PTYInfo
+	path := "/v1/ptys/" + url.PathEscape(req.PTYID) + "/kill"
+	err := c.post(ctx, path, req, &result)
+	return result, err
+}
+
+func (c *HTTPClient) AddPTYBookmark(ctx context.Context, req protocol.AddPTYBookmarkRequest) (protocol.PTYBookmark, error) {
+	var result protocol.PTYBookmark
+	path := "/v1/ptys/" + url.PathEscape(req.PTYID) + "/bookmarks"
+	err := c.post(ctx, path, req, &result)
+	return result, err
+}
+
+func (c *HTTPClient) ListPTYBookmarks(ctx context.Context, ptyID string) ([]protocol.PTYBookmark, error) {
+	var result []protocol.PTYBookmark
+	path := "/v1/ptys/" + url.PathEscape(ptyID) + "/bookmarks"
+	err := c.get(ctx, path, nil, &result)
+	return result, err
+}
+
+func (c *HTTPClient) RemovePTYBookmark(ctx context.Context, req protocol.RemovePTYBookmarkRequest) error {
+	path := "/v1/pty-bookmarks/" + url.PathEscape(req.BookmarkID)
+	return c.delete(ctx, path)
+}
+
+func (c *HTTPClient) CloseSession(ctx context.Context, req protocol.CloseSessionRequest) ([]session.Session, error) {
+	var result []session.Session
+	path := "/v1/sessions/" + url.PathEscape(req.SessionID)
+	err := c.deleteJSON(ctx, path, &result)
+	return result, err
+}
+
+func (c *HTTPClient) ClosePane(ctx context.Context, req protocol.ClosePaneRequest) (session.Session, error) {
+	var result session.Session
+	path := "/v1/sessions/" + url.PathEscape(req.SessionID) + "/windows/" + url.PathEscape(req.WindowID) + "/panes/" + url.PathEscape(req.PaneID) + "/close"
 	err := c.post(ctx, path, req, &result)
 	return result, err
 }
@@ -125,6 +206,14 @@ func (c *HTTPClient) delete(ctx context.Context, path string) error {
 		return err
 	}
 	return c.do(req, nil)
+}
+
+func (c *HTTPClient) deleteJSON(ctx context.Context, path string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	return c.do(req, out)
 }
 
 func (c *HTTPClient) do(req *http.Request, out any) error {

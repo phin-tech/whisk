@@ -34,29 +34,37 @@ describe("visiblePtyIds", () => {
       {
         id: "sess_01",
         name: "one",
-        workingDir: ".",
-        focusedPaneId: "pane_02",
-        layout: {
-          kind: "split",
-          direction: "horizontal",
-          children: [
-            { kind: "leaf", paneId: "pane_01" },
-            { kind: "leaf", paneId: "pane_02" },
-          ],
+        rootDir: ".",
+        windows: {
+          win_01: {
+            id: "win_01",
+            layout: {
+              kind: "split",
+              direction: "horizontal",
+              children: [
+                { kind: "leaf", paneId: "pane_01" },
+                { kind: "leaf", paneId: "pane_02" },
+              ],
+            },
+          },
         },
         panes: {
-          pane_01: { id: "pane_01", ptyId: "pty_01" },
-          pane_02: { id: "pane_02", ptyId: "pty_02" },
+          pane_01: { id: "pane_01", currentPtyId: "pty_01" },
+          pane_02: { id: "pane_02", currentPtyId: "pty_02" },
         },
       },
       {
         id: "sess_02",
         name: "two",
-        workingDir: ".",
-        focusedPaneId: "pane_03",
-        layout: { kind: "leaf", paneId: "pane_03" },
+        rootDir: ".",
+        windows: {
+          win_02: {
+            id: "win_02",
+            layout: { kind: "leaf", paneId: "pane_03" },
+          },
+        },
         panes: {
-          pane_03: { id: "pane_03", ptyId: "pty_02" },
+          pane_03: { id: "pane_03", currentPtyId: "pty_02" },
         },
       },
     ];

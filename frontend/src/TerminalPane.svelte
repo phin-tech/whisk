@@ -23,13 +23,13 @@
   let lastRows = 0;
 
   function fitAndResize() {
-    if (!terminal || !fitAddon || !host.offsetWidth || !host.offsetHeight) return;
+    if (!pane.currentPtyId || !terminal || !fitAddon || !host.offsetWidth || !host.offsetHeight) return;
     fitAddon.fit();
     const { cols, rows } = terminal;
     if (cols === lastCols && rows === lastRows) return;
     lastCols = cols;
     lastRows = rows;
-    ResizePTY({ ptyId: pane.ptyId, cols, rows }).catch(console.error);
+    ResizePTY({ ptyId: pane.currentPtyId, cols, rows }).catch(console.error);
   }
 
   function focusTerminal() {
@@ -68,7 +68,8 @@
     resizeObserver.observe(host);
     window.requestAnimationFrame(fitAndResize);
     terminal.onData((data) => {
-      WritePTY({ ptyId: pane.ptyId, data })
+      if (!pane.currentPtyId) return;
+      WritePTY({ ptyId: pane.currentPtyId, data })
         .then(() => {
           onInput();
           window.setTimeout(onInput, 16);
@@ -110,7 +111,7 @@
     class="flex h-7 shrink-0 items-center justify-between gap-2 border-b border-hairline bg-bg-base/95 px-2 text-[11px]"
   >
     <span class="truncate font-medium text-text-secondary">{pane.id}</span>
-    <small class="truncate font-mono text-[10px] text-text-muted">{pane.ptyId}</small>
+    <small class="truncate font-mono text-[10px] text-text-muted">{pane.currentPtyId ?? "empty"}</small>
   </div>
   <div bind:this={host} class="min-h-0 min-w-0 flex-1 overflow-hidden"></div>
 </div>

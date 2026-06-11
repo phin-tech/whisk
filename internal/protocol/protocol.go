@@ -1,32 +1,120 @@
 package protocol
 
-import "github.com/phin-tech/whisk/internal/domain/session"
+import (
+	"github.com/phin-tech/whisk/internal/domain/ptybookmark"
+	"github.com/phin-tech/whisk/internal/domain/session"
+)
+
+const DaemonAPIVersion = 1
+
+type CompatibilityResponse struct {
+	APIVersion int `json:"apiVersion"`
+}
 
 type CreateSessionRequest struct {
-	Name       string `json:"name"`
-	WorkingDir string `json:"workingDir"`
-	Cols       int    `json:"cols"`
-	Rows       int    `json:"rows"`
+	Name       string           `json:"name"`
+	RootDir    string           `json:"rootDir"`
+	InitialPTY *StartPTYOptions `json:"initialPty,omitempty"`
 }
 
 type CreatedSession struct {
 	Session   session.Session `json:"session"`
-	MainPtyID string          `json:"mainPtyId"`
+	WindowID  string          `json:"windowId"`
+	PaneID    string          `json:"paneId"`
+	PTYID     *string         `json:"ptyId,omitempty"`
+	MainPtyID string          `json:"mainPtyId,omitempty"`
 }
 
 type SplitPaneRequest struct {
-	SessionID    string `json:"sessionId"`
-	TargetPaneID string `json:"targetPaneId"`
-	Direction    string `json:"direction"`
-	Cols         int    `json:"cols"`
-	Rows         int    `json:"rows"`
+	SessionID    string           `json:"sessionId"`
+	WindowID     string           `json:"windowId"`
+	TargetPaneID string           `json:"targetPaneId"`
+	Direction    string           `json:"direction"`
+	InitialPTY   *StartPTYOptions `json:"initialPty,omitempty"`
+}
+
+type StartPTYOptions struct {
+	Cols int `json:"cols"`
+	Rows int `json:"rows"`
 }
 
 type SplitPaneResult struct {
 	Session session.Session `json:"session"`
 	PaneID  string          `json:"paneId"`
-	PtyID   string          `json:"ptyId"`
+	PTYID   *string         `json:"ptyId,omitempty"`
+	PtyID   string          `json:"legacyPtyId,omitempty"`
 }
+
+type SetSessionRootDirRequest struct {
+	SessionID string `json:"sessionId"`
+	RootDir   string `json:"rootDir"`
+}
+
+type SetPaneWorkingDirRequest struct {
+	SessionID  string `json:"sessionId"`
+	PaneID     string `json:"paneId"`
+	WorkingDir string `json:"workingDir"`
+}
+
+type StartPanePTYRequest struct {
+	SessionID string          `json:"sessionId"`
+	PaneID    string          `json:"paneId"`
+	Options   StartPTYOptions `json:"options"`
+}
+
+type StartedPanePTY struct {
+	Session session.Session `json:"session"`
+	PTYID   string          `json:"ptyId"`
+}
+
+type RestartPanePTYRequest struct {
+	SessionID string          `json:"sessionId"`
+	PaneID    string          `json:"paneId"`
+	Options   StartPTYOptions `json:"options"`
+}
+
+type RestartedPanePTY struct {
+	Session  session.Session `json:"session"`
+	PTYID    string          `json:"ptyId"`
+	OldPTYID string          `json:"oldPtyId"`
+}
+
+type ClosePaneRequest struct {
+	SessionID string `json:"sessionId"`
+	WindowID  string `json:"windowId"`
+	PaneID    string `json:"paneId"`
+}
+
+type CloseSessionRequest struct {
+	SessionID string `json:"sessionId"`
+}
+
+type DetachPanePTYRequest struct {
+	SessionID string `json:"sessionId"`
+	PaneID    string `json:"paneId"`
+}
+
+type DetachedPanePTY struct {
+	Session session.Session `json:"session"`
+	PTYID   string          `json:"ptyId"`
+}
+
+type KillPTYRequest struct {
+	PTYID string `json:"ptyId"`
+}
+
+type AddPTYBookmarkRequest struct {
+	PTYID  string `json:"ptyId"`
+	Offset uint64 `json:"offset"`
+	Kind   string `json:"kind"`
+	Label  string `json:"label"`
+}
+
+type RemovePTYBookmarkRequest struct {
+	BookmarkID string `json:"bookmarkId"`
+}
+
+type PTYBookmark = ptybookmark.Bookmark
 
 type WritePTYRequest struct {
 	PtyID string `json:"ptyId"`
@@ -52,13 +140,18 @@ type OutputSnapshot struct {
 }
 
 type PTYInfo struct {
-	ID         string `json:"id"`
-	WorkingDir string `json:"workingDir"`
-	Cols       int    `json:"cols"`
-	Rows       int    `json:"rows"`
-	Running    bool   `json:"running"`
-	SessionID  string `json:"sessionId"`
-	PaneID     string `json:"paneId"`
+	ID             string `json:"id"`
+	WorkingDir     string `json:"workingDir"`
+	Cols           int    `json:"cols"`
+	Rows           int    `json:"rows"`
+	Running        bool   `json:"running"`
+	Status         string `json:"status"`
+	ExitCode       *int   `json:"exitCode,omitempty"`
+	SessionID      string `json:"sessionId"`
+	WindowID       string `json:"windowId"`
+	PaneID         string `json:"paneId"`
+	OriginWindowID string `json:"originWindowId"`
+	OriginPaneID   string `json:"originPaneId"`
 }
 
 type NextEventRequest struct {

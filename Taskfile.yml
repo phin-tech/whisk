@@ -7,6 +7,7 @@ vars:
   COVERAGE_PACKAGES: "./internal/adapters/agents ./internal/adapters/ghcli ./internal/adapters/gitcli ./internal/adapters/hooks ./internal/adapters/processrunner ./internal/adapters/pty/native ./internal/adapters/worktrunk ./internal/app ./internal/client ./internal/daemon ./internal/domain/httpforward ./internal/domain/session ./internal/server ./internal/wailsapp"
   COVERAGE_PROFILE: '{{.COVERAGE_PROFILE | default "/tmp/whisk-internal-cover.out"}}'
   DAEMON_ADDR: '{{.WHISKD_ADDR | default "127.0.0.1:8787"}}'
+  DEV_DAEMON_ADDR: '{{.WHISKD_DEV_ADDR | default "127.0.0.1:8877"}}'
   PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
   VITE_PORT: "{{.WAILS_VITE_PORT | default 9245}}"
 
@@ -116,9 +117,12 @@ tasks:
     summary: Runs the macOS application in Wails development mode
     cmds:
       - task: build:daemon
+      - 'echo "task dev:app using WHISKD_URL=http://{{.DEV_DAEMON_ADDR}} WHISKD_PATH={{.BIN_DIR}}/whiskd"'
+      - 'echo "If a stale whiskd is on the dev port, the app will shut it down and start this sidecar."'
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
     env:
-      WHISKD_URL: "http://{{.DAEMON_ADDR}}"
+      WHISKD_PATH: "{{.BIN_DIR}}/whiskd"
+      WHISKD_URL: "http://{{.DEV_DAEMON_ADDR}}"
 
   setup:docker:
     summary: Builds Docker image for cross-compilation
