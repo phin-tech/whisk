@@ -1,7 +1,8 @@
 <script lang="ts">
-  import type { LayoutNode, Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
+  import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import { CreateSession, ListSessions, Output, SplitPane } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import LayoutView from "./LayoutView.svelte";
+  import { visiblePtyIds } from "./sessionView";
 
   let sessions: Session[] = [];
   let activeSessionId = "";
@@ -77,34 +78,8 @@
     }
   }
 
-  function paneIds(node: LayoutNode | undefined): string[] {
-    if (!node) return [];
-    if (node.kind === "leaf") return node.paneId ? [node.paneId] : [];
-    return (node.children ?? []).flatMap(paneIds);
-  }
-
-  function visiblePtyIds(): string[] {
-    const ptys: string[] = [];
-    const seen = new Set<string>();
-    const activePtyID = activeSession?.panes[activePaneId]?.ptyId;
-    if (activePtyID) {
-      ptys.push(activePtyID);
-      seen.add(activePtyID);
-    }
-    for (const session of sessions) {
-      for (const paneID of paneIds(session.layout)) {
-        const ptyID = session.panes[paneID]?.ptyId;
-        if (ptyID && !seen.has(ptyID)) {
-          ptys.push(ptyID);
-          seen.add(ptyID);
-        }
-      }
-    }
-    return ptys;
-  }
-
   async function pollOutputs() {
-    const ptys = visiblePtyIds();
+    const ptys = visiblePtyIds(sessions, activeSessionId, activePaneId);
     await Promise.all(
       ptys.map(async (ptyID) => {
         const snapshot = await Output({

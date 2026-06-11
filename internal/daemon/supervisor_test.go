@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -84,4 +85,39 @@ func TestWhiskdHelperProcess(t *testing.T) {
 	}
 	_ = server.Shutdown(context.Background())
 	os.Exit(0)
+}
+
+func TestStopPIDSignalsRecordedProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell helper is unix-only")
+	}
+
+	script := filepath.Join(t.TempDir(), "wait.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\ntrap 'exit 0' INT TERM\nwhile true; do sleep 1; done\n"), 0o755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	cmd := exec.Command(script)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start script: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	})
+
+	baseURL := "http://127.0.0.1:19991"
+	pidPath, err := daemon.PIDPath(baseURL)
+	if err != nil {
+		t.Fatalf("pid path: %v", err)
+	}
+	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0o600); err != nil {
+		t.Fatalf("write pid: %v", err)
+	}
+
+	if err := daemon.StopPID(baseURL); err != nil {
+		t.Fatalf("stop pid: %v", err)
+	}
+	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+		t.Fatalf("pid file still exists or unexpected stat error: %v", err)
+	}
 }
