@@ -14,6 +14,7 @@ import (
 
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/app"
+	"github.com/phin-tech/whisk/internal/events"
 	"github.com/phin-tech/whisk/internal/server"
 )
 
@@ -24,7 +25,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend()})
+	eventBus, err := events.NewNATSBus()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer eventBus.Close()
+
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend(), EventSink: eventBus})
 	defer func() { _ = runtime.Shutdown(context.Background()) }()
 
 	shutdown := make(chan struct{})

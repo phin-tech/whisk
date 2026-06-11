@@ -14,4 +14,6 @@ type RuntimeClient interface {
 	WritePTY(ctx context.Context, req protocol.WritePTYRequest) error
 	ResizePTY(ctx context.Context, req protocol.ResizePTYRequest) error
 	Output(ctx context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error)
+	ListPTYs(ctx context.Context) ([]protocol.PTYInfo, error)
+	NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error)
 }

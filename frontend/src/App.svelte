@@ -1,21 +1,47 @@
 <script lang="ts">
+  import { onDestroy, onMount } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import { CreateSession, ListSessions, Output, SplitPane } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
+  import type { PTYInfo, RuntimeEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import {
+    CreateSession,
+    ListPTYs,
+    ListSessions,
+    NextEvent,
+    Output,
+    SplitPane,
+  } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
+  import ActivityRail from "./ActivityRail.svelte";
   import LayoutView from "./LayoutView.svelte";
-  import { visiblePtyIds } from "./sessionView";
+  import SettingsView from "./SettingsView.svelte";
+  import SidebarDock from "./SidebarDock.svelte";
+  import { runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
+
+  type SidebarId = "sessions" | "ptys";
+  type RailSide = "left" | "right";
+
+  const SETTINGS_KEY = "whisk.ui.settings";
 
   let sessions: Session[] = [];
+  let ptys: PTYInfo[] = [];
   let activeSessionId = "";
   let activePaneId = "";
+  let activeSidebar: SidebarId | null = "sessions";
+  let settingsOpen = false;
+  let railSide: RailSide = "right";
+  let terminalFontSize = 13;
+  let terminalCursorBlink = true;
   let error = "";
-  let loading = false;
-  let outputs: Record<string, string> = {};
+  let loadingSession = false;
+  let loadingPtys = false;
+  let outputChunks: Record<string, string[]> = {};
   let offsets: Record<string, number> = {};
-  let poller: number | undefined;
-  let polling = false;
-  let pollAgain = false;
-
-  const pollIntervalMs = 40;
+  let reconcileTimer: number | undefined;
+  let eventLoopRunning = false;
+  let settingsLoaded = false;
+  let stopped = false;
+  const textEncoder = new TextEncoder();
+  const outputFetchInFlight = new Set<string>();
+  const outputFetchAgain = new Set<string>();
 
   $: activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   $: if (activeSession && !activePaneId) activePaneId = activeSession.focusedPaneId;
@@ -28,17 +54,99 @@
     return message;
   }
 
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<{
+        railSide: RailSide;
+        terminalFontSize: number;
+        terminalCursorBlink: boolean;
+      }>;
+      if (parsed.railSide === "left" || parsed.railSide === "right") railSide = parsed.railSide;
+      if (typeof parsed.terminalFontSize === "number") terminalFontSize = parsed.terminalFontSize;
+      if (typeof parsed.terminalCursorBlink === "boolean") {
+        terminalCursorBlink = parsed.terminalCursorBlink;
+      }
+    } catch {
+      return;
+    }
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify({ railSide, terminalFontSize, terminalCursorBlink }),
+      );
+    } catch {
+      return;
+    }
+  }
+
   async function refreshSessions() {
     sessions = await ListSessions();
     if (!activeSessionId && sessions.length > 0) {
       activeSessionId = sessions[0].id;
       activePaneId = sessions[0].focusedPaneId;
     }
+    if (activeSessionId && !sessions.some((session) => session.id === activeSessionId)) {
+      activeSessionId = sessions[0]?.id ?? "";
+      activePaneId = sessions[0]?.focusedPaneId ?? "";
+    }
+  }
+
+  async function refreshPTYs() {
+    loadingPtys = true;
+    try {
+      ptys = await ListPTYs();
+    } finally {
+      loadingPtys = false;
+    }
+  }
+
+  async function refreshVisibleOutput() {
+    const ids = visiblePtyIds(sessions, activeSessionId, activePaneId);
+    await Promise.all(ids.map((ptyId) => refreshOutput(ptyId)));
+  }
+
+  async function refreshOutput(ptyId: string) {
+    if (outputFetchInFlight.has(ptyId)) {
+      outputFetchAgain.add(ptyId);
+      return;
+    }
+    outputFetchInFlight.add(ptyId);
+    try {
+      do {
+        outputFetchAgain.delete(ptyId);
+        const snapshot = await Output({
+          ptyId,
+          fromOffset: offsets[ptyId] ?? 0,
+        });
+        if (snapshot.outputBase64) {
+          outputChunks = {
+            ...outputChunks,
+            [ptyId]: [...(outputChunks[ptyId] ?? []), snapshot.outputBase64],
+          };
+        } else if (snapshot.output) {
+          const bytes = textEncoder.encode(snapshot.output);
+          let binary = "";
+          for (const byte of bytes) binary += String.fromCharCode(byte);
+          outputChunks = {
+            ...outputChunks,
+            [ptyId]: [...(outputChunks[ptyId] ?? []), btoa(binary)],
+          };
+        }
+        offsets = { ...offsets, [ptyId]: snapshot.offset };
+      } while (outputFetchAgain.has(ptyId));
+    } finally {
+      outputFetchInFlight.delete(ptyId);
+    }
   }
 
   async function createSession() {
     error = "";
-    loading = true;
+    loadingSession = true;
     try {
       const created = await CreateSession({
         name: "Local shell",
@@ -49,11 +157,13 @@
       sessions = [created.session, ...sessions.filter((session) => session.id !== created.session.id)];
       activeSessionId = created.session.id;
       activePaneId = created.session.focusedPaneId;
-      await pollOnce();
+      activeSidebar = "sessions";
+      await refreshPTYs();
+      await refreshOutput(created.mainPtyId);
     } catch (err) {
       error = backendError(err);
     } finally {
-      loading = false;
+      loadingSession = false;
     }
   }
 
@@ -72,132 +182,214 @@
         session.id === result.session.id ? result.session : session,
       );
       activePaneId = result.paneId;
-      await pollOnce();
+      await refreshPTYs();
+      await refreshOutput(result.ptyId);
     } catch (err) {
       error = backendError(err);
     }
   }
 
-  async function pollOutputs() {
-    const ptys = visiblePtyIds(sessions, activeSessionId, activePaneId);
-    await Promise.all(
-      ptys.map(async (ptyID) => {
-        const snapshot = await Output({
-          ptyId: ptyID,
-          fromOffset: offsets[ptyID] ?? 0,
-        });
-        if (snapshot.output) {
-          outputs = {
-            ...outputs,
-            [ptyID]: (outputs[ptyID] ?? "") + snapshot.output,
-          };
+  async function handleRuntimeEvent(event: RuntimeEvent) {
+    const targets = runtimeRefreshTargets(event);
+    if (targets.sessions) await refreshSessions();
+    if (targets.ptys) await refreshPTYs();
+    if (targets.outputPtyId) await refreshOutput(targets.outputPtyId);
+  }
+
+  async function runEventLoop() {
+    if (eventLoopRunning) return;
+    eventLoopRunning = true;
+    while (!stopped) {
+      try {
+        const event = await NextEvent({ timeoutMs: 30000 });
+        await handleRuntimeEvent(event);
+      } catch {
+        if (!stopped) {
+          await new Promise((resolve) => window.setTimeout(resolve, 250));
         }
-        offsets = { ...offsets, [ptyID]: snapshot.offset };
-      }),
-    );
-  }
-
-  async function pollOnce() {
-    if (polling) {
-      pollAgain = true;
-      return;
-    }
-    polling = true;
-    try {
-      do {
-        pollAgain = false;
-        await pollOutputs();
-      } while (pollAgain);
-    } finally {
-      polling = false;
+      }
     }
   }
 
-  refreshSessions().catch((err) => {
-    error = backendError(err);
-  });
-
-  poller = window.setInterval(() => {
-    pollOnce().catch((err) => {
+  function selectSession(session: Session) {
+    activeSessionId = session.id;
+    activePaneId = session.focusedPaneId;
+    void refreshVisibleOutput().catch((err) => {
       error = backendError(err);
     });
-  }, pollIntervalMs);
+  }
+
+  function toggleSidebar(id: SidebarId) {
+    activeSidebar = activeSidebar === id ? null : id;
+    settingsOpen = false;
+  }
+
+  function toggleSettings() {
+    settingsOpen = !settingsOpen;
+  }
+
+  onMount(() => {
+    loadSettings();
+    settingsLoaded = true;
+    refreshSessions()
+      .then(refreshPTYs)
+      .then(refreshVisibleOutput)
+      .catch((err) => {
+        error = backendError(err);
+      });
+    void runEventLoop();
+    reconcileTimer = window.setInterval(() => {
+      refreshVisibleOutput().catch((err) => {
+        error = backendError(err);
+      });
+    }, 2000);
+  });
+
+  $: if (settingsLoaded) saveSettings();
+
+  onDestroy(() => {
+    stopped = true;
+    if (reconcileTimer) window.clearInterval(reconcileTimer);
+  });
 </script>
 
-<svelte:window
-  on:beforeunload={() => {
-    if (poller) window.clearInterval(poller);
-  }}
-/>
-
-<main class="app-shell">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="mark">W</div>
-      <div>
-        <h1>Whisk</h1>
-        <p>Local runtime</p>
+<main class="flex h-screen flex-col overflow-hidden bg-bg-deep text-text-primary">
+  <div class="flex min-h-0 flex-1 flex-row">
+    {#if railSide === "left"}
+      <div class="flex h-full w-[36px] shrink-0 flex-col border-r border-hairline bg-bg-base/96">
+        <ActivityRail
+          {activeSidebar}
+          {settingsOpen}
+          onSidebar={toggleSidebar}
+          onSettings={toggleSettings}
+        />
       </div>
-    </div>
-
-    <button class="primary-action" on:click={createSession} disabled={loading}>
-      {loading ? "Creating..." : "New session"}
-    </button>
-
-    <div class="session-list">
-      {#if sessions.length === 0}
-        <p class="empty">No sessions yet.</p>
-      {:else}
-        {#each sessions as session}
-          <button
-            class:active={session.id === activeSessionId}
-            class="session-row"
-            on:click={() => {
-              activeSessionId = session.id;
-              activePaneId = session.focusedPaneId;
-            }}
-          >
-            <span>{session.name}</span>
-            <small>{session.workingDir}</small>
-          </button>
-        {/each}
-      {/if}
-    </div>
-  </aside>
-
-  <section class="workspace">
-    <header class="toolbar">
-      <div>
-        <strong>{activeSession?.name ?? "No active session"}</strong>
-        <span>{activePaneId || "No pane selected"}</span>
-      </div>
-      <nav>
-        <button on:click={() => split("horizontal")} disabled={!activeSession}>Split right</button>
-        <button on:click={() => split("vertical")} disabled={!activeSession}>Split down</button>
-      </nav>
-    </header>
-
-    {#if error}
-      <div class="error">{error}</div>
+      <SidebarDock
+        activePanel={activeSidebar}
+        {sessions}
+        {ptys}
+        {activeSessionId}
+        {loadingSession}
+        {loadingPtys}
+        {railSide}
+        onClose={() => (activeSidebar = null)}
+        onNewSession={createSession}
+        onSelectSession={selectSession}
+        onRefreshPtys={() => void refreshPTYs()}
+      />
     {/if}
 
-    <div class="pane-stage">
-      {#if activeSession}
-        <LayoutView
-          node={activeSession.layout}
-          panes={activeSession.panes}
-          outputs={outputs}
-          activePaneId={activePaneId}
-          onFocus={(paneId) => (activePaneId = paneId)}
-          onInput={pollOnce}
-        />
-      {:else}
-        <div class="start-panel">
-          <h2>Start a local shell</h2>
-          <p>Create a session to spawn a backend-owned PTY and render it here.</p>
-          <button on:click={createSession}>New session</button>
+    <section class="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-bg-deep">
+      <header class="flex h-10 shrink-0 items-center justify-between border-b border-hairline bg-bg-base/80 px-3">
+        <div class="min-w-0">
+          <div class="truncate text-[13px] font-semibold text-text-primary">
+            {activeSession?.name ?? "No active session"}
+          </div>
+          <div class="truncate font-mono text-[10px] text-text-muted">
+            {activePaneId || "No pane selected"}
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <button
+            type="button"
+            class="rounded border border-border-subtle bg-bg-surface/60 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+            disabled={!activeSession}
+            on:click={() => split("horizontal")}
+          >
+            Split right
+          </button>
+          <button
+            type="button"
+            class="rounded border border-border-subtle bg-bg-surface/60 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+            disabled={!activeSession}
+            on:click={() => split("vertical")}
+          >
+            Split down
+          </button>
+        </div>
+      </header>
+
+      {#if error}
+        <div
+          class="absolute bottom-3 right-3 z-30 max-w-[520px] rounded border border-red/30 bg-red/10 px-3 py-2 text-[12px] text-red shadow-lg shadow-black/30"
+        >
+          {error}
         </div>
       {/if}
-    </div>
-  </section>
+
+      <div class="relative flex min-h-0 flex-1 flex-col">
+        {#if activeSession}
+          <LayoutView
+            node={activeSession.layout}
+            panes={activeSession.panes}
+            {outputChunks}
+            {activePaneId}
+            {terminalFontSize}
+            {terminalCursorBlink}
+            onFocus={(paneId) => (activePaneId = paneId)}
+            onInput={() => refreshVisibleOutput().catch((err) => (error = backendError(err)))}
+          />
+        {:else}
+          <div class="flex flex-1 flex-col items-center justify-center gap-4 text-center text-text-secondary">
+            <div
+              class="flex h-16 w-16 items-center justify-center rounded-2xl border border-border-subtle bg-bg-surface/80 text-accent shadow-[0_18px_40px_rgba(2,6,23,0.45)]"
+            >
+              <span class="text-3xl">W</span>
+            </div>
+            <div class="space-y-1">
+              <p class="text-base font-semibold tracking-tight text-text-primary">
+                No active sessions
+              </p>
+              <p class="text-sm text-text-secondary">
+                Start a daemon-owned shell session.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="rounded-lg border border-border-subtle bg-bg-surface/80 px-4 py-2 text-sm font-semibold text-text-primary shadow-[0_18px_40px_rgba(2,6,23,0.45)] transition-colors hover:border-accent hover:text-accent"
+              disabled={loadingSession}
+              on:click={createSession}
+            >
+              New Session
+            </button>
+          </div>
+        {/if}
+
+        <SettingsView
+          visible={settingsOpen}
+          {railSide}
+          {terminalFontSize}
+          {terminalCursorBlink}
+          onclose={() => (settingsOpen = false)}
+          onRailSide={(side) => (railSide = side)}
+          onTerminalFontSize={(size) => (terminalFontSize = size)}
+          onTerminalCursorBlink={(blink) => (terminalCursorBlink = blink)}
+        />
+      </div>
+    </section>
+
+    {#if railSide === "right"}
+      <SidebarDock
+        activePanel={activeSidebar}
+        {sessions}
+        {ptys}
+        {activeSessionId}
+        {loadingSession}
+        {loadingPtys}
+        {railSide}
+        onClose={() => (activeSidebar = null)}
+        onNewSession={createSession}
+        onSelectSession={selectSession}
+        onRefreshPtys={() => void refreshPTYs()}
+      />
+      <div class="flex h-full w-[36px] shrink-0 flex-col border-l border-hairline bg-bg-base/96">
+        <ActivityRail
+          {activeSidebar}
+          {settingsOpen}
+          onSidebar={toggleSidebar}
+          onSettings={toggleSettings}
+        />
+      </div>
+    {/if}
+  </div>
 </main>

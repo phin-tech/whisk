@@ -29,6 +29,11 @@ type Pane struct {
 	PtyID string `json:"ptyId"`
 }
 
+type PTYOwner struct {
+	SessionID string
+	PaneID    string
+}
+
 type Session struct {
 	ID            string          `json:"id"`
 	Name          string          `json:"name"`
@@ -141,6 +146,19 @@ func (s *State) List() []Session {
 		out = append(out, cloneSession(session))
 	}
 	return out
+}
+
+func (s *State) PTYOwners() map[string]PTYOwner {
+	owners := make(map[string]PTYOwner)
+	for _, session := range s.sessions {
+		for paneID, pane := range session.Panes {
+			owners[pane.PtyID] = PTYOwner{
+				SessionID: session.ID,
+				PaneID:    paneID,
+			}
+		}
+	}
+	return owners
 }
 
 func insertLeaf(node LayoutNode, targetID string, direction SplitDirection, newPaneID string) (LayoutNode, bool) {

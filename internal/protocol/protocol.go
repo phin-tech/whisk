@@ -45,9 +45,32 @@ type OutputRequest struct {
 }
 
 type OutputSnapshot struct {
-	PtyID  string `json:"ptyId"`
-	Offset uint64 `json:"offset"`
-	Output string `json:"output"`
+	PtyID        string `json:"ptyId"`
+	Offset       uint64 `json:"offset"`
+	Output       string `json:"output"`
+	OutputBase64 string `json:"outputBase64"`
+}
+
+type PTYInfo struct {
+	ID         string `json:"id"`
+	WorkingDir string `json:"workingDir"`
+	Cols       int    `json:"cols"`
+	Rows       int    `json:"rows"`
+	Running    bool   `json:"running"`
+	SessionID  string `json:"sessionId"`
+	PaneID     string `json:"paneId"`
+}
+
+type NextEventRequest struct {
+	TimeoutMs int `json:"timeoutMs"`
+}
+
+const RuntimeEventNone = "none"
+
+type RuntimeEvent struct {
+	Type   string `json:"type"`
+	PtyID  string `json:"ptyId,omitempty"`
+	Offset uint64 `json:"offset,omitempty"`
 }
 
 type ErrorResponse struct {

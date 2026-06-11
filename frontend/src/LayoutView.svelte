@@ -4,8 +4,10 @@
 
   export let node: LayoutNode;
   export let panes: { [_ in string]?: Pane };
-  export let outputs: Record<string, string>;
+  export let outputChunks: Record<string, string[]>;
   export let activePaneId: string;
+  export let terminalFontSize = 13;
+  export let terminalCursorBlink = true;
   export let onFocus: (paneId: string) => void;
   export let onInput: () => void;
 </script>
@@ -15,23 +17,34 @@
   {#if pane}
     <TerminalPane
       pane={pane}
-      output={outputs[pane.ptyId] ?? ""}
+      outputChunks={outputChunks[pane.ptyId] ?? []}
       focused={activePaneId === pane.id}
+      fontSize={terminalFontSize}
+      cursorBlink={terminalCursorBlink}
       onFocus={() => onFocus(pane.id)}
       onInput={onInput}
     />
   {/if}
 {:else}
-  <div class:row={node.direction === "horizontal"} class:column={node.direction === "vertical"} class="split">
+  <div
+    class="flex min-h-0 min-w-0 flex-1 gap-px bg-hairline {node.direction ===
+    'horizontal'
+      ? 'flex-row'
+      : 'flex-col'}"
+  >
     {#each node.children ?? [] as child}
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
       <svelte:self
         node={child}
         panes={panes}
-        outputs={outputs}
+        {outputChunks}
         activePaneId={activePaneId}
+        {terminalFontSize}
+        {terminalCursorBlink}
         onFocus={onFocus}
         onInput={onInput}
       />
+      </div>
     {/each}
   </div>
 {/if}

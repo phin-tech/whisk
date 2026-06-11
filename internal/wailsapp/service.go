@@ -39,3 +39,11 @@ func (s *Service) ResizePTY(ctx context.Context, req protocol.ResizePTYRequest) 
 func (s *Service) Output(ctx context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error) {
 	return s.client.Output(ctx, req)
 }
+
+func (s *Service) ListPTYs(ctx context.Context) ([]protocol.PTYInfo, error) {
+	return s.client.ListPTYs(ctx)
+}
+
+func (s *Service) NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error) {
+	return s.client.NextEvent(ctx, req)
+}

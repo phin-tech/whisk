@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { paneIds, visiblePtyIds } from "./sessionView";
+import {
+  paneIds,
+  ptyRowsFromInventory,
+  runtimeRefreshTargets,
+  visiblePtyIds,
+} from "./sessionView";
 
 describe("paneIds", () => {
   it("walks nested split layouts in render order", () => {
@@ -57,5 +62,51 @@ describe("visiblePtyIds", () => {
     ];
 
     expect(visiblePtyIds(sessions, "sess_01", "pane_02")).toEqual(["pty_02", "pty_01"]);
+  });
+});
+
+describe("ptyRowsFromInventory", () => {
+  it("formats daemon PTY inventory without deriving ownership locally", () => {
+    expect(
+      ptyRowsFromInventory([
+        {
+          id: "pty_01",
+          workingDir: "/repo",
+          cols: 80,
+          rows: 24,
+          running: true,
+          sessionId: "sess_01",
+          paneId: "pane_01",
+        },
+      ]),
+    ).toEqual([
+      {
+        id: "pty_01",
+        title: "pty_01",
+        subtitle: "sess_01 / pane_01",
+        detail: "/repo / 80x24",
+        running: true,
+      },
+    ]);
+  });
+});
+
+describe("runtimeRefreshTargets", () => {
+  it("keeps runtime events as invalidation hints", () => {
+    expect(runtimeRefreshTargets({ type: "session.changed" })).toEqual({
+      sessions: true,
+      ptys: false,
+      outputPtyId: null,
+    });
+    expect(runtimeRefreshTargets({ type: "pty.changed", ptyId: "pty_01" })).toEqual({
+      sessions: false,
+      ptys: true,
+      outputPtyId: null,
+    });
+    expect(runtimeRefreshTargets({ type: "pty.output", ptyId: "pty_01", offset: 12 })).toEqual({
+      sessions: false,
+      ptys: false,
+      outputPtyId: "pty_01",
+    });
   });
 });

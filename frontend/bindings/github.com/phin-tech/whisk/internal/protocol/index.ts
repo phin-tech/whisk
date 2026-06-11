@@ -4,9 +4,12 @@
 export {
     CreateSessionRequest,
     CreatedSession,
+    NextEventRequest,
     OutputRequest,
     OutputSnapshot,
+    PTYInfo,
     ResizePTYRequest,
+    RuntimeEvent,
     SplitPaneRequest,
     SplitPaneResult,
     WritePTYRequest

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,18 +30,57 @@ func TestEnsureStartsDaemonWhenDown(t *testing.T) {
 		t.Fatalf("close listener: %v", err)
 	}
 
-	helper := filepath.Join(t.TempDir(), "whiskd-helper")
-	script := fmt.Sprintf("#!/bin/sh\nWHISKD_HELPER_PROCESS=1 exec %q -test.run TestWhiskdHelperProcess -- \"$@\"\n", os.Args[0])
-	if err := os.WriteFile(helper, []byte(script), 0o755); err != nil {
-		t.Fatalf("write helper: %v", err)
-	}
-
-	t.Setenv("WHISKD_PATH", helper)
+	t.Setenv("WHISKD_PATH", writeWhiskdHelper(t))
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	if err := daemon.Ensure(ctx, "http://"+addr); err != nil {
 		t.Fatalf("ensure daemon: %v", err)
+	}
+}
+
+func TestEnsureRestartsIncompatibleDaemon(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell helper is unix-only")
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	shutdownCalled := make(chan struct{})
+	oldServer := &http.Server{ReadHeaderTimeout: time.Second}
+	mux := http.NewServeMux()
+	oldServer.Handler = mux
+	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.HandleFunc("/v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		close(shutdownCalled)
+		go func() {
+			_ = oldServer.Shutdown(context.Background())
+		}()
+	})
+	go func() {
+		_ = oldServer.Serve(listener)
+	}()
+	t.Cleanup(func() { _ = oldServer.Shutdown(context.Background()) })
+
+	t.Setenv("WHISKD_PATH", writeWhiskdHelper(t))
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := daemon.Ensure(ctx, "http://"+addr); err != nil {
+		t.Fatalf("ensure daemon: %v", err)
+	}
+	select {
+	case <-shutdownCalled:
+	default:
+		t.Fatalf("incompatible daemon was not asked to shut down")
 	}
 }
 
@@ -67,11 +107,16 @@ func TestWhiskdHelperProcess(t *testing.T) {
 	}
 
 	done := make(chan struct{})
+	var doneOnce sync.Once
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
-		close(done)
+	})
+	mux.HandleFunc("/v1/ptys", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+		doneOnce.Do(func() { close(done) })
 	})
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: time.Second}
 	go func() {
@@ -85,6 +130,16 @@ func TestWhiskdHelperProcess(t *testing.T) {
 	}
 	_ = server.Shutdown(context.Background())
 	os.Exit(0)
+}
+
+func writeWhiskdHelper(t *testing.T) string {
+	t.Helper()
+	helper := filepath.Join(t.TempDir(), "whiskd-helper")
+	script := fmt.Sprintf("#!/bin/sh\nWHISKD_HELPER_PROCESS=1 exec %q -test.run TestWhiskdHelperProcess -- \"$@\"\n", os.Args[0])
+	if err := os.WriteFile(helper, []byte(script), 0o755); err != nil {
+		t.Fatalf("write helper: %v", err)
+	}
+	return helper
 }
 
 func TestStopPIDSignalsRecordedProcess(t *testing.T) {

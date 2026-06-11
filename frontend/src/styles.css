@@ -1,273 +1,133 @@
-:root {
-  color: #d7dde8;
-  background: #0e1218;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+@import "tailwindcss";
+
+@theme {
+  --app-bg-start: #0a0a0b;
+  --app-bg-end: #09090b;
+  --app-glow: rgba(14, 165, 233, 0.06);
+  --color-bg-deep: #09090b;
+  --color-bg-base: #0f0f11;
+  --color-bg-surface: #18181b;
+  --color-bg-elevated: #27272a;
+  --color-bg-hover: #2e2e32;
+  --color-bg-active: rgba(39, 39, 42, 0.72);
+  --color-border: rgba(113, 113, 122, 0.4);
+  --color-border-subtle: rgba(82, 82, 91, 0.25);
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #d4d4d8;
+  --color-text-muted: #b5b5bd;
+  --color-accent: #7dd3fc;
+  --color-accent-dim: #0ea5e9;
+  --color-green: #4ade80;
+  --color-amber: #fbbf24;
+  --color-red: #fb7185;
+  --color-blue: #38bdf8;
+  --color-hairline: rgba(255, 255, 255, 0.18);
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
+  --font-sans: "Geist", "Inter", "SF Pro Display", "Segoe UI", sans-serif;
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  :root {
+    color-scheme: dark;
+    font-family: var(--font-sans);
+    color: var(--color-text-primary);
+    background: var(--color-bg-deep);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #app {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at top, var(--app-glow), transparent 50%),
+      linear-gradient(180deg, var(--app-bg-start) 0%, var(--app-bg-end) 100%);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  input,
+  textarea,
+  .xterm,
+  .xterm * {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  ::selection {
+    background: rgba(56, 189, 248, 0.28);
+    color: var(--color-text-primary);
+  }
 }
 
-html,
-body,
-#app {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  overflow: hidden;
+.app-scrollbar {
+  scrollbar-color: rgba(161, 161, 170, 0.45) transparent;
+  scrollbar-width: thin;
 }
 
-button {
-  font: inherit;
+.app-scrollbar::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
 }
 
-.app-shell {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  width: 100%;
-  height: 100%;
-  background: #0e1218;
+.app-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(161, 161, 170, 0.32);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
 }
 
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 18px;
-  border-right: 1px solid #202834;
-  background: #121821;
-  min-width: 0;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.mark {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: #f3c969;
-  color: #17130a;
-  font-weight: 800;
-}
-
-h1,
-h2,
-p {
-  margin: 0;
-}
-
-.brand h1 {
-  font-size: 17px;
-  line-height: 1.1;
-}
-
-.brand p,
-.toolbar span,
-.session-row small,
-.empty {
-  color: #8e9bae;
-  font-size: 12px;
-}
-
-.primary-action,
-.toolbar button,
-.start-panel button {
-  height: 34px;
-  border: 1px solid #344255;
-  border-radius: 7px;
-  background: #1b2430;
-  color: #dce3ee;
-  cursor: pointer;
-}
-
-.primary-action {
-  background: #e3b84f;
-  border-color: #e3b84f;
-  color: #15120a;
-  font-weight: 700;
-}
-
-button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.session-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-  overflow: auto;
-}
-
-.session-row {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  width: 100%;
-  padding: 10px;
-  border: 1px solid transparent;
-  border-radius: 7px;
+.app-scrollbar::-webkit-scrollbar-track {
   background: transparent;
-  color: #d7dde8;
-  cursor: pointer;
-  text-align: left;
 }
 
-.session-row.active {
-  border-color: #334052;
-  background: #1a2230;
-}
-
-.workspace {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 58px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #202834;
-  background: #0f141b;
-}
-
-.toolbar > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.toolbar nav {
-  display: flex;
-  gap: 8px;
-}
-
-.toolbar button {
-  padding: 0 12px;
-}
-
-.error {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 20;
-  max-width: 520px;
-  padding: 10px 12px;
-  border: 1px solid #7a3541;
-  border-radius: 7px;
-  background: #2b151a;
-  color: #ffdbe0;
-  font-size: 13px;
-}
-
-.pane-stage {
-  min-width: 0;
-  min-height: 0;
-  padding: 10px;
-}
-
-.split {
-  display: flex;
-  gap: 8px;
+.xterm {
   width: 100%;
   height: 100%;
-  min-width: 0;
-  min-height: 0;
 }
 
-.split.row {
-  flex-direction: row;
+.xterm,
+.xterm * {
+  box-sizing: content-box;
 }
 
-.split.column {
-  flex-direction: column;
+.xterm .xterm-viewport {
+  background-color: transparent !important;
 }
 
-.split > * {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
+.dock-panel {
+  width: var(--dock-width);
 }
 
-.terminal-frame {
-  display: grid;
-  grid-template-rows: 30px minmax(0, 1fr);
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid #222b38;
-  border-radius: 7px;
-  background: #0b0f14;
-  color: inherit;
-  text-align: left;
-}
-
-.terminal-frame.focused {
-  border-color: #e3b84f;
-}
-
-.pane-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 9px;
-  border-bottom: 1px solid #1d2530;
-  background: #111820;
-  font-size: 12px;
-}
-
-.pane-header small {
-  color: #6f7e92;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.terminal-host {
-  width: 100%;
-  height: 100%;
-  padding: 8px;
-  overflow: hidden;
-}
-
-.start-panel {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 12px;
-  height: 100%;
-  color: #d7dde8;
-  text-align: center;
-}
-
-.start-panel h2 {
-  font-size: 20px;
-}
-
-.start-panel p {
-  color: #8e9bae;
-}
-
-.start-panel button {
-  padding: 0 14px;
+@media (max-width: 700px) {
+  .dock-panel {
+    width: calc(100vw - 36px);
+  }
 }

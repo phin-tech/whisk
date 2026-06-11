@@ -11,6 +11,22 @@ type SessionLike = {
   panes: { [_ in string]?: { id?: string; ptyId: string } };
 };
 
+type PtyInfoLike = {
+  id: string;
+  workingDir: string;
+  cols: number;
+  rows: number;
+  running: boolean;
+  sessionId: string;
+  paneId: string;
+};
+
+type RuntimeEventLike = {
+  type: string;
+  ptyId?: string;
+  offset?: number;
+};
+
 export function paneIds(node: LayoutNodeLike | undefined): string[] {
   if (!node) return [];
   if (node.kind === "leaf") return node.paneId ? [node.paneId] : [];
@@ -40,4 +56,22 @@ export function visiblePtyIds(
     }
   }
   return ptys;
+}
+
+export function ptyRowsFromInventory(ptys: PtyInfoLike[]) {
+  return ptys.map((pty) => ({
+    id: pty.id,
+    title: pty.id,
+    subtitle: `${pty.sessionId || "unowned"} / ${pty.paneId || "detached"}`,
+    detail: `${pty.workingDir || "."} / ${pty.cols}x${pty.rows}`,
+    running: pty.running,
+  }));
+}
+
+export function runtimeRefreshTargets(event: RuntimeEventLike) {
+  return {
+    sessions: event.type === "session.changed",
+    ptys: event.type === "pty.changed",
+    outputPtyId: event.type === "pty.output" ? (event.ptyId ?? null) : null,
+  };
 }

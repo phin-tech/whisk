@@ -23,6 +23,16 @@ type PTYRecord struct {
 	Running    bool   `json:"running"`
 }
 
+type PTYInfo struct {
+	ID         string `json:"id"`
+	WorkingDir string `json:"workingDir"`
+	Cols       int    `json:"cols"`
+	Rows       int    `json:"rows"`
+	Running    bool   `json:"running"`
+	SessionID  string `json:"sessionId"`
+	PaneID     string `json:"paneId"`
+}
+
 type PTYEvent struct {
 	Kind   PTYEventKind
 	Offset uint64
@@ -50,6 +60,7 @@ type PTYBackend interface {
 	Resize(ctx context.Context, ptyID string, size PTYSize) error
 	Attach(ctx context.Context, req AttachPTYRequest) (*PTYAttach, error)
 	Output(ctx context.Context, ptyID string, fromOffset uint64) (PTYOutputSnapshot, error)
+	List(ctx context.Context) ([]PTYRecord, error)
 	Shutdown(ctx context.Context) error
 }
 
@@ -79,14 +90,40 @@ type AttachPTYRequest struct {
 type RuntimeConfig struct {
 	PTYBackend  PTYBackend
 	IDGenerator func() string
+	EventSink   EventSink
 }
 
 type Runtime struct {
-	mu     sync.Mutex
-	ids    func() string
-	ptys   PTYBackend
-	state  *session.State
-	nextID int
+	mu          sync.Mutex
+	ids         func() string
+	ptys        PTYBackend
+	state       *session.State
+	nextID      int
+	eventSink   EventSink
+	watchCtx    context.Context
+	watchCancel context.CancelFunc
+}
+
+type RuntimeEventType string
+
+const (
+	EventSessionChanged RuntimeEventType = "session.changed"
+	EventPTYChanged     RuntimeEventType = "pty.changed"
+	EventPTYOutput      RuntimeEventType = "pty.output"
+)
+
+type RuntimeEvent struct {
+	Type   RuntimeEventType `json:"type"`
+	PtyID  string           `json:"ptyId,omitempty"`
+	Offset uint64           `json:"offset,omitempty"`
+}
+
+type EventSink interface {
+	Publish(ctx context.Context, event RuntimeEvent) error
+}
+
+type EventSource interface {
+	Next(ctx context.Context) (RuntimeEvent, error)
 }
 
 type CreateSessionRequest struct {
@@ -117,10 +154,14 @@ type SplitPaneResult struct {
 
 func NewRuntime(config RuntimeConfig) *Runtime {
 	ids := config.IDGenerator
+	watchCtx, watchCancel := context.WithCancel(context.Background())
 	r := &Runtime{
-		ids:   ids,
-		ptys:  config.PTYBackend,
-		state: session.NewState(),
+		ids:         ids,
+		ptys:        config.PTYBackend,
+		state:       session.NewState(),
+		eventSink:   config.EventSink,
+		watchCtx:    watchCtx,
+		watchCancel: watchCancel,
 	}
 	if r.ids == nil {
 		r.ids = r.generatedID
@@ -154,6 +195,9 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 	if err != nil {
 		return CreatedSession{}, err
 	}
+	r.watchPTYOutput(record.ID)
+	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
+	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: record.ID})
 	return CreatedSession{Session: created, MainPtyID: record.ID}, nil
 }
 
@@ -195,7 +239,35 @@ func (r *Runtime) SplitPane(ctx context.Context, req SplitPaneRequest) (SplitPan
 	if err != nil {
 		return SplitPaneResult{}, err
 	}
+	r.watchPTYOutput(record.ID)
+	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
+	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: record.ID})
 	return SplitPaneResult{Session: updated, PaneID: newPaneID, PtyID: record.ID}, nil
+}
+
+func (r *Runtime) ListPTYs(ctx context.Context) ([]PTYInfo, error) {
+	if r.ptys == nil {
+		return nil, fmt.Errorf("pty backend required")
+	}
+	records, err := r.ptys.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	owners := r.state.PTYOwners()
+	out := make([]PTYInfo, 0, len(records))
+	for _, record := range records {
+		owner := owners[record.ID]
+		out = append(out, PTYInfo{
+			ID:         record.ID,
+			WorkingDir: record.WorkingDir,
+			Cols:       record.Cols,
+			Rows:       record.Rows,
+			Running:    record.Running,
+			SessionID:  owner.SessionID,
+			PaneID:     owner.PaneID,
+		})
+	}
+	return out, nil
 }
 
 func (r *Runtime) WritePTY(ctx context.Context, ptyID string, data []byte) error {
@@ -220,7 +292,18 @@ func (r *Runtime) PTYOutput(ctx context.Context, ptyID string, fromOffset uint64
 	return r.ptys.Output(ctx, ptyID, fromOffset)
 }
 
+func (r *Runtime) NextEvent(ctx context.Context) (RuntimeEvent, error) {
+	source, ok := r.eventSink.(EventSource)
+	if !ok || source == nil {
+		return RuntimeEvent{}, fmt.Errorf("runtime event source unavailable")
+	}
+	return source.Next(ctx)
+}
+
 func (r *Runtime) Shutdown(ctx context.Context) error {
+	if r.watchCancel != nil {
+		r.watchCancel()
+	}
 	if r.ptys == nil {
 		return nil
 	}
@@ -232,4 +315,40 @@ func (r *Runtime) generatedID() string {
 	defer r.mu.Unlock()
 	r.nextID++
 	return fmt.Sprintf("whisk_%06d", r.nextID)
+}
+
+func (r *Runtime) publish(ctx context.Context, event RuntimeEvent) {
+	if r.eventSink == nil {
+		return
+	}
+	_ = r.eventSink.Publish(ctx, event)
+}
+
+func (r *Runtime) watchPTYOutput(ptyID string) {
+	if r.eventSink == nil || r.ptys == nil {
+		return
+	}
+	go func() {
+		attach, err := r.ptys.Attach(r.watchCtx, AttachPTYRequest{PtyID: ptyID})
+		if err != nil {
+			return
+		}
+		defer attach.Close()
+		for {
+			select {
+			case event, ok := <-attach.Events:
+				if !ok {
+					return
+				}
+				switch event.Kind {
+				case PTYOutput:
+					r.publish(r.watchCtx, RuntimeEvent{Type: EventPTYOutput, PtyID: ptyID, Offset: event.Offset + uint64(len(event.Bytes))})
+				case PTYExit:
+					r.publish(r.watchCtx, RuntimeEvent{Type: EventPTYChanged, PtyID: ptyID})
+				}
+			case <-r.watchCtx.Done():
+				return
+			}
+		}
+	}()
 }

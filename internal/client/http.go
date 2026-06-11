@@ -78,6 +78,22 @@ func (c *HTTPClient) Output(ctx context.Context, req protocol.OutputRequest) (pr
 	return snapshot, err
 }
 
+func (c *HTTPClient) ListPTYs(ctx context.Context) ([]protocol.PTYInfo, error) {
+	var ptys []protocol.PTYInfo
+	err := c.get(ctx, "/v1/ptys", nil, &ptys)
+	return ptys, err
+}
+
+func (c *HTTPClient) NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error) {
+	query := url.Values{}
+	if req.TimeoutMs > 0 {
+		query.Set("timeoutMs", strconv.Itoa(req.TimeoutMs))
+	}
+	var event protocol.RuntimeEvent
+	err := c.get(ctx, "/v1/events/next", query, &event)
+	return event, err
+}
+
 func (c *HTTPClient) get(ctx context.Context, path string, query url.Values, out any) error {
 	endpoint := c.baseURL + path
 	if len(query) > 0 {

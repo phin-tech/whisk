@@ -18,7 +18,7 @@ import (
 func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 
-	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend()})
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend(), EventSink: newFakeEventBus()})
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 
 	httpServer := httptest.NewServer(server.NewHTTP(runtime))
@@ -51,6 +51,22 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	}
 	if len(sessions) != 1 || sessions[0].ID != created.Session.ID {
 		t.Fatalf("sessions = %#v", sessions)
+	}
+
+	ptys, err := daemon.ListPTYs(ctx)
+	if err != nil {
+		t.Fatalf("list ptys: %v", err)
+	}
+	if len(ptys) != 1 || ptys[0].ID != created.MainPtyID || ptys[0].SessionID != created.Session.ID {
+		t.Fatalf("ptys = %#v", ptys)
+	}
+
+	event, err := daemon.NextEvent(ctx, protocol.NextEventRequest{TimeoutMs: 10})
+	if err != nil {
+		t.Fatalf("next event: %v", err)
+	}
+	if event.Type != "session.changed" {
+		t.Fatalf("event = %#v", event)
 	}
 
 	split, err := daemon.SplitPane(ctx, protocol.SplitPaneRequest{
@@ -91,6 +107,48 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 		case <-ctx.Done():
 			t.Fatalf("timed out waiting for output; got %q", output.String())
 		}
+	}
+}
+
+func TestHTTPClientNextEventTimeoutReturnsNoop(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend(), EventSink: newFakeEventBus()})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	event, err := daemon.NextEvent(ctx, protocol.NextEventRequest{TimeoutMs: 1})
+	if err != nil {
+		t.Fatalf("next event: %v", err)
+	}
+	if event.Type != protocol.RuntimeEventNone {
+		t.Fatalf("event = %#v", event)
+	}
+}
+
+type fakeEventBus struct {
+	ch chan app.RuntimeEvent
+}
+
+func newFakeEventBus() *fakeEventBus {
+	return &fakeEventBus{ch: make(chan app.RuntimeEvent, 64)}
+}
+
+func (b *fakeEventBus) Publish(_ context.Context, event app.RuntimeEvent) error {
+	b.ch <- event
+	return nil
+}
+
+func (b *fakeEventBus) Next(ctx context.Context) (app.RuntimeEvent, error) {
+	select {
+	case event := <-b.ch:
+		return event, nil
+	case <-ctx.Done():
+		return app.RuntimeEvent{}, ctx.Err()
 	}
 }
 
