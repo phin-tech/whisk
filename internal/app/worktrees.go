@@ -60,29 +60,40 @@ type RemoveWorktreeRequest struct {
 }
 
 func (r *Runtime) DetectWorktrunk(ctx context.Context, req DetectWorktrunkRequest) (WorktrunkStatus, error) {
-	if r.worktrees == nil {
-		return WorktrunkStatus{}, fmt.Errorf("worktree backend required")
+	backend, err := r.requireWorktreeBackend()
+	if err != nil {
+		return WorktrunkStatus{}, err
 	}
-	return r.worktrees.DetectWorktrunk(ctx, req)
+	return backend.DetectWorktrunk(ctx, req)
 }
 
 func (r *Runtime) ListWorktrees(ctx context.Context, req ListWorktreesRequest) ([]Worktree, error) {
-	if r.worktrees == nil {
-		return nil, fmt.Errorf("worktree backend required")
+	backend, err := r.requireWorktreeBackend()
+	if err != nil {
+		return nil, err
 	}
-	return r.worktrees.ListWorktrees(ctx, req)
+	return backend.ListWorktrees(ctx, req)
 }
 
 func (r *Runtime) CreateWorktree(ctx context.Context, req CreateWorktreeRequest) (CreatedWorktree, error) {
-	if r.worktrees == nil {
-		return CreatedWorktree{}, fmt.Errorf("worktree backend required")
+	backend, err := r.requireWorktreeBackend()
+	if err != nil {
+		return CreatedWorktree{}, err
 	}
-	return r.worktrees.CreateWorktree(ctx, req)
+	return backend.CreateWorktree(ctx, req)
 }
 
 func (r *Runtime) RemoveWorktree(ctx context.Context, req RemoveWorktreeRequest) error {
-	if r.worktrees == nil {
-		return fmt.Errorf("worktree backend required")
+	backend, err := r.requireWorktreeBackend()
+	if err != nil {
+		return err
 	}
-	return r.worktrees.RemoveWorktree(ctx, req)
+	return backend.RemoveWorktree(ctx, req)
+}
+
+func (r *Runtime) requireWorktreeBackend() (WorktreeBackend, error) {
+	if r.worktrees == nil {
+		return nil, fmt.Errorf("worktree backend required")
+	}
+	return r.worktrees, nil
 }

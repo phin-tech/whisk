@@ -30,14 +30,11 @@ func (b *Backend) DetectWorktrunk(ctx context.Context, req app.DetectWorktrunkRe
 }
 
 func (b *Backend) ListWorktrees(ctx context.Context, req app.ListWorktreesRequest) ([]app.Worktree, error) {
-	binary, available, err := Detect(ctx, b.runner, DetectOptions{})
+	client, err := b.client(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if !available {
-		return nil, &NotFoundError{Path: "wt"}
-	}
-	items, err := NewClient(binary, b.runner).List(ctx, req.RepoPath)
+	items, err := client.List(ctx, req.RepoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -49,14 +46,11 @@ func (b *Backend) ListWorktrees(ctx context.Context, req app.ListWorktreesReques
 }
 
 func (b *Backend) CreateWorktree(ctx context.Context, req app.CreateWorktreeRequest) (app.CreatedWorktree, error) {
-	binary, available, err := Detect(ctx, b.runner, DetectOptions{})
+	client, err := b.client(ctx)
 	if err != nil {
 		return app.CreatedWorktree{}, err
 	}
-	if !available {
-		return app.CreatedWorktree{}, &NotFoundError{Path: "wt"}
-	}
-	path, err := NewClient(binary, b.runner).Create(ctx, CreateRequest{
+	path, err := client.Create(ctx, CreateRequest{
 		RepoPath: req.RepoPath,
 		Branch:   req.Branch,
 		Base:     req.Base,
@@ -68,19 +62,27 @@ func (b *Backend) CreateWorktree(ctx context.Context, req app.CreateWorktreeRequ
 }
 
 func (b *Backend) RemoveWorktree(ctx context.Context, req app.RemoveWorktreeRequest) error {
-	binary, available, err := Detect(ctx, b.runner, DetectOptions{})
+	client, err := b.client(ctx)
 	if err != nil {
 		return err
 	}
-	if !available {
-		return &NotFoundError{Path: "wt"}
-	}
-	return NewClient(binary, b.runner).Remove(ctx, RemoveRequest{
+	return client.Remove(ctx, RemoveRequest{
 		RepoPath:     req.RepoPath,
 		WorktreePath: req.WorktreePath,
 		AlsoBranch:   req.AlsoBranch,
 		Force:        req.Force,
 	})
+}
+
+func (b *Backend) client(ctx context.Context) (*Client, error) {
+	binary, available, err := Detect(ctx, b.runner, DetectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if !available {
+		return nil, &NotFoundError{Path: "wt"}
+	}
+	return NewClient(binary, b.runner), nil
 }
 
 func toAppWorktree(item Item) app.Worktree {
