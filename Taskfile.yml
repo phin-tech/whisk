@@ -29,7 +29,7 @@ tasks:
     desc: Runs coverage for first-party daemon/runtime packages
     summary: Runs coverage for first-party daemon/runtime packages
     cmds:
-      - go test ./internal/adapters/pty/native ./internal/adapters/worktrunk ./internal/app ./internal/client ./internal/daemon ./internal/domain/session ./internal/server ./internal/wailsapp -coverprofile=/tmp/whisk-internal-cover.out
+      - go test ./internal/adapters/agents ./internal/adapters/ghcli ./internal/adapters/gitcli ./internal/adapters/hooks ./internal/adapters/processrunner ./internal/adapters/pty/native ./internal/adapters/worktrunk ./internal/app ./internal/client ./internal/daemon ./internal/domain/session ./internal/server ./internal/wailsapp -coverprofile=/tmp/whisk-internal-cover.out
       - go tool cover -func=/tmp/whisk-internal-cover.out
 
   frontend:install:
