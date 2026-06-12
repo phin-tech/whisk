@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, TypeVar
+
+from attrs import define as _attrs_define
+from attrs import field as _attrs_field
+
+from ..types import UNSET, Unset
+
+T = TypeVar("T", bound="BindWorkItemWorktreeRequest")
+
+
+@_attrs_define
+class BindWorkItemWorktreeRequest:
+    """
+    Attributes:
+        branch (str):
+        id (str):
+        worktree_path (str):
+        actor (str | Unset):
+        base (str | Unset):
+    """
+
+    branch: str
+    id: str
+    worktree_path: str
+    actor: str | Unset = UNSET
+    base: str | Unset = UNSET
+    additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        branch = self.branch
+
+        id = self.id
+
+        worktree_path = self.worktree_path
+
+        actor = self.actor
+
+        base = self.base
+
+        field_dict: dict[str, Any] = {}
+        field_dict.update(self.additional_properties)
+        field_dict.update(
+            {
+                "branch": branch,
+                "id": id,
+                "worktreePath": worktree_path,
+            }
+        )
+        if actor is not UNSET:
+            field_dict["actor"] = actor
+        if base is not UNSET:
+            field_dict["base"] = base
+
+        return field_dict
+
+    @classmethod
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        d = dict(src_dict)
+        branch = d.pop("branch")
+
+        id = d.pop("id")
+
+        worktree_path = d.pop("worktreePath")
+
+        actor = d.pop("actor", UNSET)
+
+        base = d.pop("base", UNSET)
+
+        bind_work_item_worktree_request = cls(
+            branch=branch,
+            id=id,
+            worktree_path=worktree_path,
+            actor=actor,
+            base=base,
+        )
+
+        bind_work_item_worktree_request.additional_properties = d
+        return bind_work_item_worktree_request
+
+    @property
+    def additional_keys(self) -> list[str]:
+        return list(self.additional_properties.keys())
+
+    def __getitem__(self, key: str) -> Any:
+        return self.additional_properties[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.additional_properties[key] = value
+
+    def __delitem__(self, key: str) -> None:
+        del self.additional_properties[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.additional_properties

@@ -68,6 +68,60 @@ tasks:
     cmds:
       - wails3 generate bindings -ts -names -d frontend/bindings ./...
 
+  sdk:spec:
+    desc: Generates sdk/openapi.json from the daemon protocol/domain structs
+    summary: Generates the OpenAPI spec (source of truth for all generated clients)
+    cmds:
+      - go run ./cmd/gen-openapi -o sdk/openapi.json
+
+  sdk:python:
+    desc: Generates the Python client from sdk/openapi.json
+    deps: [sdk:spec]
+    cmds:
+      - rm -rf sdk/python
+      - uvx --from openapi-python-client openapi-python-client generate --path sdk/openapi.json --output-path sdk/python --overwrite --meta none
+
+  sdk:ts:
+    desc: Generates the headless TypeScript types from sdk/openapi.json
+    deps: [sdk:spec]
+    cmds:
+      - mkdir -p sdk/ts
+      - npx -y openapi-typescript@latest sdk/openapi.json -o sdk/ts/whiskd.d.ts
+
+  sdk:
+    desc: Regenerates the OpenAPI spec and the Python + TypeScript clients
+    cmds:
+      - task: sdk:python
+      - task: sdk:ts
+
+  sdk:check:
+    desc: Fails if sdk/openapi.json is stale or the route table drifts from the server (CI guard)
+    summary: Runs the route-parity tests and diffs the regenerated spec against the committed one
+    cmds:
+      - go test ./cmd/gen-openapi/
+      - go run ./cmd/gen-openapi -o /tmp/whiskd-openapi.json
+      - cmd: diff -u sdk/openapi.json /tmp/whiskd-openapi.json
+        msg: "sdk/openapi.json is out of date; run `task sdk:spec` and commit the result."
+
+  sdk:test:python:
+    desc: Runs the Python SDK integration suite against a live daemon
+    cmds:
+      - go build -o {{.BIN_DIR}}/whiskd ./cmd/whiskd
+      - WHISKD_BIN="$PWD/{{.BIN_DIR}}/whiskd" uv run --no-project --with pytest --with httpx --with attrs --with python-dateutil pytest sdk/python/tests
+
+  sdk:test:ts:
+    desc: Runs the headless TypeScript SDK integration suite against a live daemon
+    cmds:
+      - go build -o {{.BIN_DIR}}/whiskd ./cmd/whiskd
+      - npm --prefix sdk/ts install --no-audit --no-fund
+      - WHISKD_BIN="$PWD/{{.BIN_DIR}}/whiskd" npm --prefix sdk/ts test
+
+  sdk:test:
+    desc: Runs both SDK integration suites (Python + TypeScript) against a live daemon
+    cmds:
+      - task: sdk:test:python
+      - task: sdk:test:ts
+
   build:daemon:
     desc: Builds the whisk daemon-mode executable
     summary: Builds the whisk daemon-mode executable
