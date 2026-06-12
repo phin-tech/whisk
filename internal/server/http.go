@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/phin-tech/whisk/internal/app"
+	"github.com/phin-tech/whisk/internal/buildinfo"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/protocol"
 )
@@ -277,7 +278,10 @@ func (s *HTTPServer) health(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *HTTPServer) compatibility(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, protocol.CompatibilityResponse{APIVersion: protocol.DaemonAPIVersion})
+	writeJSON(w, http.StatusOK, protocol.CompatibilityResponse{
+		APIVersion: protocol.DaemonAPIVersion,
+		GitSHA:     buildinfo.GitSHA(),
+	})
 }
 
 func (s *HTTPServer) listSessions(w http.ResponseWriter, r *http.Request) {

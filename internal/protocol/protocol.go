@@ -10,6 +10,7 @@ const DaemonAPIVersion = 5
 
 type CompatibilityResponse struct {
 	APIVersion int `json:"apiVersion"`
+	GitSHA     string `json:"gitSha"`
 }
 
 type CreateSessionRequest struct {

@@ -29,6 +29,9 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	if compatibility.APIVersion != protocol.DaemonAPIVersion {
 		t.Fatalf("compatibility = %#v", compatibility)
 	}
+	if compatibility.GitSHA == "" {
+		t.Fatalf("compatibility missing git sha: %#v", compatibility)
+	}
 
 	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
 		Name:       "Whisk",

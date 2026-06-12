@@ -31,6 +31,13 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	if err := daemon.Health(ctx); err != nil {
 		t.Fatalf("health: %v", err)
 	}
+	compatibility, err := daemon.Compatibility(ctx)
+	if err != nil {
+		t.Fatalf("compatibility: %v", err)
+	}
+	if compatibility.APIVersion != protocol.DaemonAPIVersion || compatibility.GitSHA == "" {
+		t.Fatalf("compatibility = %#v", compatibility)
+	}
 
 	created, err := daemon.CreateSession(ctx, protocol.CreateSessionRequest{
 		Name:       "Whisk",
