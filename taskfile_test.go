@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestDevAppTaskRestartsWithFreshDaemonAndCLI(t *testing.T) {
+func TestDevAppTaskPreservesRunningDaemonAndCLI(t *testing.T) {
 	taskfile, err := os.ReadFile("Taskfile.yml")
 	if err != nil {
 		t.Fatalf("read Taskfile.yml: %v", err)
@@ -15,10 +15,34 @@ func TestDevAppTaskRestartsWithFreshDaemonAndCLI(t *testing.T) {
 
 	requireTaskLine(t, block, "- task: build:daemon")
 	requireTaskLine(t, block, "- task: build:cli")
-	requireTaskLine(t, block, "- '{{.BIN_DIR}}/whisk daemon stop -url http://{{.DEV_DAEMON_ADDR}} || true'")
-	requireTaskLine(t, block, "WHISKD_PATH: \"{{.BIN_DIR}}/whiskd\"")
+	requireTaskLine(t, block, "WHISKD_PATH: \"{{.BIN_DIR}}/whisk\"")
 	requireTaskLine(t, block, "WHISK_CLI: \"{{.BIN_DIR}}/whisk\"")
 	requireTaskLine(t, block, "WHISKD_URL: \"http://{{.DEV_DAEMON_ADDR}}\"")
+	requireTaskLineAbsent(t, block, "whisk daemon stop")
+	requireTaskLineAbsent(t, block, "{{.BIN_DIR}}/whiskd")
+}
+
+func TestBuildDaemonTaskBuildsWhiskDaemonMode(t *testing.T) {
+	taskfile, err := os.ReadFile("Taskfile.yml")
+	if err != nil {
+		t.Fatalf("read Taskfile.yml: %v", err)
+	}
+	block := taskBlock(string(taskfile), "build:daemon")
+
+	requireTaskLine(t, block, "go build -o {{.BIN_DIR}}/whisk ./cmd/whisk")
+	requireTaskLineAbsent(t, block, "./cmd/whiskd")
+	requireTaskLineAbsent(t, block, "{{.BIN_DIR}}/whiskd")
+}
+
+func TestDevDaemonTaskRunsWhiskDaemonMode(t *testing.T) {
+	taskfile, err := os.ReadFile("Taskfile.yml")
+	if err != nil {
+		t.Fatalf("read Taskfile.yml: %v", err)
+	}
+	block := taskBlock(string(taskfile), "dev:daemon")
+
+	requireTaskLine(t, block, "{{.BIN_DIR}}/whisk daemon run -addr {{.DAEMON_ADDR}}")
+	requireTaskLineAbsent(t, block, "whiskd")
 }
 
 func taskBlock(taskfile string, name string) string {
@@ -46,5 +70,15 @@ func requireTaskLine(t *testing.T, block string, want string) {
 	}
 	if !strings.Contains(block, want) {
 		t.Fatalf("dev:app task missing %q\nblock:\n%s", want, block)
+	}
+}
+
+func requireTaskLineAbsent(t *testing.T, block string, unwanted string) {
+	t.Helper()
+	if block == "" {
+		t.Fatalf("dev:app task block not found")
+	}
+	if strings.Contains(block, unwanted) {
+		t.Fatalf("dev:app task should not contain %q\nblock:\n%s", unwanted, block)
 	}
 }

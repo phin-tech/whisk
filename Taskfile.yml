@@ -69,11 +69,11 @@ tasks:
       - wails3 generate bindings -ts -names -d frontend/bindings ./...
 
   build:daemon:
-    desc: Builds the whiskd sidecar daemon
-    summary: Builds the whiskd sidecar daemon
+    desc: Builds the whisk daemon-mode executable
+    summary: Builds the whisk daemon-mode executable
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - go build -o {{.BIN_DIR}}/whiskd ./cmd/whiskd
+      - go build -o {{.BIN_DIR}}/whisk ./cmd/whisk
 
   build:cli:
     desc: Builds the whisk CLI
@@ -92,11 +92,11 @@ tasks:
       - sh scripts/smoke-agent.sh
 
   dev:daemon:
-    desc: Runs the whiskd sidecar daemon in the foreground
-    summary: Runs the whiskd sidecar daemon in the foreground
+    desc: Runs the whisk daemon in the foreground
+    summary: Runs the whisk daemon in the foreground
     cmds:
       - task: build:daemon
-      - "{{.BIN_DIR}}/whiskd -addr {{.DAEMON_ADDR}}"
+      - "{{.BIN_DIR}}/whisk daemon run -addr {{.DAEMON_ADDR}}"
 
   build:
     summary: Builds the application
@@ -127,12 +127,11 @@ tasks:
     cmds:
       - task: build:daemon
       - task: build:cli
-      - '{{.BIN_DIR}}/whisk daemon stop -url http://{{.DEV_DAEMON_ADDR}} || true'
-      - 'echo "task dev:app using WHISKD_URL=http://{{.DEV_DAEMON_ADDR}} WHISKD_PATH={{.BIN_DIR}}/whiskd WHISK_CLI={{.BIN_DIR}}/whisk"'
-      - 'echo "Stopped any stale whiskd on the dev port; the app will start this sidecar."'
+      - 'echo "task dev:app using WHISKD_URL=http://{{.DEV_DAEMON_ADDR}} WHISKD_PATH={{.BIN_DIR}}/whisk WHISK_CLI={{.BIN_DIR}}/whisk"'
+      - 'echo "The app will reuse a compatible running sidecar or start one if needed."'
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
     env:
-      WHISKD_PATH: "{{.BIN_DIR}}/whiskd"
+      WHISKD_PATH: "{{.BIN_DIR}}/whisk"
       WHISK_CLI: "{{.BIN_DIR}}/whisk"
       WHISKD_URL: "http://{{.DEV_DAEMON_ADDR}}"
 

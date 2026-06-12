@@ -98,6 +98,10 @@ func TestWhiskdHelperProcess(t *testing.T) {
 	}
 
 	var addr string
+	if len(args) < 2 || args[0] != "daemon" || args[1] != "run" {
+		os.Exit(4)
+	}
+	args = args[2:]
 	for i := 0; i < len(args)-1; i++ {
 		if args[i] == "-addr" {
 			addr = args[i+1]

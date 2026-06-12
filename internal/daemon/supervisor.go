@@ -42,8 +42,8 @@ func Ensure(ctx context.Context, baseURL string) error {
 		return err
 	}
 
-	log.Printf("starting whiskd at %s from %s", baseURL, path)
-	cmd := exec.CommandContext(context.Background(), path, "-addr", addr)
+	log.Printf("starting whisk daemon at %s from %s", baseURL, path)
+	cmd := exec.CommandContext(context.Background(), path, "daemon", "run", "-addr", addr)
 	logFile, err := os.OpenFile(filepath.Join(os.TempDir(), "whiskd.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("open whiskd log: %w", err)
@@ -207,5 +207,5 @@ func daemonPath() (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("whiskd not found; run `task build:daemon` or set WHISKD_PATH")
+	return "", fmt.Errorf("whisk daemon executable not found; run `task build:daemon` or set WHISKD_PATH")
 }

@@ -68,7 +68,10 @@ func runWithDeps(args []string, deps runDeps) error {
 
 func runDaemon(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: whisk daemon <start|stop|status> [-url http://127.0.0.1:8787]")
+		return fmt.Errorf("usage: whisk daemon <run|start|stop|status> [-url http://127.0.0.1:8787]")
+	}
+	if args[0] == "run" {
+		return runDaemonRun(args[1:])
 	}
 
 	flags := flag.NewFlagSet("daemon "+args[0], flag.ContinueOnError)

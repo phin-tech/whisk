@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -37,6 +38,16 @@ func TestRunDaemonStopUsesShutdownEndpoint(t *testing.T) {
 	}
 	if !called {
 		t.Fatalf("shutdown endpoint was not called")
+	}
+}
+
+func TestRunDaemonRunValidatesListenAddress(t *testing.T) {
+	err := run([]string{"daemon", "run", "-addr", "0.0.0.0:8787"})
+	if err == nil {
+		t.Fatalf("expected non-loopback daemon run address to be rejected")
+	}
+	if !strings.Contains(err.Error(), "refusing non-loopback bind") {
+		t.Fatalf("daemon run error = %q", err.Error())
 	}
 }
 
