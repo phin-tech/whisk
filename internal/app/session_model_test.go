@@ -84,6 +84,7 @@ func TestRuntimeStartPanePTYSpawnsIntoExistingEmptyPane(t *testing.T) {
 }
 
 func TestRuntimeInjectsWhiskContextIntoSessionPTYs(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
 	ctx := context.Background()
 	rootDir := t.TempDir()
 	ptyBackend := newMemoryPTYBackend()
@@ -103,6 +104,7 @@ func TestRuntimeInjectsWhiskContextIntoSessionPTYs(t *testing.T) {
 	}
 	if got := ptyBackend.spawns[0].Env; got["WHISKD_URL"] != "http://127.0.0.1:8787" ||
 		got["WHISK_CLI"] != "/usr/local/bin/whisk" ||
+		got["PATH"] != "/usr/local/bin:/usr/bin:/bin" ||
 		got["WHISK_SESSION_ID"] != created.Session.ID ||
 		got["WHISK_PTY_ID"] != created.MainPtyID {
 		t.Fatalf("create session env = %#v", got)
@@ -151,6 +153,32 @@ func TestRuntimeInjectsWhiskContextIntoSessionPTYs(t *testing.T) {
 	}
 	if got := ptyBackend.spawns[3].Env; got["WHISK_SESSION_ID"] != empty.Session.ID || got["WHISK_PTY_ID"] != restarted.PTYID {
 		t.Fatalf("restart env = %#v", got)
+	}
+}
+
+func TestRuntimePrependsWhiskCLIToExistingPTYPath(t *testing.T) {
+	ctx := context.Background()
+	rootDir := t.TempDir()
+	ptyBackend := newMemoryPTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend: ptyBackend,
+		CLIPath:    "/opt/whisk/bin/whisk",
+	})
+
+	_, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:    "Whisk",
+		RootDir: rootDir,
+		InitialPTY: &app.StartPTYOptions{
+			Cols: 80,
+			Rows: 24,
+			Env:  map[string]string{"PATH": "/usr/bin:/bin"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if got := ptyBackend.spawns[0].Env["PATH"]; got != "/opt/whisk/bin:/usr/bin:/bin" {
+		t.Fatalf("PATH = %q", got)
 	}
 }
 

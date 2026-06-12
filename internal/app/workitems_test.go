@@ -67,6 +67,7 @@ func TestRuntimeWorkItemRunLifecyclePersistsAndPublishes(t *testing.T) {
 }
 
 func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
 	ctx := context.Background()
 	root := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -122,6 +123,7 @@ func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 	env := ptyBackend.spawns[0].Env
 	if env["WHISKD_URL"] != "http://127.0.0.1:8787" ||
 		env["WHISK_CLI"] != "/usr/local/bin/whisk" ||
+		env["PATH"] != "/usr/local/bin:/usr/bin:/bin" ||
 		env["WHISK_PROJECT_ID"] != project.ID ||
 		env["WHISK_WORK_ITEM_ID"] != item.ID ||
 		env["WHISK_RUN_ID"] != run.ID ||

@@ -994,6 +994,18 @@ func (r *Runtime) ptyContextEnv(sessionID string, ptyID string, extra map[string
 	}
 	if r.cliPath != "" {
 		env["WHISK_CLI"] = r.cliPath
+		cliDir := filepath.Dir(r.cliPath)
+		if cliDir != "." && cliDir != string(filepath.Separator) {
+			pathValue := env["PATH"]
+			if pathValue == "" {
+				pathValue = os.Getenv("PATH")
+			}
+			if pathValue == "" {
+				env["PATH"] = cliDir
+			} else {
+				env["PATH"] = cliDir + string(os.PathListSeparator) + pathValue
+			}
+		}
 	}
 	if sessionID != "" {
 		env["WHISK_SESSION_ID"] = sessionID
