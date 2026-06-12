@@ -3,8 +3,11 @@
 
 export {
     Attachment,
+    GateConfig,
     HistoryEvent,
+    MetadataValue,
     Project,
+    ProjectPreferences,
     ProjectWorkflow,
     PromptTemplate,
     RunEvent,

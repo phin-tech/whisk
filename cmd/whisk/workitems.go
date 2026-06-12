@@ -143,6 +143,7 @@ func runWorkItemCreate(args []string) error {
 	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
 	outputJSON := flags.Bool("json", false, "write JSON output")
 	projectID := flags.String("project", envOrDefault("WHISK_PROJECT", ""), "project id")
+	workflowID := flags.String("workflow", "", "workflow id")
 	title := flags.String("title", "", "work item title")
 	body := flags.String("body", "", "markdown body")
 	stageID := flags.String("stage", "", "initial stage id")
@@ -157,6 +158,7 @@ func runWorkItemCreate(args []string) error {
 	defer cancel()
 	item, err := client.NewHTTP(*baseURL, nil).CreateWorkItem(ctx, protocol.CreateWorkItemRequest{
 		ProjectID:    *projectID,
+		WorkflowID:   *workflowID,
 		Title:        *title,
 		BodyMarkdown: *body,
 		StageID:      *stageID,

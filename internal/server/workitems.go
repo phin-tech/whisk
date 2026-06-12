@@ -22,16 +22,174 @@ func (s *HTTPServer) createProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	project, err := s.runtime.CreateProject(r.Context(), app.CreateProjectRequest{
-		Name:       req.Name,
-		Slug:       req.Slug,
-		RootDir:    req.RootDir,
-		WorkflowID: req.WorkflowID,
+		Name:        req.Name,
+		Slug:        req.Slug,
+		RootDir:     req.RootDir,
+		WorkflowID:  req.WorkflowID,
+		Preferences: req.Preferences,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, project)
+}
+
+func (s *HTTPServer) startPlanning(w http.ResponseWriter, r *http.Request) {
+	var req protocol.StartPlanningRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
+	run, err := s.runtime.StartPlanning(r.Context(), app.StartPlanningRequest{
+		WorkItemID:     req.WorkItemID,
+		SessionID:      req.SessionID,
+		PTYID:          req.PTYID,
+		Launch:         req.Launch,
+		AgentProfileID: req.AgentProfileID,
+		SystemPrompt:   req.SystemPrompt,
+		Actor:          req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, run)
+}
+
+func (s *HTTPServer) submitDraftPlan(w http.ResponseWriter, r *http.Request) {
+	var req protocol.SubmitDraftPlanRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
+	artifact, err := s.runtime.SubmitDraftPlan(r.Context(), app.SubmitDraftPlanRequest{
+		WorkItemID: req.WorkItemID,
+		RunID:      req.RunID,
+		Title:      req.Title,
+		Body:       req.Body,
+		Actor:      req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, artifact)
+}
+
+func (s *HTTPServer) approvePlan(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ApprovePlanRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
+	item, err := s.runtime.ApprovePlan(r.Context(), app.ApprovePlanRequest{
+		ArtifactID: req.ArtifactID,
+		WorkItemID: req.WorkItemID,
+		Actor:      req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *HTTPServer) startExecution(w http.ResponseWriter, r *http.Request) {
+	var req protocol.StartExecutionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
+	run, err := s.runtime.StartExecution(r.Context(), app.StartExecutionRequest{
+		WorkItemID:     req.WorkItemID,
+		SessionID:      req.SessionID,
+		PTYID:          req.PTYID,
+		Launch:         req.Launch,
+		AgentProfileID: req.AgentProfileID,
+		SystemPrompt:   req.SystemPrompt,
+		Actor:          req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, run)
+}
+
+func (s *HTTPServer) askQuestion(w http.ResponseWriter, r *http.Request) {
+	var req protocol.AskQuestionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	question, err := s.runtime.AskQuestion(r.Context(), app.AskQuestionRequest{
+		WorkItemID: req.WorkItemID,
+		RunID:      req.RunID,
+		SessionID:  req.SessionID,
+		PTYID:      req.PTYID,
+		Prompt:     req.Prompt,
+		Actor:      req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, question)
+}
+
+func (s *HTTPServer) answerQuestion(w http.ResponseWriter, r *http.Request) {
+	var req protocol.AnswerQuestionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.ID = pathValue(r, "questionID", req.ID)
+	question, err := s.runtime.AnswerQuestion(r.Context(), app.AnswerQuestionRequest{
+		ID:     req.ID,
+		Answer: req.Answer,
+		Actor:  req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, question)
+}
+
+func (s *HTTPServer) completeExecution(w http.ResponseWriter, r *http.Request) {
+	var req protocol.CompleteExecutionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.RunID = pathValue(r, "runID", req.RunID)
+	item, err := s.runtime.CompleteExecution(r.Context(), app.CompleteExecutionRequest{
+		RunID:   req.RunID,
+		Message: req.Message,
+		Actor:   req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *HTTPServer) submitReviewFeedback(w http.ResponseWriter, r *http.Request) {
+	var req protocol.SubmitReviewFeedbackRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
+	artifact, err := s.runtime.SubmitReviewFeedback(r.Context(), app.SubmitReviewFeedbackRequest{
+		WorkItemID: req.WorkItemID,
+		RunID:      req.RunID,
+		Body:       req.Body,
+		Actor:      req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, artifact)
 }
 
 func (s *HTTPServer) listWorkflowTemplates(w http.ResponseWriter, r *http.Request) {
@@ -68,6 +226,7 @@ func (s *HTTPServer) createWorkItem(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := s.runtime.CreateWorkItem(r.Context(), app.CreateWorkItemRequest{
 		ProjectID:    req.ProjectID,
+		WorkflowID:   req.WorkflowID,
 		Title:        req.Title,
 		BodyMarkdown: req.BodyMarkdown,
 		StageID:      req.StageID,

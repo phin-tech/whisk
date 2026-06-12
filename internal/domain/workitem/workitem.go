@@ -1,6 +1,7 @@
 package workitem
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -9,12 +10,23 @@ import (
 )
 
 const (
-	StageKindBacklog  = "backlog"
-	StageKindReady    = "ready"
-	StageKindActive   = "active"
-	StageKindReview   = "review"
-	StageKindDone     = "done"
-	StageKindArchived = "archived"
+	StageKindBacklog   = "backlog"
+	StageKindPlanning  = "planning"
+	StageKindReady     = "ready"
+	StageKindActive    = "active"
+	StageKindExecution = "execution"
+	StageKindBlocked   = "blocked"
+	StageKindReview    = "review"
+	StageKindDone      = "done"
+	StageKindArchived  = "archived"
+
+	StageBacklog   = "backlog"
+	StagePlanning  = "planning"
+	StageReady     = "ready"
+	StageExecution = "execution"
+	StageBlocked   = "blocked"
+	StageReview    = "review"
+	StageDone      = "done"
 
 	RunStateIdle          = "idle"
 	RunStateQueued        = "queued"
@@ -40,6 +52,47 @@ const (
 	AttachmentScopeWorktree = "worktree"
 	AttachmentScopeExternal = "external"
 
+	AutoRunNever = "never"
+	AutoRunPlan  = "plan"
+	AutoRunAll   = "all"
+
+	MetadataOwnerProject  = "project"
+	MetadataOwnerWorkItem = "work_item"
+	MetadataOwnerRun      = "run"
+	MetadataOwnerArtifact = "artifact"
+
+	MetadataTypeString = "string"
+	MetadataTypeNumber = "number"
+	MetadataTypeBool   = "bool"
+	MetadataTypeJSON   = "json"
+
+	ArtifactKindPlan       = "plan"
+	ArtifactKindFeedback   = "feedback"
+	ArtifactKindGateReport = "gate_report"
+
+	ArtifactStatusDraft    = "draft"
+	ArtifactStatusApproved = "approved"
+
+	QuestionStatusOpen     = "open"
+	QuestionStatusAnswered = "answered"
+
+	GateStatusPending    = "pending"
+	GateStatusPassed     = "passed"
+	GateStatusFailed     = "failed"
+	GateStatusOverridden = "overridden"
+
+	WorkflowEventPlanningStarted     = "planning_started"
+	WorkflowEventDraftPlanSubmitted  = "draft_plan_submitted"
+	WorkflowEventPlanApproved        = "plan_approved"
+	WorkflowEventExecutionStarted    = "execution_started"
+	WorkflowEventQuestionAsked       = "question_asked"
+	WorkflowEventQuestionAnswered    = "question_answered"
+	WorkflowEventBlocked             = "blocked"
+	WorkflowEventUnblocked           = "unblocked"
+	WorkflowEventExecutionCompleted  = "execution_completed"
+	WorkflowEventReviewFeedbackAdded = "review_feedback_added"
+	WorkflowEventDoneApproved        = "done_approved"
+
 	HistoryCreated          = "created"
 	HistoryStageMoved       = "stage_moved"
 	HistoryAttachmentAdded  = "attachment_added"
@@ -58,14 +111,41 @@ const (
 )
 
 type Project struct {
-	ID                 string          `json:"id"`
-	Name               string          `json:"name"`
-	Slug               string          `json:"slug"`
-	RootDir            string          `json:"rootDir"`
-	Workflow           ProjectWorkflow `json:"workflow"`
-	NextWorkItemNumber int             `json:"nextWorkItemNumber"`
-	CreatedAt          time.Time       `json:"createdAt"`
-	UpdatedAt          time.Time       `json:"updatedAt"`
+	ID                 string                   `json:"id"`
+	Name               string                   `json:"name"`
+	Slug               string                   `json:"slug"`
+	RootDir            string                   `json:"rootDir"`
+	Workflow           ProjectWorkflow          `json:"workflow"`
+	Preferences        ProjectPreferences       `json:"preferences"`
+	Metadata           map[string]MetadataValue `json:"metadata,omitempty"`
+	NextWorkItemNumber int                      `json:"nextWorkItemNumber"`
+	CreatedAt          time.Time                `json:"createdAt"`
+	UpdatedAt          time.Time                `json:"updatedAt"`
+}
+
+type ProjectPreferences struct {
+	AutoRun            string            `json:"autoRun"`
+	AutoWorktree       bool              `json:"autoWorktree"`
+	DefaultPhaseAgents map[string]string `json:"defaultPhaseAgents,omitempty"`
+	Gates              []GateConfig      `json:"gates,omitempty"`
+}
+
+type GateConfig struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Kind     string `json:"kind"`
+	Command  string `json:"command,omitempty"`
+	Skill    string `json:"skill,omitempty"`
+	Blocking bool   `json:"blocking"`
+	Phase    string `json:"phase,omitempty"`
+}
+
+type MetadataValue struct {
+	Type   string          `json:"type"`
+	String string          `json:"string,omitempty"`
+	Number float64         `json:"number,omitempty"`
+	Bool   bool            `json:"bool,omitempty"`
+	JSON   json.RawMessage `json:"json,omitempty"`
 }
 
 type WorkflowTemplate struct {
@@ -105,18 +185,22 @@ type TransitionRule struct {
 }
 
 type WorkItem struct {
-	ID           string           `json:"id"`
-	ProjectID    string           `json:"projectId"`
-	Number       int              `json:"number"`
-	Title        string           `json:"title"`
-	BodyMarkdown string           `json:"bodyMarkdown"`
-	StageID      string           `json:"stageId"`
-	RunState     string           `json:"runState"`
-	Worktree     *WorktreeBinding `json:"worktree,omitempty"`
-	Attachments  []Attachment     `json:"attachments"`
-	History      []HistoryEvent   `json:"history"`
-	CreatedAt    time.Time        `json:"createdAt"`
-	UpdatedAt    time.Time        `json:"updatedAt"`
+	ID              string                   `json:"id"`
+	ProjectID       string                   `json:"projectId"`
+	WorkflowID      string                   `json:"workflowId"`
+	WorkflowVersion int                      `json:"workflowVersion"`
+	Number          int                      `json:"number"`
+	Title           string                   `json:"title"`
+	BodyMarkdown    string                   `json:"bodyMarkdown"`
+	StageID         string                   `json:"stageId"`
+	PreviousStageID string                   `json:"previousStageId,omitempty"`
+	RunState        string                   `json:"runState"`
+	Worktree        *WorktreeBinding         `json:"worktree,omitempty"`
+	Attachments     []Attachment             `json:"attachments"`
+	Metadata        map[string]MetadataValue `json:"metadata,omitempty"`
+	History         []HistoryEvent           `json:"history"`
+	CreatedAt       time.Time                `json:"createdAt"`
+	UpdatedAt       time.Time                `json:"updatedAt"`
 }
 
 type PromptTemplate struct {
@@ -129,19 +213,75 @@ type PromptTemplate struct {
 }
 
 type WorkItemRun struct {
-	ID               string     `json:"id"`
-	WorkItemID       string     `json:"workItemId"`
-	ProjectID        string     `json:"projectId"`
-	Preset           string     `json:"preset"`
-	PromptTemplateID string     `json:"promptTemplateId"`
-	PromptSnapshot   string     `json:"promptSnapshot"`
-	SessionID        string     `json:"sessionId,omitempty"`
-	PTYID            string     `json:"ptyId,omitempty"`
-	Status           string     `json:"status"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	UpdatedAt        time.Time  `json:"updatedAt"`
-	CompletedAt      *time.Time `json:"completedAt,omitempty"`
-	History          []RunEvent `json:"history"`
+	ID               string                   `json:"id"`
+	WorkItemID       string                   `json:"workItemId"`
+	ProjectID        string                   `json:"projectId"`
+	Preset           string                   `json:"preset"`
+	PromptTemplateID string                   `json:"promptTemplateId"`
+	PromptSnapshot   string                   `json:"promptSnapshot"`
+	SessionID        string                   `json:"sessionId,omitempty"`
+	PTYID            string                   `json:"ptyId,omitempty"`
+	Status           string                   `json:"status"`
+	Metadata         map[string]MetadataValue `json:"metadata,omitempty"`
+	CreatedAt        time.Time                `json:"createdAt"`
+	UpdatedAt        time.Time                `json:"updatedAt"`
+	CompletedAt      *time.Time               `json:"completedAt,omitempty"`
+	History          []RunEvent               `json:"history"`
+}
+
+type Artifact struct {
+	ID         string                   `json:"id"`
+	ProjectID  string                   `json:"projectId"`
+	WorkItemID string                   `json:"workItemId"`
+	RunID      string                   `json:"runId,omitempty"`
+	Kind       string                   `json:"kind"`
+	Status     string                   `json:"status"`
+	Title      string                   `json:"title,omitempty"`
+	Body       string                   `json:"body,omitempty"`
+	Metadata   map[string]MetadataValue `json:"metadata,omitempty"`
+	CreatedAt  time.Time                `json:"createdAt"`
+	UpdatedAt  time.Time                `json:"updatedAt"`
+}
+
+type Question struct {
+	ID         string     `json:"id"`
+	ProjectID  string     `json:"projectId"`
+	WorkItemID string     `json:"workItemId"`
+	RunID      string     `json:"runId,omitempty"`
+	SessionID  string     `json:"sessionId,omitempty"`
+	PTYID      string     `json:"ptyId,omitempty"`
+	Prompt     string     `json:"prompt"`
+	Answer     string     `json:"answer,omitempty"`
+	Status     string     `json:"status"`
+	Actor      string     `json:"actor,omitempty"`
+	AnsweredBy string     `json:"answeredBy,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+	AnsweredAt *time.Time `json:"answeredAt,omitempty"`
+}
+
+type GateReport struct {
+	ID             string    `json:"id"`
+	ProjectID      string    `json:"projectId"`
+	WorkItemID     string    `json:"workItemId"`
+	RunID          string    `json:"runId,omitempty"`
+	Name           string    `json:"name"`
+	Blocking       bool      `json:"blocking"`
+	Status         string    `json:"status"`
+	OverrideReason string    `json:"overrideReason,omitempty"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+type WorkflowEvent struct {
+	ID         string    `json:"id"`
+	ProjectID  string    `json:"projectId"`
+	WorkItemID string    `json:"workItemId,omitempty"`
+	RunID      string    `json:"runId,omitempty"`
+	Type       string    `json:"type"`
+	Actor      string    `json:"actor,omitempty"`
+	Message    string    `json:"message,omitempty"`
+	At         time.Time `json:"at"`
 }
 
 type StatusEvent struct {
@@ -203,6 +343,10 @@ type State struct {
 	promptTemplates map[string]PromptTemplate
 	items           map[string]WorkItem
 	runs            map[string]WorkItemRun
+	artifacts       map[string]Artifact
+	questions       map[string]Question
+	gateReports     map[string]GateReport
+	workflowEvents  map[string]WorkflowEvent
 	statusEvents    map[string]StatusEvent
 }
 
@@ -212,6 +356,10 @@ type Snapshot struct {
 	PromptTemplates []PromptTemplate   `json:"promptTemplates"`
 	Items           []WorkItem         `json:"workItems"`
 	Runs            []WorkItemRun      `json:"workItemRuns"`
+	Artifacts       []Artifact         `json:"artifacts"`
+	Questions       []Question         `json:"questions"`
+	GateReports     []GateReport       `json:"gateReports"`
+	WorkflowEvents  []WorkflowEvent    `json:"workflowEvents"`
 	StatusEvents    []StatusEvent      `json:"statusEvents"`
 }
 
@@ -222,6 +370,7 @@ type CreateProject struct {
 	Name               string
 	Slug               string
 	RootDir            string
+	Preferences        ProjectPreferences
 	NextWorkItemNumber int
 	Now                time.Time
 }
@@ -230,6 +379,7 @@ type CreateWorkItem struct {
 	ID           string
 	HistoryID    string
 	ProjectID    string
+	WorkflowID   string
 	Title        string
 	BodyMarkdown string
 	StageID      string
@@ -286,6 +436,117 @@ type StartRun struct {
 	PTYID            string
 	Actor            string
 	Now              time.Time
+}
+
+type StartPlanning struct {
+	ID           string
+	HistoryID    string
+	RunHistoryID string
+	WorkItemID   string
+	SessionID    string
+	PTYID        string
+	Actor        string
+	Now          time.Time
+}
+
+type SubmitDraftPlan struct {
+	ID         string
+	WorkItemID string
+	RunID      string
+	Title      string
+	Body       string
+	Actor      string
+	Now        time.Time
+}
+
+type ApprovePlan struct {
+	ArtifactID string
+	WorkItemID string
+	Actor      string
+	Now        time.Time
+}
+
+type StartExecution struct {
+	ID           string
+	HistoryID    string
+	RunHistoryID string
+	WorkItemID   string
+	SessionID    string
+	PTYID        string
+	Actor        string
+	Now          time.Time
+}
+
+type AskQuestion struct {
+	ID         string
+	WorkItemID string
+	RunID      string
+	SessionID  string
+	PTYID      string
+	Prompt     string
+	Actor      string
+	Now        time.Time
+}
+
+type AnswerQuestion struct {
+	ID     string
+	Answer string
+	Actor  string
+	Now    time.Time
+}
+
+type ReportBlocked struct {
+	WorkItemID string
+	RunID      string
+	Reason     string
+	Actor      string
+	Now        time.Time
+}
+
+type Unblock struct {
+	WorkItemID string
+	Actor      string
+	Now        time.Time
+}
+
+type CompleteExecution struct {
+	RunID   string
+	Actor   string
+	Message string
+	Now     time.Time
+}
+
+type SubmitReviewFeedback struct {
+	ID         string
+	WorkItemID string
+	RunID      string
+	Body       string
+	Actor      string
+	Now        time.Time
+}
+
+type ApproveDone struct {
+	WorkItemID string
+	Actor      string
+	Reason     string
+	Now        time.Time
+}
+
+type CompleteGate struct {
+	ID             string
+	Status         string
+	OverrideReason string
+	Actor          string
+	Now            time.Time
+}
+
+type SetMetadata struct {
+	OwnerType string
+	OwnerID   string
+	Namespace string
+	Key       string
+	Value     MetadataValue
+	Now       time.Time
 }
 
 type CancelRun struct {
@@ -347,6 +608,10 @@ func NewState() *State {
 		promptTemplates: map[string]PromptTemplate{},
 		items:           map[string]WorkItem{},
 		runs:            map[string]WorkItemRun{},
+		artifacts:       map[string]Artifact{},
+		questions:       map[string]Question{},
+		gateReports:     map[string]GateReport{},
+		workflowEvents:  map[string]WorkflowEvent{},
 		statusEvents:    map[string]StatusEvent{},
 	}
 	template := DefaultWorkflowTemplate(time.Time{})
@@ -364,6 +629,10 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		promptTemplates: map[string]PromptTemplate{},
 		items:           map[string]WorkItem{},
 		runs:            map[string]WorkItemRun{},
+		artifacts:       map[string]Artifact{},
+		questions:       map[string]Question{},
+		gateReports:     map[string]GateReport{},
+		workflowEvents:  map[string]WorkflowEvent{},
 		statusEvents:    map[string]StatusEvent{},
 	}
 	if len(snapshot.Templates) == 0 {
@@ -420,6 +689,42 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		}
 		state.runs[run.ID] = cloneRun(run)
 	}
+	for _, artifact := range snapshot.Artifacts {
+		if err := state.validateArtifact(artifact); err != nil {
+			return nil, err
+		}
+		if _, exists := state.artifacts[artifact.ID]; exists {
+			return nil, fmt.Errorf("artifact %s already exists", artifact.ID)
+		}
+		state.artifacts[artifact.ID] = cloneArtifact(artifact)
+	}
+	for _, question := range snapshot.Questions {
+		if err := state.validateQuestion(question); err != nil {
+			return nil, err
+		}
+		if _, exists := state.questions[question.ID]; exists {
+			return nil, fmt.Errorf("question %s already exists", question.ID)
+		}
+		state.questions[question.ID] = cloneQuestion(question)
+	}
+	for _, gate := range snapshot.GateReports {
+		if err := state.validateGateReport(gate); err != nil {
+			return nil, err
+		}
+		if _, exists := state.gateReports[gate.ID]; exists {
+			return nil, fmt.Errorf("gate report %s already exists", gate.ID)
+		}
+		state.gateReports[gate.ID] = cloneGateReport(gate)
+	}
+	for _, event := range snapshot.WorkflowEvents {
+		if event.ID == "" {
+			return nil, fmt.Errorf("workflow event id required")
+		}
+		if _, exists := state.workflowEvents[event.ID]; exists {
+			return nil, fmt.Errorf("workflow event %s already exists", event.ID)
+		}
+		state.workflowEvents[event.ID] = event
+	}
 	for _, event := range snapshot.StatusEvents {
 		if err := state.validateStatusEvent(event); err != nil {
 			return nil, err
@@ -434,12 +739,13 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 
 func DefaultWorkflowTemplate(now time.Time) WorkflowTemplate {
 	stages := []WorkflowStage{
-		{ID: "backlog", Name: "Backlog", Kind: StageKindBacklog, DefaultRunPreset: "reader", DefaultPromptTemplateID: "plan"},
-		{ID: "ready", Name: "Ready", Kind: StageKindReady, DefaultRunPreset: "manager", DefaultPromptTemplateID: "plan", ProvisionWorktree: true},
-		{ID: "in_progress", Name: "In Progress", Kind: StageKindActive, DefaultRunPreset: "writer", DefaultPromptTemplateID: "implement"},
-		{ID: "review", Name: "Review", Kind: StageKindReview, DefaultRunPreset: "reviewer", DefaultPromptTemplateID: "review"},
-		{ID: "done", Name: "Done", Kind: StageKindDone},
-		{ID: "archived", Name: "Archived", Kind: StageKindArchived},
+		{ID: StageBacklog, Name: "Backlog", Kind: StageKindBacklog, DefaultRunPreset: RunPresetReader, DefaultPromptTemplateID: PromptTemplatePlan},
+		{ID: StagePlanning, Name: "Planning", Kind: StageKindPlanning, DefaultRunPreset: RunPresetReader, DefaultPromptTemplateID: PromptTemplatePlan},
+		{ID: StageReady, Name: "Ready", Kind: StageKindReady, DefaultRunPreset: RunPresetManager, DefaultPromptTemplateID: PromptTemplatePlan},
+		{ID: StageExecution, Name: "Execution", Kind: StageKindExecution, DefaultRunPreset: RunPresetWriter, DefaultPromptTemplateID: PromptTemplateImplement, ProvisionWorktree: true},
+		{ID: StageBlocked, Name: "Blocked", Kind: StageKindBlocked},
+		{ID: StageReview, Name: "Review", Kind: StageKindReview, DefaultRunPreset: RunPresetReviewer, DefaultPromptTemplateID: PromptTemplateReview},
+		{ID: StageDone, Name: "Done", Kind: StageKindDone},
 	}
 	return WorkflowTemplate{
 		ID:        "default",
@@ -487,6 +793,10 @@ func (s *State) Snapshot() Snapshot {
 		PromptTemplates: s.ListPromptTemplates(),
 		Items:           s.ListWorkItems(""),
 		Runs:            s.ListRuns(""),
+		Artifacts:       s.ListArtifacts(""),
+		Questions:       s.ListQuestions(""),
+		GateReports:     s.ListGateReports(""),
+		WorkflowEvents:  s.ListWorkflowEvents(""),
 		StatusEvents:    s.ListStatusEvents(ListStatusEvents{}),
 	}
 }
@@ -556,6 +866,70 @@ func (s *State) ListRuns(workItemID string) []WorkItemRun {
 		}
 		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
 			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func (s *State) ListArtifacts(workItemID string) []Artifact {
+	out := make([]Artifact, 0, len(s.artifacts))
+	for _, artifact := range s.artifacts {
+		if workItemID == "" || artifact.WorkItemID == workItemID {
+			out = append(out, cloneArtifact(artifact))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func (s *State) ListQuestions(workItemID string) []Question {
+	out := make([]Question, 0, len(s.questions))
+	for _, question := range s.questions {
+		if workItemID == "" || question.WorkItemID == workItemID {
+			out = append(out, cloneQuestion(question))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func (s *State) ListGateReports(workItemID string) []GateReport {
+	out := make([]GateReport, 0, len(s.gateReports))
+	for _, gate := range s.gateReports {
+		if workItemID == "" || gate.WorkItemID == workItemID {
+			out = append(out, cloneGateReport(gate))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func (s *State) ListWorkflowEvents(workItemID string) []WorkflowEvent {
+	out := make([]WorkflowEvent, 0, len(s.workflowEvents))
+	for _, event := range s.workflowEvents {
+		if workItemID == "" || event.WorkItemID == workItemID {
+			out = append(out, event)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].At.Equal(out[j].At) {
+			return out[i].At.Before(out[j].At)
 		}
 		return out[i].ID < out[j].ID
 	})
@@ -654,6 +1028,8 @@ func (s *State) CreateProject(req CreateProject) (Project, error) {
 			Stages:          cloneStages(template.Stages),
 			TransitionRules: cloneTransitionRules(template.TransitionRules),
 		},
+		Preferences:        defaultProjectPreferences(req.Preferences),
+		Metadata:           map[string]MetadataValue{},
 		NextWorkItemNumber: nextNumber,
 		CreatedAt:          req.Now,
 		UpdatedAt:          req.Now,
@@ -691,19 +1067,25 @@ func (s *State) CreateWorkItem(req CreateWorkItem) (WorkItem, error) {
 	if stage.ProvisionWorktree {
 		return WorkItem{}, fmt.Errorf("stage %s requires worktree", stageID)
 	}
+	workflow := DefaultWorkflowDefinition()
+	if req.WorkflowID != "" && req.WorkflowID != workflow.ID {
+		return WorkItem{}, fmt.Errorf("workflow %s not found", req.WorkflowID)
+	}
 	number := project.NextWorkItemNumber
 	project.NextWorkItemNumber++
 	project.UpdatedAt = req.Now
 	item := WorkItem{
-		ID:           req.ID,
-		ProjectID:    project.ID,
-		Number:       number,
-		Title:        title,
-		BodyMarkdown: req.BodyMarkdown,
-		StageID:      stageID,
-		RunState:     RunStateIdle,
-		CreatedAt:    req.Now,
-		UpdatedAt:    req.Now,
+		ID:              req.ID,
+		ProjectID:       project.ID,
+		WorkflowID:      workflow.ID,
+		WorkflowVersion: workflow.Version,
+		Number:          number,
+		Title:           title,
+		BodyMarkdown:    req.BodyMarkdown,
+		StageID:         stageID,
+		RunState:        RunStateIdle,
+		CreatedAt:       req.Now,
+		UpdatedAt:       req.Now,
 		History: []HistoryEvent{{
 			ID:      req.HistoryID,
 			Type:    HistoryCreated,
@@ -904,6 +1286,457 @@ func (s *State) StartRun(req StartRun) (WorkItemRun, error) {
 	s.items[item.ID] = item
 	s.runs[run.ID] = run
 	return cloneRun(run), nil
+}
+
+func (s *State) StartPlanning(req StartPlanning) (WorkItemRun, error) {
+	item, ok := s.items[req.WorkItemID]
+	if !ok {
+		return WorkItemRun{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	action := mustDefaultWorkflowAction(WorkflowActionStartPlanning)
+	item.StageID = action.To
+	item.UpdatedAt = req.Now
+	s.items[item.ID] = item
+	runEffect := action.CreatesRun
+	if runEffect == nil {
+		return WorkItemRun{}, fmt.Errorf("workflow action %s does not create a run", action.ID)
+	}
+	run, err := s.StartRun(StartRun{
+		ID:               req.ID,
+		HistoryID:        req.HistoryID,
+		RunHistoryID:     req.RunHistoryID,
+		WorkItemID:       req.WorkItemID,
+		Preset:           runEffect.Preset,
+		PromptTemplateID: runEffect.PromptTemplateID,
+		SessionID:        req.SessionID,
+		PTYID:            req.PTYID,
+		Actor:            req.Actor,
+		Now:              req.Now,
+	})
+	if err != nil {
+		return WorkItemRun{}, err
+	}
+	s.recordWorkflowEvent(WorkflowEventPlanningStarted, item.ProjectID, item.ID, run.ID, req.Actor, "", req.Now)
+	return run, nil
+}
+
+func (s *State) SubmitDraftPlan(req SubmitDraftPlan) (Artifact, error) {
+	item, ok := s.items[req.WorkItemID]
+	if !ok {
+		return Artifact{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	body := strings.TrimSpace(req.Body)
+	if body == "" {
+		return Artifact{}, fmt.Errorf("plan body required")
+	}
+	action := mustDefaultWorkflowAction(WorkflowActionSubmitDraftPlan)
+	effect := action.CreatesArtifact
+	if effect == nil {
+		return Artifact{}, fmt.Errorf("workflow action %s does not create an artifact", action.ID)
+	}
+	artifact := Artifact{
+		ID:         req.ID,
+		ProjectID:  item.ProjectID,
+		WorkItemID: item.ID,
+		RunID:      strings.TrimSpace(req.RunID),
+		Kind:       effect.Kind,
+		Status:     effect.Status,
+		Title:      strings.TrimSpace(req.Title),
+		Body:       body,
+		CreatedAt:  req.Now,
+		UpdatedAt:  req.Now,
+	}
+	if artifact.ID == "" {
+		return Artifact{}, fmt.Errorf("artifact id required")
+	}
+	if _, exists := s.artifacts[artifact.ID]; exists {
+		return Artifact{}, fmt.Errorf("artifact %s already exists", artifact.ID)
+	}
+	if err := s.validateArtifact(artifact); err != nil {
+		return Artifact{}, err
+	}
+	s.artifacts[artifact.ID] = artifact
+	s.recordWorkflowEvent(WorkflowEventDraftPlanSubmitted, item.ProjectID, item.ID, artifact.RunID, req.Actor, "", req.Now)
+	return cloneArtifact(artifact), nil
+}
+
+func (s *State) ApprovePlan(req ApprovePlan) (WorkItem, error) {
+	item, ok := s.items[req.WorkItemID]
+	if !ok {
+		return WorkItem{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	artifact, ok := s.artifacts[req.ArtifactID]
+	if !ok {
+		return WorkItem{}, fmt.Errorf("artifact %s not found", req.ArtifactID)
+	}
+	if artifact.WorkItemID != item.ID || artifact.Kind != ArtifactKindPlan {
+		return WorkItem{}, fmt.Errorf("plan artifact required")
+	}
+	action := mustDefaultWorkflowAction(WorkflowActionApprovePlan)
+	if action.UpdatesArtifact == nil {
+		return WorkItem{}, fmt.Errorf("workflow action %s does not update an artifact", action.ID)
+	}
+	artifact.Status = action.UpdatesArtifact.Status
+	artifact.UpdatedAt = req.Now
+	item.StageID = action.To
+	item.UpdatedAt = req.Now
+	s.artifacts[artifact.ID] = artifact
+	s.items[item.ID] = item
+	s.recordWorkflowEvent(WorkflowEventPlanApproved, item.ProjectID, item.ID, artifact.RunID, req.Actor, "", req.Now)
+	return cloneWorkItem(item), nil
+}
+
+func (s *State) StartExecution(req StartExecution) (WorkItemRun, error) {
+	item, ok := s.items[req.WorkItemID]
+	if !ok {
+		return WorkItemRun{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	action := mustDefaultWorkflowAction(WorkflowActionStartExecution)
+	if !s.hasRequiredArtifacts(item.ID, action.Requires) {
+		return WorkItemRun{}, fmt.Errorf("approved plan required")
+	}
+	item.StageID = action.To
+	item.PreviousStageID = ""
+	item.UpdatedAt = req.Now
+	s.items[item.ID] = item
+	runEffect := action.CreatesRun
+	if runEffect == nil {
+		return WorkItemRun{}, fmt.Errorf("workflow action %s does not create a run", action.ID)
+	}
+	run, err := s.StartRun(StartRun{
+		ID:               req.ID,
+		HistoryID:        req.HistoryID,
+		RunHistoryID:     req.RunHistoryID,
+		WorkItemID:       req.WorkItemID,
+		Preset:           runEffect.Preset,
+		PromptTemplateID: runEffect.PromptTemplateID,
+		SessionID:        req.SessionID,
+		PTYID:            req.PTYID,
+		Actor:            req.Actor,
+		Now:              req.Now,
+	})
+	if err != nil {
+		return WorkItemRun{}, err
+	}
+	s.recordWorkflowEvent(WorkflowEventExecutionStarted, item.ProjectID, item.ID, run.ID, req.Actor, "", req.Now)
+	return run, nil
+}
+
+func (s *State) AskQuestion(req AskQuestion) (Question, error) {
+	item, ok := s.items[req.WorkItemID]
+	if !ok {
+		return Question{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	prompt := strings.TrimSpace(req.Prompt)
+	if prompt == "" {
+		return Question{}, fmt.Errorf("question prompt required")
+	}
+	question := Question{
+		ID:         req.ID,
+		ProjectID:  item.ProjectID,
+		WorkItemID: item.ID,
+		RunID:      strings.TrimSpace(req.RunID),
+		SessionID:  strings.TrimSpace(req.SessionID),
+		PTYID:      strings.TrimSpace(req.PTYID),
+		Prompt:     prompt,
+		Status:     QuestionStatusOpen,
+		Actor:      req.Actor,
+		CreatedAt:  req.Now,
+		UpdatedAt:  req.Now,
+	}
+	if question.ID == "" {
+		return Question{}, fmt.Errorf("question id required")
+	}
+	if _, exists := s.questions[question.ID]; exists {
+		return Question{}, fmt.Errorf("question %s already exists", question.ID)
+	}
+	if question.RunID != "" {
+		run, ok := s.runs[question.RunID]
+		if !ok {
+			return Question{}, fmt.Errorf("work item run %s not found", question.RunID)
+		}
+		run.Status = RunStateAwaitingInput
+		run.UpdatedAt = req.Now
+		if question.SessionID == "" {
+			question.SessionID = run.SessionID
+		}
+		if question.PTYID == "" {
+			question.PTYID = run.PTYID
+		}
+		s.runs[run.ID] = run
+		item.RunState = RunStateAwaitingInput
+		item.UpdatedAt = req.Now
+		s.items[item.ID] = item
+	}
+	if err := s.validateQuestion(question); err != nil {
+		return Question{}, err
+	}
+	s.questions[question.ID] = question
+	s.recordWorkflowEvent(WorkflowEventQuestionAsked, item.ProjectID, item.ID, question.RunID, req.Actor, prompt, req.Now)
+	return cloneQuestion(question), nil
+}
+
+func (s *State) AnswerQuestion(req AnswerQuestion) (Question, error) {
+	question, ok := s.questions[req.ID]
+	if !ok {
+		return Question{}, fmt.Errorf("question %s not found", req.ID)
+	}
+	answer := strings.TrimSpace(req.Answer)
+	if answer == "" {
+		return Question{}, fmt.Errorf("question answer required")
+	}
+	question.Answer = answer
+	question.Status = QuestionStatusAnswered
+	question.AnsweredBy = req.Actor
+	question.AnsweredAt = &req.Now
+	question.UpdatedAt = req.Now
+	s.questions[question.ID] = question
+	if question.RunID != "" && !s.hasOpenQuestionForRun(question.RunID) {
+		run := s.runs[question.RunID]
+		if run.Status == RunStateAwaitingInput {
+			run.Status = RunStateRunning
+			run.UpdatedAt = req.Now
+			s.runs[run.ID] = run
+			item := s.items[run.WorkItemID]
+			item.RunState = RunStateRunning
+			item.UpdatedAt = req.Now
+			s.items[item.ID] = item
+		}
+	}
+	s.recordWorkflowEvent(WorkflowEventQuestionAnswered, question.ProjectID, question.WorkItemID, question.RunID, req.Actor, "", req.Now)
+	return cloneQuestion(question), nil
+}
+
+func (s *State) ReportBlocked(req ReportBlocked) (WorkItem, error) {
+	item, ok := s.items[req.WorkItemID]
+	if !ok {
+		return WorkItem{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	if item.StageID != StageBlocked {
+		item.PreviousStageID = item.StageID
+	}
+	item.StageID = StageBlocked
+	item.RunState = RunStateAwaitingInput
+	item.UpdatedAt = req.Now
+	if req.RunID != "" {
+		run := s.runs[req.RunID]
+		run.Status = RunStateAwaitingInput
+		run.UpdatedAt = req.Now
+		s.runs[run.ID] = run
+	}
+	s.items[item.ID] = item
+	s.recordWorkflowEvent(WorkflowEventBlocked, item.ProjectID, item.ID, req.RunID, req.Actor, req.Reason, req.Now)
+	return cloneWorkItem(item), nil
+}
+
+func (s *State) Unblock(req Unblock) (WorkItem, error) {
+	item, ok := s.items[req.WorkItemID]
+	if !ok {
+		return WorkItem{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	if item.StageID != StageBlocked {
+		return WorkItem{}, fmt.Errorf("work item %s is not blocked", req.WorkItemID)
+	}
+	next := item.PreviousStageID
+	if next == "" {
+		next = StageExecution
+	}
+	item.StageID = next
+	item.PreviousStageID = ""
+	item.UpdatedAt = req.Now
+	s.items[item.ID] = item
+	s.recordWorkflowEvent(WorkflowEventUnblocked, item.ProjectID, item.ID, "", req.Actor, "", req.Now)
+	return cloneWorkItem(item), nil
+}
+
+func (s *State) CompleteExecution(req CompleteExecution) (WorkItem, error) {
+	run, ok := s.runs[req.RunID]
+	if !ok {
+		return WorkItem{}, fmt.Errorf("work item run %s not found", req.RunID)
+	}
+	item := s.items[run.WorkItemID]
+	run.Status = RunStateCompleted
+	run.CompletedAt = &req.Now
+	run.UpdatedAt = req.Now
+	action := mustDefaultWorkflowAction(WorkflowActionCompleteExecution)
+	item.RunState = RunStateCompleted
+	item.StageID = action.To
+	item.UpdatedAt = req.Now
+	s.runs[run.ID] = run
+	s.items[item.ID] = item
+	definition := DefaultWorkflowDefinition()
+	for _, gateID := range action.CreatesGates {
+		if s.hasGateReport(item.ID, gateID) {
+			continue
+		}
+		gateDefinition, ok := definition.Gate(gateID)
+		if !ok {
+			return WorkItem{}, fmt.Errorf("workflow gate %s not found", gateID)
+		}
+		gate := GateReport{
+			ID:         fmt.Sprintf("gate_%d", len(s.gateReports)+1),
+			ProjectID:  item.ProjectID,
+			WorkItemID: item.ID,
+			RunID:      run.ID,
+			Name:       gateDefinition.ID,
+			Blocking:   gateDefinition.Blocking,
+			Status:     GateStatusPending,
+			CreatedAt:  req.Now,
+			UpdatedAt:  req.Now,
+		}
+		s.gateReports[gate.ID] = gate
+	}
+	s.recordWorkflowEvent(WorkflowEventExecutionCompleted, item.ProjectID, item.ID, run.ID, req.Actor, req.Message, req.Now)
+	return cloneWorkItem(item), nil
+}
+
+func (s *State) SubmitReviewFeedback(req SubmitReviewFeedback) (Artifact, error) {
+	item, ok := s.items[req.WorkItemID]
+	if !ok {
+		return Artifact{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	body := strings.TrimSpace(req.Body)
+	if body == "" {
+		return Artifact{}, fmt.Errorf("feedback body required")
+	}
+	action := mustDefaultWorkflowAction(WorkflowActionSubmitReviewFeedback)
+	effect := action.CreatesArtifact
+	if effect == nil {
+		return Artifact{}, fmt.Errorf("workflow action %s does not create an artifact", action.ID)
+	}
+	artifact := Artifact{
+		ID:         req.ID,
+		ProjectID:  item.ProjectID,
+		WorkItemID: item.ID,
+		RunID:      strings.TrimSpace(req.RunID),
+		Kind:       effect.Kind,
+		Status:     effect.Status,
+		Body:       body,
+		CreatedAt:  req.Now,
+		UpdatedAt:  req.Now,
+	}
+	if artifact.ID == "" {
+		return Artifact{}, fmt.Errorf("artifact id required")
+	}
+	if _, exists := s.artifacts[artifact.ID]; exists {
+		return Artifact{}, fmt.Errorf("artifact %s already exists", artifact.ID)
+	}
+	if err := s.validateArtifact(artifact); err != nil {
+		return Artifact{}, err
+	}
+	item.StageID = action.To
+	item.RunState = RunStateRunning
+	item.UpdatedAt = req.Now
+	s.items[item.ID] = item
+	if artifact.RunID != "" {
+		run := s.runs[artifact.RunID]
+		run.Status = RunStateRunning
+		run.UpdatedAt = req.Now
+		s.runs[run.ID] = run
+	}
+	s.artifacts[artifact.ID] = artifact
+	s.recordWorkflowEvent(WorkflowEventReviewFeedbackAdded, item.ProjectID, item.ID, artifact.RunID, req.Actor, body, req.Now)
+	return cloneArtifact(artifact), nil
+}
+
+func (s *State) CompleteGate(req CompleteGate) (GateReport, error) {
+	gate, ok := s.gateReports[req.ID]
+	if !ok {
+		return GateReport{}, fmt.Errorf("gate report %s not found", req.ID)
+	}
+	switch req.Status {
+	case GateStatusPassed, GateStatusFailed:
+	case GateStatusOverridden:
+		if strings.TrimSpace(req.OverrideReason) == "" {
+			return GateReport{}, fmt.Errorf("override reason required")
+		}
+	default:
+		return GateReport{}, fmt.Errorf("unsupported gate status %s", req.Status)
+	}
+	gate.Status = req.Status
+	gate.OverrideReason = strings.TrimSpace(req.OverrideReason)
+	gate.UpdatedAt = req.Now
+	s.gateReports[gate.ID] = gate
+	return cloneGateReport(gate), nil
+}
+
+func (s *State) ApproveDone(req ApproveDone) (WorkItem, error) {
+	item, ok := s.items[req.WorkItemID]
+	if !ok {
+		return WorkItem{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	action := mustDefaultWorkflowAction(WorkflowActionApproveDone)
+	if action.RequiresPassingBlockingGates {
+		for _, gate := range s.gateReports {
+			if gate.WorkItemID == item.ID && gate.Blocking && gate.Status != GateStatusPassed && gate.Status != GateStatusOverridden {
+				return WorkItem{}, fmt.Errorf("blocking gates must pass or be overridden")
+			}
+		}
+	}
+	item.StageID = action.To
+	item.UpdatedAt = req.Now
+	s.items[item.ID] = item
+	s.recordWorkflowEvent(WorkflowEventDoneApproved, item.ProjectID, item.ID, "", req.Actor, req.Reason, req.Now)
+	return cloneWorkItem(item), nil
+}
+
+func (s *State) SetMetadata(req SetMetadata) (MetadataValue, error) {
+	key, err := metadataFullKey(req.Namespace, req.Key)
+	if err != nil {
+		return MetadataValue{}, err
+	}
+	if err := validateMetadataValue(req.Value); err != nil {
+		return MetadataValue{}, err
+	}
+	switch req.OwnerType {
+	case MetadataOwnerProject:
+		project, ok := s.projects[req.OwnerID]
+		if !ok {
+			return MetadataValue{}, fmt.Errorf("project %s not found", req.OwnerID)
+		}
+		if project.Metadata == nil {
+			project.Metadata = map[string]MetadataValue{}
+		}
+		project.Metadata[key] = req.Value
+		project.UpdatedAt = req.Now
+		s.projects[project.ID] = project
+	case MetadataOwnerWorkItem:
+		item, ok := s.items[req.OwnerID]
+		if !ok {
+			return MetadataValue{}, fmt.Errorf("work item %s not found", req.OwnerID)
+		}
+		if item.Metadata == nil {
+			item.Metadata = map[string]MetadataValue{}
+		}
+		item.Metadata[key] = req.Value
+		item.UpdatedAt = req.Now
+		s.items[item.ID] = item
+	case MetadataOwnerRun:
+		run, ok := s.runs[req.OwnerID]
+		if !ok {
+			return MetadataValue{}, fmt.Errorf("work item run %s not found", req.OwnerID)
+		}
+		if run.Metadata == nil {
+			run.Metadata = map[string]MetadataValue{}
+		}
+		run.Metadata[key] = req.Value
+		run.UpdatedAt = req.Now
+		s.runs[run.ID] = run
+	case MetadataOwnerArtifact:
+		artifact, ok := s.artifacts[req.OwnerID]
+		if !ok {
+			return MetadataValue{}, fmt.Errorf("artifact %s not found", req.OwnerID)
+		}
+		if artifact.Metadata == nil {
+			artifact.Metadata = map[string]MetadataValue{}
+		}
+		artifact.Metadata[key] = req.Value
+		artifact.UpdatedAt = req.Now
+		s.artifacts[artifact.ID] = artifact
+	default:
+		return MetadataValue{}, fmt.Errorf("unsupported metadata owner %s", req.OwnerType)
+	}
+	return req.Value, nil
 }
 
 func (s *State) CancelRun(req CancelRun) (WorkItemRun, error) {
@@ -1173,6 +2006,15 @@ func (s *State) validateWorkItem(item WorkItem) error {
 	if strings.TrimSpace(item.Title) == "" {
 		return fmt.Errorf("work item title required")
 	}
+	if item.WorkflowID == "" {
+		return fmt.Errorf("work item workflow id required")
+	}
+	if item.WorkflowVersion <= 0 {
+		return fmt.Errorf("work item workflow version must be positive")
+	}
+	if item.WorkflowID != WorkflowPlanExecuteReview {
+		return fmt.Errorf("workflow %s not found", item.WorkflowID)
+	}
 	if !project.hasStage(item.StageID) {
 		return fmt.Errorf("stage %s not found", item.StageID)
 	}
@@ -1184,7 +2026,7 @@ func (s *State) validateWorkItem(item WorkItem) error {
 			return err
 		}
 	}
-	return nil
+	return validateMetadataMap(item.Metadata)
 }
 
 func validateWorkflowTemplate(template WorkflowTemplate) error {
@@ -1245,11 +2087,199 @@ func validateProject(project Project) error {
 	if project.NextWorkItemNumber <= 0 {
 		return fmt.Errorf("next work item number must be positive")
 	}
+	if err := validateMetadataMap(project.Metadata); err != nil {
+		return err
+	}
 	return validateWorkflowTemplate(WorkflowTemplate{
 		ID:     project.Workflow.ID,
 		Name:   project.Workflow.Name,
 		Stages: project.Workflow.Stages,
 	})
+}
+
+func defaultProjectPreferences(preferences ProjectPreferences) ProjectPreferences {
+	if preferences.AutoRun == "" {
+		preferences.AutoRun = AutoRunNever
+	}
+	if preferences.DefaultPhaseAgents != nil {
+		copied := map[string]string{}
+		for key, value := range preferences.DefaultPhaseAgents {
+			copied[key] = value
+		}
+		preferences.DefaultPhaseAgents = copied
+	}
+	if preferences.Gates != nil {
+		preferences.Gates = append([]GateConfig(nil), preferences.Gates...)
+	}
+	return preferences
+}
+
+func (s *State) validateArtifact(artifact Artifact) error {
+	if artifact.ID == "" {
+		return fmt.Errorf("artifact id required")
+	}
+	if _, ok := s.items[artifact.WorkItemID]; !ok {
+		return fmt.Errorf("work item %s not found", artifact.WorkItemID)
+	}
+	switch artifact.Kind {
+	case ArtifactKindPlan, ArtifactKindFeedback, ArtifactKindGateReport:
+	default:
+		return fmt.Errorf("unsupported artifact kind %s", artifact.Kind)
+	}
+	switch artifact.Status {
+	case ArtifactStatusDraft, ArtifactStatusApproved:
+	default:
+		return fmt.Errorf("unsupported artifact status %s", artifact.Status)
+	}
+	return validateMetadataMap(artifact.Metadata)
+}
+
+func (s *State) validateQuestion(question Question) error {
+	if question.ID == "" {
+		return fmt.Errorf("question id required")
+	}
+	if _, ok := s.items[question.WorkItemID]; !ok {
+		return fmt.Errorf("work item %s not found", question.WorkItemID)
+	}
+	if strings.TrimSpace(question.Prompt) == "" {
+		return fmt.Errorf("question prompt required")
+	}
+	switch question.Status {
+	case QuestionStatusOpen, QuestionStatusAnswered:
+	default:
+		return fmt.Errorf("unsupported question status %s", question.Status)
+	}
+	return nil
+}
+
+func (s *State) validateGateReport(gate GateReport) error {
+	if gate.ID == "" {
+		return fmt.Errorf("gate report id required")
+	}
+	if _, ok := s.items[gate.WorkItemID]; !ok {
+		return fmt.Errorf("work item %s not found", gate.WorkItemID)
+	}
+	if strings.TrimSpace(gate.Name) == "" {
+		return fmt.Errorf("gate report name required")
+	}
+	switch gate.Status {
+	case GateStatusPending, GateStatusPassed, GateStatusFailed, GateStatusOverridden:
+	default:
+		return fmt.Errorf("unsupported gate status %s", gate.Status)
+	}
+	return nil
+}
+
+func (s *State) hasRequiredArtifacts(workItemID string, requirements []WorkflowArtifactRequirement) bool {
+	for _, requirement := range requirements {
+		found := false
+		for _, artifact := range s.artifacts {
+			if artifact.WorkItemID == workItemID && artifact.Kind == requirement.Kind && artifact.Status == requirement.Status {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *State) hasOpenQuestionForRun(runID string) bool {
+	for _, question := range s.questions {
+		if question.RunID == runID && question.Status == QuestionStatusOpen {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *State) hasGateReport(workItemID string, name string) bool {
+	for _, gate := range s.gateReports {
+		if gate.WorkItemID == workItemID && gate.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *State) recordWorkflowEvent(kind, projectID, workItemID, runID, actor, message string, at time.Time) {
+	id := fmt.Sprintf("workflow_event_%d", len(s.workflowEvents)+1)
+	s.workflowEvents[id] = WorkflowEvent{
+		ID:         id,
+		ProjectID:  projectID,
+		WorkItemID: workItemID,
+		RunID:      runID,
+		Type:       kind,
+		Actor:      actor,
+		Message:    message,
+		At:         at,
+	}
+}
+
+func mustDefaultWorkflowAction(id string) WorkflowActionDefinition {
+	action, ok := DefaultWorkflowDefinition().Action(id)
+	if !ok {
+		panic(fmt.Sprintf("default workflow action %s not found", id))
+	}
+	return action
+}
+
+func metadataFullKey(namespace, key string) (string, error) {
+	namespace = strings.TrimSpace(namespace)
+	key = strings.TrimSpace(key)
+	if !validMetadataToken(namespace) {
+		return "", fmt.Errorf("invalid metadata namespace")
+	}
+	if !validMetadataToken(key) {
+		return "", fmt.Errorf("invalid metadata key")
+	}
+	return namespace + "/" + key, nil
+}
+
+func validMetadataToken(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validateMetadataMap(metadata map[string]MetadataValue) error {
+	for key, value := range metadata {
+		parts := strings.Split(key, "/")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid metadata key %s", key)
+		}
+		if _, err := metadataFullKey(parts[0], parts[1]); err != nil {
+			return err
+		}
+		if err := validateMetadataValue(value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateMetadataValue(value MetadataValue) error {
+	switch value.Type {
+	case MetadataTypeString, MetadataTypeNumber, MetadataTypeBool:
+		return nil
+	case MetadataTypeJSON:
+		if len(value.JSON) == 0 || !json.Valid(value.JSON) {
+			return fmt.Errorf("metadata json value must be valid json")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported metadata type %s", value.Type)
+	}
 }
 
 func validateAttachment(attachment Attachment) (Attachment, error) {
@@ -1330,7 +2360,7 @@ func (s *State) validateRun(run WorkItemRun) error {
 	if run.Status == "" {
 		return fmt.Errorf("run status required")
 	}
-	return nil
+	return validateMetadataMap(run.Metadata)
 }
 
 func (s *State) validateStatusEvent(event StatusEvent) error {
@@ -1459,6 +2489,8 @@ func cleanSlug(value string) string {
 func cloneProject(project Project) Project {
 	project.Workflow.Stages = cloneStages(project.Workflow.Stages)
 	project.Workflow.TransitionRules = cloneTransitionRules(project.Workflow.TransitionRules)
+	project.Preferences = defaultProjectPreferences(project.Preferences)
+	project.Metadata = cloneMetadata(project.Metadata)
 	return project
 }
 
@@ -1474,6 +2506,7 @@ func cloneWorkItem(item WorkItem) WorkItem {
 		item.Worktree = &worktree
 	}
 	item.Attachments = append([]Attachment(nil), item.Attachments...)
+	item.Metadata = cloneMetadata(item.Metadata)
 	item.History = append([]HistoryEvent(nil), item.History...)
 	return item
 }
@@ -1483,8 +2516,26 @@ func cloneRun(run WorkItemRun) WorkItemRun {
 		completedAt := *run.CompletedAt
 		run.CompletedAt = &completedAt
 	}
+	run.Metadata = cloneMetadata(run.Metadata)
 	run.History = append([]RunEvent(nil), run.History...)
 	return run
+}
+
+func cloneArtifact(artifact Artifact) Artifact {
+	artifact.Metadata = cloneMetadata(artifact.Metadata)
+	return artifact
+}
+
+func cloneQuestion(question Question) Question {
+	if question.AnsweredAt != nil {
+		answeredAt := *question.AnsweredAt
+		question.AnsweredAt = &answeredAt
+	}
+	return question
+}
+
+func cloneGateReport(gate GateReport) GateReport {
+	return gate
 }
 
 func cloneStatusEvent(event StatusEvent) StatusEvent {
@@ -1501,4 +2552,18 @@ func cloneStages(stages []WorkflowStage) []WorkflowStage {
 
 func cloneTransitionRules(rules []TransitionRule) []TransitionRule {
 	return append([]TransitionRule(nil), rules...)
+}
+
+func cloneMetadata(metadata map[string]MetadataValue) map[string]MetadataValue {
+	if metadata == nil {
+		return nil
+	}
+	out := map[string]MetadataValue{}
+	for key, value := range metadata {
+		if value.JSON != nil {
+			value.JSON = append(json.RawMessage(nil), value.JSON...)
+		}
+		out[key] = value
+	}
+	return out
 }

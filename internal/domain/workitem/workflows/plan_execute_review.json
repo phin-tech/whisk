@@ -1,0 +1,117 @@
+{
+  "id": "plan-execute-review",
+  "version": 1,
+  "stages": [
+    "backlog",
+    "planning",
+    "ready",
+    "execution",
+    "blocked",
+    "review",
+    "done"
+  ],
+  "actions": [
+    {
+      "id": "start_planning",
+      "from": ["backlog"],
+      "to": "planning",
+      "createsRun": {
+        "phase": "planning",
+        "preset": "reader",
+        "promptTemplateId": "plan",
+        "workingDir": "projectRoot"
+      }
+    },
+    {
+      "id": "submit_draft_plan",
+      "from": ["planning"],
+      "to": "planning",
+      "createsArtifact": {
+        "kind": "plan",
+        "status": "draft"
+      }
+    },
+    {
+      "id": "approve_plan",
+      "from": ["planning"],
+      "to": "ready",
+      "requires": [
+        {
+          "kind": "plan",
+          "status": "draft"
+        }
+      ],
+      "updatesArtifact": {
+        "kind": "plan",
+        "status": "approved"
+      },
+      "requiresHuman": true
+    },
+    {
+      "id": "start_execution",
+      "from": ["ready"],
+      "to": "execution",
+      "requires": [
+        {
+          "kind": "plan",
+          "status": "approved"
+        }
+      ],
+      "createsRun": {
+        "phase": "execution",
+        "preset": "writer",
+        "promptTemplateId": "implement",
+        "workingDir": "worktree",
+        "autoProvisionWorktree": true
+      }
+    },
+    {
+      "id": "complete_execution",
+      "from": ["execution"],
+      "to": "review",
+      "completesRun": true,
+      "createsGates": ["review"]
+    },
+    {
+      "id": "submit_review_feedback",
+      "from": ["review"],
+      "to": "execution",
+      "createsArtifact": {
+        "kind": "feedback",
+        "status": "approved"
+      },
+      "resumesRun": "existing_execution"
+    },
+    {
+      "id": "approve_done",
+      "from": ["review"],
+      "to": "done",
+      "requiresPassingBlockingGates": true,
+      "requiresHuman": true
+    },
+    {
+      "id": "report_blocked",
+      "from": ["planning", "execution", "review"],
+      "to": "blocked",
+      "sideStage": true
+    },
+    {
+      "id": "unblock",
+      "from": ["blocked"],
+      "to": "$previousStage"
+    }
+  ],
+  "questions": {
+    "enabled": true,
+    "moveToBlocked": false,
+    "setsRunState": "awaiting_input",
+    "answerClearsAwaitingInputWhenNoOpenQuestionsRemain": true
+  },
+  "gates": [
+    {
+      "id": "review",
+      "phase": "review",
+      "blocking": true
+    }
+  ]
+}

@@ -330,6 +330,99 @@ func TestRunStatusUsesInjectedEnvironmentContext(t *testing.T) {
 	}
 }
 
+func TestRunWorkflowActionCommandsUseDaemonAPIAndEnvDefaults(t *testing.T) {
+	t.Setenv("WHISK_WORK_ITEM_ID", "wi_env")
+	t.Setenv("WHISK_RUN_ID", "run_env")
+	t.Setenv("WHISK_ACTOR", "agent")
+	requests := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests[r.Method+" "+r.URL.Path]++
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/work-items/wi_env/start-planning":
+			var req protocol.StartPlanningRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode planning: %v", err)
+			}
+			if req.WorkItemID != "wi_env" || req.Actor != "agent" {
+				t.Fatalf("planning request = %#v", req)
+			}
+			_ = json.NewEncoder(w).Encode(protocol.WorkItemRun{ID: "run_plan", WorkItemID: req.WorkItemID, PromptTemplateID: workitem.PromptTemplatePlan})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/work-items/wi_env/plan-drafts":
+			var req protocol.SubmitDraftPlanRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode draft: %v", err)
+			}
+			if req.WorkItemID != "wi_env" || req.RunID != "run_env" || req.Body != "Do it." || req.Actor != "agent" {
+				t.Fatalf("draft request = %#v", req)
+			}
+			_ = json.NewEncoder(w).Encode(protocol.Artifact{ID: "artifact_plan", WorkItemID: req.WorkItemID, Kind: workitem.ArtifactKindPlan, Status: workitem.ArtifactStatusDraft})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/work-items/wi_env/approve-plan":
+			var req protocol.ApprovePlanRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode approve: %v", err)
+			}
+			if req.ArtifactID != "artifact_plan" || req.Actor != "agent" {
+				t.Fatalf("approve request = %#v", req)
+			}
+			_ = json.NewEncoder(w).Encode(protocol.WorkItem{ID: "wi_env", StageID: workitem.StageReady})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/work-items/wi_env/start-execution":
+			_ = json.NewEncoder(w).Encode(protocol.WorkItemRun{ID: "run_exec", WorkItemID: "wi_env", PromptTemplateID: workitem.PromptTemplateImplement})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/questions":
+			var req protocol.AskQuestionRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode question: %v", err)
+			}
+			if req.WorkItemID != "wi_env" || req.RunID != "run_env" || req.Prompt != "Which key?" {
+				t.Fatalf("question request = %#v", req)
+			}
+			_ = json.NewEncoder(w).Encode(protocol.Question{ID: "question_01", WorkItemID: req.WorkItemID, RunID: req.RunID, Prompt: req.Prompt, Status: workitem.QuestionStatusOpen})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/questions/question_01/answer":
+			var req protocol.AnswerQuestionRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode answer: %v", err)
+			}
+			if req.Answer != "Staging." {
+				t.Fatalf("answer request = %#v", req)
+			}
+			_ = json.NewEncoder(w).Encode(protocol.Question{ID: "question_01", Answer: req.Answer, Status: workitem.QuestionStatusAnswered})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/work-items/wi_env/review-feedback":
+			var req protocol.SubmitReviewFeedbackRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode feedback: %v", err)
+			}
+			if req.RunID != "run_env" || req.Body != "Fix validation." {
+				t.Fatalf("feedback request = %#v", req)
+			}
+			_ = json.NewEncoder(w).Encode(protocol.Artifact{ID: "feedback_01", Kind: workitem.ArtifactKindFeedback, Status: workitem.ArtifactStatusApproved})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+	t.Setenv("WHISKD_URL", server.URL)
+
+	cases := [][]string{
+		{"workflow", "start-planning", "-json"},
+		{"workflow", "submit-plan", "-body", "Do it.", "-json"},
+		{"workflow", "approve-plan", "-artifact", "artifact_plan", "-json"},
+		{"workflow", "start-execution", "-json"},
+		{"question", "ask", "-prompt", "Which key?", "-json"},
+		{"question", "answer", "question_01", "-answer", "Staging.", "-json"},
+		{"workflow", "feedback", "-body", "Fix validation.", "-json"},
+	}
+	for _, args := range cases {
+		if _, err := captureStdout(func() error { return run(args) }); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+	}
+	if requests["POST /v1/work-items/wi_env/start-planning"] != 1 ||
+		requests["POST /v1/questions"] != 1 ||
+		requests["POST /v1/work-items/wi_env/review-feedback"] != 1 {
+		t.Fatalf("requests = %#v", requests)
+	}
+}
+
 func TestRunStatusRejectsMissingContext(t *testing.T) {
 	if err := run([]string{"status", "question", "-message", "Need input"}); err == nil {
 		t.Fatalf("expected missing context error")

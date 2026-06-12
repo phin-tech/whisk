@@ -61,8 +61,8 @@ func TestHTTPClientDrivesDaemonWorkItemAPI(t *testing.T) {
 		t.Fatalf("item = %#v", item)
 	}
 
-	if _, err := daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: item.ID, StageID: "ready"}); err == nil {
-		t.Fatalf("expected ready move without worktree to fail")
+	if _, err := daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: item.ID, StageID: "execution"}); err == nil {
+		t.Fatalf("expected execution move without worktree to fail")
 	}
 
 	item, err = daemon.BindWorkItemWorktree(ctx, protocol.BindWorkItemWorktreeRequest{
@@ -79,11 +79,11 @@ func TestHTTPClientDrivesDaemonWorkItemAPI(t *testing.T) {
 		t.Fatalf("bound item = %#v", item)
 	}
 
-	item, err = daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: item.ID, StageID: "ready", Actor: "agent"})
+	item, err = daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: item.ID, StageID: "execution", Actor: "agent"})
 	if err != nil {
 		t.Fatalf("move ready: %v", err)
 	}
-	if item.StageID != "ready" {
+	if item.StageID != "execution" {
 		t.Fatalf("moved item = %#v", item)
 	}
 

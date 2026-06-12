@@ -1008,6 +1008,7 @@ func (r *Runtime) ptyContextEnv(sessionID string, ptyID string, extra map[string
 		}
 	}
 	if sessionID != "" {
+		env["WHISK_SESSION"] = "1"
 		env["WHISK_SESSION_ID"] = sessionID
 	}
 	if ptyID != "" {

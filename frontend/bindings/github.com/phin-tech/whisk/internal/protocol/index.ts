@@ -30,6 +30,7 @@ export {
     PTYBookmark,
     PTYInfo,
     Project,
+    ProjectPreferences,
     PromptTemplate,
     RemovePTYBookmarkRequest,
     RemoveWorktreeRequest,

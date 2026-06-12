@@ -105,6 +105,7 @@ func TestRuntimeInjectsWhiskContextIntoSessionPTYs(t *testing.T) {
 	if got := ptyBackend.spawns[0].Env; got["WHISKD_URL"] != "http://127.0.0.1:8787" ||
 		got["WHISK_CLI"] != "/usr/local/bin/whisk" ||
 		got["PATH"] != "/usr/local/bin:/usr/bin:/bin" ||
+		got["WHISK_SESSION"] != "1" ||
 		got["WHISK_SESSION_ID"] != created.Session.ID ||
 		got["WHISK_PTY_ID"] != created.MainPtyID {
 		t.Fatalf("create session env = %#v", got)
@@ -120,7 +121,7 @@ func TestRuntimeInjectsWhiskContextIntoSessionPTYs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("split pane: %v", err)
 	}
-	if got := ptyBackend.spawns[1].Env; got["WHISK_SESSION_ID"] != created.Session.ID || got["WHISK_PTY_ID"] != split.PtyID {
+	if got := ptyBackend.spawns[1].Env; got["WHISK_SESSION"] != "1" || got["WHISK_SESSION_ID"] != created.Session.ID || got["WHISK_PTY_ID"] != split.PtyID {
 		t.Fatalf("split env = %#v", got)
 	}
 
@@ -136,7 +137,7 @@ func TestRuntimeInjectsWhiskContextIntoSessionPTYs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start pane pty: %v", err)
 	}
-	if got := ptyBackend.spawns[2].Env; got["WHISK_SESSION_ID"] != empty.Session.ID || got["WHISK_PTY_ID"] != started.PTYID {
+	if got := ptyBackend.spawns[2].Env; got["WHISK_SESSION"] != "1" || got["WHISK_SESSION_ID"] != empty.Session.ID || got["WHISK_PTY_ID"] != started.PTYID {
 		t.Fatalf("start env = %#v", got)
 	}
 
@@ -151,7 +152,7 @@ func TestRuntimeInjectsWhiskContextIntoSessionPTYs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restart pane pty: %v", err)
 	}
-	if got := ptyBackend.spawns[3].Env; got["WHISK_SESSION_ID"] != empty.Session.ID || got["WHISK_PTY_ID"] != restarted.PTYID {
+	if got := ptyBackend.spawns[3].Env; got["WHISK_SESSION"] != "1" || got["WHISK_SESSION_ID"] != empty.Session.ID || got["WHISK_PTY_ID"] != restarted.PTYID {
 		t.Fatalf("restart env = %#v", got)
 	}
 }

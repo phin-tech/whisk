@@ -12,14 +12,16 @@ import (
 )
 
 type CreateProjectRequest struct {
-	Name       string
-	Slug       string
-	RootDir    string
-	WorkflowID string
+	Name        string
+	Slug        string
+	RootDir     string
+	WorkflowID  string
+	Preferences workitem.ProjectPreferences
 }
 
 type CreateWorkItemRequest struct {
 	ProjectID    string
+	WorkflowID   string
 	Title        string
 	BodyMarkdown string
 	StageID      string
@@ -65,6 +67,68 @@ type StartWorkItemRunRequest struct {
 	AgentProfileID   string
 	SystemPrompt     string
 	Actor            string
+}
+
+type StartPlanningRequest struct {
+	WorkItemID     string
+	SessionID      string
+	PTYID          string
+	Launch         bool
+	AgentProfileID string
+	SystemPrompt   string
+	Actor          string
+}
+
+type SubmitDraftPlanRequest struct {
+	WorkItemID string
+	RunID      string
+	Title      string
+	Body       string
+	Actor      string
+}
+
+type ApprovePlanRequest struct {
+	ArtifactID string
+	WorkItemID string
+	Actor      string
+}
+
+type StartExecutionRequest struct {
+	WorkItemID     string
+	SessionID      string
+	PTYID          string
+	Launch         bool
+	AgentProfileID string
+	SystemPrompt   string
+	Actor          string
+}
+
+type AskQuestionRequest struct {
+	WorkItemID string
+	RunID      string
+	SessionID  string
+	PTYID      string
+	Prompt     string
+	Actor      string
+}
+
+type AnswerQuestionRequest struct {
+	ID     string
+	Answer string
+	Actor  string
+}
+
+type CompleteExecutionRequest struct {
+	RunID   string
+	Message string
+	Actor   string
+}
+
+type SubmitReviewFeedbackRequest struct {
+	WorkItemID string
+	RunID      string
+	Body       string
+	Actor      string
 }
 
 type CancelWorkItemRunRequest struct {
@@ -127,6 +191,7 @@ func (r *Runtime) CreateProject(ctx context.Context, req CreateProjectRequest) (
 		Name:              req.Name,
 		Slug:              req.Slug,
 		RootDir:           rootDir,
+		Preferences:       req.Preferences,
 		Now:               now,
 	})
 	if err != nil {
@@ -149,6 +214,7 @@ func (r *Runtime) CreateWorkItem(ctx context.Context, req CreateWorkItemRequest)
 		ID:           r.ids(),
 		HistoryID:    r.ids(),
 		ProjectID:    req.ProjectID,
+		WorkflowID:   req.WorkflowID,
 		Title:        req.Title,
 		BodyMarkdown: req.BodyMarkdown,
 		StageID:      req.StageID,
@@ -300,6 +366,208 @@ func (r *Runtime) StartWorkItemRun(ctx context.Context, req StartWorkItemRunRequ
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	return run, nil
+}
+
+func (r *Runtime) StartPlanning(ctx context.Context, req StartPlanningRequest) (workitem.WorkItemRun, error) {
+	now := time.Now().UTC()
+	run, err := r.workItems.StartPlanning(workitem.StartPlanning{
+		ID:           r.ids(),
+		HistoryID:    r.ids(),
+		RunHistoryID: r.ids(),
+		WorkItemID:   req.WorkItemID,
+		SessionID:    req.SessionID,
+		PTYID:        req.PTYID,
+		Actor:        req.Actor,
+		Now:          now,
+	})
+	if err != nil {
+		return workitem.WorkItemRun{}, err
+	}
+	if req.Launch {
+		run, err = r.launchAndMarkWorkItemRun(ctx, run, StartWorkItemRunRequest{
+			WorkItemID:     req.WorkItemID,
+			Launch:         true,
+			AgentProfileID: req.AgentProfileID,
+			SystemPrompt:   req.SystemPrompt,
+			Actor:          req.Actor,
+		})
+		if err != nil {
+			return workitem.WorkItemRun{}, err
+		}
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkItemRun{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return run, nil
+}
+
+func (r *Runtime) SubmitDraftPlan(ctx context.Context, req SubmitDraftPlanRequest) (workitem.Artifact, error) {
+	artifact, err := r.workItems.SubmitDraftPlan(workitem.SubmitDraftPlan{
+		ID:         r.ids(),
+		WorkItemID: req.WorkItemID,
+		RunID:      req.RunID,
+		Title:      req.Title,
+		Body:       req.Body,
+		Actor:      req.Actor,
+		Now:        time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.Artifact{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.Artifact{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return artifact, nil
+}
+
+func (r *Runtime) ApprovePlan(ctx context.Context, req ApprovePlanRequest) (workitem.WorkItem, error) {
+	item, err := r.workItems.ApprovePlan(workitem.ApprovePlan{
+		ArtifactID: req.ArtifactID,
+		WorkItemID: req.WorkItemID,
+		Actor:      req.Actor,
+		Now:        time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.WorkItem{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkItem{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return item, nil
+}
+
+func (r *Runtime) StartExecution(ctx context.Context, req StartExecutionRequest) (workitem.WorkItemRun, error) {
+	run, err := r.workItems.StartExecution(workitem.StartExecution{
+		ID:           r.ids(),
+		HistoryID:    r.ids(),
+		RunHistoryID: r.ids(),
+		WorkItemID:   req.WorkItemID,
+		SessionID:    req.SessionID,
+		PTYID:        req.PTYID,
+		Actor:        req.Actor,
+		Now:          time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.WorkItemRun{}, err
+	}
+	if req.Launch {
+		run, err = r.launchAndMarkWorkItemRun(ctx, run, StartWorkItemRunRequest{
+			WorkItemID:     req.WorkItemID,
+			Launch:         true,
+			AgentProfileID: req.AgentProfileID,
+			SystemPrompt:   req.SystemPrompt,
+			Actor:          req.Actor,
+		})
+		if err != nil {
+			return workitem.WorkItemRun{}, err
+		}
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkItemRun{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return run, nil
+}
+
+func (r *Runtime) AskQuestion(ctx context.Context, req AskQuestionRequest) (workitem.Question, error) {
+	question, err := r.workItems.AskQuestion(workitem.AskQuestion{
+		ID:         r.ids(),
+		WorkItemID: req.WorkItemID,
+		RunID:      req.RunID,
+		SessionID:  req.SessionID,
+		PTYID:      req.PTYID,
+		Prompt:     req.Prompt,
+		Actor:      req.Actor,
+		Now:        time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.Question{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.Question{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return question, nil
+}
+
+func (r *Runtime) AnswerQuestion(ctx context.Context, req AnswerQuestionRequest) (workitem.Question, error) {
+	question, err := r.workItems.AnswerQuestion(workitem.AnswerQuestion{
+		ID:     req.ID,
+		Answer: req.Answer,
+		Actor:  req.Actor,
+		Now:    time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.Question{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.Question{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return question, nil
+}
+
+func (r *Runtime) CompleteExecution(ctx context.Context, req CompleteExecutionRequest) (workitem.WorkItem, error) {
+	item, err := r.workItems.CompleteExecution(workitem.CompleteExecution{
+		RunID:   req.RunID,
+		Actor:   req.Actor,
+		Message: req.Message,
+		Now:     time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.WorkItem{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkItem{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return item, nil
+}
+
+func (r *Runtime) SubmitReviewFeedback(ctx context.Context, req SubmitReviewFeedbackRequest) (workitem.Artifact, error) {
+	artifact, err := r.workItems.SubmitReviewFeedback(workitem.SubmitReviewFeedback{
+		ID:         r.ids(),
+		WorkItemID: req.WorkItemID,
+		RunID:      req.RunID,
+		Body:       req.Body,
+		Actor:      req.Actor,
+		Now:        time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.Artifact{}, err
+	}
+	for _, run := range r.workItems.ListRuns(req.WorkItemID) {
+		if run.ID == req.RunID && run.PTYID != "" {
+			envelope := "\n<whisk-review-feedback>\n" + req.Body + "\n</whisk-review-feedback>\n"
+			if err := r.WritePTY(ctx, run.PTYID, []byte(envelope)); err != nil {
+				return workitem.Artifact{}, err
+			}
+			break
+		}
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.Artifact{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return artifact, nil
+}
+
+func (r *Runtime) launchAndMarkWorkItemRun(ctx context.Context, run workitem.WorkItemRun, req StartWorkItemRunRequest) (workitem.WorkItemRun, error) {
+	sessionID, ptyID, err := r.launchWorkItemRun(ctx, run, req)
+	if err != nil {
+		return workitem.WorkItemRun{}, err
+	}
+	return r.workItems.MarkRunRunning(workitem.MarkRunRunning{
+		ID:           run.ID,
+		RunHistoryID: r.ids(),
+		SessionID:    sessionID,
+		PTYID:        ptyID,
+		Actor:        req.Actor,
+		Now:          time.Now().UTC(),
+	})
 }
 
 func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRun, req StartWorkItemRunRequest) (string, string, error) {

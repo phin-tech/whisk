@@ -54,6 +54,64 @@ func (c *HTTPClient) MoveWorkItem(ctx context.Context, req protocol.MoveWorkItem
 	return item, err
 }
 
+func (c *HTTPClient) StartPlanning(ctx context.Context, req protocol.StartPlanningRequest) (protocol.WorkItemRun, error) {
+	var run protocol.WorkItemRun
+	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/start-planning"
+	err := c.post(ctx, path, req, &run)
+	return run, err
+}
+
+func (c *HTTPClient) SubmitDraftPlan(ctx context.Context, req protocol.SubmitDraftPlanRequest) (protocol.Artifact, error) {
+	var artifact protocol.Artifact
+	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/plan-drafts"
+	err := c.post(ctx, path, req, &artifact)
+	return artifact, err
+}
+
+func (c *HTTPClient) ApprovePlan(ctx context.Context, req protocol.ApprovePlanRequest) (protocol.WorkItem, error) {
+	var item protocol.WorkItem
+	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/approve-plan"
+	err := c.post(ctx, path, req, &item)
+	return item, err
+}
+
+func (c *HTTPClient) StartExecution(ctx context.Context, req protocol.StartExecutionRequest) (protocol.WorkItemRun, error) {
+	var run protocol.WorkItemRun
+	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/start-execution"
+	err := c.post(ctx, path, req, &run)
+	return run, err
+}
+
+func (c *HTTPClient) AskQuestion(ctx context.Context, req protocol.AskQuestionRequest) (protocol.Question, error) {
+	var question protocol.Question
+	err := c.post(ctx, "/v1/questions", req, &question)
+	return question, err
+}
+
+func (c *HTTPClient) AnswerQuestion(ctx context.Context, req protocol.AnswerQuestionRequest) (protocol.Question, error) {
+	var question protocol.Question
+	path := "/v1/questions/" + url.PathEscape(req.ID) + "/answer"
+	err := c.post(ctx, path, req, &question)
+	return question, err
+}
+
+func (c *HTTPClient) CompleteExecution(ctx context.Context, req protocol.CompleteExecutionRequest) (protocol.WorkItem, error) {
+	var item protocol.WorkItem
+	path := "/v1/work-item-runs/" + url.PathEscape(req.RunID) + "/complete-execution"
+	if req.WorkItemID != "" {
+		path = "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/complete-execution"
+	}
+	err := c.post(ctx, path, req, &item)
+	return item, err
+}
+
+func (c *HTTPClient) SubmitReviewFeedback(ctx context.Context, req protocol.SubmitReviewFeedbackRequest) (protocol.Artifact, error) {
+	var artifact protocol.Artifact
+	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/review-feedback"
+	err := c.post(ctx, path, req, &artifact)
+	return artifact, err
+}
+
 func (c *HTTPClient) BindWorkItemWorktree(ctx context.Context, req protocol.BindWorkItemWorktreeRequest) (protocol.WorkItem, error) {
 	var item protocol.WorkItem
 	path := "/v1/work-items/" + url.PathEscape(req.ID) + "/bind-worktree"

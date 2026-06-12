@@ -24,11 +24,14 @@ func TestStateCreatesProjectWithCopiedDefaultWorkflow(t *testing.T) {
 	if project.Slug != "my-app" || project.NextWorkItemNumber != 1 {
 		t.Fatalf("project = %#v", project)
 	}
-	if project.Workflow.TemplateID != "default" || len(project.Workflow.Stages) != 6 {
+	if project.Workflow.TemplateID != "default" || len(project.Workflow.Stages) != 7 {
 		t.Fatalf("workflow = %#v", project.Workflow)
 	}
-	if project.Workflow.Stages[1].ID != "ready" || !project.Workflow.Stages[1].ProvisionWorktree {
-		t.Fatalf("ready stage = %#v", project.Workflow.Stages[1])
+	if project.Workflow.Stages[2].ID != "ready" || project.Workflow.Stages[2].ProvisionWorktree {
+		t.Fatalf("ready stage = %#v", project.Workflow.Stages[2])
+	}
+	if project.Workflow.Stages[3].ID != "execution" || !project.Workflow.Stages[3].ProvisionWorktree {
+		t.Fatalf("execution stage = %#v", project.Workflow.Stages[3])
 	}
 }
 
@@ -86,7 +89,7 @@ func TestStateCreatesWorkItemsWithPerProjectNumbersAndHistory(t *testing.T) {
 	}
 }
 
-func TestMoveToReadyRequiresWorktreeAndBindWorktreeAllowsMove(t *testing.T) {
+func TestMoveToExecutionRequiresWorktreeAndBindWorktreeAllowsMove(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	mustProject(t, state, "proj_01", "One")
@@ -95,7 +98,7 @@ func TestMoveToReadyRequiresWorktreeAndBindWorktreeAllowsMove(t *testing.T) {
 	if _, err := state.MoveWorkItem(MoveWorkItem{
 		ID:        item.ID,
 		HistoryID: "hist_move_01",
-		StageID:   "ready",
+		StageID:   "execution",
 		Now:       now,
 	}); err == nil || !strings.Contains(err.Error(), "requires worktree") {
 		t.Fatalf("expected worktree requirement, got %v", err)
@@ -120,14 +123,14 @@ func TestMoveToReadyRequiresWorktreeAndBindWorktreeAllowsMove(t *testing.T) {
 	moved, err := state.MoveWorkItem(MoveWorkItem{
 		ID:        item.ID,
 		HistoryID: "hist_move_02",
-		StageID:   "ready",
+		StageID:   "execution",
 		Actor:     "user",
 		Now:       now,
 	})
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
-	if moved.StageID != "ready" || len(moved.History) != 3 {
+	if moved.StageID != "execution" || len(moved.History) != 3 {
 		t.Fatalf("moved = %#v", moved)
 	}
 }
@@ -140,8 +143,8 @@ func TestCreateWorkItemInProvisionedStageRequiresWorktree(t *testing.T) {
 		ID:        "wi_01",
 		HistoryID: "hist_01",
 		ProjectID: "proj_01",
-		Title:     "Ready item",
-		StageID:   "ready",
+		Title:     "Execution item",
+		StageID:   "execution",
 	})
 	if err == nil || !strings.Contains(err.Error(), "requires worktree") {
 		t.Fatalf("expected worktree requirement, got %v", err)

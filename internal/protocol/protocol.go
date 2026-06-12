@@ -6,10 +6,10 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 5
+const DaemonAPIVersion = 6
 
 type CompatibilityResponse struct {
-	APIVersion int `json:"apiVersion"`
+	APIVersion int    `json:"apiVersion"`
 	GitSHA     string `json:"gitSha"`
 }
 
@@ -177,16 +177,23 @@ type WorkItemRun = workitem.WorkItemRun
 type StatusEvent = workitem.StatusEvent
 type WorktreeBinding = workitem.WorktreeBinding
 type Attachment = workitem.Attachment
+type ProjectPreferences = workitem.ProjectPreferences
+type MetadataValue = workitem.MetadataValue
+type Artifact = workitem.Artifact
+type Question = workitem.Question
+type GateReport = workitem.GateReport
 
 type CreateProjectRequest struct {
-	Name       string `json:"name"`
-	Slug       string `json:"slug,omitempty"`
-	RootDir    string `json:"rootDir"`
-	WorkflowID string `json:"workflowId,omitempty"`
+	Name        string             `json:"name"`
+	Slug        string             `json:"slug,omitempty"`
+	RootDir     string             `json:"rootDir"`
+	WorkflowID  string             `json:"workflowId,omitempty"`
+	Preferences ProjectPreferences `json:"preferences,omitempty"`
 }
 
 type CreateWorkItemRequest struct {
 	ProjectID    string `json:"projectId"`
+	WorkflowID   string `json:"workflowId,omitempty"`
 	Title        string `json:"title"`
 	BodyMarkdown string `json:"bodyMarkdown,omitempty"`
 	StageID      string `json:"stageId,omitempty"`
@@ -237,6 +244,69 @@ type StartWorkItemRunRequest struct {
 type CancelWorkItemRunRequest struct {
 	ID    string `json:"id"`
 	Actor string `json:"actor,omitempty"`
+}
+
+type StartPlanningRequest struct {
+	WorkItemID     string `json:"workItemId"`
+	SessionID      string `json:"sessionId,omitempty"`
+	PTYID          string `json:"ptyId,omitempty"`
+	Launch         bool   `json:"launch,omitempty"`
+	AgentProfileID string `json:"agentProfileId,omitempty"`
+	SystemPrompt   string `json:"systemPrompt,omitempty"`
+	Actor          string `json:"actor,omitempty"`
+}
+
+type SubmitDraftPlanRequest struct {
+	WorkItemID string `json:"workItemId"`
+	RunID      string `json:"runId,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Body       string `json:"body"`
+	Actor      string `json:"actor,omitempty"`
+}
+
+type ApprovePlanRequest struct {
+	ArtifactID string `json:"artifactId"`
+	WorkItemID string `json:"workItemId"`
+	Actor      string `json:"actor,omitempty"`
+}
+
+type StartExecutionRequest struct {
+	WorkItemID     string `json:"workItemId"`
+	SessionID      string `json:"sessionId,omitempty"`
+	PTYID          string `json:"ptyId,omitempty"`
+	Launch         bool   `json:"launch,omitempty"`
+	AgentProfileID string `json:"agentProfileId,omitempty"`
+	SystemPrompt   string `json:"systemPrompt,omitempty"`
+	Actor          string `json:"actor,omitempty"`
+}
+
+type AskQuestionRequest struct {
+	WorkItemID string `json:"workItemId,omitempty"`
+	RunID      string `json:"runId,omitempty"`
+	SessionID  string `json:"sessionId,omitempty"`
+	PTYID      string `json:"ptyId,omitempty"`
+	Prompt     string `json:"prompt"`
+	Actor      string `json:"actor,omitempty"`
+}
+
+type AnswerQuestionRequest struct {
+	ID     string `json:"id"`
+	Answer string `json:"answer"`
+	Actor  string `json:"actor,omitempty"`
+}
+
+type CompleteExecutionRequest struct {
+	WorkItemID string `json:"workItemId,omitempty"`
+	RunID      string `json:"runId"`
+	Message    string `json:"message,omitempty"`
+	Actor      string `json:"actor,omitempty"`
+}
+
+type SubmitReviewFeedbackRequest struct {
+	WorkItemID string `json:"workItemId"`
+	RunID      string `json:"runId,omitempty"`
+	Body       string `json:"body"`
+	Actor      string `json:"actor,omitempty"`
 }
 
 type ReportStatusRequest struct {

@@ -61,7 +61,7 @@ func serveDaemon(addr string) error {
 	if err != nil {
 		return err
 	}
-	workItems, err := workitemstore.NewJSONStore("")
+	workItems, err := workitemstore.NewSQLiteStore("")
 	if err != nil {
 		return err
 	}

@@ -186,6 +186,7 @@ export class CreateProjectRequest {
     "slug"?: string;
     "rootDir": string;
     "workflowId"?: string;
+    "preferences"?: ProjectPreferences;
 
     /** Creates a new CreateProjectRequest instance. */
     constructor($$source: Partial<CreateProjectRequest> = {}) {
@@ -203,7 +204,11 @@ export class CreateProjectRequest {
      * Creates a new CreateProjectRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): CreateProjectRequest {
+        const $$createField4_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("preferences" in $$parsedSource) {
+            $$parsedSource["preferences"] = $$createField4_0($$parsedSource["preferences"]);
+        }
         return new CreateProjectRequest($$parsedSource as Partial<CreateProjectRequest>);
     }
 }
@@ -229,7 +234,7 @@ export class CreateSessionRequest {
      * Creates a new CreateSessionRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): CreateSessionRequest {
-        const $$createField2_0 = $$createType1;
+        const $$createField2_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("initialPty" in $$parsedSource) {
             $$parsedSource["initialPty"] = $$createField2_0($$parsedSource["initialPty"]);
@@ -240,6 +245,7 @@ export class CreateSessionRequest {
 
 export class CreateWorkItemRequest {
     "projectId": string;
+    "workflowId"?: string;
     "title": string;
     "bodyMarkdown"?: string;
     "stageId"?: string;
@@ -321,7 +327,7 @@ export class CreatedSession {
      * Creates a new CreatedSession instance from a string or object.
      */
     static createFrom($$source: any = {}): CreatedSession {
-        const $$createField0_0 = $$createType2;
+        const $$createField0_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -418,7 +424,7 @@ export class DetachedPanePTY {
      * Creates a new DetachedPanePTY instance from a string or object.
      */
     static createFrom($$source: any = {}): DetachedPanePTY {
-        const $$createField0_0 = $$createType2;
+        const $$createField0_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -744,6 +750,9 @@ export class PTYInfo {
 export const Project = workitem$0.Project;
 export type Project = workitem$0.Project;
 
+export const ProjectPreferences = workitem$0.ProjectPreferences;
+export type ProjectPreferences = workitem$0.ProjectPreferences;
+
 export const PromptTemplate = workitem$0.PromptTemplate;
 export type PromptTemplate = workitem$0.PromptTemplate;
 
@@ -850,9 +859,9 @@ export class ReportStatusResponse {
      * Creates a new ReportStatusResponse instance from a string or object.
      */
     static createFrom($$source: any = {}): ReportStatusResponse {
-        const $$createField0_0 = $$createType3;
-        const $$createField1_0 = $$createType5;
-        const $$createField2_0 = $$createType7;
+        const $$createField0_0 = $$createType4;
+        const $$createField1_0 = $$createType6;
+        const $$createField2_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("event" in $$parsedSource) {
             $$parsedSource["event"] = $$createField0_0($$parsedSource["event"]);
@@ -920,7 +929,7 @@ export class RestartPanePTYRequest {
      * Creates a new RestartPanePTYRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): RestartPanePTYRequest {
-        const $$createField2_0 = $$createType0;
+        const $$createField2_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField2_0($$parsedSource["options"]);
@@ -953,7 +962,7 @@ export class RestartedPanePTY {
      * Creates a new RestartedPanePTY instance from a string or object.
      */
     static createFrom($$source: any = {}): RestartedPanePTY {
-        const $$createField0_0 = $$createType2;
+        const $$createField0_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -1068,7 +1077,7 @@ export class SplitPaneRequest {
      * Creates a new SplitPaneRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): SplitPaneRequest {
-        const $$createField4_0 = $$createType1;
+        const $$createField4_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("initialPty" in $$parsedSource) {
             $$parsedSource["initialPty"] = $$createField4_0($$parsedSource["initialPty"]);
@@ -1099,7 +1108,7 @@ export class SplitPaneResult {
      * Creates a new SplitPaneResult instance from a string or object.
      */
     static createFrom($$source: any = {}): SplitPaneResult {
-        const $$createField0_0 = $$createType2;
+        const $$createField0_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -1187,7 +1196,7 @@ export class StartPanePTYRequest {
      * Creates a new StartPanePTYRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): StartPanePTYRequest {
-        const $$createField2_0 = $$createType0;
+        const $$createField2_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField2_0($$parsedSource["options"]);
@@ -1249,7 +1258,7 @@ export class StartedHTTPForward {
      * Creates a new StartedHTTPForward instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedHTTPForward {
-        const $$createField2_0 = $$createType8;
+        const $$createField2_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("forward" in $$parsedSource) {
             $$parsedSource["forward"] = $$createField2_0($$parsedSource["forward"]);
@@ -1278,7 +1287,7 @@ export class StartedPanePTY {
      * Creates a new StartedPanePTY instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedPanePTY {
-        const $$createField0_0 = $$createType2;
+        const $$createField0_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -1393,7 +1402,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType9;
+        const $$createField2_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -1428,13 +1437,14 @@ export class WritePTYRequest {
 }
 
 // Private type creation functions
-const $$createType0 = StartPTYOptions.createFrom;
-const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = session$0.Session.createFrom;
-const $$createType3 = workitem$0.StatusEvent.createFrom;
-const $$createType4 = workitem$0.WorkItemRun.createFrom;
-const $$createType5 = $Create.Nullable($$createType4);
-const $$createType6 = workitem$0.WorkItem.createFrom;
-const $$createType7 = $Create.Nullable($$createType6);
-const $$createType8 = HTTPForward.createFrom;
-const $$createType9 = WorktrunkBinary.createFrom;
+const $$createType0 = workitem$0.ProjectPreferences.createFrom;
+const $$createType1 = StartPTYOptions.createFrom;
+const $$createType2 = $Create.Nullable($$createType1);
+const $$createType3 = session$0.Session.createFrom;
+const $$createType4 = workitem$0.StatusEvent.createFrom;
+const $$createType5 = workitem$0.WorkItemRun.createFrom;
+const $$createType6 = $Create.Nullable($$createType5);
+const $$createType7 = workitem$0.WorkItem.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);
+const $$createType9 = HTTPForward.createFrom;
+const $$createType10 = WorktrunkBinary.createFrom;

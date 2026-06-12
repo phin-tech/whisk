@@ -50,7 +50,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	workItems, err := workitemstore.NewJSONStore("")
+	workItems, err := workitemstore.NewSQLiteStore("")
 	if err != nil {
 		log.Fatal(err)
 	}
