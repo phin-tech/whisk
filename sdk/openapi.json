@@ -1,0 +1,3518 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "whiskd daemon API",
+    "version": "5",
+    "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8787"
+    }
+  ],
+  "paths": {
+    "/v1/compat": {
+      "get": {
+        "operationId": "getCompatibility",
+        "summary": "Daemon API version and git SHA",
+        "tags": [
+          "system"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/events/next": {
+      "get": {
+        "operationId": "nextEvent",
+        "tags": [
+          "events"
+        ],
+        "parameters": [
+          {
+            "name": "timeoutMs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeEvent"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/http-forwards": {
+      "get": {
+        "operationId": "listHTTPForwards",
+        "tags": [
+          "forwards"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HTTPForward"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createHTTPForward",
+        "tags": [
+          "forwards"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHTTPForwardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPForward"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/http-forwards/{forwardID}": {
+      "delete": {
+        "operationId": "deleteHTTPForward",
+        "tags": [
+          "forwards"
+        ],
+        "parameters": [
+          {
+            "name": "forwardID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/projects": {
+      "get": {
+        "operationId": "listProjects",
+        "tags": [
+          "workitems"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Project"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createProject",
+        "tags": [
+          "workitems"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/prompt-templates": {
+      "get": {
+        "operationId": "listPromptTemplates",
+        "tags": [
+          "workitems"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PromptTemplate"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/pty-bookmarks/{bookmarkID}": {
+      "delete": {
+        "operationId": "removePTYBookmark",
+        "tags": [
+          "ptys"
+        ],
+        "parameters": [
+          {
+            "name": "bookmarkID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/ptys": {
+      "get": {
+        "operationId": "listPTYs",
+        "tags": [
+          "ptys"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PTYInfo"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/ptys/{ptyID}/bookmarks": {
+      "get": {
+        "operationId": "listPTYBookmarks",
+        "tags": [
+          "ptys"
+        ],
+        "parameters": [
+          {
+            "name": "ptyID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Bookmark"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addPTYBookmark",
+        "tags": [
+          "ptys"
+        ],
+        "parameters": [
+          {
+            "name": "ptyID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPTYBookmarkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bookmark"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/ptys/{ptyID}/kill": {
+      "post": {
+        "operationId": "killPTY",
+        "tags": [
+          "ptys"
+        ],
+        "parameters": [
+          {
+            "name": "ptyID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillPTYRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PTYInfo"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/ptys/{ptyID}/output": {
+      "get": {
+        "operationId": "getPTYOutput",
+        "tags": [
+          "ptys"
+        ],
+        "parameters": [
+          {
+            "name": "ptyID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputSnapshot"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/ptys/{ptyID}/resize": {
+      "post": {
+        "operationId": "resizePTY",
+        "tags": [
+          "ptys"
+        ],
+        "parameters": [
+          {
+            "name": "ptyID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResizePTYRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/ptys/{ptyID}/write": {
+      "post": {
+        "operationId": "writePTY",
+        "tags": [
+          "ptys"
+        ],
+        "parameters": [
+          {
+            "name": "ptyID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WritePTYRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "tags": [
+          "sessions"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Session"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createSession",
+        "tags": [
+          "sessions"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedSession"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sessionID}": {
+      "delete": {
+        "operationId": "closeSession",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Session"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sessionID}/panes/{paneID}/detach-pty": {
+      "post": {
+        "operationId": "detachPanePTY",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paneID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetachPanePTYRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetachedPanePTY"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sessionID}/panes/{paneID}/restart-pty": {
+      "post": {
+        "operationId": "restartPanePTY",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paneID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestartPanePTYRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestartedPanePTY"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sessionID}/panes/{paneID}/set-working-dir": {
+      "post": {
+        "operationId": "setPaneWorkingDir",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paneID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPaneWorkingDirRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sessionID}/panes/{paneID}/start-pty": {
+      "post": {
+        "operationId": "startPanePTY",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paneID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPanePTYRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartedPanePTY"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sessionID}/set-root-dir": {
+      "post": {
+        "operationId": "setSessionRootDir",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionRootDirRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sessionID}/split": {
+      "post": {
+        "operationId": "splitPane",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitPaneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SplitPaneResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sessionID}/windows/{windowID}/panes/{paneID}/close": {
+      "post": {
+        "operationId": "closePane",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "windowID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paneID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClosePaneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/status": {
+      "post": {
+        "operationId": "reportStatus",
+        "tags": [
+          "workitems"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportStatusResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/status-events": {
+      "get": {
+        "operationId": "listStatusEvents",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workItemId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ptyId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unreadOnly",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StatusEvent"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/status-events/{statusEventID}/read": {
+      "post": {
+        "operationId": "markStatusEventRead",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "statusEventID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkStatusEventReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusEvent"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-item-runs": {
+      "get": {
+        "operationId": "listWorkItemRuns",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkItemRun"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "startWorkItemRun",
+        "tags": [
+          "workitems"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartWorkItemRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItemRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-item-runs/{runID}/cancel": {
+      "post": {
+        "operationId": "cancelWorkItemRun",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "runID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelWorkItemRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItemRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items": {
+      "get": {
+        "operationId": "listWorkItems",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkItem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWorkItem",
+        "tags": [
+          "workitems"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/attachments": {
+      "post": {
+        "operationId": "addWorkItemAttachment",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWorkItemAttachmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/bind-worktree": {
+      "post": {
+        "operationId": "bindWorkItemWorktree",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BindWorkItemWorktreeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/delete": {
+      "post": {
+        "operationId": "deleteWorkItem",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteWorkItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/move": {
+      "post": {
+        "operationId": "moveWorkItem",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveWorkItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/workflow-templates": {
+      "get": {
+        "operationId": "listWorkflowTemplates",
+        "tags": [
+          "workitems"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowTemplate"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/worktrees/create": {
+      "post": {
+        "operationId": "createWorktree",
+        "tags": [
+          "worktrees"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorktreeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedWorktree"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/worktrees/list": {
+      "post": {
+        "operationId": "listWorktrees",
+        "tags": [
+          "worktrees"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListWorktreesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Worktree"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/worktrees/remove": {
+      "post": {
+        "operationId": "removeWorktree",
+        "tags": [
+          "worktrees"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveWorktreeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/worktrunk/detect": {
+      "post": {
+        "operationId": "detectWorktrunk",
+        "tags": [
+          "worktrees"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetectWorktrunkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorktrunkStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddPTYBookmarkRequest": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "offset": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ptyId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ptyId",
+          "offset",
+          "kind",
+          "label"
+        ],
+        "type": "object"
+      },
+      "AddWorkItemAttachmentRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "Attachment": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "scope",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "BindWorkItemWorktreeRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "base": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "worktreePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "branch",
+          "worktreePath"
+        ],
+        "type": "object"
+      },
+      "Bookmark": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "offset": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "paneId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ptyId",
+          "sessionId",
+          "windowId",
+          "paneId",
+          "offset",
+          "kind",
+          "label",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "CancelWorkItemRunRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "ClosePaneRequest": {
+        "properties": {
+          "paneId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "windowId",
+          "paneId"
+        ],
+        "type": "object"
+      },
+      "CompatibilityResponse": {
+        "properties": {
+          "apiVersion": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "gitSha": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "gitSha"
+        ],
+        "type": "object"
+      },
+      "CreateHTTPForwardRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "targetUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "targetUrl",
+          "sessionId"
+        ],
+        "type": "object"
+      },
+      "CreateProjectRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "rootDir": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "workflowId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "rootDir"
+        ],
+        "type": "object"
+      },
+      "CreateSessionRequest": {
+        "properties": {
+          "initialPty": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StartPTYOptions"
+              }
+            ],
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "rootDir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "rootDir"
+        ],
+        "type": "object"
+      },
+      "CreateWorkItemRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "bodyMarkdown": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "stageId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId",
+          "title"
+        ],
+        "type": "object"
+      },
+      "CreateWorktreeRequest": {
+        "properties": {
+          "base": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "repoPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repoPath",
+          "branch",
+          "base"
+        ],
+        "type": "object"
+      },
+      "CreatedSession": {
+        "properties": {
+          "mainPtyId": {
+            "type": "string"
+          },
+          "paneId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "windowId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session",
+          "windowId",
+          "paneId"
+        ],
+        "type": "object"
+      },
+      "CreatedWorktree": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "DeleteWorkItemRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "DetachPanePTYRequest": {
+        "properties": {
+          "paneId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "paneId"
+        ],
+        "type": "object"
+      },
+      "DetachedPanePTY": {
+        "properties": {
+          "ptyId": {
+            "type": "string"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          }
+        },
+        "required": [
+          "session",
+          "ptyId"
+        ],
+        "type": "object"
+      },
+      "DetectWorktrunkRequest": {
+        "properties": {
+          "overridePath": {
+            "type": "string"
+          },
+          "repoPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repoPath",
+          "overridePath"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "HTTPForward": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "targetUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "targetUrl",
+          "sessionId"
+        ],
+        "type": "object"
+      },
+      "HistoryEvent": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "attachmentId": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "stageId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "worktreePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "at"
+        ],
+        "type": "object"
+      },
+      "KillPTYRequest": {
+        "properties": {
+          "ptyId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ptyId"
+        ],
+        "type": "object"
+      },
+      "LayoutNode": {
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/LayoutNode"
+            },
+            "type": "array"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "paneId": {
+            "type": "string"
+          },
+          "sizes": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "ListWorktreesRequest": {
+        "properties": {
+          "repoPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repoPath"
+        ],
+        "type": "object"
+      },
+      "MarkStatusEventReadRequest": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "MoveWorkItemRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "stageId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "stageId"
+        ],
+        "type": "object"
+      },
+      "OutputSnapshot": {
+        "properties": {
+          "offset": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "output": {
+            "type": "string"
+          },
+          "outputBase64": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ptyId",
+          "offset",
+          "output",
+          "outputBase64"
+        ],
+        "type": "object"
+      },
+      "PTYInfo": {
+        "properties": {
+          "cols": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "exitCode": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "originPaneId": {
+            "type": "string"
+          },
+          "originWindowId": {
+            "type": "string"
+          },
+          "paneId": {
+            "type": "string"
+          },
+          "rows": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "string"
+          },
+          "workingDir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workingDir",
+          "cols",
+          "rows",
+          "running",
+          "status",
+          "sessionId",
+          "windowId",
+          "paneId",
+          "originWindowId",
+          "originPaneId"
+        ],
+        "type": "object"
+      },
+      "Pane": {
+        "properties": {
+          "currentPtyId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "string"
+          },
+          "workingDir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "windowId",
+          "workingDir"
+        ],
+        "type": "object"
+      },
+      "Project": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nextWorkItemNumber": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rootDir": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workflow": {
+            "$ref": "#/components/schemas/ProjectWorkflow"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "rootDir",
+          "workflow",
+          "nextWorkItemNumber",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ProjectWorkflow": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStage"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "templateId": {
+            "type": "string"
+          },
+          "transitionRules": {
+            "items": {
+              "$ref": "#/components/schemas/TransitionRule"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "templateId",
+          "name",
+          "stages",
+          "transitionRules"
+        ],
+        "type": "object"
+      },
+      "PromptTemplate": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source",
+          "body",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "RemoveWorktreeRequest": {
+        "properties": {
+          "alsoBranch": {
+            "type": "boolean"
+          },
+          "force": {
+            "type": "boolean"
+          },
+          "repoPath": {
+            "type": "string"
+          },
+          "worktreePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repoPath",
+          "worktreePath",
+          "alsoBranch",
+          "force"
+        ],
+        "type": "object"
+      },
+      "ReportStatusRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ReportStatusResponse": {
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/StatusEvent"
+          },
+          "run": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkItemRun"
+              }
+            ],
+            "nullable": true
+          },
+          "workItem": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkItem"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "event"
+        ],
+        "type": "object"
+      },
+      "ResizePTYRequest": {
+        "properties": {
+          "cols": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "rows": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ptyId",
+          "cols",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "RestartPanePTYRequest": {
+        "properties": {
+          "options": {
+            "$ref": "#/components/schemas/StartPTYOptions"
+          },
+          "paneId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "paneId",
+          "options"
+        ],
+        "type": "object"
+      },
+      "RestartedPanePTY": {
+        "properties": {
+          "oldPtyId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          }
+        },
+        "required": [
+          "session",
+          "ptyId",
+          "oldPtyId"
+        ],
+        "type": "object"
+      },
+      "RunEvent": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "at"
+        ],
+        "type": "object"
+      },
+      "RuntimeEvent": {
+        "properties": {
+          "offset": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "Session": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "panes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Pane"
+            },
+            "nullable": true,
+            "type": "object"
+          },
+          "rootDir": {
+            "type": "string"
+          },
+          "windows": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SessionWindow"
+            },
+            "nullable": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "rootDir",
+          "windows",
+          "panes"
+        ],
+        "type": "object"
+      },
+      "SessionWindow": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/components/schemas/LayoutNode"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sessionId",
+          "name",
+          "layout"
+        ],
+        "type": "object"
+      },
+      "SetPaneWorkingDirRequest": {
+        "properties": {
+          "paneId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "workingDir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "paneId",
+          "workingDir"
+        ],
+        "type": "object"
+      },
+      "SetSessionRootDirRequest": {
+        "properties": {
+          "rootDir": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "rootDir"
+        ],
+        "type": "object"
+      },
+      "SplitPaneRequest": {
+        "properties": {
+          "direction": {
+            "type": "string"
+          },
+          "initialPty": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StartPTYOptions"
+              }
+            ],
+            "nullable": true
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "targetPaneId": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "windowId",
+          "targetPaneId",
+          "direction"
+        ],
+        "type": "object"
+      },
+      "SplitPaneResult": {
+        "properties": {
+          "legacyPtyId": {
+            "type": "string"
+          },
+          "paneId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          }
+        },
+        "required": [
+          "session",
+          "paneId"
+        ],
+        "type": "object"
+      },
+      "StartPTYOptions": {
+        "properties": {
+          "cols": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "command": {
+            "type": "string"
+          },
+          "rows": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cols",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "StartPanePTYRequest": {
+        "properties": {
+          "options": {
+            "$ref": "#/components/schemas/StartPTYOptions"
+          },
+          "paneId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "paneId",
+          "options"
+        ],
+        "type": "object"
+      },
+      "StartWorkItemRunRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "agentProfileId": {
+            "type": "string"
+          },
+          "launch": {
+            "type": "boolean"
+          },
+          "preset": {
+            "type": "string"
+          },
+          "promptTemplateId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "systemPrompt": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId"
+        ],
+        "type": "object"
+      },
+      "StartedPanePTY": {
+        "properties": {
+          "ptyId": {
+            "type": "string"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          }
+        },
+        "required": [
+          "session",
+          "ptyId"
+        ],
+        "type": "object"
+      },
+      "StatusEvent": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "readAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "requiresAttention": {
+            "type": "boolean"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "scope",
+          "kind",
+          "message",
+          "requiresAttention",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "TransitionRule": {
+        "properties": {
+          "fromStageId": {
+            "type": "string"
+          },
+          "requiresApproval": {
+            "type": "boolean"
+          },
+          "requiresChecks": {
+            "type": "boolean"
+          },
+          "requiresNoRunningRuns": {
+            "type": "boolean"
+          },
+          "toStageId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fromStageId",
+          "toStageId"
+        ],
+        "type": "object"
+      },
+      "WorkItem": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "bodyMarkdown": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryEvent"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "runState": {
+            "type": "string"
+          },
+          "stageId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "worktree": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorktreeBinding"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "number",
+          "title",
+          "bodyMarkdown",
+          "stageId",
+          "runState",
+          "attachments",
+          "history",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "WorkItemRun": {
+        "properties": {
+          "completedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/RunEvent"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "preset": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "promptSnapshot": {
+            "type": "string"
+          },
+          "promptTemplateId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workItemId",
+          "projectId",
+          "preset",
+          "promptTemplateId",
+          "promptSnapshot",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "history"
+        ],
+        "type": "object"
+      },
+      "WorkflowStage": {
+        "properties": {
+          "defaultPromptTemplateId": {
+            "type": "string"
+          },
+          "defaultRunPreset": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provisionWorktree": {
+            "type": "boolean"
+          },
+          "wipLimit": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "WorkflowTemplate": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStage"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "transitionRules": {
+            "items": {
+              "$ref": "#/components/schemas/TransitionRule"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source",
+          "stages",
+          "transitionRules",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Worktree": {
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "dirty": {
+            "type": "boolean"
+          },
+          "isCurrent": {
+            "type": "boolean"
+          },
+          "isMain": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "branch",
+          "path",
+          "kind",
+          "isMain",
+          "isCurrent",
+          "dirty",
+          "locked"
+        ],
+        "type": "object"
+      },
+      "WorktreeBinding": {
+        "properties": {
+          "base": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "worktreePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "branch",
+          "base",
+          "worktreePath",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "WorktrunkBinary": {
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version"
+        ],
+        "type": "object"
+      },
+      "WorktrunkStatus": {
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "binary": {
+            "$ref": "#/components/schemas/WorktrunkBinary"
+          },
+          "configFound": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available",
+          "configFound",
+          "binary"
+        ],
+        "type": "object"
+      },
+      "WritePTYRequest": {
+        "properties": {
+          "data": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ptyId",
+          "data"
+        ],
+        "type": "object"
+      }
+    }
+  }
+}
