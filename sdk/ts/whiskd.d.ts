@@ -213,6 +213,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["askQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/questions/{questionID}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["answerQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -437,6 +469,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/work-item-runs/{runID}/complete-execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["completeExecution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/work-items": {
         parameters: {
             query?: never;
@@ -447,6 +495,22 @@ export interface paths {
         get: operations["listWorkItems"];
         put?: never;
         post: operations["createWorkItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/work-items/{workItemID}/approve-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approvePlan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -485,6 +549,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/work-items/{workItemID}/complete-execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["completeExecutionForWorkItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/work-items/{workItemID}/delete": {
         parameters: {
             query?: never;
@@ -511,6 +591,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["moveWorkItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/work-items/{workItemID}/plan-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["submitDraftPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/work-items/{workItemID}/review-feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["submitReviewFeedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/work-items/{workItemID}/start-execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["startExecution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/work-items/{workItemID}/start-planning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["startPlanning"];
         delete?: never;
         options?: never;
         head?: never;
@@ -617,6 +761,41 @@ export interface components {
             url?: string;
             workItemId: string;
         };
+        AnswerQuestionRequest: {
+            actor?: string;
+            answer: string;
+            id: string;
+        };
+        ApprovePlanRequest: {
+            actor?: string;
+            artifactId: string;
+            workItemId: string;
+        };
+        Artifact: {
+            body?: string;
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            kind: string;
+            metadata?: {
+                [key: string]: components["schemas"]["MetadataValue"];
+            };
+            projectId: string;
+            runId?: string;
+            status: string;
+            title?: string;
+            /** Format: date-time */
+            updatedAt: string;
+            workItemId: string;
+        };
+        AskQuestionRequest: {
+            actor?: string;
+            prompt: string;
+            ptyId?: string;
+            runId?: string;
+            sessionId?: string;
+            workItemId?: string;
+        };
         Attachment: {
             /** Format: date-time */
             createdAt: string;
@@ -661,6 +840,12 @@ export interface components {
             apiVersion: number;
             gitSha: string;
         };
+        CompleteExecutionRequest: {
+            actor?: string;
+            message?: string;
+            runId: string;
+            workItemId?: string;
+        };
         CreateHTTPForwardRequest: {
             name: string;
             sessionId: string;
@@ -668,6 +853,7 @@ export interface components {
         };
         CreateProjectRequest: {
             name: string;
+            preferences?: components["schemas"]["ProjectPreferences"];
             rootDir: string;
             slug?: string;
             workflowId?: string;
@@ -683,6 +869,7 @@ export interface components {
             projectId: string;
             stageId?: string;
             title: string;
+            workflowId?: string;
         };
         CreateWorktreeRequest: {
             base: string;
@@ -718,6 +905,15 @@ export interface components {
         ErrorResponse: {
             error: string;
         };
+        GateConfig: {
+            blocking: boolean;
+            command?: string;
+            id: string;
+            kind: string;
+            name: string;
+            phase?: string;
+            skill?: string;
+        };
         HTTPForward: {
             id: string;
             name: string;
@@ -751,6 +947,14 @@ export interface components {
         };
         MarkStatusEventReadRequest: {
             id: string;
+        };
+        MetadataValue: {
+            bool?: boolean;
+            /** Format: byte */
+            json?: string;
+            number?: number;
+            string?: string;
+            type: string;
         };
         MoveWorkItemRequest: {
             actor?: string;
@@ -791,21 +995,33 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             id: string;
+            metadata?: {
+                [key: string]: components["schemas"]["MetadataValue"];
+            };
             name: string;
             /** Format: int64 */
             nextWorkItemNumber: number;
+            preferences: components["schemas"]["ProjectPreferences"];
             rootDir: string;
             slug: string;
             /** Format: date-time */
             updatedAt: string;
             workflow: components["schemas"]["ProjectWorkflow"];
         };
+        ProjectPreferences: {
+            autoRun: string;
+            autoWorktree: boolean;
+            defaultPhaseAgents?: {
+                [key: string]: string;
+            };
+            gates?: components["schemas"]["GateConfig"][];
+        };
         ProjectWorkflow: {
             id: string;
             name: string;
-            stages: components["schemas"]["WorkflowStage"][];
+            stages: components["schemas"]["WorkflowStage"][] | null;
             templateId: string;
-            transitionRules: components["schemas"]["TransitionRule"][];
+            transitionRules: components["schemas"]["TransitionRule"][] | null;
         };
         PromptTemplate: {
             body: string;
@@ -816,6 +1032,25 @@ export interface components {
             source: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        Question: {
+            actor?: string;
+            answer?: string;
+            /** Format: date-time */
+            answeredAt?: string | null;
+            answeredBy?: string;
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            projectId: string;
+            prompt: string;
+            ptyId?: string;
+            runId?: string;
+            sessionId?: string;
+            status: string;
+            /** Format: date-time */
+            updatedAt: string;
+            workItemId: string;
         };
         RemoveWorktreeRequest: {
             alsoBranch: boolean;
@@ -874,11 +1109,11 @@ export interface components {
             name: string;
             panes: {
                 [key: string]: components["schemas"]["Pane"];
-            };
+            } | null;
             rootDir: string;
             windows: {
                 [key: string]: components["schemas"]["SessionWindow"];
-            };
+            } | null;
         };
         SessionWindow: {
             id: string;
@@ -908,6 +1143,15 @@ export interface components {
             ptyId?: string | null;
             session: components["schemas"]["Session"];
         };
+        StartExecutionRequest: {
+            actor?: string;
+            agentProfileId?: string;
+            launch?: boolean;
+            ptyId?: string;
+            sessionId?: string;
+            systemPrompt?: string;
+            workItemId: string;
+        };
         StartPTYOptions: {
             /** Format: int64 */
             cols: number;
@@ -919,6 +1163,15 @@ export interface components {
             options: components["schemas"]["StartPTYOptions"];
             paneId: string;
             sessionId: string;
+        };
+        StartPlanningRequest: {
+            actor?: string;
+            agentProfileId?: string;
+            launch?: boolean;
+            ptyId?: string;
+            sessionId?: string;
+            systemPrompt?: string;
+            workItemId: string;
         };
         StartWorkItemRunRequest: {
             actor?: string;
@@ -952,6 +1205,19 @@ export interface components {
             sessionId?: string;
             workItemId?: string;
         };
+        SubmitDraftPlanRequest: {
+            actor?: string;
+            body: string;
+            runId?: string;
+            title?: string;
+            workItemId: string;
+        };
+        SubmitReviewFeedbackRequest: {
+            actor?: string;
+            body: string;
+            runId?: string;
+            workItemId: string;
+        };
         TransitionRule: {
             fromStageId: string;
             requiresApproval?: boolean;
@@ -960,20 +1226,27 @@ export interface components {
             toStageId: string;
         };
         WorkItem: {
-            attachments: components["schemas"]["Attachment"][];
+            attachments: components["schemas"]["Attachment"][] | null;
             bodyMarkdown: string;
             /** Format: date-time */
             createdAt: string;
-            history: components["schemas"]["HistoryEvent"][];
+            history: components["schemas"]["HistoryEvent"][] | null;
             id: string;
+            metadata?: {
+                [key: string]: components["schemas"]["MetadataValue"];
+            };
             /** Format: int64 */
             number: number;
+            previousStageId?: string;
             projectId: string;
             runState: string;
             stageId: string;
             title: string;
             /** Format: date-time */
             updatedAt: string;
+            workflowId: string;
+            /** Format: int64 */
+            workflowVersion: number;
             worktree?: components["schemas"]["WorktreeBinding"] | null;
         };
         WorkItemRun: {
@@ -981,8 +1254,11 @@ export interface components {
             completedAt?: string | null;
             /** Format: date-time */
             createdAt: string;
-            history: components["schemas"]["RunEvent"][];
+            history: components["schemas"]["RunEvent"][] | null;
             id: string;
+            metadata?: {
+                [key: string]: components["schemas"]["MetadataValue"];
+            };
             preset: string;
             projectId: string;
             promptSnapshot: string;
@@ -1010,8 +1286,8 @@ export interface components {
             id: string;
             name: string;
             source: string;
-            stages: components["schemas"]["WorkflowStage"][];
-            transitionRules: components["schemas"]["TransitionRule"][];
+            stages: components["schemas"]["WorkflowStage"][] | null;
+            transitionRules: components["schemas"]["TransitionRule"][] | null;
             /** Format: date-time */
             updatedAt: string;
         };
@@ -1541,6 +1817,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    askQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Question"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    answerQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Question"];
+                };
             };
             /** @description error */
             default: {
@@ -2100,6 +2444,41 @@ export interface operations {
             };
         };
     };
+    completeExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteExecutionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listWorkItems: {
         parameters: {
             query?: {
@@ -2146,6 +2525,41 @@ export interface operations {
         responses: {
             /** @description success */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approvePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2234,6 +2648,41 @@ export interface operations {
             };
         };
     };
+    completeExecutionForWorkItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteExecutionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     deleteWorkItem: {
         parameters: {
             query?: never;
@@ -2291,6 +2740,146 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    submitDraftPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitDraftPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    submitReviewFeedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitReviewFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    startExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartExecutionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemRun"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    startPlanning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartPlanningRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemRun"];
                 };
             };
             /** @description error */

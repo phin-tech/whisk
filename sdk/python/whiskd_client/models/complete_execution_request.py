@@ -8,87 +8,70 @@ from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-T = TypeVar("T", bound="CreateWorkItemRequest")
+T = TypeVar("T", bound="CompleteExecutionRequest")
 
 
 @_attrs_define
-class CreateWorkItemRequest:
+class CompleteExecutionRequest:
     """
     Attributes:
-        project_id (str):
-        title (str):
+        run_id (str):
         actor (str | Unset):
-        body_markdown (str | Unset):
-        stage_id (str | Unset):
-        workflow_id (str | Unset):
+        message (str | Unset):
+        work_item_id (str | Unset):
     """
 
-    project_id: str
-    title: str
+    run_id: str
     actor: str | Unset = UNSET
-    body_markdown: str | Unset = UNSET
-    stage_id: str | Unset = UNSET
-    workflow_id: str | Unset = UNSET
+    message: str | Unset = UNSET
+    work_item_id: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        project_id = self.project_id
-
-        title = self.title
+        run_id = self.run_id
 
         actor = self.actor
 
-        body_markdown = self.body_markdown
+        message = self.message
 
-        stage_id = self.stage_id
-
-        workflow_id = self.workflow_id
+        work_item_id = self.work_item_id
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
-                "projectId": project_id,
-                "title": title,
+                "runId": run_id,
             }
         )
         if actor is not UNSET:
             field_dict["actor"] = actor
-        if body_markdown is not UNSET:
-            field_dict["bodyMarkdown"] = body_markdown
-        if stage_id is not UNSET:
-            field_dict["stageId"] = stage_id
-        if workflow_id is not UNSET:
-            field_dict["workflowId"] = workflow_id
+        if message is not UNSET:
+            field_dict["message"] = message
+        if work_item_id is not UNSET:
+            field_dict["workItemId"] = work_item_id
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        project_id = d.pop("projectId")
-
-        title = d.pop("title")
+        run_id = d.pop("runId")
 
         actor = d.pop("actor", UNSET)
 
-        body_markdown = d.pop("bodyMarkdown", UNSET)
+        message = d.pop("message", UNSET)
 
-        stage_id = d.pop("stageId", UNSET)
+        work_item_id = d.pop("workItemId", UNSET)
 
-        workflow_id = d.pop("workflowId", UNSET)
-
-        create_work_item_request = cls(
-            project_id=project_id,
-            title=title,
+        complete_execution_request = cls(
+            run_id=run_id,
             actor=actor,
-            body_markdown=body_markdown,
-            stage_id=stage_id,
-            workflow_id=workflow_id,
+            message=message,
+            work_item_id=work_item_id,
         )
 
-        create_work_item_request.additional_properties = d
-        return create_work_item_request
+        complete_execution_request.additional_properties = d
+        return complete_execution_request
 
     @property
     def additional_keys(self) -> list[str]:

@@ -8,87 +8,88 @@ from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-T = TypeVar("T", bound="CreateWorkItemRequest")
+T = TypeVar("T", bound="AskQuestionRequest")
 
 
 @_attrs_define
-class CreateWorkItemRequest:
+class AskQuestionRequest:
     """
     Attributes:
-        project_id (str):
-        title (str):
+        prompt (str):
         actor (str | Unset):
-        body_markdown (str | Unset):
-        stage_id (str | Unset):
-        workflow_id (str | Unset):
+        pty_id (str | Unset):
+        run_id (str | Unset):
+        session_id (str | Unset):
+        work_item_id (str | Unset):
     """
 
-    project_id: str
-    title: str
+    prompt: str
     actor: str | Unset = UNSET
-    body_markdown: str | Unset = UNSET
-    stage_id: str | Unset = UNSET
-    workflow_id: str | Unset = UNSET
+    pty_id: str | Unset = UNSET
+    run_id: str | Unset = UNSET
+    session_id: str | Unset = UNSET
+    work_item_id: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        project_id = self.project_id
-
-        title = self.title
+        prompt = self.prompt
 
         actor = self.actor
 
-        body_markdown = self.body_markdown
+        pty_id = self.pty_id
 
-        stage_id = self.stage_id
+        run_id = self.run_id
 
-        workflow_id = self.workflow_id
+        session_id = self.session_id
+
+        work_item_id = self.work_item_id
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
-                "projectId": project_id,
-                "title": title,
+                "prompt": prompt,
             }
         )
         if actor is not UNSET:
             field_dict["actor"] = actor
-        if body_markdown is not UNSET:
-            field_dict["bodyMarkdown"] = body_markdown
-        if stage_id is not UNSET:
-            field_dict["stageId"] = stage_id
-        if workflow_id is not UNSET:
-            field_dict["workflowId"] = workflow_id
+        if pty_id is not UNSET:
+            field_dict["ptyId"] = pty_id
+        if run_id is not UNSET:
+            field_dict["runId"] = run_id
+        if session_id is not UNSET:
+            field_dict["sessionId"] = session_id
+        if work_item_id is not UNSET:
+            field_dict["workItemId"] = work_item_id
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        project_id = d.pop("projectId")
-
-        title = d.pop("title")
+        prompt = d.pop("prompt")
 
         actor = d.pop("actor", UNSET)
 
-        body_markdown = d.pop("bodyMarkdown", UNSET)
+        pty_id = d.pop("ptyId", UNSET)
 
-        stage_id = d.pop("stageId", UNSET)
+        run_id = d.pop("runId", UNSET)
 
-        workflow_id = d.pop("workflowId", UNSET)
+        session_id = d.pop("sessionId", UNSET)
 
-        create_work_item_request = cls(
-            project_id=project_id,
-            title=title,
+        work_item_id = d.pop("workItemId", UNSET)
+
+        ask_question_request = cls(
+            prompt=prompt,
             actor=actor,
-            body_markdown=body_markdown,
-            stage_id=stage_id,
-            workflow_id=workflow_id,
+            pty_id=pty_id,
+            run_id=run_id,
+            session_id=session_id,
+            work_item_id=work_item_id,
         )
 
-        create_work_item_request.additional_properties = d
-        return create_work_item_request
+        ask_question_request.additional_properties = d
+        return ask_question_request
 
     @property
     def additional_keys(self) -> list[str]:

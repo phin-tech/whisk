@@ -78,8 +78,8 @@ tasks:
     desc: Generates the Python client from sdk/openapi.json
     deps: [sdk:spec]
     cmds:
-      - rm -rf sdk/python
-      - uvx --from openapi-python-client openapi-python-client generate --path sdk/openapi.json --output-path sdk/python --overwrite --meta none
+      - rm -rf sdk/python/whiskd_client
+      - uvx --from openapi-python-client openapi-python-client generate --path sdk/openapi.json --output-path sdk/python/whiskd_client --overwrite --meta none
 
   sdk:ts:
     desc: Generates the headless TypeScript types from sdk/openapi.json
@@ -107,14 +107,14 @@ tasks:
     desc: Runs the Python SDK integration suite against a live daemon
     cmds:
       - go build -o {{.BIN_DIR}}/whiskd ./cmd/whiskd
-      - WHISKD_BIN="$PWD/{{.BIN_DIR}}/whiskd" uv run --no-project --with pytest --with httpx --with attrs --with python-dateutil pytest sdk/python/tests
+      - WHISKD_BIN="$PWD/{{.BIN_DIR}}/whiskd" uv run --no-project --with pytest --with httpx --with attrs --with python-dateutil pytest sdk/tests/python
 
   sdk:test:ts:
     desc: Runs the headless TypeScript SDK integration suite against a live daemon
     cmds:
       - go build -o {{.BIN_DIR}}/whiskd ./cmd/whiskd
-      - npm --prefix sdk/ts install --no-audit --no-fund
-      - WHISKD_BIN="$PWD/{{.BIN_DIR}}/whiskd" npm --prefix sdk/ts test
+      - npm --prefix sdk/tests/ts install --no-audit --no-fund
+      - WHISKD_BIN="$PWD/{{.BIN_DIR}}/whiskd" npm --prefix sdk/tests/ts test
 
   sdk:test:
     desc: Runs both SDK integration suites (Python + TypeScript) against a live daemon
@@ -151,7 +151,7 @@ tasks:
     deps:
       - build:cli
     cmds:
-      - WHISK_BIN="{{.TASKFILE_DIR}}/{{.BIN_DIR}}/whisk" uv run --project tests/integration pytest
+      - WHISK_BIN="{{.TASKFILE_DIR}}/{{.BIN_DIR}}/whisk" uv run --project tests/integration pytest tests/integration
 
   dev:daemon:
     desc: Runs the whisk daemon in the foreground

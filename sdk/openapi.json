@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "5",
+    "version": "6",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -617,6 +617,96 @@
         "responses": {
           "204": {
             "description": "no content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/questions": {
+      "post": {
+        "operationId": "askQuestion",
+        "tags": [
+          "workitems"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskQuestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Question"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/questions/{questionID}/answer": {
+      "post": {
+        "operationId": "answerQuestion",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "questionID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerQuestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Question"
+                }
+              }
+            },
+            "description": "success"
           },
           "default": {
             "content": {
@@ -1447,6 +1537,56 @@
         }
       }
     },
+    "/v1/work-item-runs/{runID}/complete-execution": {
+      "post": {
+        "operationId": "completeExecution",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "runID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteExecutionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/work-items": {
       "get": {
         "operationId": "listWorkItems",
@@ -1506,6 +1646,56 @@
         },
         "responses": {
           "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/approve-plan": {
+      "post": {
+        "operationId": "approvePlan",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovePlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1628,6 +1818,56 @@
         }
       }
     },
+    "/v1/work-items/{workItemID}/complete-execution": {
+      "post": {
+        "operationId": "completeExecutionForWorkItem",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteExecutionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/work-items/{workItemID}/delete": {
       "post": {
         "operationId": "deleteWorkItem",
@@ -1710,6 +1950,206 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/plan-drafts": {
+      "post": {
+        "operationId": "submitDraftPlan",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitDraftPlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Artifact"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/review-feedback": {
+      "post": {
+        "operationId": "submitReviewFeedback",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitReviewFeedbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Artifact"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/start-execution": {
+      "post": {
+        "operationId": "startExecution",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartExecutionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItemRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/start-planning": {
+      "post": {
+        "operationId": "startPlanning",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPlanningRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItemRun"
                 }
               }
             },
@@ -1974,6 +2414,120 @@
         ],
         "type": "object"
       },
+      "AnswerQuestionRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "answer"
+        ],
+        "type": "object"
+      },
+      "ApprovePlanRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "artifactId": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "workItemId"
+        ],
+        "type": "object"
+      },
+      "Artifact": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetadataValue"
+            },
+            "type": "object"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "workItemId",
+          "kind",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "AskQuestionRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "type": "object"
+      },
       "Attachment": {
         "properties": {
           "createdAt": {
@@ -2126,6 +2680,26 @@
         ],
         "type": "object"
       },
+      "CompleteExecutionRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId"
+        ],
+        "type": "object"
+      },
       "CreateHTTPForwardRequest": {
         "properties": {
           "name": {
@@ -2149,6 +2723,9 @@
         "properties": {
           "name": {
             "type": "string"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/ProjectPreferences"
           },
           "rootDir": {
             "type": "string"
@@ -2204,6 +2781,9 @@
             "type": "string"
           },
           "title": {
+            "type": "string"
+          },
+          "workflowId": {
             "type": "string"
           }
         },
@@ -2339,6 +2919,38 @@
         ],
         "type": "object"
       },
+      "GateConfig": {
+        "properties": {
+          "blocking": {
+            "type": "boolean"
+          },
+          "command": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "skill": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "blocking"
+        ],
+        "type": "object"
+      },
       "HTTPForward": {
         "properties": {
           "id": {
@@ -2459,6 +3071,30 @@
         },
         "required": [
           "id"
+        ],
+        "type": "object"
+      },
+      "MetadataValue": {
+        "properties": {
+          "bool": {
+            "type": "boolean"
+          },
+          "json": {
+            "format": "byte",
+            "type": "string"
+          },
+          "number": {
+            "type": "number"
+          },
+          "string": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
         ],
         "type": "object"
       },
@@ -2594,12 +3230,21 @@
           "id": {
             "type": "string"
           },
+          "metadata": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetadataValue"
+            },
+            "type": "object"
+          },
           "name": {
             "type": "string"
           },
           "nextWorkItemNumber": {
             "format": "int64",
             "type": "integer"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/ProjectPreferences"
           },
           "rootDir": {
             "type": "string"
@@ -2621,9 +3266,37 @@
           "slug",
           "rootDir",
           "workflow",
+          "preferences",
           "nextWorkItemNumber",
           "createdAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ProjectPreferences": {
+        "properties": {
+          "autoRun": {
+            "type": "string"
+          },
+          "autoWorktree": {
+            "type": "boolean"
+          },
+          "defaultPhaseAgents": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "gates": {
+            "items": {
+              "$ref": "#/components/schemas/GateConfig"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "autoRun",
+          "autoWorktree"
         ],
         "type": "object"
       },
@@ -2690,6 +3363,66 @@
           "name",
           "source",
           "body",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Question": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "answeredAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "answeredBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "workItemId",
+          "prompt",
+          "status",
           "createdAt",
           "updatedAt"
         ],
@@ -3026,6 +3759,35 @@
         ],
         "type": "object"
       },
+      "StartExecutionRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "agentProfileId": {
+            "type": "string"
+          },
+          "launch": {
+            "type": "boolean"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "systemPrompt": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId"
+        ],
+        "type": "object"
+      },
       "StartPTYOptions": {
         "properties": {
           "cols": {
@@ -3062,6 +3824,35 @@
           "sessionId",
           "paneId",
           "options"
+        ],
+        "type": "object"
+      },
+      "StartPlanningRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "agentProfileId": {
+            "type": "string"
+          },
+          "launch": {
+            "type": "boolean"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "systemPrompt": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId"
         ],
         "type": "object"
       },
@@ -3170,6 +3961,51 @@
         ],
         "type": "object"
       },
+      "SubmitDraftPlanRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId",
+          "body"
+        ],
+        "type": "object"
+      },
+      "SubmitReviewFeedbackRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId",
+          "body"
+        ],
+        "type": "object"
+      },
       "TransitionRule": {
         "properties": {
           "fromStageId": {
@@ -3220,9 +4056,18 @@
           "id": {
             "type": "string"
           },
+          "metadata": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetadataValue"
+            },
+            "type": "object"
+          },
           "number": {
             "format": "int64",
             "type": "integer"
+          },
+          "previousStageId": {
+            "type": "string"
           },
           "projectId": {
             "type": "string"
@@ -3240,6 +4085,13 @@
             "format": "date-time",
             "type": "string"
           },
+          "workflowId": {
+            "type": "string"
+          },
+          "workflowVersion": {
+            "format": "int64",
+            "type": "integer"
+          },
           "worktree": {
             "allOf": [
               {
@@ -3252,6 +4104,8 @@
         "required": [
           "id",
           "projectId",
+          "workflowId",
+          "workflowVersion",
           "number",
           "title",
           "bodyMarkdown",
@@ -3284,6 +4138,12 @@
           },
           "id": {
             "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetadataValue"
+            },
+            "type": "object"
           },
           "preset": {
             "type": "string"

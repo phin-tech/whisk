@@ -10,40 +10,40 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.project_metadata import ProjectMetadata
-    from ..models.project_preferences import ProjectPreferences
-    from ..models.project_workflow import ProjectWorkflow
+    from ..models.artifact_metadata import ArtifactMetadata
 
 
-T = TypeVar("T", bound="Project")
+T = TypeVar("T", bound="Artifact")
 
 
 @_attrs_define
-class Project:
+class Artifact:
     """
     Attributes:
         created_at (datetime.datetime):
         id (str):
-        name (str):
-        next_work_item_number (int):
-        preferences (ProjectPreferences):
-        root_dir (str):
-        slug (str):
+        kind (str):
+        project_id (str):
+        status (str):
         updated_at (datetime.datetime):
-        workflow (ProjectWorkflow):
-        metadata (ProjectMetadata | Unset):
+        work_item_id (str):
+        body (str | Unset):
+        metadata (ArtifactMetadata | Unset):
+        run_id (str | Unset):
+        title (str | Unset):
     """
 
     created_at: datetime.datetime
     id: str
-    name: str
-    next_work_item_number: int
-    preferences: ProjectPreferences
-    root_dir: str
-    slug: str
+    kind: str
+    project_id: str
+    status: str
     updated_at: datetime.datetime
-    workflow: ProjectWorkflow
-    metadata: ProjectMetadata | Unset = UNSET
+    work_item_id: str
+    body: str | Unset = UNSET
+    metadata: ArtifactMetadata | Unset = UNSET
+    run_id: str | Unset = UNSET
+    title: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -51,23 +51,25 @@ class Project:
 
         id = self.id
 
-        name = self.name
+        kind = self.kind
 
-        next_work_item_number = self.next_work_item_number
+        project_id = self.project_id
 
-        preferences = self.preferences.to_dict()
-
-        root_dir = self.root_dir
-
-        slug = self.slug
+        status = self.status
 
         updated_at = self.updated_at.isoformat()
 
-        workflow = self.workflow.to_dict()
+        work_item_id = self.work_item_id
+
+        body = self.body
 
         metadata: dict[str, Any] | Unset = UNSET
         if not isinstance(self.metadata, Unset):
             metadata = self.metadata.to_dict()
+
+        run_id = self.run_id
+
+        title = self.title
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -75,67 +77,72 @@ class Project:
             {
                 "createdAt": created_at,
                 "id": id,
-                "name": name,
-                "nextWorkItemNumber": next_work_item_number,
-                "preferences": preferences,
-                "rootDir": root_dir,
-                "slug": slug,
+                "kind": kind,
+                "projectId": project_id,
+                "status": status,
                 "updatedAt": updated_at,
-                "workflow": workflow,
+                "workItemId": work_item_id,
             }
         )
+        if body is not UNSET:
+            field_dict["body"] = body
         if metadata is not UNSET:
             field_dict["metadata"] = metadata
+        if run_id is not UNSET:
+            field_dict["runId"] = run_id
+        if title is not UNSET:
+            field_dict["title"] = title
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.project_metadata import ProjectMetadata
-        from ..models.project_preferences import ProjectPreferences
-        from ..models.project_workflow import ProjectWorkflow
+        from ..models.artifact_metadata import ArtifactMetadata
 
         d = dict(src_dict)
         created_at = datetime.datetime.fromisoformat(d.pop("createdAt"))
 
         id = d.pop("id")
 
-        name = d.pop("name")
+        kind = d.pop("kind")
 
-        next_work_item_number = d.pop("nextWorkItemNumber")
+        project_id = d.pop("projectId")
 
-        preferences = ProjectPreferences.from_dict(d.pop("preferences"))
-
-        root_dir = d.pop("rootDir")
-
-        slug = d.pop("slug")
+        status = d.pop("status")
 
         updated_at = datetime.datetime.fromisoformat(d.pop("updatedAt"))
 
-        workflow = ProjectWorkflow.from_dict(d.pop("workflow"))
+        work_item_id = d.pop("workItemId")
+
+        body = d.pop("body", UNSET)
 
         _metadata = d.pop("metadata", UNSET)
-        metadata: ProjectMetadata | Unset
+        metadata: ArtifactMetadata | Unset
         if isinstance(_metadata, Unset):
             metadata = UNSET
         else:
-            metadata = ProjectMetadata.from_dict(_metadata)
+            metadata = ArtifactMetadata.from_dict(_metadata)
 
-        project = cls(
+        run_id = d.pop("runId", UNSET)
+
+        title = d.pop("title", UNSET)
+
+        artifact = cls(
             created_at=created_at,
             id=id,
-            name=name,
-            next_work_item_number=next_work_item_number,
-            preferences=preferences,
-            root_dir=root_dir,
-            slug=slug,
+            kind=kind,
+            project_id=project_id,
+            status=status,
             updated_at=updated_at,
-            workflow=workflow,
+            work_item_id=work_item_id,
+            body=body,
             metadata=metadata,
+            run_id=run_id,
+            title=title,
         )
 
-        project.additional_properties = d
-        return project
+        artifact.additional_properties = d
+        return artifact
 
     @property
     def additional_keys(self) -> list[str]:

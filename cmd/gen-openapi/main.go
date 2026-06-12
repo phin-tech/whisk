@@ -1,7 +1,7 @@
 // Command gen-openapi emits an OpenAPI 3.0.3 spec for the whiskd daemon by
-// reflecting over the protocol/domain structs and walking a hand-written route
-// table (see routes.go). The spec is the single source of truth for the Python
-// and headless-TypeScript clients; regenerate with `go run ./cmd/gen-openapi`.
+// reflecting over the protocol/domain structs and walking the protocol-owned
+// route catalog. The spec is the single source of truth for the Python and
+// headless-TypeScript clients; regenerate with `go run ./cmd/gen-openapi`.
 package main
 
 import (
@@ -97,13 +97,13 @@ func build() *openAPI {
 	reg := newRegistry()
 
 	paths := map[string]pathItem{}
-	for _, rt := range routes {
-		item, ok := paths[rt.path]
+	for _, rt := range protocol.APIRoutes {
+		item, ok := paths[rt.Path]
 		if !ok {
 			item = pathItem{}
-			paths[rt.path] = item
+			paths[rt.Path] = item
 		}
-		item[strings.ToLower(rt.method)] = rt.operation(reg)
+		item[strings.ToLower(rt.Method)] = operationForRoute(rt, reg)
 	}
 
 	// Always expose the uniform error envelope.
@@ -122,48 +122,48 @@ func build() *openAPI {
 	}
 }
 
-func (rt route) operation(reg *registry) operation {
+func operationForRoute(rt protocol.APIRoute, reg *registry) operation {
 	op := operation{
-		OperationID: rt.op,
-		Summary:     rt.summary,
-		Tags:        []string{rt.tag},
+		OperationID: rt.OperationID,
+		Summary:     rt.Summary,
+		Tags:        []string{rt.Tag},
 		Responses:   map[string]any{},
 	}
 
-	for _, name := range pathParams(rt.path) {
+	for _, name := range pathParams(rt.Path) {
 		op.Parameters = append(op.Parameters, parameter{
 			Name: name, In: "path", Required: true,
 			Schema: map[string]any{"type": "string"},
 		})
 	}
-	for _, q := range rt.query {
+	for _, q := range rt.Query {
 		op.Parameters = append(op.Parameters, parameter{
-			Name: q.name, In: "query", Required: q.required,
-			Schema: map[string]any{"type": q.typ},
+			Name: q.Name, In: "query", Required: q.Required,
+			Schema: map[string]any{"type": q.Type},
 		})
 	}
 
-	if rt.req != nil {
+	if rt.Request != nil {
 		op.RequestBody = &requestBody{
 			Required: true,
 			Content: map[string]mediaType{
-				"application/json": {Schema: reg.schemaFor(reflect.TypeOf(rt.req))},
+				"application/json": {Schema: reg.schemaFor(reflect.TypeOf(rt.Request))},
 			},
 		}
 	}
 
-	status := rt.status
+	status := rt.Status
 	if status == 0 {
 		status = 200
 	}
-	if rt.resp == nil {
+	if rt.Response == nil {
 		op.Responses[fmt.Sprintf("%d", status)] = map[string]any{"description": "no content"}
 	} else {
 		op.Responses[fmt.Sprintf("%d", status)] = map[string]any{
 			"description": "success",
 			"content": map[string]any{
 				"application/json": map[string]any{
-					"schema": reg.schemaFor(reflect.TypeOf(rt.resp)),
+					"schema": reg.schemaFor(reflect.TypeOf(rt.Response)),
 				},
 			},
 		}

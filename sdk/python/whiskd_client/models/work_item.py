@@ -12,6 +12,7 @@ from ..types import UNSET, Unset
 if TYPE_CHECKING:
     from ..models.attachment import Attachment
     from ..models.history_event import HistoryEvent
+    from ..models.work_item_metadata import WorkItemMetadata
     from ..models.worktree_binding import WorktreeBinding
 
 
@@ -33,6 +34,10 @@ class WorkItem:
         stage_id (str):
         title (str):
         updated_at (datetime.datetime):
+        workflow_id (str):
+        workflow_version (int):
+        metadata (WorkItemMetadata | Unset):
+        previous_stage_id (str | Unset):
         worktree (None | Unset | WorktreeBinding):
     """
 
@@ -47,6 +52,10 @@ class WorkItem:
     stage_id: str
     title: str
     updated_at: datetime.datetime
+    workflow_id: str
+    workflow_version: int
+    metadata: WorkItemMetadata | Unset = UNSET
+    previous_stage_id: str | Unset = UNSET
     worktree: None | Unset | WorktreeBinding = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -91,6 +100,16 @@ class WorkItem:
 
         updated_at = self.updated_at.isoformat()
 
+        workflow_id = self.workflow_id
+
+        workflow_version = self.workflow_version
+
+        metadata: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.metadata, Unset):
+            metadata = self.metadata.to_dict()
+
+        previous_stage_id = self.previous_stage_id
+
         worktree: dict[str, Any] | None | Unset
         if isinstance(self.worktree, Unset):
             worktree = UNSET
@@ -114,8 +133,14 @@ class WorkItem:
                 "stageId": stage_id,
                 "title": title,
                 "updatedAt": updated_at,
+                "workflowId": workflow_id,
+                "workflowVersion": workflow_version,
             }
         )
+        if metadata is not UNSET:
+            field_dict["metadata"] = metadata
+        if previous_stage_id is not UNSET:
+            field_dict["previousStageId"] = previous_stage_id
         if worktree is not UNSET:
             field_dict["worktree"] = worktree
 
@@ -125,6 +150,7 @@ class WorkItem:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.attachment import Attachment
         from ..models.history_event import HistoryEvent
+        from ..models.work_item_metadata import WorkItemMetadata
         from ..models.worktree_binding import WorktreeBinding
 
         d = dict(src_dict)
@@ -191,6 +217,19 @@ class WorkItem:
 
         updated_at = datetime.datetime.fromisoformat(d.pop("updatedAt"))
 
+        workflow_id = d.pop("workflowId")
+
+        workflow_version = d.pop("workflowVersion")
+
+        _metadata = d.pop("metadata", UNSET)
+        metadata: WorkItemMetadata | Unset
+        if isinstance(_metadata, Unset):
+            metadata = UNSET
+        else:
+            metadata = WorkItemMetadata.from_dict(_metadata)
+
+        previous_stage_id = d.pop("previousStageId", UNSET)
+
         def _parse_worktree(data: object) -> None | Unset | WorktreeBinding:
             if data is None:
                 return data
@@ -220,6 +259,10 @@ class WorkItem:
             stage_id=stage_id,
             title=title,
             updated_at=updated_at,
+            workflow_id=workflow_id,
+            workflow_version=workflow_version,
+            metadata=metadata,
+            previous_stage_id=previous_stage_id,
             worktree=worktree,
         )
 

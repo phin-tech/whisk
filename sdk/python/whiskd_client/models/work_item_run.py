@@ -11,6 +11,7 @@ from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
     from ..models.run_event import RunEvent
+    from ..models.work_item_run_metadata import WorkItemRunMetadata
 
 
 T = TypeVar("T", bound="WorkItemRun")
@@ -31,6 +32,7 @@ class WorkItemRun:
         updated_at (datetime.datetime):
         work_item_id (str):
         completed_at (datetime.datetime | None | Unset):
+        metadata (WorkItemRunMetadata | Unset):
         pty_id (str | Unset):
         session_id (str | Unset):
     """
@@ -46,6 +48,7 @@ class WorkItemRun:
     updated_at: datetime.datetime
     work_item_id: str
     completed_at: datetime.datetime | None | Unset = UNSET
+    metadata: WorkItemRunMetadata | Unset = UNSET
     pty_id: str | Unset = UNSET
     session_id: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
@@ -87,6 +90,10 @@ class WorkItemRun:
         else:
             completed_at = self.completed_at
 
+        metadata: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.metadata, Unset):
+            metadata = self.metadata.to_dict()
+
         pty_id = self.pty_id
 
         session_id = self.session_id
@@ -109,6 +116,8 @@ class WorkItemRun:
         )
         if completed_at is not UNSET:
             field_dict["completedAt"] = completed_at
+        if metadata is not UNSET:
+            field_dict["metadata"] = metadata
         if pty_id is not UNSET:
             field_dict["ptyId"] = pty_id
         if session_id is not UNSET:
@@ -119,6 +128,7 @@ class WorkItemRun:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.run_event import RunEvent
+        from ..models.work_item_run_metadata import WorkItemRunMetadata
 
         d = dict(src_dict)
         created_at = datetime.datetime.fromisoformat(d.pop("createdAt"))
@@ -176,6 +186,13 @@ class WorkItemRun:
 
         completed_at = _parse_completed_at(d.pop("completedAt", UNSET))
 
+        _metadata = d.pop("metadata", UNSET)
+        metadata: WorkItemRunMetadata | Unset
+        if isinstance(_metadata, Unset):
+            metadata = UNSET
+        else:
+            metadata = WorkItemRunMetadata.from_dict(_metadata)
+
         pty_id = d.pop("ptyId", UNSET)
 
         session_id = d.pop("sessionId", UNSET)
@@ -192,6 +209,7 @@ class WorkItemRun:
             updated_at=updated_at,
             work_item_id=work_item_id,
             completed_at=completed_at,
+            metadata=metadata,
             pty_id=pty_id,
             session_id=session_id,
         )

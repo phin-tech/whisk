@@ -10,6 +10,7 @@ import (
 
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/app"
+	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/server"
 )
 
@@ -28,7 +29,7 @@ var routesNotInSDK = map[string]bool{
 
 // TestEverySDKRouteIsRegistered asserts that every route in the generator table
 // resolves to a registered handler on the real server router. This is the
-// contract guard: the route table is hand-maintained, so this catches a spec
+// contract guard: the route catalog is hand-maintained, so this catches a spec
 // route that the server never serves. It matches on the router pattern (via
 // ServeMux.Handler) rather than status codes, so handlers that legitimately
 // return 404 (e.g. delete of a missing resource) don't produce false failures.
@@ -39,12 +40,12 @@ func TestEverySDKRouteIsRegistered(t *testing.T) {
 		t.Fatal("server.NewHTTP no longer returns *http.ServeMux; update this test")
 	}
 
-	for _, rt := range routes {
-		t.Run(rt.method+" "+rt.path, func(t *testing.T) {
-			path := pathParamRe.ReplaceAllString(rt.path, "x")
-			req := httptest.NewRequest(rt.method, path, nil)
+	for _, rt := range protocol.APIRoutes {
+		t.Run(rt.Method+" "+rt.Path, func(t *testing.T) {
+			path := pathParamRe.ReplaceAllString(rt.Path, "x")
+			req := httptest.NewRequest(rt.Method, path, nil)
 			if _, pattern := mux.Handler(req); pattern == "" {
-				t.Fatalf("route %s %s is not registered on the server", rt.method, path)
+				t.Fatalf("route %s %s is not registered on the server", rt.Method, path)
 			}
 		})
 	}
@@ -60,8 +61,8 @@ func TestEveryServerRouteIsInSDK(t *testing.T) {
 	}
 
 	inTable := map[string]bool{}
-	for _, rt := range routes {
-		inTable[rt.method+" "+rt.path] = true
+	for _, rt := range protocol.APIRoutes {
+		inTable[rt.Method+" "+rt.Path] = true
 	}
 
 	for _, m := range serverRoutePattern.FindAllStringSubmatch(string(src), -1) {
@@ -71,7 +72,7 @@ func TestEveryServerRouteIsInSDK(t *testing.T) {
 			continue
 		}
 		if !inTable[key] {
-			t.Errorf("server route %q has no entry in cmd/gen-openapi/routes.go", strings.TrimSpace(key))
+			t.Errorf("server route %q has no entry in protocol.APIRoutes", strings.TrimSpace(key))
 		}
 	}
 }

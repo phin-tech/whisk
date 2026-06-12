@@ -16,7 +16,7 @@ import httpx
 import pytest
 
 # Make the generated `whiskd_client` package importable without installation.
-PKG_ROOT = pathlib.Path(__file__).resolve().parents[1]  # sdk/python
+PKG_ROOT = pathlib.Path(__file__).resolve().parents[2] / "python"
 sys.path.insert(0, str(PKG_ROOT))
 
 
