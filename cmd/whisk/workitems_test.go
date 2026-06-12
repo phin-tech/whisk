@@ -271,6 +271,71 @@ func TestRunCommandsUseDaemonAPI(t *testing.T) {
 	}
 }
 
+func TestRunStatusUsesInjectedEnvironmentContext(t *testing.T) {
+	t.Setenv("WHISK_RUN_ID", "run_01")
+	t.Setenv("WHISK_SESSION_ID", "sess_01")
+	t.Setenv("WHISK_PTY_ID", "pty_01")
+	t.Setenv("WHISK_ACTOR", "agent")
+	requests := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests[r.Method+" "+r.URL.Path]++
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/status" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+		var req protocol.ReportStatusRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode status: %v", err)
+		}
+		if req.Kind != workitem.StatusKindQuestion ||
+			req.Message != "Need the staging API key." ||
+			req.Actor != "agent" ||
+			req.RunID != "run_01" ||
+			req.SessionID != "sess_01" ||
+			req.PTYID != "pty_01" {
+			t.Fatalf("status request = %#v", req)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.ReportStatusResponse{
+			Event: protocol.StatusEvent{
+				ID:                "status_01",
+				Kind:              workitem.StatusKindQuestion,
+				Message:           req.Message,
+				Actor:             req.Actor,
+				RunID:             req.RunID,
+				SessionID:         req.SessionID,
+				PTYID:             req.PTYID,
+				RequiresAttention: true,
+			},
+			Run: &protocol.WorkItemRun{ID: req.RunID, Status: workitem.RunStateAwaitingInput},
+		})
+	}))
+	defer server.Close()
+	t.Setenv("WHISKD_URL", server.URL)
+
+	output, err := captureStdout(func() error {
+		return run([]string{"status", "question", "-message", "Need the staging API key.", "-json"})
+	})
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	var report protocol.ReportStatusResponse
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("json output %q: %v", output, err)
+	}
+	if report.Event.ID != "status_01" || !report.Event.RequiresAttention || report.Run == nil || report.Run.Status != workitem.RunStateAwaitingInput {
+		t.Fatalf("report = %#v", report)
+	}
+	if requests["POST /v1/status"] != 1 {
+		t.Fatalf("requests = %#v", requests)
+	}
+}
+
+func TestRunStatusRejectsMissingContext(t *testing.T) {
+	if err := run([]string{"status", "question", "-message", "Need input"}); err == nil {
+		t.Fatalf("expected missing context error")
+	}
+}
+
 func TestRunWorkItemRejectsInvalidUsage(t *testing.T) {
 	if err := run([]string{"project", "create"}); err == nil {
 		t.Fatalf("expected project create usage error")

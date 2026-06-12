@@ -119,13 +119,45 @@ func TestHTTPClientDrivesDaemonWorkItemAPI(t *testing.T) {
 	if run.ID == "" || run.Status != workitem.RunStateQueued || run.PromptSnapshot == "" {
 		t.Fatalf("run = %#v", run)
 	}
+	report, err := daemon.ReportStatus(ctx, protocol.ReportStatusRequest{
+		RunID:   run.ID,
+		Kind:    workitem.StatusKindQuestion,
+		Message: "Need the staging API key.",
+		Actor:   "agent",
+	})
+	if err != nil {
+		t.Fatalf("report question: %v", err)
+	}
+	if report.Event.Kind != workitem.StatusKindQuestion || !report.Event.RequiresAttention {
+		t.Fatalf("report = %#v", report)
+	}
+	if report.Run == nil || report.Run.Status != workitem.RunStateAwaitingInput || report.Run.History[len(report.Run.History)-1].Message != "Need the staging API key." {
+		t.Fatalf("report run = %#v", report.Run)
+	}
+	items, err = daemon.ListWorkItems(ctx, project.ID)
+	if err != nil || len(items) != 1 || items[0].RunState != workitem.RunStateAwaitingInput {
+		t.Fatalf("items after question = %#v, err = %v", items, err)
+	}
+	events, err := daemon.ListStatusEvents(ctx, protocol.ListStatusEventsRequest{SessionID: report.Event.SessionID, UnreadOnly: true})
+	if err != nil || len(events) != 1 || events[0].ID != report.Event.ID {
+		t.Fatalf("status events = %#v, err = %v", events, err)
+	}
+	read, err := daemon.MarkStatusEventRead(ctx, protocol.MarkStatusEventReadRequest{ID: report.Event.ID})
+	if err != nil || read.ReadAt == nil {
+		t.Fatalf("mark read = %#v, err = %v", read, err)
+	}
 	runs, err := daemon.ListWorkItemRuns(ctx, item.ID)
 	if err != nil || len(runs) != 1 || runs[0].ID != run.ID {
 		t.Fatalf("runs = %#v, err = %v", runs, err)
 	}
-	cancelled, err := daemon.CancelWorkItemRun(ctx, protocol.CancelWorkItemRunRequest{ID: run.ID, Actor: "agent"})
-	if err != nil || cancelled.Status != workitem.RunStateCancelled {
-		t.Fatalf("cancel = %#v, err = %v", cancelled, err)
+	completed, err := daemon.ReportStatus(ctx, protocol.ReportStatusRequest{
+		RunID:   run.ID,
+		Kind:    workitem.StatusKindDone,
+		Message: "Implementation complete and tests pass.",
+		Actor:   "agent",
+	})
+	if err != nil || completed.Run == nil || completed.Run.Status != workitem.RunStateCompleted || completed.Run.CompletedAt == nil || completed.WorkItem == nil || completed.WorkItem.StageID != "review" {
+		t.Fatalf("done = %#v, err = %v", completed, err)
 	}
 
 	deleted, err := daemon.DeleteWorkItem(ctx, protocol.DeleteWorkItemRequest{ID: item.ID, Actor: "agent"})

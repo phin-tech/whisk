@@ -138,27 +138,39 @@ export function ListSessions(): $CancellablePromise<session$0.Session[]> {
     });
 }
 
+export function ListStatusEvents(req: protocol$0.ListStatusEventsRequest): $CancellablePromise<protocol$0.StatusEvent[]> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListStatusEvents", req).then(($result: any) => {
+        return $$createType19($result);
+    });
+}
+
 export function ListWorkItemRuns(workItemID: string): $CancellablePromise<protocol$0.WorkItemRun[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorkItemRuns", workItemID).then(($result: any) => {
-        return $$createType18($result);
+        return $$createType20($result);
     });
 }
 
 export function ListWorkItems(projectID: string): $CancellablePromise<protocol$0.WorkItem[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorkItems", projectID).then(($result: any) => {
-        return $$createType19($result);
+        return $$createType21($result);
     });
 }
 
 export function ListWorkflowTemplates(): $CancellablePromise<protocol$0.WorkflowTemplate[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorkflowTemplates").then(($result: any) => {
-        return $$createType21($result);
+        return $$createType23($result);
     });
 }
 
 export function ListWorktrees(req: protocol$0.ListWorktreesRequest): $CancellablePromise<protocol$0.Worktree[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorktrees", req).then(($result: any) => {
-        return $$createType23($result);
+        return $$createType25($result);
+    });
+}
+
+export function MarkStatusEventRead(req: protocol$0.MarkStatusEventReadRequest): $CancellablePromise<protocol$0.StatusEvent> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.MarkStatusEventRead", req).then(($result: any) => {
+        return $$createType18($result);
     });
 }
 
@@ -170,13 +182,13 @@ export function MoveWorkItem(req: protocol$0.MoveWorkItemRequest): $CancellableP
 
 export function NextEvent(req: protocol$0.NextEventRequest): $CancellablePromise<protocol$0.RuntimeEvent> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.NextEvent", req).then(($result: any) => {
-        return $$createType24($result);
+        return $$createType26($result);
     });
 }
 
 export function Output(req: protocol$0.OutputRequest): $CancellablePromise<protocol$0.OutputSnapshot> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.Output", req).then(($result: any) => {
-        return $$createType25($result);
+        return $$createType27($result);
     });
 }
 
@@ -188,13 +200,19 @@ export function RemoveWorktree(req: protocol$0.RemoveWorktreeRequest): $Cancella
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.RemoveWorktree", req);
 }
 
+export function ReportStatus(req: protocol$0.ReportStatusRequest): $CancellablePromise<protocol$0.ReportStatusResponse> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ReportStatus", req).then(($result: any) => {
+        return $$createType28($result);
+    });
+}
+
 export function ResizePTY(req: protocol$0.ResizePTYRequest): $CancellablePromise<void> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ResizePTY", req);
 }
 
 export function RestartPanePTY(req: protocol$0.RestartPanePTYRequest): $CancellablePromise<protocol$0.RestartedPanePTY> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.RestartPanePTY", req).then(($result: any) => {
-        return $$createType26($result);
+        return $$createType29($result);
     });
 }
 
@@ -212,19 +230,19 @@ export function SetSessionRootDir(req: protocol$0.SetSessionRootDirRequest): $Ca
 
 export function SplitPane(req: protocol$0.SplitPaneRequest): $CancellablePromise<protocol$0.SplitPaneResult> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SplitPane", req).then(($result: any) => {
-        return $$createType27($result);
+        return $$createType30($result);
     });
 }
 
 export function StartHTTPForward(req: protocol$0.StartHTTPForwardRequest): $CancellablePromise<protocol$0.StartedHTTPForward> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartHTTPForward", req).then(($result: any) => {
-        return $$createType28($result);
+        return $$createType31($result);
     });
 }
 
 export function StartPanePTY(req: protocol$0.StartPanePTYRequest): $CancellablePromise<protocol$0.StartedPanePTY> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartPanePTY", req).then(($result: any) => {
-        return $$createType29($result);
+        return $$createType32($result);
     });
 }
 
@@ -261,15 +279,18 @@ const $$createType14 = $Create.Array($$createType10);
 const $$createType15 = $Create.Array($$createType5);
 const $$createType16 = workitem$0.PromptTemplate.createFrom;
 const $$createType17 = $Create.Array($$createType16);
-const $$createType18 = $Create.Array($$createType2);
-const $$createType19 = $Create.Array($$createType1);
-const $$createType20 = workitem$0.WorkflowTemplate.createFrom;
-const $$createType21 = $Create.Array($$createType20);
-const $$createType22 = protocol$0.Worktree.createFrom;
+const $$createType18 = workitem$0.StatusEvent.createFrom;
+const $$createType19 = $Create.Array($$createType18);
+const $$createType20 = $Create.Array($$createType2);
+const $$createType21 = $Create.Array($$createType1);
+const $$createType22 = workitem$0.WorkflowTemplate.createFrom;
 const $$createType23 = $Create.Array($$createType22);
-const $$createType24 = protocol$0.RuntimeEvent.createFrom;
-const $$createType25 = protocol$0.OutputSnapshot.createFrom;
-const $$createType26 = protocol$0.RestartedPanePTY.createFrom;
-const $$createType27 = protocol$0.SplitPaneResult.createFrom;
-const $$createType28 = protocol$0.StartedHTTPForward.createFrom;
-const $$createType29 = protocol$0.StartedPanePTY.createFrom;
+const $$createType24 = protocol$0.Worktree.createFrom;
+const $$createType25 = $Create.Array($$createType24);
+const $$createType26 = protocol$0.RuntimeEvent.createFrom;
+const $$createType27 = protocol$0.OutputSnapshot.createFrom;
+const $$createType28 = protocol$0.ReportStatusResponse.createFrom;
+const $$createType29 = protocol$0.RestartedPanePTY.createFrom;
+const $$createType30 = protocol$0.SplitPaneResult.createFrom;
+const $$createType31 = protocol$0.StartedHTTPForward.createFrom;
+const $$createType32 = protocol$0.StartedPanePTY.createFrom;

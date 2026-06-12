@@ -166,6 +166,18 @@ func (s *Service) CancelWorkItemRun(ctx context.Context, req protocol.CancelWork
 	return s.client.CancelWorkItemRun(ctx, req)
 }
 
+func (s *Service) ReportStatus(ctx context.Context, req protocol.ReportStatusRequest) (protocol.ReportStatusResponse, error) {
+	return s.client.ReportStatus(ctx, req)
+}
+
+func (s *Service) ListStatusEvents(ctx context.Context, req protocol.ListStatusEventsRequest) ([]protocol.StatusEvent, error) {
+	return s.client.ListStatusEvents(ctx, req)
+}
+
+func (s *Service) MarkStatusEventRead(ctx context.Context, req protocol.MarkStatusEventReadRequest) (protocol.StatusEvent, error) {
+	return s.client.MarkStatusEventRead(ctx, req)
+}
+
 func (s *Service) ListHTTPForwards(ctx context.Context) ([]protocol.HTTPForward, error) {
 	return s.client.ListHTTPForwards(ctx)
 }

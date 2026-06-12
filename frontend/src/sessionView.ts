@@ -99,9 +99,11 @@ export function ptyRowsFromInventory(ptys: PtyInfoLike[]) {
 }
 
 export function runtimeRefreshTargets(event: RuntimeEventLike) {
-  return {
-    sessions: event.type === "session.changed",
-    ptys: event.type === "pty.changed",
-    outputPtyId: event.type === "pty.output" ? (event.ptyId ?? null) : null,
-  };
+	return {
+		sessions: event.type === "session.changed",
+		ptys: event.type === "pty.changed",
+		outputPtyId: event.type === "pty.output" ? (event.ptyId ?? null) : null,
+		work: event.type === "workitems.changed" || event.type === "status.changed",
+		statusEvents: event.type === "status.changed",
+	};
 }

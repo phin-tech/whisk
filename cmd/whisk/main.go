@@ -44,7 +44,7 @@ func defaultRunDeps() runDeps {
 
 func runWithDeps(args []string, deps runDeps) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run>")
+		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|status>")
 	}
 	switch args[0] {
 	case "daemon":
@@ -59,8 +59,10 @@ func runWithDeps(args []string, deps runDeps) error {
 		return runWorkItem(args[1:])
 	case "run":
 		return runWorkItemRun(args[1:])
+	case "status":
+		return runStatus(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run>")
+		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|status>")
 	}
 }
 

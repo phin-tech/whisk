@@ -151,6 +151,198 @@ func TestMarkRunRunningStoresSessionPTYAndTransitionsWorkItem(t *testing.T) {
 	}
 }
 
+func TestReportStatusQuestionBlockedAndDoneTransitionRunAndWorkItem(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", "proj_01")
+	run, err := state.StartRun(StartRun{
+		ID:           "run_01",
+		HistoryID:    "hist_run_01",
+		RunHistoryID: "run_hist_01",
+		WorkItemID:   item.ID,
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	run, err = state.MarkRunRunning(MarkRunRunning{
+		ID:           run.ID,
+		RunHistoryID: "run_hist_running_01",
+		SessionID:    "sess_01",
+		PTYID:        "pty_01",
+		Actor:        "agent",
+		Now:          now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("mark running: %v", err)
+	}
+
+	question, err := state.ReportStatus(ReportStatus{
+		ID:           "status_01",
+		RunHistoryID: "run_hist_question_01",
+		Kind:         StatusKindQuestion,
+		Actor:        "agent",
+		Message:      "Need the staging API key.",
+		ProjectID:    "proj_01",
+		WorkItemID:   item.ID,
+		RunID:        run.ID,
+		SessionID:    "sess_01",
+		PTYID:        "pty_01",
+		Now:          now.Add(2 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("report question: %v", err)
+	}
+	if question.Kind != StatusKindQuestion || !question.RequiresAttention || question.Message != "Need the staging API key." {
+		t.Fatalf("question = %#v", question)
+	}
+	runs := state.ListRuns(item.ID)
+	if len(runs) != 1 || runs[0].Status != RunStateAwaitingInput || runs[0].CompletedAt != nil {
+		t.Fatalf("runs after question = %#v", runs)
+	}
+	if got := runs[0].History[len(runs[0].History)-1]; got.Type != RunStateAwaitingInput || got.Actor != "agent" || got.Message != "Need the staging API key." {
+		t.Fatalf("question event = %#v", got)
+	}
+	updated, _ := state.GetWorkItem(item.ID)
+	if updated.RunState != RunStateAwaitingInput {
+		t.Fatalf("run state = %q", updated.RunState)
+	}
+
+	blocked, err := state.ReportStatus(ReportStatus{
+		ID:           "status_02",
+		RunHistoryID: "run_hist_blocked_01",
+		Kind:         StatusKindBlocked,
+		Actor:        "agent",
+		Message:      "Waiting on credentials.",
+		ProjectID:    "proj_01",
+		WorkItemID:   item.ID,
+		RunID:        run.ID,
+		SessionID:    "sess_01",
+		PTYID:        "pty_01",
+		Now:          now.Add(3 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("report blocked: %v", err)
+	}
+	if blocked.Kind != StatusKindBlocked || !blocked.RequiresAttention {
+		t.Fatalf("blocked = %#v", blocked)
+	}
+	runs = state.ListRuns(item.ID)
+	if len(runs) != 1 || runs[0].Status != RunStateAwaitingInput || runs[0].CompletedAt != nil {
+		t.Fatalf("runs after blocked = %#v", runs)
+	}
+
+	done, err := state.ReportStatus(ReportStatus{
+		ID:           "status_03",
+		RunHistoryID: "run_hist_done_01",
+		Kind:         StatusKindDone,
+		Actor:        "agent",
+		Message:      "Implementation complete and tests pass.",
+		ProjectID:    "proj_01",
+		WorkItemID:   item.ID,
+		RunID:        run.ID,
+		SessionID:    "sess_01",
+		PTYID:        "pty_01",
+		Now:          now.Add(4 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("report done: %v", err)
+	}
+	if done.Kind != StatusKindDone || done.RequiresAttention {
+		t.Fatalf("done = %#v", done)
+	}
+	runs = state.ListRuns(item.ID)
+	if len(runs) != 1 || runs[0].Status != RunStateCompleted || runs[0].CompletedAt == nil {
+		t.Fatalf("runs after done = %#v", runs)
+	}
+	if got := runs[0].History[len(runs[0].History)-1]; got.Type != RunStateCompleted || got.Message != "Implementation complete and tests pass." {
+		t.Fatalf("done event = %#v", got)
+	}
+	updated, _ = state.GetWorkItem(item.ID)
+	if updated.RunState != RunStateCompleted || updated.StageID != "review" {
+		t.Fatalf("updated item = %#v", updated)
+	}
+}
+
+func TestReportStatusStoresSessionScopedEventsWithoutMutatingWorkItems(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+
+	event, err := state.ReportStatus(ReportStatus{
+		ID:        "status_01",
+		Kind:      StatusKindQuestion,
+		Actor:     "agent",
+		Message:   "Which branch should I use?",
+		SessionID: "sess_01",
+		PTYID:     "pty_01",
+		Now:       now,
+	})
+	if err != nil {
+		t.Fatalf("report session status: %v", err)
+	}
+	if event.Scope != StatusScopePTY || event.RunID != "" || !event.RequiresAttention {
+		t.Fatalf("event = %#v", event)
+	}
+	events := state.ListStatusEvents(ListStatusEvents{SessionID: "sess_01", UnreadOnly: true})
+	if len(events) != 1 || events[0].ID != event.ID {
+		t.Fatalf("events = %#v", events)
+	}
+
+	read, err := state.MarkStatusEventRead(MarkStatusEventRead{ID: event.ID, Now: now.Add(time.Minute)})
+	if err != nil {
+		t.Fatalf("mark read: %v", err)
+	}
+	if read.ReadAt == nil {
+		t.Fatalf("read event = %#v", read)
+	}
+	if events := state.ListStatusEvents(ListStatusEvents{SessionID: "sess_01", UnreadOnly: true}); len(events) != 0 {
+		t.Fatalf("unread events = %#v", events)
+	}
+}
+
+func TestReportStatusRejectsTerminalRuns(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", "proj_01")
+	run, err := state.StartRun(StartRun{
+		ID:           "run_01",
+		HistoryID:    "hist_run_01",
+		RunHistoryID: "run_hist_01",
+		WorkItemID:   item.ID,
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	if _, err := state.ReportStatus(ReportStatus{
+		ID:           "status_01",
+		RunHistoryID: "run_hist_done_01",
+		Kind:         StatusKindDone,
+		ProjectID:    "proj_01",
+		WorkItemID:   item.ID,
+		RunID:        run.ID,
+		Now:          now.Add(time.Minute),
+	}); err != nil {
+		t.Fatalf("report done: %v", err)
+	}
+
+	_, err = state.ReportStatus(ReportStatus{
+		ID:           "status_02",
+		RunHistoryID: "run_hist_question_01",
+		Kind:         StatusKindQuestion,
+		Message:      "One more thing.",
+		ProjectID:    "proj_01",
+		WorkItemID:   item.ID,
+		RunID:        run.ID,
+		Now:          now.Add(2 * time.Minute),
+	})
+	if err == nil || !strings.Contains(err.Error(), "already terminal") {
+		t.Fatalf("expected terminal run error, got %v", err)
+	}
+}
+
 func TestFailRunTransitionsRunAndWorkItem(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)

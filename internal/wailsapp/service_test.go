@@ -251,6 +251,9 @@ type runtimeClientFake struct {
 	listRunsWorkItemID       string
 	startRunReq              protocol.StartWorkItemRunRequest
 	cancelRunReq             protocol.CancelWorkItemRunRequest
+	reportStatusReq          protocol.ReportStatusRequest
+	listStatusEventsReq      protocol.ListStatusEventsRequest
+	markStatusReadReq        protocol.MarkStatusEventReadRequest
 	createForwardReq         protocol.CreateHTTPForwardRequest
 	deleteForwardID          string
 }
@@ -428,6 +431,21 @@ func (f *runtimeClientFake) StartWorkItemRun(_ context.Context, req protocol.Sta
 func (f *runtimeClientFake) CancelWorkItemRun(_ context.Context, req protocol.CancelWorkItemRunRequest) (protocol.WorkItemRun, error) {
 	f.cancelRunReq = req
 	return protocol.WorkItemRun{ID: req.ID, Status: "cancelled"}, nil
+}
+
+func (f *runtimeClientFake) ReportStatus(_ context.Context, req protocol.ReportStatusRequest) (protocol.ReportStatusResponse, error) {
+	f.reportStatusReq = req
+	return protocol.ReportStatusResponse{Event: protocol.StatusEvent{ID: "status_01", Kind: req.Kind, Message: req.Message}}, nil
+}
+
+func (f *runtimeClientFake) ListStatusEvents(_ context.Context, req protocol.ListStatusEventsRequest) ([]protocol.StatusEvent, error) {
+	f.listStatusEventsReq = req
+	return []protocol.StatusEvent{{ID: "status_01", SessionID: req.SessionID}}, nil
+}
+
+func (f *runtimeClientFake) MarkStatusEventRead(_ context.Context, req protocol.MarkStatusEventReadRequest) (protocol.StatusEvent, error) {
+	f.markStatusReadReq = req
+	return protocol.StatusEvent{ID: req.ID}, nil
 }
 
 func (f *runtimeClientFake) CreateHTTPForward(_ context.Context, req protocol.CreateHTTPForwardRequest) (protocol.HTTPForward, error) {

@@ -105,16 +105,36 @@ describe("runtimeRefreshTargets", () => {
       sessions: true,
       ptys: false,
       outputPtyId: null,
+      work: false,
+      statusEvents: false,
     });
     expect(runtimeRefreshTargets({ type: "pty.changed", ptyId: "pty_01" })).toEqual({
       sessions: false,
       ptys: true,
       outputPtyId: null,
+      work: false,
+      statusEvents: false,
     });
     expect(runtimeRefreshTargets({ type: "pty.output", ptyId: "pty_01", offset: 12 })).toEqual({
       sessions: false,
       ptys: false,
       outputPtyId: "pty_01",
+      work: false,
+      statusEvents: false,
+    });
+    expect(runtimeRefreshTargets({ type: "workitems.changed" })).toEqual({
+      sessions: false,
+      ptys: false,
+      outputPtyId: null,
+      work: true,
+      statusEvents: false,
+    });
+    expect(runtimeRefreshTargets({ type: "status.changed" })).toEqual({
+      sessions: false,
+      ptys: false,
+      outputPtyId: null,
+      work: true,
+      statusEvents: true,
     });
   });
 });

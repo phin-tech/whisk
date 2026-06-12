@@ -1,28 +1,33 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import type { Project, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { Project, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import type { PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import NotificationsPanel from "./NotificationsPanel.svelte";
   import PtysPanel from "./PtysPanel.svelte";
   import SessionsPanel from "./SessionsPanel.svelte";
   import WorkItemsPanel from "./WorkItemsPanel.svelte";
 
-  export let activePanel: "sessions" | "ptys" | "work" | null = "sessions";
+  export let activePanel: "sessions" | "ptys" | "work" | "notifications" | null = "sessions";
   export let sessions: Session[] = [];
   export let ptys: PTYInfo[] = [];
   export let projects: Project[] = [];
   export let workItems: WorkItem[] = [];
+  export let statusEvents: StatusEvent[] = [];
   export let activeSessionId = "";
   export let activeProjectId = "";
   export let loadingSession = false;
   export let loadingPtys = false;
   export let loadingWork = false;
+  export let loadingStatusEvents = false;
   export let railSide: "left" | "right" = "right";
   export let onClose: () => void;
   export let onNewSession: () => void;
   export let onSelectSession: (session: Session) => void;
   export let onCloseSession: (session: Session) => void;
   export let onRefreshPtys: () => void;
+  export let onRefreshStatusEvents: () => void;
+  export let onSelectStatusEvent: (event: StatusEvent) => void;
   export let onRefreshWork: () => void;
   export let onNewProject: () => void;
   export let onSelectProject: (projectId: string) => void;
@@ -114,7 +119,15 @@
           {onCloseSession}
         />
       {:else}
-        {#if activePanel === "work"}
+        {#if activePanel === "notifications"}
+          <NotificationsPanel
+            {statusEvents}
+            loading={loadingStatusEvents}
+            onclose={onClose}
+            onRefresh={onRefreshStatusEvents}
+            {onSelectStatusEvent}
+          />
+        {:else if activePanel === "work"}
           <WorkItemsPanel
             {projects}
             {workItems}

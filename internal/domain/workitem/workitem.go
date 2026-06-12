@@ -24,6 +24,14 @@ const (
 	RunStateCompleted     = "completed"
 	RunStateCancelled     = "cancelled"
 
+	StatusKindQuestion = "question"
+	StatusKindDone     = "done"
+	StatusKindBlocked  = "blocked"
+
+	StatusScopeRun     = "run"
+	StatusScopePTY     = "pty"
+	StatusScopeSession = "session"
+
 	AttachmentKindFile = "file"
 	AttachmentKindURL  = "url"
 	AttachmentKindNote = "note"
@@ -136,6 +144,22 @@ type WorkItemRun struct {
 	History          []RunEvent `json:"history"`
 }
 
+type StatusEvent struct {
+	ID                string     `json:"id"`
+	Scope             string     `json:"scope"`
+	Kind              string     `json:"kind"`
+	Message           string     `json:"message"`
+	Actor             string     `json:"actor,omitempty"`
+	ProjectID         string     `json:"projectId,omitempty"`
+	WorkItemID        string     `json:"workItemId,omitempty"`
+	RunID             string     `json:"runId,omitempty"`
+	SessionID         string     `json:"sessionId,omitempty"`
+	PTYID             string     `json:"ptyId,omitempty"`
+	RequiresAttention bool       `json:"requiresAttention"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	ReadAt            *time.Time `json:"readAt,omitempty"`
+}
+
 type RunEvent struct {
 	ID      string    `json:"id"`
 	Type    string    `json:"type"`
@@ -179,6 +203,7 @@ type State struct {
 	promptTemplates map[string]PromptTemplate
 	items           map[string]WorkItem
 	runs            map[string]WorkItemRun
+	statusEvents    map[string]StatusEvent
 }
 
 type Snapshot struct {
@@ -187,6 +212,7 @@ type Snapshot struct {
 	PromptTemplates []PromptTemplate   `json:"promptTemplates"`
 	Items           []WorkItem         `json:"workItems"`
 	Runs            []WorkItemRun      `json:"workItemRuns"`
+	StatusEvents    []StatusEvent      `json:"statusEvents"`
 }
 
 type CreateProject struct {
@@ -286,6 +312,34 @@ type FailRun struct {
 	Now          time.Time
 }
 
+type ReportStatus struct {
+	ID           string
+	RunHistoryID string
+	Kind         string
+	Message      string
+	Actor        string
+	ProjectID    string
+	WorkItemID   string
+	RunID        string
+	SessionID    string
+	PTYID        string
+	Now          time.Time
+}
+
+type ListStatusEvents struct {
+	ProjectID  string
+	WorkItemID string
+	RunID      string
+	SessionID  string
+	PTYID      string
+	UnreadOnly bool
+}
+
+type MarkStatusEventRead struct {
+	ID  string
+	Now time.Time
+}
+
 func NewState() *State {
 	state := &State{
 		projects:        map[string]Project{},
@@ -293,6 +347,7 @@ func NewState() *State {
 		promptTemplates: map[string]PromptTemplate{},
 		items:           map[string]WorkItem{},
 		runs:            map[string]WorkItemRun{},
+		statusEvents:    map[string]StatusEvent{},
 	}
 	template := DefaultWorkflowTemplate(time.Time{})
 	state.templates[template.ID] = template
@@ -309,6 +364,7 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		promptTemplates: map[string]PromptTemplate{},
 		items:           map[string]WorkItem{},
 		runs:            map[string]WorkItemRun{},
+		statusEvents:    map[string]StatusEvent{},
 	}
 	if len(snapshot.Templates) == 0 {
 		template := DefaultWorkflowTemplate(time.Time{})
@@ -363,6 +419,15 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 			return nil, fmt.Errorf("work item run %s already exists", run.ID)
 		}
 		state.runs[run.ID] = cloneRun(run)
+	}
+	for _, event := range snapshot.StatusEvents {
+		if err := state.validateStatusEvent(event); err != nil {
+			return nil, err
+		}
+		if _, exists := state.statusEvents[event.ID]; exists {
+			return nil, fmt.Errorf("status event %s already exists", event.ID)
+		}
+		state.statusEvents[event.ID] = cloneStatusEvent(event)
 	}
 	return state, nil
 }
@@ -422,6 +487,7 @@ func (s *State) Snapshot() Snapshot {
 		PromptTemplates: s.ListPromptTemplates(),
 		Items:           s.ListWorkItems(""),
 		Runs:            s.ListRuns(""),
+		StatusEvents:    s.ListStatusEvents(ListStatusEvents{}),
 	}
 }
 
@@ -488,6 +554,38 @@ func (s *State) ListRuns(workItemID string) []WorkItemRun {
 		if out[i].WorkItemID != out[j].WorkItemID {
 			return out[i].WorkItemID < out[j].WorkItemID
 		}
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func (s *State) ListStatusEvents(filter ListStatusEvents) []StatusEvent {
+	out := make([]StatusEvent, 0, len(s.statusEvents))
+	for _, event := range s.statusEvents {
+		if filter.ProjectID != "" && event.ProjectID != filter.ProjectID {
+			continue
+		}
+		if filter.WorkItemID != "" && event.WorkItemID != filter.WorkItemID {
+			continue
+		}
+		if filter.RunID != "" && event.RunID != filter.RunID {
+			continue
+		}
+		if filter.SessionID != "" && event.SessionID != filter.SessionID {
+			continue
+		}
+		if filter.PTYID != "" && event.PTYID != filter.PTYID {
+			continue
+		}
+		if filter.UnreadOnly && event.ReadAt != nil {
+			continue
+		}
+		out = append(out, cloneStatusEvent(event))
+	}
+	sort.Slice(out, func(i, j int) bool {
 		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
 			return out[i].CreatedAt.Before(out[j].CreatedAt)
 		}
@@ -905,9 +1003,137 @@ func (s *State) FailRun(req FailRun) (WorkItemRun, error) {
 	return cloneRun(run), nil
 }
 
+func (s *State) ReportStatus(req ReportStatus) (StatusEvent, error) {
+	kind := strings.TrimSpace(req.Kind)
+	if !validStatusKind(kind) {
+		return StatusEvent{}, fmt.Errorf("unsupported status kind %s", req.Kind)
+	}
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		message = kind
+	}
+	if req.ID == "" {
+		return StatusEvent{}, fmt.Errorf("status event id required")
+	}
+	if _, exists := s.statusEvents[req.ID]; exists {
+		return StatusEvent{}, fmt.Errorf("status event %s already exists", req.ID)
+	}
+
+	runID := strings.TrimSpace(req.RunID)
+	workItemID := strings.TrimSpace(req.WorkItemID)
+	projectID := strings.TrimSpace(req.ProjectID)
+	sessionID := strings.TrimSpace(req.SessionID)
+	ptyID := strings.TrimSpace(req.PTYID)
+	scope := StatusScopeSession
+
+	if runID != "" {
+		run, ok := s.runs[runID]
+		if !ok {
+			return StatusEvent{}, fmt.Errorf("work item run %s not found", runID)
+		}
+		if run.Status == RunStateCompleted || run.Status == RunStateFailed || run.Status == RunStateCancelled {
+			return StatusEvent{}, fmt.Errorf("work item run %s is already terminal", runID)
+		}
+		workItemID = run.WorkItemID
+		projectID = run.ProjectID
+		if sessionID == "" {
+			sessionID = run.SessionID
+		}
+		if ptyID == "" {
+			ptyID = run.PTYID
+		}
+		scope = StatusScopeRun
+
+		switch kind {
+		case StatusKindQuestion, StatusKindBlocked:
+			run.Status = RunStateAwaitingInput
+			run.UpdatedAt = req.Now
+			if err := appendRunEvent(&run, RunEvent{
+				ID:      req.RunHistoryID,
+				Type:    RunStateAwaitingInput,
+				At:      req.Now,
+				Actor:   req.Actor,
+				Message: message,
+			}); err != nil {
+				return StatusEvent{}, err
+			}
+			item := s.items[run.WorkItemID]
+			item.RunState = RunStateAwaitingInput
+			item.UpdatedAt = req.Now
+			s.items[item.ID] = item
+		case StatusKindDone:
+			run.Status = RunStateCompleted
+			run.UpdatedAt = req.Now
+			run.CompletedAt = &req.Now
+			if err := appendRunEvent(&run, RunEvent{
+				ID:      req.RunHistoryID,
+				Type:    RunStateCompleted,
+				At:      req.Now,
+				Actor:   req.Actor,
+				Message: message,
+			}); err != nil {
+				return StatusEvent{}, err
+			}
+			item := s.items[run.WorkItemID]
+			item.RunState = RunStateCompleted
+			if reviewStageID := reviewStageID(s.projects[item.ProjectID]); reviewStageID != "" {
+				item.StageID = reviewStageID
+			}
+			item.UpdatedAt = req.Now
+			s.items[item.ID] = item
+		}
+		s.runs[run.ID] = run
+	} else if ptyID != "" {
+		scope = StatusScopePTY
+	} else if sessionID != "" {
+		scope = StatusScopeSession
+	} else {
+		return StatusEvent{}, fmt.Errorf("status context required")
+	}
+
+	event := StatusEvent{
+		ID:                req.ID,
+		Scope:             scope,
+		Kind:              kind,
+		Message:           message,
+		Actor:             req.Actor,
+		ProjectID:         projectID,
+		WorkItemID:        workItemID,
+		RunID:             runID,
+		SessionID:         sessionID,
+		PTYID:             ptyID,
+		RequiresAttention: kind == StatusKindQuestion || kind == StatusKindBlocked,
+		CreatedAt:         req.Now,
+	}
+	if err := s.validateStatusEvent(event); err != nil {
+		return StatusEvent{}, err
+	}
+	s.statusEvents[event.ID] = event
+	return cloneStatusEvent(event), nil
+}
+
+func (s *State) MarkStatusEventRead(req MarkStatusEventRead) (StatusEvent, error) {
+	event, ok := s.statusEvents[req.ID]
+	if !ok {
+		return StatusEvent{}, fmt.Errorf("status event %s not found", req.ID)
+	}
+	event.ReadAt = &req.Now
+	s.statusEvents[event.ID] = event
+	return cloneStatusEvent(event), nil
+}
+
 func (p Project) hasStage(stageID string) bool {
 	_, ok := p.stage(stageID)
 	return ok
+}
+
+func reviewStageID(project Project) string {
+	for _, stage := range project.Workflow.Stages {
+		if stage.Kind == StageKindReview {
+			return stage.ID
+		}
+	}
+	return ""
 }
 
 func defaultPresetForStage(project Project, stageID string) string {
@@ -1107,6 +1333,47 @@ func (s *State) validateRun(run WorkItemRun) error {
 	return nil
 }
 
+func (s *State) validateStatusEvent(event StatusEvent) error {
+	if event.ID == "" {
+		return fmt.Errorf("status event id required")
+	}
+	if !validStatusKind(event.Kind) {
+		return fmt.Errorf("unsupported status kind %s", event.Kind)
+	}
+	if strings.TrimSpace(event.Message) == "" {
+		return fmt.Errorf("status message required")
+	}
+	switch event.Scope {
+	case StatusScopeRun:
+		if event.RunID == "" {
+			return fmt.Errorf("run status event requires run id")
+		}
+		if _, ok := s.runs[event.RunID]; !ok {
+			return fmt.Errorf("work item run %s not found", event.RunID)
+		}
+	case StatusScopePTY:
+		if event.PTYID == "" {
+			return fmt.Errorf("pty status event requires pty id")
+		}
+	case StatusScopeSession:
+		if event.SessionID == "" {
+			return fmt.Errorf("session status event requires session id")
+		}
+	default:
+		return fmt.Errorf("unsupported status scope %s", event.Scope)
+	}
+	return nil
+}
+
+func validStatusKind(kind string) bool {
+	switch kind {
+	case StatusKindQuestion, StatusKindDone, StatusKindBlocked:
+		return true
+	default:
+		return false
+	}
+}
+
 func validPreset(preset string) bool {
 	switch preset {
 	case RunPresetReader, RunPresetWriter, RunPresetReviewer, RunPresetManager:
@@ -1218,6 +1485,14 @@ func cloneRun(run WorkItemRun) WorkItemRun {
 	}
 	run.History = append([]RunEvent(nil), run.History...)
 	return run
+}
+
+func cloneStatusEvent(event StatusEvent) StatusEvent {
+	if event.ReadAt != nil {
+		readAt := *event.ReadAt
+		event.ReadAt = &readAt
+	}
+	return event
 }
 
 func cloneStages(stages []WorkflowStage) []WorkflowStage {

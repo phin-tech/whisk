@@ -506,6 +506,29 @@ export class KillPTYRequest {
     }
 }
 
+export class ListStatusEventsRequest {
+    "projectId"?: string;
+    "workItemId"?: string;
+    "runId"?: string;
+    "sessionId"?: string;
+    "ptyId"?: string;
+    "unreadOnly"?: boolean;
+
+    /** Creates a new ListStatusEventsRequest instance. */
+    constructor($$source: Partial<ListStatusEventsRequest> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ListStatusEventsRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ListStatusEventsRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ListStatusEventsRequest($$parsedSource as Partial<ListStatusEventsRequest>);
+    }
+}
+
 export class ListWorktreesRequest {
     "repoPath": string;
 
@@ -524,6 +547,27 @@ export class ListWorktreesRequest {
     static createFrom($$source: any = {}): ListWorktreesRequest {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ListWorktreesRequest($$parsedSource as Partial<ListWorktreesRequest>);
+    }
+}
+
+export class MarkStatusEventReadRequest {
+    "id": string;
+
+    /** Creates a new MarkStatusEventReadRequest instance. */
+    constructor($$source: Partial<MarkStatusEventReadRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MarkStatusEventReadRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): MarkStatusEventReadRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new MarkStatusEventReadRequest($$parsedSource as Partial<MarkStatusEventReadRequest>);
     }
 }
 
@@ -754,6 +798,72 @@ export class RemoveWorktreeRequest {
     static createFrom($$source: any = {}): RemoveWorktreeRequest {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new RemoveWorktreeRequest($$parsedSource as Partial<RemoveWorktreeRequest>);
+    }
+}
+
+export class ReportStatusRequest {
+    "kind": string;
+    "message": string;
+    "actor"?: string;
+    "projectId"?: string;
+    "workItemId"?: string;
+    "runId"?: string;
+    "sessionId"?: string;
+    "ptyId"?: string;
+
+    /** Creates a new ReportStatusRequest instance. */
+    constructor($$source: Partial<ReportStatusRequest> = {}) {
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("message" in $$source)) {
+            this["message"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReportStatusRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ReportStatusRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ReportStatusRequest($$parsedSource as Partial<ReportStatusRequest>);
+    }
+}
+
+export class ReportStatusResponse {
+    "event": StatusEvent;
+    "run"?: WorkItemRun | null;
+    "workItem"?: WorkItem | null;
+
+    /** Creates a new ReportStatusResponse instance. */
+    constructor($$source: Partial<ReportStatusResponse> = {}) {
+        if (!("event" in $$source)) {
+            this["event"] = (new StatusEvent());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReportStatusResponse instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ReportStatusResponse {
+        const $$createField0_0 = $$createType3;
+        const $$createField1_0 = $$createType5;
+        const $$createField2_0 = $$createType7;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("event" in $$parsedSource) {
+            $$parsedSource["event"] = $$createField0_0($$parsedSource["event"]);
+        }
+        if ("run" in $$parsedSource) {
+            $$parsedSource["run"] = $$createField1_0($$parsedSource["run"]);
+        }
+        if ("workItem" in $$parsedSource) {
+            $$parsedSource["workItem"] = $$createField2_0($$parsedSource["workItem"]);
+        }
+        return new ReportStatusResponse($$parsedSource as Partial<ReportStatusResponse>);
     }
 }
 
@@ -1139,7 +1249,7 @@ export class StartedHTTPForward {
      * Creates a new StartedHTTPForward instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedHTTPForward {
-        const $$createField2_0 = $$createType3;
+        const $$createField2_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("forward" in $$parsedSource) {
             $$parsedSource["forward"] = $$createField2_0($$parsedSource["forward"]);
@@ -1176,6 +1286,9 @@ export class StartedPanePTY {
         return new StartedPanePTY($$parsedSource as Partial<StartedPanePTY>);
     }
 }
+
+export const StatusEvent = workitem$0.StatusEvent;
+export type StatusEvent = workitem$0.StatusEvent;
 
 export const WorkItem = workitem$0.WorkItem;
 export type WorkItem = workitem$0.WorkItem;
@@ -1280,7 +1393,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType4;
+        const $$createField2_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -1318,5 +1431,10 @@ export class WritePTYRequest {
 const $$createType0 = StartPTYOptions.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
 const $$createType2 = session$0.Session.createFrom;
-const $$createType3 = HTTPForward.createFrom;
-const $$createType4 = WorktrunkBinary.createFrom;
+const $$createType3 = workitem$0.StatusEvent.createFrom;
+const $$createType4 = workitem$0.WorkItemRun.createFrom;
+const $$createType5 = $Create.Nullable($$createType4);
+const $$createType6 = workitem$0.WorkItem.createFrom;
+const $$createType7 = $Create.Nullable($$createType6);
+const $$createType8 = HTTPForward.createFrom;
+const $$createType9 = WorktrunkBinary.createFrom;

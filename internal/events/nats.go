@@ -12,9 +12,11 @@ import (
 )
 
 const (
-	subjectSessionChanged = "whisk.session.changed"
-	subjectPTYChanged     = "whisk.pty.changed"
-	subjectPTYOutput      = "whisk.pty.output"
+	subjectSessionChanged   = "whisk.session.changed"
+	subjectPTYChanged       = "whisk.pty.changed"
+	subjectPTYOutput        = "whisk.pty.output"
+	subjectWorkItemsChanged = "whisk.workitems.changed"
+	subjectStatusChanged    = "whisk.status.changed"
 )
 
 type NATSBus struct {
@@ -96,6 +98,10 @@ func subjectFor(eventType app.RuntimeEventType) string {
 		return subjectPTYChanged
 	case app.EventPTYOutput:
 		return subjectPTYOutput
+	case app.EventWorkItemsChanged:
+		return subjectWorkItemsChanged
+	case app.EventStatusChanged:
+		return subjectStatusChanged
 	default:
 		return "whisk.unknown"
 	}

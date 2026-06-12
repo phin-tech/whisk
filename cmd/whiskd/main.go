@@ -8,7 +8,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -60,6 +62,8 @@ func main() {
 		TranscriptStore: transcripts,
 		BookmarkStore:   bookmarks,
 		WorkItemStore:   workItems,
+		DaemonURL:       "http://" + *addr,
+		CLIPath:         whiskCLIPath(),
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -123,4 +127,30 @@ func validateListenAddr(addr string) error {
 		return fmt.Errorf("refusing non-loopback bind %q until daemon auth is implemented", addr)
 	}
 	return nil
+}
+
+func whiskCLIPath() string {
+	candidates := []string{}
+	if path := os.Getenv("WHISK_CLI"); path != "" {
+		candidates = append(candidates, path)
+	}
+	if executable, err := os.Executable(); err == nil {
+		dir := filepath.Dir(executable)
+		candidates = append(candidates, filepath.Join(dir, "whisk"))
+		candidates = append(candidates, executable)
+	}
+	if path, err := exec.LookPath("whisk"); err == nil {
+		candidates = append(candidates, path)
+	}
+	for _, candidate := range candidates {
+		abs, err := filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		info, err := os.Stat(abs)
+		if err == nil && !info.IsDir() {
+			return abs
+		}
+	}
+	return ""
 }

@@ -80,6 +80,8 @@ func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 		},
 		WorkItemStore: store,
 		PTYBackend:    ptyBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
 	})
 
 	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: root})
@@ -117,6 +119,17 @@ func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 	if len(ptyBackend.spawns) != 1 || ptyBackend.spawns[0].WorkingDir != worktreeDir {
 		t.Fatalf("spawns = %#v", ptyBackend.spawns)
 	}
+	env := ptyBackend.spawns[0].Env
+	if env["WHISKD_URL"] != "http://127.0.0.1:8787" ||
+		env["WHISK_CLI"] != "/usr/local/bin/whisk" ||
+		env["WHISK_PROJECT_ID"] != project.ID ||
+		env["WHISK_WORK_ITEM_ID"] != item.ID ||
+		env["WHISK_RUN_ID"] != run.ID ||
+		env["WHISK_SESSION_ID"] != run.SessionID ||
+		env["WHISK_PTY_ID"] != run.PTYID ||
+		env["WHISK_ACTOR"] != "agent" {
+		t.Fatalf("spawn env = %#v", env)
+	}
 	writes := ptyBackend.writes[run.PTYID]
 	if len(writes) != 2 {
 		t.Fatalf("writes = %#v", writes)
@@ -130,6 +143,65 @@ func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 	sessions, err := runtime.ListSessions(ctx)
 	if err != nil || len(sessions) != 1 || sessions[0].RootDir != worktreeDir {
 		t.Fatalf("sessions = %#v, err = %v", sessions, err)
+	}
+}
+
+func TestRuntimeReportStatusPersistsAndPublishes(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	store := &memoryWorkItemStore{}
+	sink := &memoryEventSink{}
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: store,
+		EventSink:     sink,
+	})
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: root})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Wire status"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	run, err := runtime.StartWorkItemRun(ctx, app.StartWorkItemRunRequest{
+		WorkItemID: item.ID,
+		SessionID:  "sess_01",
+		PTYID:      "pty_01",
+		Actor:      "agent",
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+
+	report, err := runtime.ReportStatus(ctx, app.ReportStatusRequest{
+		Kind:    workitem.StatusKindQuestion,
+		Message: "Need staging API key.",
+		Actor:   "agent",
+		RunID:   run.ID,
+	})
+	if err != nil {
+		t.Fatalf("report status: %v", err)
+	}
+	if report.Event.Kind != workitem.StatusKindQuestion || !report.Event.RequiresAttention {
+		t.Fatalf("report = %#v", report)
+	}
+	if report.Run == nil || report.Run.Status != workitem.RunStateAwaitingInput {
+		t.Fatalf("report run = %#v", report.Run)
+	}
+	if report.WorkItem == nil || report.WorkItem.RunState != workitem.RunStateAwaitingInput {
+		t.Fatalf("report work item = %#v", report.WorkItem)
+	}
+	if len(store.saved.StatusEvents) != 1 || store.saved.StatusEvents[0].Message != "Need staging API key." {
+		t.Fatalf("saved status events = %#v", store.saved.StatusEvents)
+	}
+	if len(sink.events) == 0 || sink.events[len(sink.events)-1].Type != app.EventStatusChanged {
+		t.Fatalf("events = %#v", sink.events)
 	}
 }
 

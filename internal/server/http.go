@@ -62,6 +62,9 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("GET /v1/work-item-runs", server.listWorkItemRuns)
 	mux.HandleFunc("POST /v1/work-item-runs", server.startWorkItemRun)
 	mux.HandleFunc("POST /v1/work-item-runs/{runID}/cancel", server.cancelWorkItemRun)
+	mux.HandleFunc("POST /v1/status", server.reportStatus)
+	mux.HandleFunc("GET /v1/status-events", server.listStatusEvents)
+	mux.HandleFunc("POST /v1/status-events/{statusEventID}/read", server.markStatusEventRead)
 	return mux
 }
 

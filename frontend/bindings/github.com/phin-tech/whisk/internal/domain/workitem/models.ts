@@ -250,6 +250,54 @@ export class RunEvent {
     }
 }
 
+export class StatusEvent {
+    "id": string;
+    "scope": string;
+    "kind": string;
+    "message": string;
+    "actor"?: string;
+    "projectId"?: string;
+    "workItemId"?: string;
+    "runId"?: string;
+    "sessionId"?: string;
+    "ptyId"?: string;
+    "requiresAttention": boolean;
+    "createdAt": time$0.Time;
+    "readAt"?: time$0.Time | null;
+
+    /** Creates a new StatusEvent instance. */
+    constructor($$source: Partial<StatusEvent> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("scope" in $$source)) {
+            this["scope"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("message" in $$source)) {
+            this["message"] = "";
+        }
+        if (!("requiresAttention" in $$source)) {
+            this["requiresAttention"] = false;
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StatusEvent instance from a string or object.
+     */
+    static createFrom($$source: any = {}): StatusEvent {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new StatusEvent($$parsedSource as Partial<StatusEvent>);
+    }
+}
+
 export class TransitionRule {
     "fromStageId": string;
     "toStageId": string;

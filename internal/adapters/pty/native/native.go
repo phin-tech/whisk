@@ -54,6 +54,12 @@ func (b *Backend) Spawn(_ context.Context, req app.SpawnPTYRequest) (app.PTYReco
 	}
 	cmd := exec.Command(shell)
 	cmd.Dir = workingDir
+	if len(req.Env) > 0 {
+		cmd.Env = os.Environ()
+		for key, value := range req.Env {
+			cmd.Env = append(cmd.Env, key+"="+value)
+		}
+	}
 
 	record := app.PTYRecord{
 		ID:         req.ID,

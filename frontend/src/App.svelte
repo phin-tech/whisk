@@ -1,7 +1,14 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import type { Project, PTYInfo, RuntimeEvent, WorkItem, WorkItemRun } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type {
+    Project,
+    PTYInfo,
+    RuntimeEvent,
+    StatusEvent,
+    WorkItem,
+    WorkItemRun,
+  } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
     AddWorkItemAttachment,
     BindWorkItemWorktree,
@@ -15,8 +22,10 @@
     ListPTYs,
     ListProjects,
     ListSessions,
+    ListStatusEvents,
     ListWorkItemRuns,
     ListWorkItems,
+    MarkStatusEventRead,
     MoveWorkItem,
     NextEvent,
     Output,
@@ -30,9 +39,10 @@
   import SettingsView from "./SettingsView.svelte";
   import SidebarDock from "./SidebarDock.svelte";
   import WorkBoard from "./WorkBoard.svelte";
+  import { notificationBadgeCount, targetForStatusEvent } from "./notificationsView";
   import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
 
-  type SidebarId = "sessions" | "ptys" | "work";
+  type SidebarId = "sessions" | "ptys" | "work" | "notifications";
   type MainView = "session" | "work";
   type RailSide = "left" | "right";
 
@@ -43,6 +53,7 @@
   let projects: Project[] = [];
   let workItems: WorkItem[] = [];
   let workItemRuns: WorkItemRun[] = [];
+  let statusEvents: StatusEvent[] = [];
   let activeSessionId = "";
   let activePaneId = "";
   let activeProjectId = "";
@@ -58,6 +69,7 @@
   let loadingSession = false;
   let loadingPtys = false;
   let loadingWork = false;
+  let loadingStatusEvents = false;
   let outputChunks: Record<string, string[]> = {};
   let offsets: Record<string, number> = {};
   let reconcileTimer: number | undefined;
@@ -70,6 +82,7 @@
 
   $: activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   $: activeSessionWindow = activeWindow(activeSession, activePaneId);
+  $: notificationCount = notificationBadgeCount(statusEvents);
   $: if (activeSession && (!activePaneId || !activeSession.panes[activePaneId])) {
     activePaneId = firstPaneId(activeSession);
   }
@@ -160,6 +173,15 @@
 
   async function refreshWorkItemRuns() {
     workItemRuns = await ListWorkItemRuns("");
+  }
+
+  async function refreshStatusEvents() {
+    loadingStatusEvents = true;
+    try {
+      statusEvents = await ListStatusEvents({ unreadOnly: true });
+    } finally {
+      loadingStatusEvents = false;
+    }
   }
 
   async function refreshVisibleOutput() {
@@ -263,7 +285,8 @@
     if (targets.sessions) await refreshSessions();
     if (targets.ptys) await refreshPTYs();
     if (targets.outputPtyId) await refreshOutput(targets.outputPtyId);
-    if (event.type === "workitems.changed") await refreshProjects();
+    if (targets.statusEvents) await refreshStatusEvents();
+    if (targets.work) await refreshProjects();
   }
 
   async function runEventLoop() {
@@ -296,6 +319,25 @@
     void Promise.all([refreshWorkItems(), refreshWorkItemRuns()]).catch((err) => {
       error = backendError(err);
     });
+  }
+
+  async function selectStatusEvent(event: StatusEvent) {
+    const target = targetForStatusEvent(event, sessions);
+    if (target.main === "work") {
+      activeMain = "work";
+      activeSidebar = "work";
+    } else {
+      activeMain = "session";
+      if (target.sessionId) activeSessionId = target.sessionId;
+      if (target.paneId) activePaneId = target.paneId;
+    }
+    try {
+      await MarkStatusEventRead({ id: event.id });
+      await refreshStatusEvents();
+      if (target.main === "session") await refreshVisibleOutput();
+    } catch (err) {
+      error = backendError(err);
+    }
   }
 
   function openNewProject() {
@@ -483,7 +525,8 @@
   }
 
   function toggleSidebar(id: SidebarId) {
-    activeMain = id === "work" ? "work" : "session";
+    if (id === "work") activeMain = "work";
+    if (id === "sessions" || id === "ptys") activeMain = "session";
     activeSidebar = activeSidebar === id ? null : id;
     settingsOpen = false;
   }
@@ -498,6 +541,7 @@
     refreshSessions()
       .then(refreshPTYs)
       .then(refreshProjects)
+      .then(refreshStatusEvents)
       .then(refreshVisibleOutput)
       .catch((err) => {
         error = backendError(err);
@@ -525,6 +569,7 @@
         <ActivityRail
           activeSidebar={activeSidebar ?? (activeMain === "work" ? "work" : null)}
           {settingsOpen}
+          {notificationCount}
           onSidebar={toggleSidebar}
           onSettings={toggleSettings}
         />
@@ -535,17 +580,21 @@
         {ptys}
         {projects}
         {workItems}
+        {statusEvents}
         {activeSessionId}
         {activeProjectId}
         {loadingSession}
         {loadingPtys}
         {loadingWork}
+        {loadingStatusEvents}
         {railSide}
         onClose={() => (activeSidebar = null)}
         onNewSession={openNewSession}
         onSelectSession={selectSession}
         onCloseSession={closeSession}
         onRefreshPtys={() => void refreshPTYs()}
+        onRefreshStatusEvents={() => void refreshStatusEvents()}
+        onSelectStatusEvent={(event) => void selectStatusEvent(event)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
         onSelectProject={selectProject}
@@ -687,17 +736,21 @@
         {ptys}
         {projects}
         {workItems}
+        {statusEvents}
         {activeSessionId}
         {activeProjectId}
         {loadingSession}
         {loadingPtys}
         {loadingWork}
+        {loadingStatusEvents}
         {railSide}
         onClose={() => (activeSidebar = null)}
         onNewSession={openNewSession}
         onSelectSession={selectSession}
         onCloseSession={closeSession}
         onRefreshPtys={() => void refreshPTYs()}
+        onRefreshStatusEvents={() => void refreshStatusEvents()}
+        onSelectStatusEvent={(event) => void selectStatusEvent(event)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
         onSelectProject={selectProject}
@@ -711,6 +764,7 @@
         <ActivityRail
           activeSidebar={activeSidebar ?? (activeMain === "work" ? "work" : null)}
           {settingsOpen}
+          {notificationCount}
           onSidebar={toggleSidebar}
           onSettings={toggleSettings}
         />

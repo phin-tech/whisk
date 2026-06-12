@@ -98,6 +98,7 @@ type SpawnPTYRequest struct {
 	WorkingDir string
 	Cols       int
 	Rows       int
+	Env        map[string]string
 }
 
 type PTYSize struct {
@@ -119,6 +120,8 @@ type RuntimeConfig struct {
 	TranscriptStore TranscriptStore
 	BookmarkStore   BookmarkStore
 	WorkItemStore   WorkItemStore
+	DaemonURL       string
+	CLIPath         string
 }
 
 type Runtime struct {
@@ -132,6 +135,8 @@ type Runtime struct {
 	transcriptStore TranscriptStore
 	bookmarkStore   BookmarkStore
 	workItemStore   WorkItemStore
+	daemonURL       string
+	cliPath         string
 	ptyMeta         map[string]ptyMetadata
 	forwards        *httpforward.State
 	workItems       *workitem.State
@@ -158,6 +163,7 @@ const (
 	EventPTYChanged       RuntimeEventType = "pty.changed"
 	EventPTYOutput        RuntimeEventType = "pty.output"
 	EventWorkItemsChanged RuntimeEventType = "workitems.changed"
+	EventStatusChanged    RuntimeEventType = "status.changed"
 )
 
 type RuntimeEvent struct {
@@ -242,6 +248,7 @@ type StartPTYOptions struct {
 	Cols    int
 	Rows    int
 	Command string
+	Env     map[string]string
 }
 
 type SplitPaneResult struct {
@@ -380,6 +387,8 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		transcriptStore: config.TranscriptStore,
 		bookmarkStore:   config.BookmarkStore,
 		workItemStore:   config.WorkItemStore,
+		daemonURL:       config.DaemonURL,
+		cliPath:         config.CLIPath,
 		ptyMeta:         map[string]ptyMetadata{},
 		forwards:        httpforward.NewState(),
 		workItems:       workItems,
@@ -413,6 +422,7 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 			WorkingDir: rootDir,
 			Cols:       req.InitialPTY.Cols,
 			Rows:       req.InitialPTY.Rows,
+			Env:        r.ptyContextEnv(sessionID, nextPTYID, req.InitialPTY.Env),
 		})
 		if err != nil {
 			return CreatedSession{}, err
@@ -487,6 +497,7 @@ func (r *Runtime) SplitPane(ctx context.Context, req SplitPaneRequest) (SplitPan
 			WorkingDir: target.WorkingDir,
 			Cols:       req.InitialPTY.Cols,
 			Rows:       req.InitialPTY.Rows,
+			Env:        r.ptyContextEnv(req.SessionID, newPtyID, req.InitialPTY.Env),
 		})
 		if err != nil {
 			return SplitPaneResult{}, err
@@ -618,6 +629,7 @@ func (r *Runtime) StartPanePTY(ctx context.Context, req StartPanePTYRequest) (St
 		WorkingDir: pane.WorkingDir,
 		Cols:       req.Options.Cols,
 		Rows:       req.Options.Rows,
+		Env:        r.ptyContextEnv(req.SessionID, ptyID, req.Options.Env),
 	})
 	if err != nil {
 		return StartedPanePTY{}, err
@@ -708,6 +720,7 @@ func (r *Runtime) RestartPanePTY(ctx context.Context, req RestartPanePTYRequest)
 		WorkingDir: pane.WorkingDir,
 		Cols:       req.Options.Cols,
 		Rows:       req.Options.Rows,
+		Env:        r.ptyContextEnv(req.SessionID, newPTYID, req.Options.Env),
 	})
 	if err != nil {
 		return RestartedPanePTY{}, err
@@ -969,6 +982,29 @@ func (r *Runtime) writeInitialCommand(ctx context.Context, ptyID string, command
 		return nil
 	}
 	return r.ptys.Write(ctx, ptyID, []byte(command+"\n"))
+}
+
+func (r *Runtime) ptyContextEnv(sessionID string, ptyID string, extra map[string]string) map[string]string {
+	env := map[string]string{}
+	for key, value := range extra {
+		env[key] = value
+	}
+	if r.daemonURL != "" {
+		env["WHISKD_URL"] = r.daemonURL
+	}
+	if r.cliPath != "" {
+		env["WHISK_CLI"] = r.cliPath
+	}
+	if sessionID != "" {
+		env["WHISK_SESSION_ID"] = sessionID
+	}
+	if ptyID != "" {
+		env["WHISK_PTY_ID"] = ptyID
+	}
+	if len(env) == 0 {
+		return nil
+	}
+	return env
 }
 
 func (r *Runtime) appendPTYTranscriptOutput(ctx context.Context, ptyID string, offset uint64, data []byte) {

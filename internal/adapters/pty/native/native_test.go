@@ -67,6 +67,45 @@ func TestBackendSpawnWriteOutputAttachAndResize(t *testing.T) {
 	}
 }
 
+func TestBackendSpawnInjectsEnvironment(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	backend := NewBackend()
+	t.Cleanup(func() { _ = backend.Shutdown(context.Background()) })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := backend.Spawn(ctx, app.SpawnPTYRequest{
+		ID:         "pty_env",
+		WorkingDir: ".",
+		Cols:       80,
+		Rows:       24,
+		Env:        map[string]string{"WHISK_TEST_CONTEXT": "context-ok"},
+	}); err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+	attach, err := backend.Attach(ctx, app.AttachPTYRequest{PtyID: "pty_env"})
+	if err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	defer attach.Close()
+	if err := backend.Write(ctx, "pty_env", []byte("printf \"$WHISK_TEST_CONTEXT\\n\"\n")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	var output strings.Builder
+	for !strings.Contains(output.String(), "context-ok") {
+		select {
+		case event := <-attach.Events:
+			if event.Kind == app.PTYOutput {
+				output.Write(event.Bytes)
+			}
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for env output; got %q", output.String())
+		}
+	}
+}
+
 func TestBackendRejectsInvalidOperations(t *testing.T) {
 	backend := NewBackend()
 	t.Cleanup(func() { _ = backend.Shutdown(context.Background()) })

@@ -8,6 +8,7 @@ export {
     ProjectWorkflow,
     PromptTemplate,
     RunEvent,
+    StatusEvent,
     TransitionRule,
     WorkItem,
     WorkItemRun,

@@ -205,3 +205,59 @@ func (s *HTTPServer) cancelWorkItemRun(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, run)
 }
+
+func (s *HTTPServer) reportStatus(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ReportStatusRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	report, err := s.runtime.ReportStatus(r.Context(), app.ReportStatusRequest{
+		Kind:       req.Kind,
+		Message:    req.Message,
+		Actor:      req.Actor,
+		ProjectID:  req.ProjectID,
+		WorkItemID: req.WorkItemID,
+		RunID:      req.RunID,
+		SessionID:  req.SessionID,
+		PTYID:      req.PTYID,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, protocol.ReportStatusResponse{
+		Event:    report.Event,
+		Run:      report.Run,
+		WorkItem: report.WorkItem,
+	})
+}
+
+func (s *HTTPServer) listStatusEvents(w http.ResponseWriter, r *http.Request) {
+	events, err := s.runtime.ListStatusEvents(r.Context(), app.ListStatusEventsRequest{
+		ProjectID:  r.URL.Query().Get("projectId"),
+		WorkItemID: r.URL.Query().Get("workItemId"),
+		RunID:      r.URL.Query().Get("runId"),
+		SessionID:  r.URL.Query().Get("sessionId"),
+		PTYID:      r.URL.Query().Get("ptyId"),
+		UnreadOnly: r.URL.Query().Get("unreadOnly") == "true",
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, events)
+}
+
+func (s *HTTPServer) markStatusEventRead(w http.ResponseWriter, r *http.Request) {
+	var req protocol.MarkStatusEventReadRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.ID = pathValue(r, "statusEventID", req.ID)
+	event, err := s.runtime.MarkStatusEventRead(r.Context(), app.MarkStatusEventReadRequest{ID: req.ID})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, event)
+}

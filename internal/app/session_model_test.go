@@ -83,6 +83,77 @@ func TestRuntimeStartPanePTYSpawnsIntoExistingEmptyPane(t *testing.T) {
 	}
 }
 
+func TestRuntimeInjectsWhiskContextIntoSessionPTYs(t *testing.T) {
+	ctx := context.Background()
+	rootDir := t.TempDir()
+	ptyBackend := newMemoryPTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend: ptyBackend,
+		DaemonURL:  "http://127.0.0.1:8787",
+		CLIPath:    "/usr/local/bin/whisk",
+	})
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    rootDir,
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if got := ptyBackend.spawns[0].Env; got["WHISKD_URL"] != "http://127.0.0.1:8787" ||
+		got["WHISK_CLI"] != "/usr/local/bin/whisk" ||
+		got["WHISK_SESSION_ID"] != created.Session.ID ||
+		got["WHISK_PTY_ID"] != created.MainPtyID {
+		t.Fatalf("create session env = %#v", got)
+	}
+
+	split, err := runtime.SplitPane(ctx, app.SplitPaneRequest{
+		SessionID:    created.Session.ID,
+		WindowID:     created.WindowID,
+		TargetPaneID: created.PaneID,
+		Direction:    session.SplitHorizontal,
+		InitialPTY:   &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("split pane: %v", err)
+	}
+	if got := ptyBackend.spawns[1].Env; got["WHISK_SESSION_ID"] != created.Session.ID || got["WHISK_PTY_ID"] != split.PtyID {
+		t.Fatalf("split env = %#v", got)
+	}
+
+	empty, err := runtime.CreateSession(ctx, app.CreateSessionRequest{Name: "Empty", RootDir: rootDir})
+	if err != nil {
+		t.Fatalf("create empty session: %v", err)
+	}
+	started, err := runtime.StartPanePTY(ctx, app.StartPanePTYRequest{
+		SessionID: empty.Session.ID,
+		PaneID:    empty.PaneID,
+		Options:   app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("start pane pty: %v", err)
+	}
+	if got := ptyBackend.spawns[2].Env; got["WHISK_SESSION_ID"] != empty.Session.ID || got["WHISK_PTY_ID"] != started.PTYID {
+		t.Fatalf("start env = %#v", got)
+	}
+
+	if _, err := runtime.KillPTY(ctx, app.KillPTYRequest{PTYID: started.PTYID}); err != nil {
+		t.Fatalf("kill pty: %v", err)
+	}
+	restarted, err := runtime.RestartPanePTY(ctx, app.RestartPanePTYRequest{
+		SessionID: empty.Session.ID,
+		PaneID:    empty.PaneID,
+		Options:   app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("restart pane pty: %v", err)
+	}
+	if got := ptyBackend.spawns[3].Env; got["WHISK_SESSION_ID"] != empty.Session.ID || got["WHISK_PTY_ID"] != restarted.PTYID {
+		t.Fatalf("restart env = %#v", got)
+	}
+}
+
 func TestRuntimeSetRootDirRejectsRunningPTYAndValidatesFilesystem(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	ctx := context.Background()

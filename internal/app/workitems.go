@@ -72,6 +72,36 @@ type CancelWorkItemRunRequest struct {
 	Actor string
 }
 
+type ReportStatusRequest struct {
+	Kind       string
+	Message    string
+	Actor      string
+	ProjectID  string
+	WorkItemID string
+	RunID      string
+	SessionID  string
+	PTYID      string
+}
+
+type ReportStatusResponse struct {
+	Event    workitem.StatusEvent
+	Run      *workitem.WorkItemRun
+	WorkItem *workitem.WorkItem
+}
+
+type ListStatusEventsRequest struct {
+	ProjectID  string
+	WorkItemID string
+	RunID      string
+	SessionID  string
+	PTYID      string
+	UnreadOnly bool
+}
+
+type MarkStatusEventReadRequest struct {
+	ID string
+}
+
 func (r *Runtime) ListProjects(context.Context) ([]workitem.Project, error) {
 	return r.workItems.ListProjects(), nil
 }
@@ -308,6 +338,12 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 		RootDir: launch.WorkingDir,
 		InitialPTY: &StartPTYOptions{
 			Command: command,
+			Env: map[string]string{
+				"WHISK_PROJECT_ID":   project.ID,
+				"WHISK_WORK_ITEM_ID": item.ID,
+				"WHISK_RUN_ID":       run.ID,
+				"WHISK_ACTOR":        "agent",
+			},
 		},
 	})
 	if err != nil {
@@ -373,4 +409,71 @@ func (r *Runtime) CancelWorkItemRun(ctx context.Context, req CancelWorkItemRunRe
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	return run, nil
+}
+
+func (r *Runtime) ReportStatus(ctx context.Context, req ReportStatusRequest) (ReportStatusResponse, error) {
+	event, err := r.workItems.ReportStatus(workitem.ReportStatus{
+		ID:           r.ids(),
+		RunHistoryID: r.ids(),
+		Kind:         req.Kind,
+		Message:      req.Message,
+		Actor:        req.Actor,
+		ProjectID:    req.ProjectID,
+		WorkItemID:   req.WorkItemID,
+		RunID:        req.RunID,
+		SessionID:    req.SessionID,
+		PTYID:        req.PTYID,
+		Now:          time.Now().UTC(),
+	})
+	if err != nil {
+		return ReportStatusResponse{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return ReportStatusResponse{}, err
+	}
+	if event.RunID != "" {
+		r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventStatusChanged})
+	response := ReportStatusResponse{Event: event}
+	if event.WorkItemID != "" {
+		if item, ok := r.workItems.GetWorkItem(event.WorkItemID); ok {
+			response.WorkItem = &item
+		}
+	}
+	if event.RunID != "" {
+		for _, run := range r.workItems.ListRuns(event.WorkItemID) {
+			if run.ID == event.RunID {
+				response.Run = &run
+				break
+			}
+		}
+	}
+	return response, nil
+}
+
+func (r *Runtime) ListStatusEvents(_ context.Context, req ListStatusEventsRequest) ([]workitem.StatusEvent, error) {
+	return r.workItems.ListStatusEvents(workitem.ListStatusEvents{
+		ProjectID:  req.ProjectID,
+		WorkItemID: req.WorkItemID,
+		RunID:      req.RunID,
+		SessionID:  req.SessionID,
+		PTYID:      req.PTYID,
+		UnreadOnly: req.UnreadOnly,
+	}), nil
+}
+
+func (r *Runtime) MarkStatusEventRead(ctx context.Context, req MarkStatusEventReadRequest) (workitem.StatusEvent, error) {
+	event, err := r.workItems.MarkStatusEventRead(workitem.MarkStatusEventRead{
+		ID:  req.ID,
+		Now: time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.StatusEvent{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.StatusEvent{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventStatusChanged})
+	return event, nil
 }

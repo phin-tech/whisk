@@ -6,7 +6,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 4
+const DaemonAPIVersion = 5
 
 type CompatibilityResponse struct {
 	APIVersion int `json:"apiVersion"`
@@ -173,6 +173,7 @@ type WorkflowTemplate = workitem.WorkflowTemplate
 type PromptTemplate = workitem.PromptTemplate
 type WorkItem = workitem.WorkItem
 type WorkItemRun = workitem.WorkItemRun
+type StatusEvent = workitem.StatusEvent
 type WorktreeBinding = workitem.WorktreeBinding
 type Attachment = workitem.Attachment
 
@@ -235,6 +236,36 @@ type StartWorkItemRunRequest struct {
 type CancelWorkItemRunRequest struct {
 	ID    string `json:"id"`
 	Actor string `json:"actor,omitempty"`
+}
+
+type ReportStatusRequest struct {
+	Kind       string `json:"kind"`
+	Message    string `json:"message"`
+	Actor      string `json:"actor,omitempty"`
+	ProjectID  string `json:"projectId,omitempty"`
+	WorkItemID string `json:"workItemId,omitempty"`
+	RunID      string `json:"runId,omitempty"`
+	SessionID  string `json:"sessionId,omitempty"`
+	PTYID      string `json:"ptyId,omitempty"`
+}
+
+type ReportStatusResponse struct {
+	Event    StatusEvent  `json:"event"`
+	Run      *WorkItemRun `json:"run,omitempty"`
+	WorkItem *WorkItem    `json:"workItem,omitempty"`
+}
+
+type ListStatusEventsRequest struct {
+	ProjectID  string `json:"projectId,omitempty"`
+	WorkItemID string `json:"workItemId,omitempty"`
+	RunID      string `json:"runId,omitempty"`
+	SessionID  string `json:"sessionId,omitempty"`
+	PTYID      string `json:"ptyId,omitempty"`
+	UnreadOnly bool   `json:"unreadOnly,omitempty"`
+}
+
+type MarkStatusEventReadRequest struct {
+	ID string `json:"id"`
 }
 
 type DetectWorktrunkRequest struct {

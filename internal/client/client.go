@@ -44,6 +44,9 @@ type RuntimeClient interface {
 	ListWorkItemRuns(ctx context.Context, workItemID string) ([]protocol.WorkItemRun, error)
 	StartWorkItemRun(ctx context.Context, req protocol.StartWorkItemRunRequest) (protocol.WorkItemRun, error)
 	CancelWorkItemRun(ctx context.Context, req protocol.CancelWorkItemRunRequest) (protocol.WorkItemRun, error)
+	ReportStatus(ctx context.Context, req protocol.ReportStatusRequest) (protocol.ReportStatusResponse, error)
+	ListStatusEvents(ctx context.Context, req protocol.ListStatusEventsRequest) ([]protocol.StatusEvent, error)
+	MarkStatusEventRead(ctx context.Context, req protocol.MarkStatusEventReadRequest) (protocol.StatusEvent, error)
 	CreateHTTPForward(ctx context.Context, req protocol.CreateHTTPForwardRequest) (protocol.HTTPForward, error)
 	ListHTTPForwards(ctx context.Context) ([]protocol.HTTPForward, error)
 	DeleteHTTPForward(ctx context.Context, id string) error

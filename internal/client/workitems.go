@@ -97,3 +97,41 @@ func (c *HTTPClient) CancelWorkItemRun(ctx context.Context, req protocol.CancelW
 	err := c.post(ctx, path, req, &run)
 	return run, err
 }
+
+func (c *HTTPClient) ReportStatus(ctx context.Context, req protocol.ReportStatusRequest) (protocol.ReportStatusResponse, error) {
+	var report protocol.ReportStatusResponse
+	err := c.post(ctx, "/v1/status", req, &report)
+	return report, err
+}
+
+func (c *HTTPClient) ListStatusEvents(ctx context.Context, req protocol.ListStatusEventsRequest) ([]protocol.StatusEvent, error) {
+	query := url.Values{}
+	if req.ProjectID != "" {
+		query.Set("projectId", req.ProjectID)
+	}
+	if req.WorkItemID != "" {
+		query.Set("workItemId", req.WorkItemID)
+	}
+	if req.RunID != "" {
+		query.Set("runId", req.RunID)
+	}
+	if req.SessionID != "" {
+		query.Set("sessionId", req.SessionID)
+	}
+	if req.PTYID != "" {
+		query.Set("ptyId", req.PTYID)
+	}
+	if req.UnreadOnly {
+		query.Set("unreadOnly", "true")
+	}
+	var events []protocol.StatusEvent
+	err := c.get(ctx, "/v1/status-events", query, &events)
+	return events, err
+}
+
+func (c *HTTPClient) MarkStatusEventRead(ctx context.Context, req protocol.MarkStatusEventReadRequest) (protocol.StatusEvent, error) {
+	var event protocol.StatusEvent
+	path := "/v1/status-events/" + url.PathEscape(req.ID) + "/read"
+	err := c.post(ctx, path, req, &event)
+	return event, err
+}
