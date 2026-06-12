@@ -2,3 +2,5 @@ bin/
 .task/
 frontend/node_modules/
 frontend/dist/
+tests/integration/.venv/
+tests/integration/__pycache__/

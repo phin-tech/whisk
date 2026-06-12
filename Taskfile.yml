@@ -91,6 +91,14 @@ tasks:
     cmds:
       - sh scripts/smoke-agent.sh
 
+  integration:test:
+    desc: Runs pytest black-box integration tests against a real whisk daemon
+    summary: Builds the CLI, then runs the isolated uv pytest suite in tests/integration
+    deps:
+      - build:cli
+    cmds:
+      - WHISK_BIN="{{.TASKFILE_DIR}}/{{.BIN_DIR}}/whisk" uv run --project tests/integration pytest
+
   dev:daemon:
     desc: Runs the whisk daemon in the foreground
     summary: Runs the whisk daemon in the foreground
