@@ -266,6 +266,53 @@ tasks:
       - task: sign:op
       - task: publish
 
+  publish:verified:
+    desc: "Package, verify, and upload the current signed macOS app zip"
+    platforms: [darwin]
+    preconditions:
+      - sh: "command -v gh >/dev/null 2>&1"
+        msg: "GitHub CLI 'gh' is required"
+      - sh: '[ -d "bin/Whisk.app" ]'
+        msg: "bin/Whisk.app is required; run task sign:op first"
+    cmds:
+      - |
+        set -euo pipefail
+        ROOT_DIR=$PWD
+        VERSION=$(scripts/current-version.sh)
+        TAG="v${VERSION}"
+        APP_ZIP="bin/Whisk-${TAG}-macos.zip"
+        VERIFY_DIR=$(mktemp -d)
+        CERT_DIR=$(mktemp -d)
+        cleanup() {
+          rm -rf "${VERIFY_DIR}" "${CERT_DIR}"
+        }
+        trap cleanup EXIT
+
+        codesign --verify --deep --strict --verbose=4 bin/Whisk.app
+        spctl -a -vvv -t execute bin/Whisk.app
+
+        (
+          cd "${CERT_DIR}"
+          codesign -d --extract-certificates "${ROOT_DIR}/bin/Whisk.app" >/dev/null
+          test -e codesign0
+        )
+
+        ditto -c -k --keepParent bin/Whisk.app "${APP_ZIP}"
+        ditto -x -k "${APP_ZIP}" "${VERIFY_DIR}"
+
+        codesign --verify --deep --strict --verbose=4 "${VERIFY_DIR}/Whisk.app"
+        spctl -a -vvv -t execute "${VERIFY_DIR}/Whisk.app"
+
+        shasum -a 256 "${APP_ZIP}"
+        gh release upload "${TAG}" "${APP_ZIP}" --repo phin-tech/whisk --clobber
+
+  release:local:
+    desc: "Sign locally with 1Password, verify the macOS zip on this Mac, and upload it"
+    platforms: [darwin]
+    cmds:
+      - task: sign:op
+      - task: publish:verified
+
   ci:sync-secrets:
     desc: "Push signing/notarization secrets from 1Password into GitHub Actions secrets"
     preconditions:
