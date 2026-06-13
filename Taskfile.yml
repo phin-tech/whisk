@@ -232,7 +232,7 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        VERSION=$(awk -F'"' '/^[[:space:]]*version:/ {print $2; exit}' build/config.yml)
+        VERSION=$(scripts/current-version.sh)
         TAG="v${VERSION}"
         APP_ZIP="bin/Whisk_${VERSION}.app.zip"
 
@@ -286,14 +286,37 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        VERSION=$(awk -F'"' '/^[[:space:]]*version:/ {print $2; exit}' build/config.yml)
+        VERSION="{{.VERSION}}"
+        if [ -z "$VERSION" ]; then
+          VERSION=$(scripts/current-version.sh)
+        fi
         TAG="v${VERSION}"
         gh workflow run release.yml --repo phin-tech/whisk --ref main -f version="${TAG}"
+    vars:
+      VERSION: "{{.VERSION}}"
 
   release:
-    desc: "Dispatch the GitHub release workflow for the current build/config.yml version"
+    desc: "Bump, tag, push, and dispatch release. Usage: task release BUMP=patch [PRE=pre]"
+    preconditions:
+      - sh: '[ -n "{{.BUMP}}" ]'
+        msg: "BUMP is required: patch, minor, or major"
+      - sh: "git diff --quiet && git diff --cached --quiet"
+        msg: "Working tree must be clean before releasing"
     cmds:
-      - task: ci:trigger
+      - |
+        set -euo pipefail
+        VERSION=$(BUMP="{{.BUMP}}" PRE="{{.PRE}}" scripts/bump-version.sh)
+        wails3 task common:update:build-assets
+        git add build/config.yml build/darwin/Info.dev.plist build/darwin/Info.plist build/ios/Info.dev.plist build/ios/Info.plist build/ios/LaunchScreen.storyboard build/ios/build.sh build/ios/entitlements.plist build/ios/project.pbxproj build/linux/desktop build/linux/nfpm/nfpm.yaml build/windows/info.json build/windows/nsis/wails_tools.nsh build/windows/wails.exe.manifest
+        if [ -n "{{.PRE}}" ]; then
+          git commit -m "pre-release: v${VERSION}"
+        else
+          git commit -m "release: v${VERSION}"
+        fi
+        git tag "v${VERSION}"
+        git push origin main
+        git push origin "v${VERSION}"
+        task ci:trigger VERSION="${VERSION}"
 
   run:
     summary: Builds and runs the application
