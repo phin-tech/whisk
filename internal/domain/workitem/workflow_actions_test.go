@@ -25,6 +25,57 @@ func TestDefaultWorkflowUsesExplicitActionStages(t *testing.T) {
 	}
 }
 
+func TestWorkflowDefinitionValidationRejectsInvalidDefinitions(t *testing.T) {
+	valid := DefaultWorkflowDefinition()
+	tests := []struct {
+		name string
+		edit func(*WorkflowDefinition)
+		want string
+	}{
+		{name: "missing id", edit: func(def *WorkflowDefinition) { def.ID = "" }, want: "workflow id required"},
+		{name: "missing version", edit: func(def *WorkflowDefinition) { def.Version = 0 }, want: "workflow version must be positive"},
+		{name: "missing stage", edit: func(def *WorkflowDefinition) { def.Stages = def.Stages[:len(def.Stages)-1] }, want: "workflow stages must match universal stages"},
+		{name: "wrong stage order", edit: func(def *WorkflowDefinition) { def.Stages[0], def.Stages[1] = def.Stages[1], def.Stages[0] }, want: "workflow stages must match universal stages"},
+		{name: "missing action id", edit: func(def *WorkflowDefinition) { def.Actions[0].ID = "" }, want: "workflow action id required"},
+		{name: "duplicate action id", edit: func(def *WorkflowDefinition) { def.Actions[1].ID = def.Actions[0].ID }, want: "already exists"},
+		{name: "unknown from stage", edit: func(def *WorkflowDefinition) { def.Actions[0].From = []string{"missing"} }, want: "unknown stage missing"},
+		{name: "unknown to stage", edit: func(def *WorkflowDefinition) { def.Actions[0].To = "missing" }, want: "unknown stage missing"},
+		{name: "bad required artifact", edit: func(def *WorkflowDefinition) {
+			def.Actions[0].Requires = []WorkflowArtifactRequirement{{Kind: "bad", Status: ArtifactStatusDraft}}
+		}, want: "unsupported artifact kind bad"},
+		{name: "bad created artifact", edit: func(def *WorkflowDefinition) {
+			def.Actions[0].CreatesArtifact = &WorkflowArtifactEffect{Kind: ArtifactKindPlan, Status: "bad"}
+		}, want: "unsupported artifact status bad"},
+		{name: "bad updated artifact", edit: func(def *WorkflowDefinition) {
+			def.Actions[0].UpdatesArtifact = &WorkflowArtifactEffect{Kind: "bad", Status: ArtifactStatusDraft}
+		}, want: "unsupported artifact kind bad"},
+		{name: "bad run preset", edit: func(def *WorkflowDefinition) {
+			def.Actions[0].CreatesRun = &WorkflowRunEffect{Preset: "bad", PromptTemplateID: PromptTemplatePlan}
+		}, want: "unsupported run preset bad"},
+		{name: "bad run prompt", edit: func(def *WorkflowDefinition) {
+			def.Actions[0].CreatesRun = &WorkflowRunEffect{Preset: RunPresetReader, PromptTemplateID: "bad"}
+		}, want: "unsupported prompt template bad"},
+		{name: "missing gate id", edit: func(def *WorkflowDefinition) { def.Gates[0].ID = "" }, want: "workflow gate id required"},
+		{name: "bad gate phase", edit: func(def *WorkflowDefinition) { def.Gates[0].Phase = "missing" }, want: "unknown stage missing"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			definition := valid
+			definition.Stages = append([]string(nil), valid.Stages...)
+			definition.Actions = append([]WorkflowActionDefinition(nil), valid.Actions...)
+			definition.Gates = append([]WorkflowGateDefinition(nil), valid.Gates...)
+			test.edit(&definition)
+			err := ValidateWorkflowDefinition(definition)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("expected %q, got %v", test.want, err)
+			}
+		})
+	}
+	if _, err := ParseWorkflowDefinition([]byte(`{`)); err == nil {
+		t.Fatalf("expected invalid json error")
+	}
+}
+
 func TestWorkflowActionsEnforcePlanExecutionReviewAndDoneRules(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)

@@ -2,6 +2,8 @@ package workitemstore
 
 import (
 	"context"
+	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -138,5 +140,76 @@ func TestSQLiteStorePersistsWorkflowEntities(t *testing.T) {
 	}
 	if len(loaded.WorkflowEvents) != 1 || loaded.WorkflowEvents[0].Type != workitem.WorkflowEventPlanApproved {
 		t.Fatalf("events = %#v", loaded.WorkflowEvents)
+	}
+}
+
+func TestSQLiteStoreDefaultPathUsesXDGConfigHome(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	path, err := DefaultSQLitePath()
+	if err != nil {
+		t.Fatalf("default sqlite path: %v", err)
+	}
+	if path != filepath.Join(configHome, "whisk", "work-items.sqlite") {
+		t.Fatalf("path = %q", path)
+	}
+	store, err := NewSQLiteStore("")
+	if err != nil {
+		t.Fatalf("new sqlite store: %v", err)
+	}
+	if store.path != path {
+		t.Fatalf("store path = %q", store.path)
+	}
+	loaded, err := store.LoadWorkItems(context.Background())
+	if err != nil {
+		t.Fatalf("load default store: %v", err)
+	}
+	if len(loaded.Projects) != 0 || len(loaded.Items) != 0 {
+		t.Fatalf("loaded = %#v", loaded)
+	}
+}
+
+func TestSQLiteStoreDefaultPathFallsBackToHomeConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", home)
+
+	path, err := DefaultSQLitePath()
+	if err != nil {
+		t.Fatalf("default sqlite path: %v", err)
+	}
+	if path != filepath.Join(home, ".config", "whisk", "work-items.sqlite") {
+		t.Fatalf("path = %q", path)
+	}
+}
+
+func TestSQLiteStoreRejectsCorruptSnapshotPayload(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "work-items.sqlite")
+	store, err := NewSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("new sqlite store: %v", err)
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.ExecContext(ctx, `insert into snapshots (id, payload, updated_at) values (1, ?, datetime('now'))`, []byte(`{`)); err != nil {
+		t.Fatalf("write corrupt payload: %v", err)
+	}
+	if _, err := store.LoadWorkItems(ctx); err == nil {
+		t.Fatalf("expected corrupt payload error")
+	}
+}
+
+func TestSQLiteStoreReportsParentDirectoryErrors(t *testing.T) {
+	parent := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(parent, []byte("file"), 0o600); err != nil {
+		t.Fatalf("write parent file: %v", err)
+	}
+	if _, err := NewSQLiteStore(filepath.Join(parent, "work-items.sqlite")); err == nil {
+		t.Fatalf("expected parent directory error")
 	}
 }

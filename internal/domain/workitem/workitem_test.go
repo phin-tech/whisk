@@ -1,6 +1,7 @@
 package workitem
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -32,6 +33,34 @@ func TestStateCreatesProjectWithCopiedDefaultWorkflow(t *testing.T) {
 	}
 	if project.Workflow.Stages[3].ID != "execution" || !project.Workflow.Stages[3].ProvisionWorktree {
 		t.Fatalf("execution stage = %#v", project.Workflow.Stages[3])
+	}
+}
+
+func TestStateCreatesProjectWithCopiedPreferences(t *testing.T) {
+	state := NewState()
+	agents := map[string]string{StagePlanning: "codex"}
+	gates := []GateConfig{{ID: "gate_01", Name: "Review", Kind: "manual", Blocking: true, Phase: StageReview}}
+	project, err := state.CreateProject(CreateProject{
+		ID:      "proj_01",
+		Name:    "My App",
+		RootDir: "/repo/my-app",
+		Preferences: ProjectPreferences{
+			AutoRun:            AutoRunAll,
+			AutoWorktree:       true,
+			DefaultPhaseAgents: agents,
+			Gates:              gates,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	agents[StagePlanning] = "mutated"
+	gates[0].Name = "Mutated"
+	if project.Preferences.AutoRun != AutoRunAll || !project.Preferences.AutoWorktree {
+		t.Fatalf("preferences = %#v", project.Preferences)
+	}
+	if project.Preferences.DefaultPhaseAgents[StagePlanning] != "codex" || project.Preferences.Gates[0].Name != "Review" {
+		t.Fatalf("preferences were not copied: %#v", project.Preferences)
 	}
 }
 
@@ -498,6 +527,337 @@ func TestSnapshotRoundTripValidatesReferences(t *testing.T) {
 	snapshot.Items[0].ProjectID = "missing"
 	if _, err := NewStateFromSnapshot(snapshot); err == nil || !strings.Contains(err.Error(), "project missing not found") {
 		t.Fatalf("expected missing project error, got %v", err)
+	}
+}
+
+func TestSnapshotLoadRestoresFullWorkflowRecords(t *testing.T) {
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	base := NewState()
+	project := mustProject(t, base, "proj_01", "One")
+	item := mustWorkItem(t, base, "wi_01", project.ID)
+	readAt := now.Add(time.Minute)
+	snapshot := Snapshot{
+		Projects: []Project{project},
+		Items:    []WorkItem{item},
+		Runs: []WorkItemRun{{
+			ID:               "run_01",
+			WorkItemID:       item.ID,
+			ProjectID:        project.ID,
+			Preset:           RunPresetWriter,
+			PromptTemplateID: PromptTemplateImplement,
+			PromptSnapshot:   "Implement Task wi_01.",
+			SessionID:        "sess_01",
+			PTYID:            "pty_01",
+			Status:           RunStateRunning,
+			Metadata: map[string]MetadataValue{
+				"agent/owned": {Type: MetadataTypeBool, Bool: true},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+			History: []RunEvent{{
+				ID:   "run_hist_01",
+				Type: RunStateRunning,
+				At:   now,
+			}},
+		}},
+		Artifacts: []Artifact{{
+			ID:         "artifact_01",
+			ProjectID:  project.ID,
+			WorkItemID: item.ID,
+			RunID:      "run_01",
+			Kind:       ArtifactKindPlan,
+			Status:     ArtifactStatusApproved,
+			Title:      "Plan",
+			Body:       "Do it.",
+			Metadata: map[string]MetadataValue{
+				"review/risk": {Type: MetadataTypeNumber, Number: 0.25},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		}},
+		Questions: []Question{{
+			ID:         "question_01",
+			ProjectID:  project.ID,
+			WorkItemID: item.ID,
+			RunID:      "run_01",
+			SessionID:  "sess_01",
+			PTYID:      "pty_01",
+			Prompt:     "Which key?",
+			Answer:     "Staging.",
+			Status:     QuestionStatusAnswered,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+			AnsweredAt: &readAt,
+		}},
+		GateReports: []GateReport{{
+			ID:             "gate_01",
+			ProjectID:      project.ID,
+			WorkItemID:     item.ID,
+			RunID:          "run_01",
+			Name:           "review",
+			Blocking:       true,
+			Status:         GateStatusOverridden,
+			OverrideReason: "Manual review passed.",
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		}},
+		WorkflowEvents: []WorkflowEvent{{
+			ID:         "event_01",
+			ProjectID:  project.ID,
+			WorkItemID: item.ID,
+			RunID:      "run_01",
+			Type:       WorkflowEventPlanApproved,
+			Actor:      "human",
+			Message:    "Looks good.",
+			At:         now,
+		}},
+		StatusEvents: []StatusEvent{{
+			ID:                "status_01",
+			Scope:             StatusScopeRun,
+			Kind:              StatusKindQuestion,
+			Message:           "Need input.",
+			Actor:             "agent",
+			ProjectID:         project.ID,
+			WorkItemID:        item.ID,
+			RunID:             "run_01",
+			SessionID:         "sess_01",
+			PTYID:             "pty_01",
+			RequiresAttention: true,
+			CreatedAt:         now,
+			ReadAt:            &readAt,
+		}},
+	}
+
+	restored, err := NewStateFromSnapshot(snapshot)
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	run, ok := restored.GetRun("run_01")
+	if !ok || run.Metadata["agent/owned"].Type != MetadataTypeBool || !run.Metadata["agent/owned"].Bool {
+		t.Fatalf("run = %#v ok=%v", run, ok)
+	}
+	run.Metadata["agent/owned"] = MetadataValue{Type: MetadataTypeBool}
+	again, _ := restored.GetRun("run_01")
+	if !again.Metadata["agent/owned"].Bool {
+		t.Fatalf("run metadata was not cloned: %#v", again.Metadata)
+	}
+	if got := restored.ListArtifacts(item.ID); len(got) != 1 || got[0].Metadata["review/risk"].Number != 0.25 {
+		t.Fatalf("artifacts = %#v", got)
+	}
+	if got := restored.ListQuestions(item.ID); len(got) != 1 || got[0].AnsweredAt == nil {
+		t.Fatalf("questions = %#v", got)
+	}
+	if got := restored.ListGateReports(item.ID); len(got) != 1 || got[0].Status != GateStatusOverridden {
+		t.Fatalf("gates = %#v", got)
+	}
+	if got := restored.ListWorkflowEvents(item.ID); len(got) != 1 || got[0].Message != "Looks good." {
+		t.Fatalf("workflow events = %#v", got)
+	}
+	if got := restored.ListStatusEvents(ListStatusEvents{RunID: "run_01"}); len(got) != 1 || got[0].ReadAt == nil {
+		t.Fatalf("status events = %#v", got)
+	}
+}
+
+func TestSetMetadataCoversOwnersAndValidation(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	project := mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+	run, err := state.StartRun(StartRun{
+		ID:           "run_01",
+		HistoryID:    "hist_run_01",
+		RunHistoryID: "run_hist_01",
+		WorkItemID:   item.ID,
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	artifact, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "artifact_01",
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Body:       "Do it.",
+		Now:        now,
+	})
+	if err != nil {
+		t.Fatalf("submit plan: %v", err)
+	}
+	tests := []struct {
+		name      string
+		ownerType string
+		ownerID   string
+		value     MetadataValue
+	}{
+		{name: "project", ownerType: MetadataOwnerProject, ownerID: project.ID, value: MetadataValue{Type: MetadataTypeString, String: "high"}},
+		{name: "work item", ownerType: MetadataOwnerWorkItem, ownerID: item.ID, value: MetadataValue{Type: MetadataTypeNumber, Number: 0.5}},
+		{name: "run", ownerType: MetadataOwnerRun, ownerID: run.ID, value: MetadataValue{Type: MetadataTypeBool, Bool: true}},
+		{name: "artifact", ownerType: MetadataOwnerArtifact, ownerID: artifact.ID, value: MetadataValue{Type: MetadataTypeJSON, JSON: json.RawMessage(`{"ok":true}`)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := state.SetMetadata(SetMetadata{
+				OwnerType: tt.ownerType,
+				OwnerID:   tt.ownerID,
+				Namespace: "review",
+				Key:       "risk",
+				Value:     tt.value,
+				Now:       now.Add(time.Minute),
+			})
+			if err != nil {
+				t.Fatalf("set metadata: %v", err)
+			}
+			if got.Type != tt.value.Type {
+				t.Fatalf("metadata = %#v", got)
+			}
+		})
+	}
+	if _, err := state.SetMetadata(SetMetadata{
+		OwnerType: MetadataOwnerProject,
+		OwnerID:   project.ID,
+		Namespace: "bad namespace",
+		Key:       "risk",
+		Value:     MetadataValue{Type: MetadataTypeString, String: "high"},
+	}); err == nil || !strings.Contains(err.Error(), "invalid metadata namespace") {
+		t.Fatalf("expected namespace error, got %v", err)
+	}
+	if _, err := state.SetMetadata(SetMetadata{
+		OwnerType: MetadataOwnerArtifact,
+		OwnerID:   artifact.ID,
+		Namespace: "review",
+		Key:       "risk",
+		Value:     MetadataValue{Type: MetadataTypeJSON, JSON: json.RawMessage(`{`)},
+	}); err == nil || !strings.Contains(err.Error(), "valid json") {
+		t.Fatalf("expected json error, got %v", err)
+	}
+	if _, err := state.SetMetadata(SetMetadata{
+		OwnerType: "unknown",
+		OwnerID:   "id",
+		Namespace: "review",
+		Key:       "risk",
+		Value:     MetadataValue{Type: MetadataTypeString, String: "high"},
+	}); err == nil || !strings.Contains(err.Error(), "unsupported metadata owner") {
+		t.Fatalf("expected owner error, got %v", err)
+	}
+}
+
+func TestSnapshotLoadRejectsInvalidRecords(t *testing.T) {
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	base := NewState()
+	project := mustProject(t, base, "proj_01", "One")
+	item := mustWorkItem(t, base, "wi_01", project.ID)
+	validRun := WorkItemRun{
+		ID:               "run_01",
+		WorkItemID:       item.ID,
+		ProjectID:        project.ID,
+		Preset:           RunPresetWriter,
+		PromptTemplateID: PromptTemplateImplement,
+		PromptSnapshot:   "Implement it.",
+		Status:           RunStateQueued,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+	validSnapshot := func() Snapshot {
+		return Snapshot{
+			Projects: []Project{project},
+			Items:    []WorkItem{item},
+			Runs:     []WorkItemRun{validRun},
+			Artifacts: []Artifact{{
+				ID:         "artifact_01",
+				ProjectID:  project.ID,
+				WorkItemID: item.ID,
+				RunID:      validRun.ID,
+				Kind:       ArtifactKindPlan,
+				Status:     ArtifactStatusDraft,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+			}},
+			Questions: []Question{{
+				ID:         "question_01",
+				ProjectID:  project.ID,
+				WorkItemID: item.ID,
+				RunID:      validRun.ID,
+				Prompt:     "Question?",
+				Status:     QuestionStatusOpen,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+			}},
+			GateReports: []GateReport{{
+				ID:         "gate_01",
+				ProjectID:  project.ID,
+				WorkItemID: item.ID,
+				Name:       "review",
+				Status:     GateStatusPending,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+			}},
+			StatusEvents: []StatusEvent{{
+				ID:        "status_01",
+				Scope:     StatusScopeRun,
+				Kind:      StatusKindQuestion,
+				Message:   "Need input.",
+				RunID:     validRun.ID,
+				CreatedAt: now,
+			}},
+		}
+	}
+	tests := []struct {
+		name string
+		edit func(*Snapshot)
+		want string
+	}{
+		{name: "project id", edit: func(s *Snapshot) { s.Projects[0].ID = "" }, want: "project id required"},
+		{name: "project metadata key", edit: func(s *Snapshot) {
+			s.Projects[0].Metadata = map[string]MetadataValue{"bad": {Type: MetadataTypeString, String: "x"}}
+		}, want: "invalid metadata key"},
+		{name: "workflow stage", edit: func(s *Snapshot) { s.Projects[0].Workflow.Stages = nil }, want: "workflow template stages required"},
+		{name: "item id", edit: func(s *Snapshot) { s.Items[0].ID = "" }, want: "work item id required"},
+		{name: "item project", edit: func(s *Snapshot) { s.Items[0].ProjectID = "missing" }, want: "project missing not found"},
+		{name: "item attachment", edit: func(s *Snapshot) {
+			s.Items[0].Attachments = []Attachment{{ID: "att_01", Kind: AttachmentKindURL}}
+		}, want: "attachment url required"},
+		{name: "run id", edit: func(s *Snapshot) { s.Runs[0].ID = "" }, want: "work item run id required"},
+		{name: "run project", edit: func(s *Snapshot) { s.Runs[0].ProjectID = "other" }, want: "work item run project mismatch"},
+		{name: "run preset", edit: func(s *Snapshot) { s.Runs[0].Preset = "bad" }, want: "unsupported run preset"},
+		{name: "run prompt template", edit: func(s *Snapshot) { s.Runs[0].PromptTemplateID = "missing" }, want: "prompt template missing not found"},
+		{name: "run prompt", edit: func(s *Snapshot) { s.Runs[0].PromptSnapshot = "" }, want: "prompt snapshot required"},
+		{name: "run metadata", edit: func(s *Snapshot) {
+			s.Runs[0].Metadata = map[string]MetadataValue{"run/risk": {Type: MetadataTypeJSON, JSON: json.RawMessage(`{`)}}
+		}, want: "metadata json value must be valid json"},
+		{name: "artifact id", edit: func(s *Snapshot) { s.Artifacts[0].ID = "" }, want: "artifact id required"},
+		{name: "artifact kind", edit: func(s *Snapshot) { s.Artifacts[0].Kind = "bad" }, want: "unsupported artifact kind"},
+		{name: "artifact status", edit: func(s *Snapshot) { s.Artifacts[0].Status = "bad" }, want: "unsupported artifact status"},
+		{name: "question id", edit: func(s *Snapshot) { s.Questions[0].ID = "" }, want: "question id required"},
+		{name: "question prompt", edit: func(s *Snapshot) { s.Questions[0].Prompt = "" }, want: "question prompt required"},
+		{name: "question status", edit: func(s *Snapshot) { s.Questions[0].Status = "bad" }, want: "unsupported question status"},
+		{name: "gate id", edit: func(s *Snapshot) { s.GateReports[0].ID = "" }, want: "gate report id required"},
+		{name: "gate name", edit: func(s *Snapshot) { s.GateReports[0].Name = "" }, want: "gate report name required"},
+		{name: "gate status", edit: func(s *Snapshot) { s.GateReports[0].Status = "bad" }, want: "unsupported gate status"},
+		{name: "status id", edit: func(s *Snapshot) { s.StatusEvents[0].ID = "" }, want: "status event id required"},
+		{name: "status kind", edit: func(s *Snapshot) { s.StatusEvents[0].Kind = "bad" }, want: "unsupported status kind"},
+		{name: "status message", edit: func(s *Snapshot) { s.StatusEvents[0].Message = "" }, want: "status message required"},
+		{name: "status run", edit: func(s *Snapshot) { s.StatusEvents[0].RunID = "" }, want: "run status event requires run id"},
+		{name: "status pty", edit: func(s *Snapshot) {
+			s.StatusEvents[0].Scope = StatusScopePTY
+			s.StatusEvents[0].RunID = ""
+			s.StatusEvents[0].PTYID = ""
+		}, want: "pty status event requires pty id"},
+		{name: "status session", edit: func(s *Snapshot) {
+			s.StatusEvents[0].Scope = StatusScopeSession
+			s.StatusEvents[0].RunID = ""
+			s.StatusEvents[0].SessionID = ""
+		}, want: "session status event requires session id"},
+		{name: "status scope", edit: func(s *Snapshot) { s.StatusEvents[0].Scope = "bad" }, want: "unsupported status scope"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			snapshot := validSnapshot()
+			test.edit(&snapshot)
+			_, err := NewStateFromSnapshot(snapshot)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("expected %q, got %v", test.want, err)
+			}
+		})
 	}
 }
 

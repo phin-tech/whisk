@@ -81,6 +81,77 @@ func TestStartRunCanUseExplicitPresetAndTemplate(t *testing.T) {
 	}
 }
 
+func TestStartRunUsesReadyAndReviewStageDefaults(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", "proj_01")
+	planning, err := state.StartPlanning(StartPlanning{
+		ID:           "run_plan",
+		HistoryID:    "hist_plan",
+		RunHistoryID: "run_hist_plan",
+		WorkItemID:   item.ID,
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	draft, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "artifact_plan",
+		WorkItemID: item.ID,
+		RunID:      planning.ID,
+		Body:       "Do it.",
+		Now:        now,
+	})
+	if err != nil {
+		t.Fatalf("submit plan: %v", err)
+	}
+	ready, err := state.ApprovePlan(ApprovePlan{ArtifactID: draft.ID, WorkItemID: item.ID, Now: now})
+	if err != nil {
+		t.Fatalf("approve plan: %v", err)
+	}
+	if ready.StageID != StageReady {
+		t.Fatalf("ready = %#v", ready)
+	}
+	readyRun, err := state.StartRun(StartRun{
+		ID:           "run_ready",
+		HistoryID:    "hist_ready",
+		RunHistoryID: "run_hist_ready",
+		WorkItemID:   item.ID,
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start ready run: %v", err)
+	}
+	if readyRun.Preset != RunPresetManager || readyRun.PromptTemplateID != PromptTemplatePlan {
+		t.Fatalf("ready run = %#v", readyRun)
+	}
+	review, err := state.CompleteExecution(CompleteExecution{
+		RunID:   readyRun.ID,
+		Message: "done",
+		Now:     now,
+	})
+	if err != nil {
+		t.Fatalf("complete execution: %v", err)
+	}
+	if review.StageID != StageReview {
+		t.Fatalf("review = %#v", review)
+	}
+	reviewRun, err := state.StartRun(StartRun{
+		ID:           "run_review",
+		HistoryID:    "hist_review",
+		RunHistoryID: "run_hist_review",
+		WorkItemID:   item.ID,
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start review run: %v", err)
+	}
+	if reviewRun.Preset != RunPresetReviewer || reviewRun.PromptTemplateID != PromptTemplateReview {
+		t.Fatalf("review run = %#v", reviewRun)
+	}
+}
+
 func TestCancelRunTransitionsRunAndWorkItem(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
@@ -331,6 +402,68 @@ func TestReportStatusQuestionBlockedAndDoneTransitionRunAndWorkItem(t *testing.T
 	updated, _ = state.GetWorkItem(item.ID)
 	if updated.RunState != RunStateCompleted || updated.StageID != "review" {
 		t.Fatalf("updated item = %#v", updated)
+	}
+}
+
+func TestGateCompletionBranchesAndApproveDoneBlocking(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", "proj_01")
+	run, err := state.StartRun(StartRun{
+		ID:               "run_01",
+		HistoryID:        "hist_run_01",
+		RunHistoryID:     "run_hist_01",
+		WorkItemID:       item.ID,
+		Preset:           RunPresetWriter,
+		PromptTemplateID: PromptTemplateImplement,
+		Now:              now,
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	if _, err := state.CompleteExecution(CompleteExecution{
+		RunID:   run.ID,
+		Message: "ready",
+		Now:     now,
+	}); err != nil {
+		t.Fatalf("complete execution: %v", err)
+	}
+	gates := state.ListGateReports(item.ID)
+	if len(gates) != 1 || !gates[0].Blocking {
+		t.Fatalf("gates = %#v", gates)
+	}
+	if _, err := state.ApproveDone(ApproveDone{WorkItemID: item.ID, Now: now}); err == nil || !strings.Contains(err.Error(), "blocking gates") {
+		t.Fatalf("expected blocking gate error, got %v", err)
+	}
+	failed, err := state.CompleteGate(CompleteGate{ID: gates[0].ID, Status: GateStatusFailed, Now: now})
+	if err != nil {
+		t.Fatalf("complete failed gate: %v", err)
+	}
+	if failed.Status != GateStatusFailed {
+		t.Fatalf("failed = %#v", failed)
+	}
+	if _, err := state.CompleteGate(CompleteGate{ID: gates[0].ID, Status: GateStatusOverridden, Now: now}); err == nil || !strings.Contains(err.Error(), "override reason required") {
+		t.Fatalf("expected override reason error, got %v", err)
+	}
+	overridden, err := state.CompleteGate(CompleteGate{
+		ID:             gates[0].ID,
+		Status:         GateStatusOverridden,
+		OverrideReason: "Manual approval.",
+		Now:            now,
+	})
+	if err != nil {
+		t.Fatalf("override gate: %v", err)
+	}
+	if overridden.Status != GateStatusOverridden || overridden.OverrideReason != "Manual approval." {
+		t.Fatalf("overridden = %#v", overridden)
+	}
+	done, err := state.ApproveDone(ApproveDone{WorkItemID: item.ID, Reason: "override accepted", Now: now})
+	if err != nil {
+		t.Fatalf("approve done: %v", err)
+	}
+	if done.StageID != StageDone {
+		t.Fatalf("done = %#v", done)
 	}
 }
 

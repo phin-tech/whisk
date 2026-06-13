@@ -2,8 +2,10 @@ package hooks
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -104,6 +106,28 @@ post_agent = "ok"
 	}
 	if len(commands) != 1 || commands[0].Command != "ok" {
 		t.Fatalf("commands = %#v", commands)
+	}
+}
+
+func TestShellRunnerRunsCommandInDirectoryAndReportsFailures(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+	if err := (ShellRunner{}).Run(ctx, RunCommand{
+		Command: "printf ok > marker",
+		Dir:     dir,
+	}); err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+	bytes, err := os.ReadFile(filepath.Join(dir, "marker"))
+	if err != nil {
+		t.Fatalf("read marker: %v", err)
+	}
+	if string(bytes) != "ok" {
+		t.Fatalf("marker = %q", string(bytes))
+	}
+	err = (ShellRunner{}).Run(ctx, RunCommand{Command: "printf nope && exit 7", Dir: dir})
+	if err == nil || !strings.Contains(err.Error(), "hook command failed") || !strings.Contains(err.Error(), "nope") {
+		t.Fatalf("expected command failure with output, got %v", err)
 	}
 }
 

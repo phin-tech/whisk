@@ -181,3 +181,31 @@ func TestStopPIDSignalsRecordedProcess(t *testing.T) {
 		t.Fatalf("pid file still exists or unexpected stat error: %v", err)
 	}
 }
+
+func TestSupervisorRejectsInvalidDaemonURLAndPIDFiles(t *testing.T) {
+	if _, err := daemon.PIDPath("://bad-url"); err == nil {
+		t.Fatalf("expected invalid pid path URL error")
+	}
+	if _, err := daemon.PIDPath("http:///missing-host"); err == nil {
+		t.Fatalf("expected missing host error")
+	}
+	if err := daemon.StopPID("http://127.0.0.1:1"); err == nil {
+		t.Fatalf("expected missing pid file error")
+	}
+	pidPath, err := daemon.PIDPath("http://127.0.0.1:19992")
+	if err != nil {
+		t.Fatalf("pid path: %v", err)
+	}
+	if err := os.WriteFile(pidPath, []byte("not-a-pid\n"), 0o600); err != nil {
+		t.Fatalf("write pid: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(pidPath) })
+	if err := daemon.StopPID("http://127.0.0.1:19992"); err == nil {
+		t.Fatalf("expected invalid pid file error")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	if err := daemon.Ensure(ctx, "http:///missing-host"); err == nil {
+		t.Fatalf("expected ensure URL error")
+	}
+}

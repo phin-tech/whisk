@@ -29,6 +29,13 @@ func TestBackendSpawnWriteOutputAttachAndResize(t *testing.T) {
 	if record.ID != "pty_01" || record.Cols != 80 || record.Rows != 24 || !record.Running {
 		t.Fatalf("record = %#v", record)
 	}
+	records, err := backend.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(records) != 1 || records[0].ID != "pty_01" || !records[0].Running {
+		t.Fatalf("records = %#v", records)
+	}
 
 	attach, err := backend.Attach(ctx, app.AttachPTYRequest{PtyID: "pty_01"})
 	if err != nil {
@@ -64,6 +71,13 @@ func TestBackendSpawnWriteOutputAttachAndResize(t *testing.T) {
 	}
 	if !strings.Contains(string(snapshot.OutputBytes), "native-ok") {
 		t.Fatalf("snapshot output = %q", string(snapshot.OutputBytes))
+	}
+	killed, err := backend.Kill(ctx, "pty_01")
+	if err != nil {
+		t.Fatalf("kill: %v", err)
+	}
+	if killed.ID != "pty_01" || killed.Running {
+		t.Fatalf("killed = %#v", killed)
 	}
 }
 
@@ -131,6 +145,12 @@ func TestBackendRejectsInvalidOperations(t *testing.T) {
 	}
 	if _, err := backend.Output(ctx, "missing", 0); err == nil {
 		t.Fatalf("expected missing pty output error")
+	}
+	if _, err := backend.Kill(ctx, "missing"); err == nil {
+		t.Fatalf("expected missing pty kill error")
+	}
+	if records, err := backend.List(ctx); err != nil || len(records) != 0 {
+		t.Fatalf("records = %#v, err = %v", records, err)
 	}
 }
 

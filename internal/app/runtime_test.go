@@ -237,6 +237,28 @@ func TestRuntimePublishesSessionPTYAndOutputEvents(t *testing.T) {
 	}
 }
 
+func TestRuntimeNextEventRequiresEventSource(t *testing.T) {
+	ctx := context.Background()
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	if _, err := runtime.NextEvent(ctx); err == nil {
+		t.Fatalf("expected missing event source error")
+	}
+
+	sink := newRecordingEventSink()
+	runtime = app.NewRuntime(app.RuntimeConfig{EventSink: sink})
+	want := app.RuntimeEvent{Type: app.EventWorkItemsChanged}
+	if err := sink.Publish(ctx, want); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	got, err := runtime.NextEvent(ctx)
+	if err != nil {
+		t.Fatalf("next event: %v", err)
+	}
+	if got.Type != want.Type {
+		t.Fatalf("event = %#v", got)
+	}
+}
+
 func TestRuntimeRejectsInvalidRequests(t *testing.T) {
 	ctx := context.Background()
 	runtime := app.NewRuntime(app.RuntimeConfig{})
@@ -336,6 +358,15 @@ func (s *recordingEventSink) Publish(_ context.Context, event app.RuntimeEvent) 
 	s.mu.Unlock()
 	s.ch <- event
 	return nil
+}
+
+func (s *recordingEventSink) Next(ctx context.Context) (app.RuntimeEvent, error) {
+	select {
+	case event := <-s.ch:
+		return event, nil
+	case <-ctx.Done():
+		return app.RuntimeEvent{}, ctx.Err()
+	}
 }
 
 func (s *recordingEventSink) waitFor(t *testing.T, ctx context.Context, eventType app.RuntimeEventType, ptyID string) app.RuntimeEvent {

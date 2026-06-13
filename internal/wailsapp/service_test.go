@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/domain/session"
+	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/wailsapp"
 )
@@ -194,6 +195,86 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	run, err = service.CancelWorkItemRun(ctx, protocol.CancelWorkItemRunRequest{ID: "run_01", Actor: "agent"})
 	if err != nil || run.Status != "cancelled" || fake.cancelRunReq.Actor != "agent" {
 		t.Fatalf("cancel run = %#v, req = %#v, err = %v", run, fake.cancelRunReq, err)
+	}
+	planning, err := service.StartPlanning(ctx, protocol.StartPlanningRequest{WorkItemID: "wi_01", Actor: "agent"})
+	if err != nil || planning.PromptTemplateID != "plan" {
+		t.Fatalf("start planning = %#v, err = %v", planning, err)
+	}
+	draft, err := service.SubmitDraftPlan(ctx, protocol.SubmitDraftPlanRequest{WorkItemID: "wi_01", RunID: planning.ID, Body: "Do it.", Actor: "agent"})
+	if err != nil || draft.Status != "draft" {
+		t.Fatalf("submit draft = %#v, err = %v", draft, err)
+	}
+	item, err = service.ApprovePlan(ctx, protocol.ApprovePlanRequest{WorkItemID: "wi_01", ArtifactID: draft.ID, Actor: "human"})
+	if err != nil || item.StageID != "ready" {
+		t.Fatalf("approve plan = %#v, err = %v", item, err)
+	}
+	run, err = service.StartExecution(ctx, protocol.StartExecutionRequest{WorkItemID: "wi_01", Actor: "agent"})
+	if err != nil || run.PromptTemplateID != "implement" {
+		t.Fatalf("start execution = %#v, err = %v", run, err)
+	}
+	run, err = service.QueueExecution(ctx, protocol.QueueExecutionRequest{WorkItemID: "wi_01", Actor: "human"})
+	if err != nil || run.Status != "queued" {
+		t.Fatalf("queue execution = %#v, err = %v", run, err)
+	}
+	run, err = service.LaunchExecution(ctx, protocol.LaunchExecutionRequest{WorkItemID: "wi_01", Actor: "agent"})
+	if err != nil || run.Status != "running" {
+		t.Fatalf("launch execution = %#v, err = %v", run, err)
+	}
+	run, err = service.LaunchWorkItemRun(ctx, protocol.LaunchWorkItemRunRequest{ID: "run_01", Actor: "agent"})
+	if err != nil || run.Status != "running" {
+		t.Fatalf("launch run = %#v, err = %v", run, err)
+	}
+	question, err := service.AskQuestion(ctx, protocol.AskQuestionRequest{WorkItemID: "wi_01", RunID: "run_01", Prompt: "Which key?", Actor: "agent"})
+	if err != nil || question.Status != "open" {
+		t.Fatalf("ask question = %#v, err = %v", question, err)
+	}
+	question, err = service.AnswerQuestion(ctx, protocol.AnswerQuestionRequest{ID: question.ID, Answer: "Staging.", Actor: "human"})
+	if err != nil || question.Status != "answered" {
+		t.Fatalf("answer question = %#v, err = %v", question, err)
+	}
+	item, err = service.CompleteExecution(ctx, protocol.CompleteExecutionRequest{WorkItemID: "wi_01", RunID: "run_01", Actor: "agent"})
+	if err != nil || item.StageID != "review" {
+		t.Fatalf("complete execution = %#v, err = %v", item, err)
+	}
+	feedback, err := service.SubmitReviewFeedback(ctx, protocol.SubmitReviewFeedbackRequest{WorkItemID: "wi_01", RunID: "run_01", Body: "Fix validation.", Actor: "human"})
+	if err != nil || feedback.Kind != "feedback" {
+		t.Fatalf("submit feedback = %#v, err = %v", feedback, err)
+	}
+	item, err = service.ApproveDone(ctx, protocol.ApproveDoneRequest{WorkItemID: "wi_01", Actor: "human"})
+	if err != nil || item.StageID != "done" {
+		t.Fatalf("approve done = %#v, err = %v", item, err)
+	}
+	artifacts, err := service.ListArtifacts(ctx, "wi_01")
+	if err != nil || len(artifacts) != 1 || artifacts[0].Kind != "plan" {
+		t.Fatalf("artifacts = %#v, err = %v", artifacts, err)
+	}
+	questions, err := service.ListQuestions(ctx, "wi_01")
+	if err != nil || len(questions) != 1 || questions[0].Status != "open" {
+		t.Fatalf("questions = %#v, err = %v", questions, err)
+	}
+	gates, err := service.ListGateReports(ctx, "wi_01")
+	if err != nil || len(gates) != 1 || gates[0].Status != "pending" {
+		t.Fatalf("gates = %#v, err = %v", gates, err)
+	}
+	gate, err := service.CompleteGate(ctx, protocol.CompleteGateRequest{ID: "gate_01", Status: workitem.GateStatusPassed, Actor: "agent"})
+	if err != nil || gate.Status != workitem.GateStatusPassed {
+		t.Fatalf("complete gate = %#v, err = %v", gate, err)
+	}
+	workflowEvents, err := service.ListWorkflowEvents(ctx, "wi_01")
+	if err != nil || len(workflowEvents) != 1 || workflowEvents[0].Type != "planning_started" {
+		t.Fatalf("workflow events = %#v, err = %v", workflowEvents, err)
+	}
+	status, err := service.ReportStatus(ctx, protocol.ReportStatusRequest{Kind: workitem.StatusKindQuestion, Message: "Need input.", WorkItemID: "wi_01", RunID: "run_01"})
+	if err != nil || status.Event.Message != "Need input." || fake.reportStatusReq.Kind != workitem.StatusKindQuestion {
+		t.Fatalf("report status = %#v, req = %#v, err = %v", status, fake.reportStatusReq, err)
+	}
+	statusEvents, err := service.ListStatusEvents(ctx, protocol.ListStatusEventsRequest{SessionID: "sess_01", UnreadOnly: true})
+	if err != nil || len(statusEvents) != 1 || fake.listStatusEventsReq.SessionID != "sess_01" {
+		t.Fatalf("status events = %#v, req = %#v, err = %v", statusEvents, fake.listStatusEventsReq, err)
+	}
+	statusEvent, err := service.MarkStatusEventRead(ctx, protocol.MarkStatusEventReadRequest{ID: "status_01"})
+	if err != nil || statusEvent.ID != "status_01" || fake.markStatusReadReq.ID != "status_01" {
+		t.Fatalf("mark status read = %#v, req = %#v, err = %v", statusEvent, fake.markStatusReadReq, err)
 	}
 	httpForwards, err := service.ListHTTPForwards(ctx)
 	if err != nil || len(httpForwards) != 1 || httpForwards[0].ID != "fwd_01" {

@@ -140,6 +140,45 @@ func TestSplitPaneWithinWindowCanAttachInitialPTY(t *testing.T) {
 	}
 }
 
+func TestSplitPaneFlattensMatchingNestedLayouts(t *testing.T) {
+	state := session.NewState()
+	_, err := state.CreateSession(session.CreateSession{
+		SessionID: "sess_01",
+		WindowID:  "win_01",
+		PaneID:    "pane_01",
+		RootDir:   "/repo",
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := state.SplitPane(session.SplitPane{
+		SessionID:    "sess_01",
+		WindowID:     "win_01",
+		TargetPaneID: "pane_01",
+		NewPaneID:    "pane_02",
+		Direction:    session.SplitHorizontal,
+	}); err != nil {
+		t.Fatalf("first split: %v", err)
+	}
+	updated, err := state.SplitPane(session.SplitPane{
+		SessionID:    "sess_01",
+		WindowID:     "win_01",
+		TargetPaneID: "pane_02",
+		NewPaneID:    "pane_03",
+		Direction:    session.SplitHorizontal,
+	})
+	if err != nil {
+		t.Fatalf("second split: %v", err)
+	}
+	layout := updated.Windows["win_01"].Layout
+	if layout.Kind != session.LayoutSplit || layout.Direction != session.SplitHorizontal || len(layout.Children) != 3 || len(layout.Sizes) != 0 {
+		t.Fatalf("layout = %#v", layout)
+	}
+	if layout.Children[0].PaneID != "pane_01" || layout.Children[1].PaneID != "pane_02" || layout.Children[2].PaneID != "pane_03" {
+		t.Fatalf("children = %#v", layout.Children)
+	}
+}
+
 func TestSetSessionRootDirUpdatesOnlyDefaultPaneWorkingDirs(t *testing.T) {
 	state := session.NewState()
 	_, err := state.CreateSession(session.CreateSession{
@@ -630,6 +669,121 @@ func TestNewStateFromSessionsRejectsMalformedLayout(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("expected malformed layout error")
+	}
+}
+
+func TestNewStateFromSessionsRejectsMalformedSessions(t *testing.T) {
+	valid := func() session.Session {
+		return session.Session{
+			ID:      "sess_01",
+			Name:    "Whisk",
+			RootDir: "/repo",
+			Windows: map[string]session.SessionWindow{
+				"win_01": {
+					ID:        "win_01",
+					SessionID: "sess_01",
+					Name:      "Main",
+					Layout: session.LayoutNode{
+						Kind:   session.LayoutLeaf,
+						PaneID: "pane_01",
+					},
+				},
+			},
+			Panes: map[string]session.Pane{
+				"pane_01": {ID: "pane_01", WindowID: "win_01", WorkingDir: "/repo"},
+			},
+		}
+	}
+	tests := []struct {
+		name   string
+		mutate func(session.Session) session.Session
+	}{
+		{name: "missing session id", mutate: func(s session.Session) session.Session { s.ID = ""; return s }},
+		{name: "relative root", mutate: func(s session.Session) session.Session { s.RootDir = "repo"; return s }},
+		{name: "no windows", mutate: func(s session.Session) session.Session { s.Windows = nil; return s }},
+		{name: "no panes", mutate: func(s session.Session) session.Session { s.Panes = nil; return s }},
+		{name: "window id mismatch", mutate: func(s session.Session) session.Session {
+			s.Windows["win_01"] = session.SessionWindow{ID: "different", SessionID: "sess_01", Name: "Main", Layout: s.Windows["win_01"].Layout}
+			return s
+		}},
+		{name: "window session mismatch", mutate: func(s session.Session) session.Session {
+			win := s.Windows["win_01"]
+			win.SessionID = "other"
+			s.Windows["win_01"] = win
+			return s
+		}},
+		{name: "pane id mismatch", mutate: func(s session.Session) session.Session {
+			s.Panes["pane_01"] = session.Pane{ID: "different", WindowID: "win_01", WorkingDir: "/repo"}
+			return s
+		}},
+		{name: "pane window missing", mutate: func(s session.Session) session.Session {
+			s.Panes["pane_01"] = session.Pane{ID: "pane_01", WindowID: "missing", WorkingDir: "/repo"}
+			return s
+		}},
+		{name: "relative pane dir", mutate: func(s session.Session) session.Session {
+			s.Panes["pane_01"] = session.Pane{ID: "pane_01", WindowID: "win_01", WorkingDir: "repo"}
+			return s
+		}},
+		{name: "leaf missing pane id", mutate: func(s session.Session) session.Session {
+			win := s.Windows["win_01"]
+			win.Layout = session.LayoutNode{Kind: session.LayoutLeaf}
+			s.Windows["win_01"] = win
+			return s
+		}},
+		{name: "split missing direction", mutate: func(s session.Session) session.Session {
+			s.Panes["pane_02"] = session.Pane{ID: "pane_02", WindowID: "win_01", WorkingDir: "/repo"}
+			win := s.Windows["win_01"]
+			win.Layout = session.LayoutNode{Kind: session.LayoutSplit, Children: []session.LayoutNode{
+				{Kind: session.LayoutLeaf, PaneID: "pane_01"},
+				{Kind: session.LayoutLeaf, PaneID: "pane_02"},
+			}}
+			s.Windows["win_01"] = win
+			return s
+		}},
+		{name: "split too few children", mutate: func(s session.Session) session.Session {
+			win := s.Windows["win_01"]
+			win.Layout = session.LayoutNode{Kind: session.LayoutSplit, Direction: session.SplitHorizontal, Children: []session.LayoutNode{
+				{Kind: session.LayoutLeaf, PaneID: "pane_01"},
+			}}
+			s.Windows["win_01"] = win
+			return s
+		}},
+		{name: "split sizes mismatch", mutate: func(s session.Session) session.Session {
+			s.Panes["pane_02"] = session.Pane{ID: "pane_02", WindowID: "win_01", WorkingDir: "/repo"}
+			win := s.Windows["win_01"]
+			win.Layout = session.LayoutNode{Kind: session.LayoutSplit, Direction: session.SplitHorizontal, Sizes: []float64{1}, Children: []session.LayoutNode{
+				{Kind: session.LayoutLeaf, PaneID: "pane_01"},
+				{Kind: session.LayoutLeaf, PaneID: "pane_02"},
+			}}
+			s.Windows["win_01"] = win
+			return s
+		}},
+		{name: "duplicate leaf", mutate: func(s session.Session) session.Session {
+			win := s.Windows["win_01"]
+			win.Layout = session.LayoutNode{Kind: session.LayoutSplit, Direction: session.SplitHorizontal, Children: []session.LayoutNode{
+				{Kind: session.LayoutLeaf, PaneID: "pane_01"},
+				{Kind: session.LayoutLeaf, PaneID: "pane_01"},
+			}}
+			s.Windows["win_01"] = win
+			return s
+		}},
+		{name: "unknown layout kind", mutate: func(s session.Session) session.Session {
+			win := s.Windows["win_01"]
+			win.Layout = session.LayoutNode{}
+			s.Windows["win_01"] = win
+			return s
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := session.NewStateFromSessions([]session.Session{test.mutate(valid())}); err == nil {
+				t.Fatalf("expected error")
+			}
+		})
+	}
+	duplicate := valid()
+	if _, err := session.NewStateFromSessions([]session.Session{duplicate, duplicate}); err == nil {
+		t.Fatalf("expected duplicate session error")
 	}
 }
 

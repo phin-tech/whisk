@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/app"
+	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/server"
 )
@@ -257,6 +258,241 @@ func TestHTTPServerNextEventTimeoutReturnsNoop(t *testing.T) {
 	}
 }
 
+func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend: newFakePTYBackend(),
+		DaemonURL:  "http://127.0.0.1:8787",
+		CLIPath:    "/usr/local/bin/whisk",
+	})
+	handler := server.NewHTTP(runtime)
+
+	project := postJSON[protocol.Project](t, handler, "/v1/projects", protocol.CreateProjectRequest{
+		Name:    "App",
+		RootDir: t.TempDir(),
+		Preferences: protocol.ProjectPreferences{
+			AutoRun: workitem.AutoRunNever,
+		},
+	}, http.StatusCreated)
+	projects := getJSON[[]protocol.Project](t, handler, "/v1/projects", http.StatusOK)
+	if len(projects) != 1 || projects[0].ID != project.ID {
+		t.Fatalf("projects = %#v", projects)
+	}
+	if templates := getJSON[[]protocol.WorkflowTemplate](t, handler, "/v1/workflow-templates", http.StatusOK); len(templates) == 0 {
+		t.Fatalf("workflow templates = %#v", templates)
+	}
+	if prompts := getJSON[[]protocol.PromptTemplate](t, handler, "/v1/prompt-templates", http.StatusOK); len(prompts) == 0 {
+		t.Fatalf("prompt templates = %#v", prompts)
+	}
+
+	item := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
+		ProjectID:    project.ID,
+		Title:        "Ship route workflow",
+		BodyMarkdown: "Use the daemon route surface.",
+		Actor:        "human",
+	}, http.StatusCreated)
+	if item.ID == "" || item.Number != 1 {
+		t.Fatalf("item = %#v", item)
+	}
+	items := getJSON[[]protocol.WorkItem](t, handler, "/v1/work-items?projectId="+project.ID, http.StatusOK)
+	if len(items) != 1 || items[0].ID != item.ID {
+		t.Fatalf("items = %#v", items)
+	}
+	moved := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/move", protocol.MoveWorkItemRequest{
+		StageID: workitem.StagePlanning,
+		Actor:   "human",
+	}, http.StatusOK)
+	if moved.StageID != workitem.StagePlanning {
+		t.Fatalf("moved = %#v", moved)
+	}
+	bound := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/bind-worktree", protocol.BindWorkItemWorktreeRequest{
+		Branch:       "whisk/app-1-route-workflow",
+		WorktreePath: t.TempDir(),
+		Actor:        "human",
+	}, http.StatusOK)
+	if bound.Worktree == nil || bound.Worktree.Branch != "whisk/app-1-route-workflow" {
+		t.Fatalf("bound = %#v", bound)
+	}
+	attached := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/attachments", protocol.AddWorkItemAttachmentRequest{
+		Kind:  "file",
+		Path:  "docs/spec.md",
+		Actor: "human",
+	}, http.StatusCreated)
+	if len(attached.Attachments) != 1 || attached.Attachments[0].Path != "docs/spec.md" {
+		t.Fatalf("attached = %#v", attached)
+	}
+
+	planning := postJSON[protocol.WorkItemRun](t, handler, "/v1/work-items/"+item.ID+"/start-planning", protocol.StartPlanningRequest{
+		Actor: "agent",
+	}, http.StatusCreated)
+	if planning.PromptTemplateID != workitem.PromptTemplatePlan {
+		t.Fatalf("planning = %#v", planning)
+	}
+	draft := postJSON[protocol.Artifact](t, handler, "/v1/work-items/"+item.ID+"/plan-drafts", protocol.SubmitDraftPlanRequest{
+		RunID: planning.ID,
+		Title: "Plan",
+		Body:  "Implement it.",
+		Actor: "agent",
+	}, http.StatusCreated)
+	if draft.Kind != workitem.ArtifactKindPlan || draft.Status != workitem.ArtifactStatusDraft {
+		t.Fatalf("draft = %#v", draft)
+	}
+	ready := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/approve-plan", protocol.ApprovePlanRequest{
+		ArtifactID: draft.ID,
+		Actor:      "human",
+	}, http.StatusOK)
+	if ready.StageID != workitem.StageReady {
+		t.Fatalf("ready = %#v", ready)
+	}
+	queued := postJSON[protocol.WorkItemRun](t, handler, "/v1/work-items/"+item.ID+"/queue-execution", protocol.QueueExecutionRequest{
+		Actor: "human",
+	}, http.StatusCreated)
+	if queued.Status != workitem.RunStateQueued || queued.PromptTemplateID != workitem.PromptTemplateImplement {
+		t.Fatalf("queued = %#v", queued)
+	}
+	launched := postJSON[protocol.WorkItemRun](t, handler, "/v1/work-item-runs/"+queued.ID+"/launch", protocol.LaunchWorkItemRunRequest{
+		Actor: "agent",
+	}, http.StatusOK)
+	if launched.Status != workitem.RunStateRunning || launched.SessionID == "" || launched.PTYID == "" {
+		t.Fatalf("launched = %#v", launched)
+	}
+	runs := getJSON[[]protocol.WorkItemRun](t, handler, "/v1/work-item-runs?workItemId="+item.ID, http.StatusOK)
+	if len(runs) != 2 || runs[1].ID != queued.ID {
+		t.Fatalf("runs = %#v", runs)
+	}
+
+	status := postJSON[protocol.ReportStatusResponse](t, handler, "/v1/status", protocol.ReportStatusRequest{
+		Kind:       workitem.StatusKindQuestion,
+		Message:    "Running tests.",
+		Actor:      "agent",
+		ProjectID:  project.ID,
+		WorkItemID: item.ID,
+		RunID:      launched.ID,
+		SessionID:  launched.SessionID,
+		PTYID:      launched.PTYID,
+	}, http.StatusCreated)
+	if status.Event.ID == "" || status.Run == nil || status.WorkItem == nil {
+		t.Fatalf("status = %#v", status)
+	}
+	events := getJSON[[]protocol.StatusEvent](t, handler, "/v1/status-events?workItemId="+item.ID+"&unreadOnly=true", http.StatusOK)
+	if len(events) != 1 || events[0].ID != status.Event.ID {
+		t.Fatalf("status events = %#v", events)
+	}
+	read := postJSON[protocol.StatusEvent](t, handler, "/v1/status-events/"+status.Event.ID+"/read", protocol.MarkStatusEventReadRequest{}, http.StatusOK)
+	if read.ReadAt == nil {
+		t.Fatalf("read = %#v", read)
+	}
+
+	question := postJSON[protocol.Question](t, handler, "/v1/questions", protocol.AskQuestionRequest{
+		WorkItemID: item.ID,
+		RunID:      launched.ID,
+		Prompt:     "Which key?",
+		Actor:      "agent",
+	}, http.StatusCreated)
+	if question.Status != workitem.QuestionStatusOpen {
+		t.Fatalf("question = %#v", question)
+	}
+	answered := postJSON[protocol.Question](t, handler, "/v1/questions/"+question.ID+"/answer", protocol.AnswerQuestionRequest{
+		Answer: "Staging.",
+		Actor:  "human",
+	}, http.StatusOK)
+	if answered.Status != workitem.QuestionStatusAnswered {
+		t.Fatalf("answered = %#v", answered)
+	}
+	questions := getJSON[[]protocol.Question](t, handler, "/v1/questions?workItemId="+item.ID, http.StatusOK)
+	if len(questions) != 1 || questions[0].ID != question.ID {
+		t.Fatalf("questions = %#v", questions)
+	}
+
+	review := postJSON[protocol.WorkItem](t, handler, "/v1/work-item-runs/"+launched.ID+"/complete-execution", protocol.CompleteExecutionRequest{
+		Message: "Done.",
+		Actor:   "agent",
+	}, http.StatusOK)
+	if review.StageID != workitem.StageReview {
+		t.Fatalf("review = %#v", review)
+	}
+	gates := getJSON[[]protocol.GateReport](t, handler, "/v1/gate-reports?workItemId="+item.ID, http.StatusOK)
+	if len(gates) != 1 || gates[0].Status != workitem.GateStatusPending {
+		t.Fatalf("gates = %#v", gates)
+	}
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/"+item.ID+"/approve-done", `{"actor":"human"}`, http.StatusBadRequest)
+	feedback := postJSON[protocol.Artifact](t, handler, "/v1/work-items/"+item.ID+"/review-feedback", protocol.SubmitReviewFeedbackRequest{
+		RunID: launched.ID,
+		Body:  "Tighten validation.",
+		Actor: "human",
+	}, http.StatusCreated)
+	if feedback.Kind != workitem.ArtifactKindFeedback {
+		t.Fatalf("feedback = %#v", feedback)
+	}
+	artifacts := getJSON[[]protocol.Artifact](t, handler, "/v1/artifacts?workItemId="+item.ID, http.StatusOK)
+	if len(artifacts) != 2 {
+		t.Fatalf("artifacts = %#v", artifacts)
+	}
+	passed := postJSON[protocol.GateReport](t, handler, "/v1/gate-reports/"+gates[0].ID+"/complete", protocol.CompleteGateRequest{
+		Status: workitem.GateStatusPassed,
+		Actor:  "agent",
+	}, http.StatusOK)
+	if passed.Status != workitem.GateStatusPassed {
+		t.Fatalf("passed = %#v", passed)
+	}
+	done := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/approve-done", protocol.ApproveDoneRequest{
+		Reason: "review passed",
+		Actor:  "human",
+	}, http.StatusOK)
+	if done.StageID != workitem.StageDone {
+		t.Fatalf("done = %#v", done)
+	}
+	workflowEvents := getJSON[[]protocol.WorkflowEvent](t, handler, "/v1/workflow-events?workItemId="+item.ID, http.StatusOK)
+	if len(workflowEvents) == 0 || workflowEvents[len(workflowEvents)-1].Type != workitem.WorkflowEventDoneApproved {
+		t.Fatalf("workflow events = %#v", workflowEvents)
+	}
+
+	runOnlyItem := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
+		ProjectID: project.ID,
+		Title:     "Standalone run",
+		Actor:     "human",
+	}, http.StatusCreated)
+	runOnly := postJSON[protocol.WorkItemRun](t, handler, "/v1/work-item-runs", protocol.StartWorkItemRunRequest{
+		WorkItemID:       runOnlyItem.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		Actor:            "agent",
+	}, http.StatusCreated)
+	cancelled := postJSON[protocol.WorkItemRun](t, handler, "/v1/work-item-runs/"+runOnly.ID+"/cancel", protocol.CancelWorkItemRunRequest{
+		Actor: "human",
+	}, http.StatusOK)
+	if cancelled.Status != workitem.RunStateCancelled {
+		t.Fatalf("cancelled = %#v", cancelled)
+	}
+
+	execItem := createReadyWorkItemViaHTTP(t, handler, project.ID, "Start execution")
+	execution := postJSON[protocol.WorkItemRun](t, handler, "/v1/work-items/"+execItem.ID+"/start-execution", protocol.StartExecutionRequest{
+		Actor: "agent",
+	}, http.StatusCreated)
+	if execution.Status != workitem.RunStateQueued {
+		t.Fatalf("execution = %#v", execution)
+	}
+	launchItem := createReadyWorkItemViaHTTP(t, handler, project.ID, "Launch execution")
+	launchExecution := postJSON[protocol.WorkItemRun](t, handler, "/v1/work-items/"+launchItem.ID+"/launch-execution", protocol.LaunchExecutionRequest{
+		Actor: "agent",
+	}, http.StatusCreated)
+	if launchExecution.Status != workitem.RunStateRunning || launchExecution.PTYID == "" {
+		t.Fatalf("launch execution = %#v", launchExecution)
+	}
+
+	deleteItem := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
+		ProjectID: project.ID,
+		Title:     "Delete me",
+		Actor:     "human",
+	}, http.StatusCreated)
+	deleted := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+deleteItem.ID+"/delete", protocol.DeleteWorkItemRequest{
+		Actor: "human",
+	}, http.StatusOK)
+	if deleted.ID != deleteItem.ID || len(deleted.History) == 0 || deleted.History[len(deleted.History)-1].Type != workitem.HistoryDeleted {
+		t.Fatalf("deleted = %#v", deleted)
+	}
+}
+
 func TestHTTPServerWorktreeFlow(t *testing.T) {
 	backend := &fakeWorktreeBackend{
 		status: app.WorktrunkStatus{
@@ -364,6 +600,53 @@ func TestHTTPServerReportsBadRequests(t *testing.T) {
 	assertStatus(t, handler, http.MethodPost, "/v1/http-forwards", `{"targetUrl":"http://example.com"}`, http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodDelete, "/v1/http-forwards/missing", "", http.StatusNotFound)
 	assertStatus(t, handler, http.MethodGet, "/v1/http-forwards/missing/proxy", "", http.StatusNotFound)
+
+	assertStatus(t, handler, http.MethodPost, "/v1/projects", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/projects", `{"name":"App"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items", `{"title":"Task"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/move", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/move", `{"stageId":"execution"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/start-planning", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/start-planning", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/plan-drafts", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/plan-drafts", `{"body":"Plan"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/approve-plan", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/approve-plan", `{"artifactId":"missing"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/start-execution", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/start-execution", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/queue-execution", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/queue-execution", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/launch-execution", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/launch-execution", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/questions", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/questions", `{"prompt":"Which key?"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/questions/missing/answer", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/questions/missing/answer", `{"answer":"Staging"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-item-runs/missing/complete-execution", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-item-runs/missing/complete-execution", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/review-feedback", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/review-feedback", `{"body":"Fix it."}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/approve-done", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/approve-done", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/gate-reports/missing/complete", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/gate-reports/missing/complete", `{"status":"passed"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/bind-worktree", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/bind-worktree", `{"branch":"feature","worktreePath":"/tmp/work"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/attachments", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/attachments", `{"kind":"note","note":"context"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/delete", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/delete", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-item-runs", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-item-runs", `{"workItemId":"missing"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-item-runs/missing/launch", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-item-runs/missing/launch", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-item-runs/missing/cancel", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-item-runs/missing/cancel", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/status", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/status", `{"kind":"question","message":"Need input."}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/status-events/missing/read", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/status-events/missing/read", `{}`, http.StatusBadRequest)
 }
 
 type fakePTYBackend struct {
@@ -515,6 +798,27 @@ func (b *fakeWorktreeBackend) CreateWorktree(_ context.Context, req app.CreateWo
 func (b *fakeWorktreeBackend) RemoveWorktree(_ context.Context, req app.RemoveWorktreeRequest) error {
 	b.removeReq = req
 	return nil
+}
+
+func createReadyWorkItemViaHTTP(t *testing.T, handler http.Handler, projectID string, title string) protocol.WorkItem {
+	t.Helper()
+	item := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
+		ProjectID: projectID,
+		Title:     title,
+		Actor:     "human",
+	}, http.StatusCreated)
+	planning := postJSON[protocol.WorkItemRun](t, handler, "/v1/work-items/"+item.ID+"/start-planning", protocol.StartPlanningRequest{
+		Actor: "agent",
+	}, http.StatusCreated)
+	draft := postJSON[protocol.Artifact](t, handler, "/v1/work-items/"+item.ID+"/plan-drafts", protocol.SubmitDraftPlanRequest{
+		RunID: planning.ID,
+		Body:  "Implement it.",
+		Actor: "agent",
+	}, http.StatusCreated)
+	return postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/approve-plan", protocol.ApprovePlanRequest{
+		ArtifactID: draft.ID,
+		Actor:      "human",
+	}, http.StatusOK)
 }
 
 func postJSON[T any](t *testing.T, handler http.Handler, path string, body any, wantStatus int) T {

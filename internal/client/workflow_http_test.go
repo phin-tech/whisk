@@ -183,4 +183,38 @@ func TestHTTPClientDrivesExplicitWorkflowActions(t *testing.T) {
 	if len(events) == 0 || events[len(events)-1].Type != workitem.WorkflowEventDoneApproved {
 		t.Fatalf("events = %#v", events)
 	}
+	if _, err := daemon.StartExecution(ctx, protocol.StartExecutionRequest{WorkItemID: "missing", Actor: "agent"}); err == nil {
+		t.Fatalf("expected start execution error for missing item")
+	}
+	if _, err := daemon.LaunchExecution(ctx, protocol.LaunchExecutionRequest{WorkItemID: "missing", Actor: "agent"}); err == nil {
+		t.Fatalf("expected launch execution error for missing item")
+	}
+	runToLaunch, err := daemon.StartWorkItemRun(ctx, protocol.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		Actor:            "agent",
+	})
+	if err != nil {
+		t.Fatalf("start launch run: %v", err)
+	}
+	if _, err := daemon.LaunchWorkItemRun(ctx, protocol.LaunchWorkItemRunRequest{ID: runToLaunch.ID, Actor: "agent"}); err == nil {
+		t.Fatalf("expected launch run error without pty backend")
+	}
+	runOnly, err := daemon.StartWorkItemRun(ctx, protocol.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		Actor:            "agent",
+	})
+	if err != nil {
+		t.Fatalf("start standalone run: %v", err)
+	}
+	cancelled, err := daemon.CancelWorkItemRun(ctx, protocol.CancelWorkItemRunRequest{ID: runOnly.ID, Actor: "human"})
+	if err != nil {
+		t.Fatalf("cancel standalone run: %v", err)
+	}
+	if cancelled.Status != workitem.RunStateCancelled {
+		t.Fatalf("cancelled = %#v", cancelled)
+	}
 }

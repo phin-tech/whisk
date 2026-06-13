@@ -109,3 +109,25 @@ func TestBackendCreateAndRemoveWorktree(t *testing.T) {
 		t.Fatalf("remove args = %#v", runner.commands[6].Args)
 	}
 }
+
+func TestBackendReportsUnavailableWorktrunk(t *testing.T) {
+	ctx := context.Background()
+	backend := NewBackend(&fakeRunner{})
+
+	status, err := backend.DetectWorktrunk(ctx, app.DetectWorktrunkRequest{RepoPath: t.TempDir()})
+	if err != nil {
+		t.Fatalf("detect unavailable: %v", err)
+	}
+	if status.Available || status.ConfigFound || status.Binary.Path != "" {
+		t.Fatalf("status = %#v", status)
+	}
+	if _, err := backend.ListWorktrees(ctx, app.ListWorktreesRequest{RepoPath: "/repo"}); err == nil {
+		t.Fatalf("expected list unavailable error")
+	}
+	if _, err := backend.CreateWorktree(ctx, app.CreateWorktreeRequest{RepoPath: "/repo", Branch: "feature"}); err == nil {
+		t.Fatalf("expected create unavailable error")
+	}
+	if err := backend.RemoveWorktree(ctx, app.RemoveWorktreeRequest{RepoPath: "/repo", WorktreePath: "/repo/.worktrees/feature"}); err == nil {
+		t.Fatalf("expected remove unavailable error")
+	}
+}
