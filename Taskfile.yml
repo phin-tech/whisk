@@ -210,7 +210,7 @@ tasks:
       - sh: '[ -f ".env.signing" ]'
         msg: ".env.signing is required"
     cmds:
-      - op run --env-file=.env.signing -- task sign
+      - op run --env-file=.env.signing -- scripts/sign-with-op-env.sh
 
   build:signed:
     desc: "Alias for the macOS signing flow"
