@@ -65,12 +65,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ inputs.version }}"
+          RELEASE_FLAGS=()
+          if [[ "$TAG" == *-* ]]; then
+            RELEASE_FLAGS+=(--prerelease)
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
+            if [[ "$TAG" == *-* ]]; then
+              gh release edit "$TAG" --prerelease
+            fi
             gh release upload "$TAG" "bin/Whisk-${TAG}-macos.zip" --clobber
           else
             gh release create "$TAG" "bin/Whisk-${TAG}-macos.zip" \
               --title "$TAG" \
-              --notes "Signed macOS Whisk build."
+              --notes "Signed macOS Whisk build." \
+              "${RELEASE_FLAGS[@]}"
           fi
       - uses: actions/upload-artifact@v4
         with:
