@@ -28,6 +28,17 @@ fi
 
 op run --env-file=.env.signing --no-masking -- bash -c '
   set -euo pipefail
+  if [ -z "${APPLE_SIGNING_IDENTITY-}" ] && [ -n "${APPLE_CERTIFICATE-}" ] && [ -n "${APPLE_CERTIFICATE_PASSWORD-}" ]; then
+    cert_path="$(mktemp)"
+    cleanup() { rm -f "${cert_path}"; }
+    trap cleanup EXIT
+    printf "%s" "${APPLE_CERTIFICATE}" | base64 --decode > "${cert_path}"
+    APPLE_SIGNING_IDENTITY="$(
+      openssl pkcs12 -in "${cert_path}" -nokeys -clcerts -passin env:APPLE_CERTIFICATE_PASSWORD |
+        openssl x509 -noout -subject -nameopt RFC2253 |
+        sed -n "s/^subject=.*CN=\\([^,]*\\).*/\\1/p"
+    )"
+  fi
   for v in '"${VARS[*]}"'; do
     val="${!v-}"
     if [ -z "$val" ]; then
