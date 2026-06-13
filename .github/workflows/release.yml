@@ -1,0 +1,77 @@
+name: Release
+run-name: Release ${{ inputs.version || github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag to create or update, for example v0.0.1"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release-macos:
+    runs-on: macos-14
+    env:
+      KEYCHAIN_PROFILE: whisk-notary
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: arduino/setup-task@v2
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.99
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+      - name: Import Developer ID certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: scripts/ci-setup-macos-keychain.sh
+      - name: Store notarization profile
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: scripts/ci-setup-notary-profile.sh
+      - name: Sign and notarize
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          task darwin:sign:notarize \
+            SIGN_IDENTITY="${APPLE_SIGNING_IDENTITY}" \
+            KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE}"
+      - name: Zip app bundle
+        run: ditto -c -k --sequesterRsrc --keepParent bin/Whisk.app "bin/Whisk-${{ inputs.version }}-macos.zip"
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.version }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "bin/Whisk-${TAG}-macos.zip" --clobber
+          else
+            gh release create "$TAG" "bin/Whisk-${TAG}-macos.zip" \
+              --title "$TAG" \
+              --notes "Signed macOS Whisk build."
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Whisk-${{ inputs.version }}-macos
+          path: bin/Whisk-${{ inputs.version }}-macos.zip

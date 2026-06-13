@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  APP_NAME: "whisk-app"
+  APP_NAME: "Whisk"
   BIN_DIR: "bin"
   COVERAGE_MIN: '{{.COVERAGE_MIN | default "85"}}'
   COVERAGE_PACKAGES: "./internal/adapters/agents ./internal/adapters/ghcli ./internal/adapters/gitcli ./internal/adapters/hooks ./internal/adapters/processrunner ./internal/adapters/pty/native ./internal/adapters/workitemstore ./internal/adapters/worktrunk ./internal/app ./internal/appsettings ./internal/client ./internal/daemon ./internal/domain/httpforward ./internal/domain/session ./internal/domain/workitem ./internal/server ./internal/wailsapp"
@@ -184,6 +184,111 @@ tasks:
     summary: Packages a production build of the application
     cmds:
       - task: "{{OS}}:package"
+
+  sign:
+    desc: "Build, sign, and notarize the macOS app"
+    platforms: [darwin]
+    preconditions:
+      - sh: '[ -n "${APPLE_SIGNING_IDENTITY:-}" ]'
+        msg: "APPLE_SIGNING_IDENTITY is required"
+      - sh: '[ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]'
+        msg: "APPLE_ID, APPLE_PASSWORD, and APPLE_TEAM_ID are required"
+    cmds:
+      - KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE:-whisk-notary}" scripts/ci-setup-notary-profile.sh
+      - |
+        KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE:-whisk-notary}"
+        task darwin:sign:notarize \
+          SIGN_IDENTITY="${APPLE_SIGNING_IDENTITY}" \
+          KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE}"
+
+  sign:op:
+    desc: "Run the signing workflow with secrets loaded from 1Password"
+    platforms: [darwin]
+    preconditions:
+      - sh: "command -v op >/dev/null 2>&1"
+        msg: "1Password CLI 'op' is required"
+      - sh: '[ -f ".env.signing" ]'
+        msg: ".env.signing is required"
+    cmds:
+      - op run --env-file=.env.signing -- task sign
+
+  build:signed:
+    desc: "Alias for the macOS signing flow"
+    cmds:
+      - task: sign
+
+  build:signed:op:
+    desc: "Alias for the 1Password-backed macOS signing flow"
+    cmds:
+      - task: sign:op
+
+  publish:
+    desc: "Create or update the GitHub release for the current build/config.yml version"
+    preconditions:
+      - sh: "command -v gh >/dev/null 2>&1"
+        msg: "GitHub CLI 'gh' is required"
+      - sh: '[ -d "bin/Whisk.app" ]'
+        msg: "bin/Whisk.app is required; run task sign first"
+    cmds:
+      - |
+        set -euo pipefail
+        VERSION=$(awk -F'"' '/^[[:space:]]*version:/ {print $2; exit}' build/config.yml)
+        TAG="v${VERSION}"
+        APP_ZIP="bin/Whisk_${VERSION}.app.zip"
+
+        ditto -c -k --sequesterRsrc --keepParent bin/Whisk.app "${APP_ZIP}"
+
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        if [ -n "$PREV_TAG" ]; then
+          CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges || true)
+        else
+          CHANGELOG=$(git log --pretty=format:"- %s" --no-merges || true)
+        fi
+        if [ -z "$CHANGELOG" ]; then
+          CHANGELOG="Signed macOS Whisk build."
+        fi
+
+        PRE_FLAG=""
+        if echo "$VERSION" | grep -q '-'; then
+          PRE_FLAG="--prerelease"
+        fi
+
+        if ! gh release view "$TAG" &>/dev/null; then
+          gh release create "$TAG" --title "$TAG" --notes "$CHANGELOG" $PRE_FLAG
+        else
+          gh release edit "$TAG" --notes "$CHANGELOG" $PRE_FLAG
+        fi
+        gh release upload "$TAG" "${APP_ZIP}" --clobber
+
+  publish:op:
+    desc: "Sign with 1Password-backed secrets, then publish the current version"
+    cmds:
+      - task: sign:op
+      - task: publish
+
+  ci:sync-secrets:
+    desc: "Push signing/notarization secrets from 1Password into GitHub Actions secrets"
+    preconditions:
+      - sh: "command -v op >/dev/null 2>&1"
+        msg: "1Password CLI 'op' is required"
+      - sh: "command -v gh >/dev/null 2>&1"
+        msg: "GitHub CLI 'gh' is required"
+      - sh: '[ -f ".env.signing" ]'
+        msg: ".env.signing is required"
+    cmds:
+      - scripts/sync-gh-secrets.sh
+
+  ci:trigger:
+    desc: "Dispatch the release workflow for the current build/config.yml version"
+    preconditions:
+      - sh: "command -v gh >/dev/null 2>&1"
+        msg: "GitHub CLI 'gh' is required"
+    cmds:
+      - |
+        set -euo pipefail
+        VERSION=$(awk -F'"' '/^[[:space:]]*version:/ {print $2; exit}' build/config.yml)
+        TAG="v${VERSION}"
+        gh workflow run release.yml --repo phin-tech/whisk --ref main -f version="${TAG}"
 
   run:
     summary: Builds and runs the application

@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-Name=My Product
-Comment=A whisk-template-3 application
+Name=Whisk
+Comment=Terminal multiplexer and agent manager
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/whisk-template-3 %u
+Exec=/usr/local/bin/Whisk %u
 Terminal=false
 Type=Application
-Icon=whisk-template-3
+Icon=Whisk
 Categories=Utility;
-StartupWMClass=whisk-template-3
+StartupWMClass=Whisk
 
  
