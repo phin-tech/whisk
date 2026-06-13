@@ -11,6 +11,20 @@ if [ ! -d "${APP_PATH}" ]; then
   exit 1
 fi
 
+assert_embedded_certificates() {
+  local cert_dir
+  cert_dir="$(mktemp -d)"
+  (
+    cd "${cert_dir}"
+    codesign -d --extract-certificates "${APP_PATH}" >/dev/null
+    if ! ls codesign* >/dev/null 2>&1; then
+      echo "Signed app does not contain embedded signing certificates" >&2
+      exit 1
+    fi
+  )
+  rm -rf "${cert_dir}"
+}
+
 # Remove any stale stapled ticket before replacing the app signature.
 rm -f "${APP_PATH}/Contents/CodeResources"
 
@@ -21,7 +35,7 @@ codesign --force --deep \
   "${APP_PATH}"
 
 codesign --verify --deep --strict --verbose=4 "${APP_PATH}"
-spctl -a -vvv -t execute "${APP_PATH}"
+assert_embedded_certificates
 
 ZIP_PATH="$(mktemp "${RUNNER_TEMP:-/tmp}/whisk-notary.XXXXXX.zip")"
 cleanup() { rm -f "${ZIP_PATH}"; }
@@ -35,4 +49,5 @@ xcrun notarytool submit "${ZIP_PATH}" \
 xcrun stapler staple "${APP_PATH}"
 xcrun stapler validate "${APP_PATH}"
 codesign --verify --deep --strict --verbose=4 "${APP_PATH}"
+assert_embedded_certificates
 spctl -a -vvv -t execute "${APP_PATH}"

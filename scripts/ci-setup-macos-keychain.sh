@@ -8,8 +8,10 @@ set -euo pipefail
 KEYCHAIN_NAME="whisk-build.keychain"
 KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
 CERT_PATH="${RUNNER_TEMP}/cert.p12"
+APPLE_ROOT_CA_PATH="${RUNNER_TEMP}/AppleRootCA-G3.cer"
+DEVELOPER_ID_CA_PATH="${RUNNER_TEMP}/DeveloperIDG2CA.cer"
 
-cleanup() { rm -f "${CERT_PATH}"; }
+cleanup() { rm -f "${CERT_PATH}" "${APPLE_ROOT_CA_PATH}" "${DEVELOPER_ID_CA_PATH}"; }
 trap cleanup EXIT
 
 cert_len=${#APPLE_CERTIFICATE}
@@ -20,6 +22,9 @@ printf '%s' "${APPLE_CERTIFICATE}" | base64 --decode > "${CERT_PATH}"
 echo "Decoded p12: size=$(wc -c < "${CERT_PATH}" | tr -d ' ') bytes, type=$(file -b "${CERT_PATH}")"
 openssl pkcs12 -info -noout -in "${CERT_PATH}" -passin env:APPLE_CERTIFICATE_PASSWORD >/dev/null
 
+curl -fsSL https://www.apple.com/certificateauthority/AppleRootCA-G3.cer -o "${APPLE_ROOT_CA_PATH}"
+curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "${DEVELOPER_ID_CA_PATH}"
+
 security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_NAME}"
 security set-keychain-settings -lut 21600 "${KEYCHAIN_NAME}"
 security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_NAME}"
@@ -27,6 +32,16 @@ security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_NAME}"
 EXISTING_KEYCHAINS=$(security list-keychains -d user | sed -E 's/^[[:space:]]*"?//; s/"?$//')
 # shellcheck disable=SC2086
 security list-keychains -d user -s "${KEYCHAIN_NAME}" ${EXISTING_KEYCHAINS}
+
+security import "${APPLE_ROOT_CA_PATH}" \
+  -k "${KEYCHAIN_NAME}" \
+  -T /usr/bin/codesign \
+  -T /usr/bin/security
+
+security import "${DEVELOPER_ID_CA_PATH}" \
+  -k "${KEYCHAIN_NAME}" \
+  -T /usr/bin/codesign \
+  -T /usr/bin/security
 
 security import "${CERT_PATH}" \
   -k "${KEYCHAIN_NAME}" \
