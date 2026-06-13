@@ -5,7 +5,7 @@ set -euo pipefail
 : "${APPLE_CERTIFICATE_PASSWORD:?.p12 password required}"
 : "${RUNNER_TEMP:?RUNNER_TEMP must be set}"
 
-KEYCHAIN_NAME="whisk-build.keychain"
+KEYCHAIN_NAME="${RUNNER_TEMP}/whisk-build.keychain"
 KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
 CERT_PATH="${RUNNER_TEMP}/cert.p12"
 APPLE_ROOT_CA_PATH="${RUNNER_TEMP}/AppleIncRootCertificate.cer"
