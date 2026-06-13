@@ -290,6 +290,11 @@ tasks:
         TAG="v${VERSION}"
         gh workflow run release.yml --repo phin-tech/whisk --ref main -f version="${TAG}"
 
+  release:
+    desc: "Dispatch the GitHub release workflow for the current build/config.yml version"
+    cmds:
+      - task: ci:trigger
+
   run:
     summary: Builds and runs the application
     cmds:
