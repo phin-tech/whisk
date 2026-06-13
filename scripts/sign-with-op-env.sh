@@ -6,6 +6,8 @@ set -euo pipefail
 
 RUNNER_TEMP="${RUNNER_TEMP:-$(mktemp -d)}"
 export RUNNER_TEMP
+SIGN_KEYCHAIN="${RUNNER_TEMP}/whisk-build.keychain"
+export SIGN_KEYCHAIN
 
 scripts/ci-setup-macos-keychain.sh
 
@@ -14,8 +16,8 @@ if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
   printf "%s" "${APPLE_CERTIFICATE}" | base64 --decode > "${cert_path}"
   APPLE_SIGNING_IDENTITY="$(
     openssl pkcs12 -in "${cert_path}" -nokeys -clcerts -passin env:APPLE_CERTIFICATE_PASSWORD 2>/dev/null |
-      openssl x509 -noout -subject -nameopt RFC2253 |
-      sed -n "s/^subject=.*CN=\\([^,]*\\).*/\\1/p"
+      openssl x509 -noout -fingerprint -sha1 |
+      sed 's/^[^=]*=//; s/://g'
   )"
   export APPLE_SIGNING_IDENTITY
 fi
