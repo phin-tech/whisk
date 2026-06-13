@@ -34,7 +34,7 @@ op run --env-file=.env.signing --no-masking -- bash -c '
     trap cleanup EXIT
     printf "%s" "${APPLE_CERTIFICATE}" | base64 --decode > "${cert_path}"
     APPLE_SIGNING_IDENTITY="$(
-      openssl pkcs12 -in "${cert_path}" -nokeys -clcerts -passin env:APPLE_CERTIFICATE_PASSWORD |
+      openssl pkcs12 -in "${cert_path}" -nokeys -clcerts -passin env:APPLE_CERTIFICATE_PASSWORD 2>/dev/null |
         openssl x509 -noout -subject -nameopt RFC2253 |
         sed -n "s/^subject=.*CN=\\([^,]*\\).*/\\1/p"
     )"
@@ -45,7 +45,7 @@ op run --env-file=.env.signing --no-masking -- bash -c '
       echo "Skipping ${v} (empty after op resolution)" >&2
       continue
     fi
-    printf "%s" "$val" | gh secret set "$v" --repo phin-tech/whisk --body -
+    printf "%s" "$val" | gh secret set "$v" --repo phin-tech/whisk
     echo "Set ${v}"
   done
 '
