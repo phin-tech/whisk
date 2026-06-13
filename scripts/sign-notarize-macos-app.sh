@@ -10,6 +10,7 @@ if [ ! -d "${APP_PATH}" ]; then
   echo "App bundle not found: ${APP_PATH}" >&2
   exit 1
 fi
+APP_PATH="$(cd "$(dirname "${APP_PATH}")" && pwd)/$(basename "${APP_PATH}")"
 
 assert_embedded_certificates() {
   local cert_dir
