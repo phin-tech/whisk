@@ -197,7 +197,7 @@ tasks:
     deps:
       - task: package
     cmds:
-      - wails3 tool sign --input "{{.BIN_DIR}}/{{.APP_NAME}}.app" --identity "{{.SIGN_IDENTITY}}" {{if .ENTITLEMENTS}}--entitlements {{.ENTITLEMENTS}}{{end}} --notarize --keychain-profile {{.KEYCHAIN_PROFILE}}
+      - SIGN_IDENTITY="{{.SIGN_IDENTITY}}" KEYCHAIN_PROFILE="{{.KEYCHAIN_PROFILE}}" scripts/sign-notarize-macos-app.sh "{{.BIN_DIR}}/{{.APP_NAME}}.app"
     preconditions:
       - sh: '[ -n "{{.SIGN_IDENTITY}}" ]'
         msg: "SIGN_IDENTITY is required. Set it in the vars section at the top of build/darwin/Taskfile.yml"

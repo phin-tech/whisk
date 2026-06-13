@@ -60,6 +60,12 @@ jobs:
             KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE}"
       - name: Zip app bundle
         run: ditto -c -k --sequesterRsrc --keepParent bin/Whisk.app "bin/Whisk-${{ inputs.version }}-macos.zip"
+      - name: Verify release zip
+        run: |
+          VERIFY_DIR="$(mktemp -d)"
+          ditto -x -k "bin/Whisk-${{ inputs.version }}-macos.zip" "${VERIFY_DIR}"
+          codesign --verify --deep --strict --verbose=4 "${VERIFY_DIR}/Whisk.app"
+          spctl -a -vvv -t execute "${VERIFY_DIR}/Whisk.app"
       - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
