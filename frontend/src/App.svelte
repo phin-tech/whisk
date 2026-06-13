@@ -39,6 +39,7 @@
     ListWorkItemRuns,
     ListWorkItems,
     ListWorkflowEvents,
+    LoadAppSettings,
     LaunchExecution,
     LaunchWorkItemRun,
     MarkStatusEventRead,
@@ -46,6 +47,7 @@
     NextEvent,
     Output,
     QueueExecution,
+    SaveAppSettings,
     SplitPane,
     StartPlanning,
     SubmitDraftPlan,
@@ -60,6 +62,11 @@
   import WorkBoard from "./WorkBoard.svelte";
   import { notificationBadgeCount, targetForStatusEvent } from "./notificationsView";
   import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
+  import {
+    normalizeStartupView,
+    startupTarget,
+    type StartupView,
+  } from "./startupView";
 
   type SidebarId = "sessions" | "ptys" | "work" | "notifications";
   type MainView = "session" | "work";
@@ -86,6 +93,7 @@
   let newSessionOpen = false;
   let settingsOpen = false;
   let railSide: RailSide = "right";
+  let startupView: StartupView = "sessions";
   let terminalFontSize = 13;
   let terminalCursorBlink = true;
   let error = "";
@@ -119,7 +127,13 @@
     return message;
   }
 
-  function loadSettings() {
+  function applyStartupView(view: StartupView) {
+    const target = startupTarget(view);
+    activeMain = target.main;
+    activeSidebar = target.sidebar;
+  }
+
+  function loadLocalSettings() {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
       if (!raw) return;
@@ -138,6 +152,17 @@
     }
   }
 
+  async function loadSettings() {
+    loadLocalSettings();
+    try {
+      const loaded = await LoadAppSettings();
+      startupView = normalizeStartupView(loaded.startupView);
+      applyStartupView(startupView);
+    } catch (err) {
+      error = `Load settings failed: ${backendError(err)}`;
+    }
+  }
+
   function saveSettings() {
     try {
       localStorage.setItem(
@@ -146,6 +171,16 @@
       );
     } catch {
       return;
+    }
+  }
+
+  async function setStartupView(view: StartupView) {
+    startupView = view;
+    try {
+      const saved = await SaveAppSettings({ startupView: view });
+      startupView = normalizeStartupView(saved.startupView);
+    } catch (err) {
+      error = `Save settings failed: ${backendError(err)}`;
     }
   }
 
@@ -754,9 +789,11 @@
   }
 
   onMount(() => {
-    loadSettings();
-    settingsLoaded = true;
-    refreshSessions()
+    loadSettings()
+      .then(() => {
+        settingsLoaded = true;
+      })
+      .then(refreshSessions)
       .then(refreshPTYs)
       .then(refreshProjects)
       .then(refreshStatusEvents)
@@ -959,10 +996,12 @@
         <SettingsView
           visible={settingsOpen}
           {railSide}
+          {startupView}
           {terminalFontSize}
           {terminalCursorBlink}
           onclose={() => (settingsOpen = false)}
           onRailSide={(side) => (railSide = side)}
+          onStartupView={(view) => void setStartupView(view)}
           onTerminalFontSize={(size) => (terminalFontSize = size)}
           onTerminalCursorBlink={(blink) => (terminalCursorBlink = blink)}
         />

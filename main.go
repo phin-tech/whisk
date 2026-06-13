@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/daemon"
 	"github.com/phin-tech/whisk/internal/wailsapp"
@@ -24,7 +25,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	whisk := wailsapp.NewService(client.NewHTTP(daemonURL, nil))
+	settingsStore, err := appsettings.NewDefaultStore()
+	if err != nil {
+		log.Fatal(err)
+	}
+	whisk := wailsapp.NewServiceWithSettings(client.NewHTTP(daemonURL, nil), settingsStore)
 
 	desktop := application.New(application.Options{
 		Name:        "Whisk",

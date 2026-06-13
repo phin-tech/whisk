@@ -4,22 +4,47 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/protocol"
 )
 
+type AppSettingsStore interface {
+	Load(context.Context) (appsettings.Settings, error)
+	Save(context.Context, appsettings.Settings) (appsettings.Settings, error)
+}
+
 type Service struct {
 	client    client.RuntimeClient
 	forwarder *client.LocalForwarder
+	settings  AppSettingsStore
 }
 
 func NewService(runtimeClient client.RuntimeClient) *Service {
-	service := &Service{client: runtimeClient}
+	return NewServiceWithSettings(runtimeClient, nil)
+}
+
+func NewServiceWithSettings(runtimeClient client.RuntimeClient, settings AppSettingsStore) *Service {
+	service := &Service{client: runtimeClient, settings: settings}
 	if httpClient, ok := runtimeClient.(*client.HTTPClient); ok {
 		service.forwarder = client.NewLocalForwarder(httpClient, nil)
 	}
 	return service
+}
+
+func (s *Service) LoadAppSettings(ctx context.Context) (appsettings.Settings, error) {
+	if s.settings == nil {
+		return appsettings.Default(), nil
+	}
+	return s.settings.Load(ctx)
+}
+
+func (s *Service) SaveAppSettings(ctx context.Context, settings appsettings.Settings) (appsettings.Settings, error) {
+	if s.settings == nil {
+		return appsettings.Normalize(settings)
+	}
+	return s.settings.Save(ctx, settings)
 }
 
 func (s *Service) ClearDaemon(ctx context.Context, req protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error) {

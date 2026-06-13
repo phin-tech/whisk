@@ -6,10 +6,12 @@
 
   export let visible = false;
   export let railSide: "left" | "right" = "right";
+  export let startupView: "sessions" | "kanban" = "sessions";
   export let terminalFontSize = 13;
   export let terminalCursorBlink = true;
   export let onclose: () => void;
   export let onRailSide: (side: "left" | "right") => void;
+  export let onStartupView: (view: "sessions" | "kanban") => void;
   export let onTerminalFontSize: (size: number) => void;
   export let onTerminalCursorBlink: (blink: boolean) => void;
 
@@ -91,6 +93,30 @@
               <div class="rounded border border-border bg-bg-deep px-2 py-1 text-xs text-text-secondary">
                 Default
               </div>
+            </div>
+          </div>
+
+          <div class="mt-4 flex items-center justify-between gap-3 py-2">
+            <div>
+              <div class="text-[13px]">Open to</div>
+              <div class="mt-0.5 text-[11px] text-text-muted">
+                Initial workspace after launch.
+              </div>
+            </div>
+            <div class="flex overflow-hidden rounded border border-border bg-bg-deep">
+              {#each [{ id: "sessions", label: "Sessions" }, { id: "kanban", label: "Kanban" }] as option}
+                <button
+                  type="button"
+                  class="px-2.5 py-1 text-[11px] transition-colors {startupView ===
+                  option.id
+                    ? 'bg-accent-dim text-text-primary'
+                    : 'text-text-secondary hover:bg-bg-hover'}"
+                  aria-pressed={startupView === option.id}
+                  on:click={() => onStartupView(option.id as "sessions" | "kanban")}
+                >
+                  {option.label}
+                </button>
+              {/each}
             </div>
           </div>
 

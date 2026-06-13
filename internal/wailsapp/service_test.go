@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/protocol"
@@ -286,6 +287,45 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err := service.StopHTTPForward(ctx, "fwd_01"); err == nil {
 		t.Fatalf("expected stop error without HTTP client")
 	}
+}
+
+func TestServiceLoadsAndSavesAppSettings(t *testing.T) {
+	store := &appSettingsStoreFake{settings: appsettings.Settings{StartupView: appsettings.StartupViewKanban}}
+	service := wailsapp.NewServiceWithSettings(&runtimeClientFake{}, store)
+	ctx := context.Background()
+
+	loaded, err := service.LoadAppSettings(ctx)
+	if err != nil {
+		t.Fatalf("load settings: %v", err)
+	}
+	if !store.loaded || loaded.StartupView != appsettings.StartupViewKanban {
+		t.Fatalf("loaded = %#v, store loaded = %v", loaded, store.loaded)
+	}
+
+	saved, err := service.SaveAppSettings(ctx, appsettings.Settings{StartupView: appsettings.StartupViewSessions})
+	if err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	if !store.saved || saved.StartupView != appsettings.StartupViewSessions || store.settings.StartupView != appsettings.StartupViewSessions {
+		t.Fatalf("saved = %#v, store = %#v, saved flag = %v", saved, store.settings, store.saved)
+	}
+}
+
+type appSettingsStoreFake struct {
+	settings appsettings.Settings
+	loaded   bool
+	saved    bool
+}
+
+func (f *appSettingsStoreFake) Load(context.Context) (appsettings.Settings, error) {
+	f.loaded = true
+	return f.settings, nil
+}
+
+func (f *appSettingsStoreFake) Save(_ context.Context, settings appsettings.Settings) (appsettings.Settings, error) {
+	f.saved = true
+	f.settings = settings
+	return settings, nil
 }
 
 type runtimeClientFake struct {
