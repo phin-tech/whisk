@@ -4,8 +4,8 @@ set -e
 # Build configuration
 APP_NAME="Whisk"
 BUNDLE_ID="com.phin-tech.whisk"
-VERSION="0.0.1"
-BUILD_NUMBER="0.0.1"
+VERSION="0.0.2-pre.1"
+BUILD_NUMBER="0.0.2-pre.1"
 BUILD_DIR="build/ios"
 TARGET="simulator"
 
