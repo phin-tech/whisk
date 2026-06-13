@@ -129,6 +129,16 @@ func TestJSONStoreRejectsInvalidFiles(t *testing.T) {
 	}
 }
 
+func TestJSONStoreLoadReportsReadErrors(t *testing.T) {
+	store, err := NewJSONStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if _, err := store.LoadWorkItems(context.Background()); err == nil {
+		t.Fatalf("expected read error")
+	}
+}
+
 func TestJSONStoreSaveReportsParentDirectoryErrors(t *testing.T) {
 	parent := filepath.Join(t.TempDir(), "not-a-dir")
 	if err := os.WriteFile(parent, []byte("file"), 0o600); err != nil {
@@ -140,5 +150,15 @@ func TestJSONStoreSaveReportsParentDirectoryErrors(t *testing.T) {
 	}
 	if err := store.SaveWorkItems(context.Background(), workitem.Snapshot{}); err == nil {
 		t.Fatalf("expected parent directory error")
+	}
+}
+
+func TestJSONStoreSaveReportsRenameErrors(t *testing.T) {
+	store, err := NewJSONStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.SaveWorkItems(context.Background(), workitem.Snapshot{}); err == nil {
+		t.Fatalf("expected rename error")
 	}
 }
