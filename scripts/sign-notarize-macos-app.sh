@@ -47,8 +47,6 @@ xcrun notarytool submit "${ZIP_PATH}" \
   --keychain-profile "${KEYCHAIN_PROFILE}" \
   --wait
 
-xcrun stapler staple "${APP_PATH}"
-xcrun stapler validate "${APP_PATH}"
 codesign --verify --deep --strict --verbose=4 "${APP_PATH}"
 assert_embedded_certificates
 spctl -a -vvv -t execute "${APP_PATH}"
