@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "6",
+    "version": "8",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -11,6 +11,49 @@
     }
   ],
   "paths": {
+    "/v1/artifacts": {
+      "get": {
+        "operationId": "listArtifacts",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Artifact"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/compat": {
       "get": {
         "operationId": "getCompatibility",
@@ -24,6 +67,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CompatibilityResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/daemon/clear": {
+      "post": {
+        "operationId": "clearDaemon",
+        "summary": "Clear daemon-owned runtime state",
+        "tags": [
+          "system"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClearDaemonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearDaemonResponse"
                 }
               }
             },
@@ -64,6 +148,99 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RuntimeEvent"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/gate-reports": {
+      "get": {
+        "operationId": "listGateReports",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GateReport"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/gate-reports/{gateReportID}/complete": {
+      "post": {
+        "operationId": "completeGate",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "gateReportID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteGateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GateReport"
                 }
               }
             },
@@ -632,6 +809,47 @@
       }
     },
     "/v1/questions": {
+      "get": {
+        "operationId": "listQuestions",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Question"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      },
       "post": {
         "operationId": "askQuestion",
         "tags": [
@@ -1587,6 +1805,56 @@
         }
       }
     },
+    "/v1/work-item-runs/{runID}/launch": {
+      "post": {
+        "operationId": "launchWorkItemRun",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "runID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LaunchWorkItemRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItemRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/work-items": {
       "get": {
         "operationId": "listWorkItems",
@@ -1646,6 +1914,56 @@
         },
         "responses": {
           "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/approve-done": {
+      "post": {
+        "operationId": "approveDone",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveDoneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1918,6 +2236,56 @@
         }
       }
     },
+    "/v1/work-items/{workItemID}/launch-execution": {
+      "post": {
+        "operationId": "launchExecution",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LaunchExecutionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItemRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/work-items/{workItemID}/move": {
       "post": {
         "operationId": "moveWorkItem",
@@ -2000,6 +2368,56 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Artifact"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-items/{workItemID}/queue-execution": {
+      "post": {
+        "operationId": "queueExecution",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueueExecutionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItemRun"
                 }
               }
             },
@@ -2150,6 +2568,49 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkItemRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/workflow-events": {
+      "get": {
+        "operationId": "listWorkflowEvents",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowEvent"
+                  },
+                  "type": "array"
                 }
               }
             },
@@ -2432,6 +2893,23 @@
         ],
         "type": "object"
       },
+      "ApproveDoneRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId"
+        ],
+        "type": "object"
+      },
       "ApprovePlanRequest": {
         "properties": {
           "actor": {
@@ -2645,6 +3123,47 @@
         ],
         "type": "object"
       },
+      "ClearDaemonRequest": {
+        "properties": {},
+        "type": "object"
+      },
+      "ClearDaemonResponse": {
+        "properties": {
+          "bookmarksCleared": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "forwardsCleared": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectsCleared": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ptysCleared": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sessionsCleared": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "workItemsCleared": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sessionsCleared",
+          "ptysCleared",
+          "bookmarksCleared",
+          "projectsCleared",
+          "workItemsCleared",
+          "forwardsCleared"
+        ],
+        "type": "object"
+      },
       "ClosePaneRequest": {
         "properties": {
           "paneId": {
@@ -2697,6 +3216,27 @@
         },
         "required": [
           "runId"
+        ],
+        "type": "object"
+      },
+      "CompleteGateRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "overrideReason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
         ],
         "type": "object"
       },
@@ -2951,6 +3491,53 @@
         ],
         "type": "object"
       },
+      "GateReport": {
+        "properties": {
+          "blocking": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "overrideReason": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "workItemId",
+          "name",
+          "blocking",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "HTTPForward": {
         "properties": {
           "id": {
@@ -3020,6 +3607,46 @@
         },
         "required": [
           "ptyId"
+        ],
+        "type": "object"
+      },
+      "LaunchExecutionRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "agentProfileId": {
+            "type": "string"
+          },
+          "systemPrompt": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId"
+        ],
+        "type": "object"
+      },
+      "LaunchWorkItemRunRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "agentProfileId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "systemPrompt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
         ],
         "type": "object"
       },
@@ -3428,6 +4055,20 @@
         ],
         "type": "object"
       },
+      "QueueExecutionRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId"
+        ],
+        "type": "object"
+      },
       "RemoveWorktreeRequest": {
         "properties": {
           "alsoBranch": {
@@ -3790,12 +4431,27 @@
       },
       "StartPTYOptions": {
         "properties": {
+          "args": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "cols": {
             "format": "int64",
             "type": "integer"
           },
           "command": {
             "type": "string"
+          },
+          "env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "exec": {
+            "type": "boolean"
           },
           "rows": {
             "format": "int64",
@@ -4185,6 +4841,42 @@
           "createdAt",
           "updatedAt",
           "history"
+        ],
+        "type": "object"
+      },
+      "WorkflowEvent": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "type",
+          "at"
         ],
         "type": "object"
       },

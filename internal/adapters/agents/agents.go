@@ -55,6 +55,13 @@ func BuildLaunch(req LaunchRequest) (Launch, error) {
 		if req.SystemPrompt != "" {
 			args = append(args, "-c", "instructions="+req.SystemPrompt)
 		}
+		if req.Prompt != "" {
+			args = append(args, req.Prompt)
+		}
+	}
+	stdin := req.Prompt
+	if profile.Provider == ProviderCodex {
+		stdin = ""
 	}
 	return Launch{
 		ProfileID:  profile.ID,
@@ -63,7 +70,7 @@ func BuildLaunch(req LaunchRequest) (Launch, error) {
 		Args:       args,
 		WorkingDir: req.WorkingDir,
 		Env:        mergeEnv(profile.Env, req.Env),
-		Stdin:      req.Prompt,
+		Stdin:      stdin,
 	}, nil
 }
 

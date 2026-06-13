@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { adjacentStageTargets, canMoveToStage, groupWorkItemsByStage } from "./workView";
+import {
+  adjacentStageTargets,
+  canMoveToStage,
+  collapsedStageStorageKey,
+  deriveWorkItemAttention,
+  groupWorkItemsByStage,
+  parseCollapsedStages,
+  selectDetailRun,
+  serializeCollapsedStages,
+} from "./workView";
 
 const stages = [
   { id: "backlog" },
@@ -44,5 +53,90 @@ describe("workView", () => {
       next: stages[1],
       blockedNext: null,
     });
+  });
+
+  it("derives only attention-worthy card signals", () => {
+    const item = { id: "a", stageId: "planning" };
+
+    expect(
+      deriveWorkItemAttention(item, {
+        runs: [{ id: "run-1", workItemId: "a", status: "awaiting_input", ptyId: "pty-1" }],
+        questions: [{ id: "q-1", workItemId: "a", status: "open" }],
+        gates: [{ id: "g-1", workItemId: "a", name: "Review", status: "pending", blocking: true }],
+        artifacts: [{ id: "plan-1", workItemId: "a", kind: "plan", status: "draft" }],
+        stageRequiresWorktree: true,
+      }),
+    ).toEqual({
+      severity: "danger",
+      terminalRunId: "run-1",
+      signals: [
+        { id: "awaiting-input", label: "Awaiting input", tone: "warning" },
+        { id: "open-questions", label: "1 question", tone: "warning" },
+        { id: "blocking-gates", label: "1 gate", tone: "danger" },
+        { id: "missing-worktree", label: "Needs worktree", tone: "warning" },
+      ],
+    });
+  });
+
+  it("keeps healthy workflow state quiet", () => {
+    expect(
+      deriveWorkItemAttention(
+        { id: "a", stageId: "execution", worktree: { branch: "feature" } },
+        {
+          runs: [{ id: "run-1", workItemId: "a", status: "completed" }],
+          questions: [{ id: "q-1", workItemId: "a", status: "answered" }],
+          gates: [{ id: "g-1", workItemId: "a", name: "Review", status: "passed", blocking: true }],
+          artifacts: [{ id: "plan-1", workItemId: "a", kind: "plan", status: "approved" }],
+          stageRequiresPlan: true,
+          stageRequiresWorktree: true,
+        },
+      ),
+    ).toEqual({ severity: "none", terminalRunId: "", signals: [] });
+  });
+
+  it("treats queued runs as visible actionable info", () => {
+    expect(
+      deriveWorkItemAttention(
+        { id: "a", stageId: "execution", worktree: { branch: "feature" } },
+        {
+          runs: [{ id: "run-1", workItemId: "a", status: "queued" }],
+        },
+      ),
+    ).toEqual({
+      severity: "info",
+      terminalRunId: "",
+      signals: [{ id: "queued", label: "Queued", tone: "info" }],
+    });
+  });
+
+  it("exposes linked running runs as terminal targets", () => {
+    expect(
+      deriveWorkItemAttention(
+        { id: "a", stageId: "execution", worktree: { branch: "feature" } },
+        {
+          runs: [{ id: "run-1", workItemId: "a", status: "running", sessionId: "session-1" }],
+        },
+      ).terminalRunId,
+    ).toBe("run-1");
+  });
+
+  it("selects the latest run for the detail modal even when an older run is cancellable", () => {
+    expect(
+      selectDetailRun([
+        { id: "execution", workItemId: "a", status: "cancelled" },
+        { id: "planning", workItemId: "a", status: "queued" },
+      ])?.id,
+    ).toBe("execution");
+  });
+
+  it("serializes collapsed stages as stable client-owned view state", () => {
+    expect(collapsedStageStorageKey("project-1")).toBe("whisk.workBoard.collapsedStages.project-1");
+    expect(serializeCollapsedStages(new Set(["done", "backlog", "done"]))).toBe(
+      '["backlog","done"]',
+    );
+    expect(parseCollapsedStages('["done","",42,"backlog","done"]')).toEqual(
+      new Set(["backlog", "done"]),
+    );
+    expect(parseCollapsedStages("not json")).toEqual(new Set());
   });
 });

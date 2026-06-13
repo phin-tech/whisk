@@ -12,6 +12,59 @@ import * as json$0 from "../../../../../../encoding/json/models.js";
 // @ts-ignore: Unused imports
 import * as time$0 from "../../../../../../time/models.js";
 
+export class Artifact {
+    "id": string;
+    "projectId": string;
+    "workItemId": string;
+    "runId"?: string;
+    "kind": string;
+    "status": string;
+    "title"?: string;
+    "body"?: string;
+    "metadata"?: { [_ in string]?: MetadataValue };
+    "createdAt": time$0.Time;
+    "updatedAt": time$0.Time;
+
+    /** Creates a new Artifact instance. */
+    constructor($$source: Partial<Artifact> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = "";
+        }
+        if (!("workItemId" in $$source)) {
+            this["workItemId"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Artifact instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Artifact {
+        const $$createField8_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("metadata" in $$parsedSource) {
+            $$parsedSource["metadata"] = $$createField8_0($$parsedSource["metadata"]);
+        }
+        return new Artifact($$parsedSource as Partial<Artifact>);
+    }
+}
+
 export class Attachment {
     "id": string;
     "kind": string;
@@ -81,6 +134,57 @@ export class GateConfig {
     static createFrom($$source: any = {}): GateConfig {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new GateConfig($$parsedSource as Partial<GateConfig>);
+    }
+}
+
+export class GateReport {
+    "id": string;
+    "projectId": string;
+    "workItemId": string;
+    "runId"?: string;
+    "name": string;
+    "blocking": boolean;
+    "status": string;
+    "overrideReason"?: string;
+    "createdAt": time$0.Time;
+    "updatedAt": time$0.Time;
+
+    /** Creates a new GateReport instance. */
+    constructor($$source: Partial<GateReport> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = "";
+        }
+        if (!("workItemId" in $$source)) {
+            this["workItemId"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("blocking" in $$source)) {
+            this["blocking"] = false;
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GateReport instance from a string or object.
+     */
+    static createFrom($$source: any = {}): GateReport {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GateReport($$parsedSource as Partial<GateReport>);
     }
 }
 
@@ -193,9 +297,9 @@ export class Project {
      * Creates a new Project instance from a string or object.
      */
     static createFrom($$source: any = {}): Project {
-        const $$createField4_0 = $$createType0;
-        const $$createField5_0 = $$createType1;
-        const $$createField6_0 = $$createType3;
+        const $$createField4_0 = $$createType2;
+        const $$createField5_0 = $$createType3;
+        const $$createField6_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workflow" in $$parsedSource) {
             $$parsedSource["workflow"] = $$createField4_0($$parsedSource["workflow"]);
@@ -328,6 +432,58 @@ export class PromptTemplate {
     static createFrom($$source: any = {}): PromptTemplate {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new PromptTemplate($$parsedSource as Partial<PromptTemplate>);
+    }
+}
+
+export class Question {
+    "id": string;
+    "projectId": string;
+    "workItemId": string;
+    "runId"?: string;
+    "sessionId"?: string;
+    "ptyId"?: string;
+    "prompt": string;
+    "answer"?: string;
+    "status": string;
+    "actor"?: string;
+    "answeredBy"?: string;
+    "createdAt": time$0.Time;
+    "updatedAt": time$0.Time;
+    "answeredAt"?: time$0.Time | null;
+
+    /** Creates a new Question instance. */
+    constructor($$source: Partial<Question> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = "";
+        }
+        if (!("workItemId" in $$source)) {
+            this["workItemId"] = "";
+        }
+        if (!("prompt" in $$source)) {
+            this["prompt"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Question instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Question {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Question($$parsedSource as Partial<Question>);
     }
 }
 
@@ -507,7 +663,7 @@ export class WorkItem {
     static createFrom($$source: any = {}): WorkItem {
         const $$createField10_0 = $$createType12;
         const $$createField11_0 = $$createType14;
-        const $$createField12_0 = $$createType3;
+        const $$createField12_0 = $$createType1;
         const $$createField13_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worktree" in $$parsedSource) {
@@ -582,7 +738,7 @@ export class WorkItemRun {
      * Creates a new WorkItemRun instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkItemRun {
-        const $$createField9_0 = $$createType3;
+        const $$createField9_0 = $$createType1;
         const $$createField13_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("metadata" in $$parsedSource) {
@@ -592,6 +748,43 @@ export class WorkItemRun {
             $$parsedSource["history"] = $$createField13_0($$parsedSource["history"]);
         }
         return new WorkItemRun($$parsedSource as Partial<WorkItemRun>);
+    }
+}
+
+export class WorkflowEvent {
+    "id": string;
+    "projectId": string;
+    "workItemId"?: string;
+    "runId"?: string;
+    "type": string;
+    "actor"?: string;
+    "message"?: string;
+    "at": time$0.Time;
+
+    /** Creates a new WorkflowEvent instance. */
+    constructor($$source: Partial<WorkflowEvent> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = "";
+        }
+        if (!("type" in $$source)) {
+            this["type"] = "";
+        }
+        if (!("at" in $$source)) {
+            this["at"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowEvent instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowEvent {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkflowEvent($$parsedSource as Partial<WorkflowEvent>);
     }
 }
 
@@ -715,10 +908,10 @@ export class WorktreeBinding {
 }
 
 // Private type creation functions
-const $$createType0 = ProjectWorkflow.createFrom;
-const $$createType1 = ProjectPreferences.createFrom;
-const $$createType2 = MetadataValue.createFrom;
-const $$createType3 = $Create.Map($Create.Any, $$createType2);
+const $$createType0 = MetadataValue.createFrom;
+const $$createType1 = $Create.Map($Create.Any, $$createType0);
+const $$createType2 = ProjectWorkflow.createFrom;
+const $$createType3 = ProjectPreferences.createFrom;
 const $$createType4 = $Create.Map($Create.Any, $Create.Any);
 const $$createType5 = GateConfig.createFrom;
 const $$createType6 = $Create.Array($$createType5);

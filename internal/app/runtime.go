@@ -55,6 +55,15 @@ type PTYInfo struct {
 	OriginPaneID   string    `json:"originPaneId"`
 }
 
+type ClearDaemonResult struct {
+	SessionsCleared  int
+	PTYsCleared      int
+	BookmarksCleared int
+	ProjectsCleared  int
+	WorkItemsCleared int
+	ForwardsCleared  int
+}
+
 type PTYEvent struct {
 	Kind   PTYEventKind
 	Offset uint64
@@ -99,6 +108,8 @@ type SpawnPTYRequest struct {
 	Cols       int
 	Rows       int
 	Env        map[string]string
+	Command    string
+	Args       []string
 }
 
 type PTYSize struct {
@@ -249,6 +260,8 @@ type StartPTYOptions struct {
 	Rows    int
 	Command string
 	Env     map[string]string
+	Args    []string
+	Exec    bool
 }
 
 type SplitPaneResult struct {
@@ -399,6 +412,10 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 	if r.ids == nil {
 		r.ids = r.generatedID
 	}
+	if err := r.reconcileLoadedWorkItemRuns(context.Background()); err != nil {
+		watchCancel()
+		return nil, err
+	}
 	return r, nil
 }
 
@@ -423,6 +440,8 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 			Cols:       req.InitialPTY.Cols,
 			Rows:       req.InitialPTY.Rows,
 			Env:        r.ptyContextEnv(sessionID, nextPTYID, req.InitialPTY.Env),
+			Command:    directPTYCommand(req.InitialPTY),
+			Args:       directPTYArgs(req.InitialPTY),
 		})
 		if err != nil {
 			return CreatedSession{}, err
@@ -442,9 +461,11 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 			Status:         PTYStatusRunning,
 		})
 		r.watchPTYOutput(record.ID)
-		if err := r.writeInitialCommand(ctx, record.ID, req.InitialPTY.Command); err != nil {
-			_, _ = r.ptys.Kill(ctx, record.ID)
-			return CreatedSession{}, err
+		if !req.InitialPTY.Exec {
+			if err := r.writeInitialCommand(ctx, record.ID, req.InitialPTY.Command); err != nil {
+				_, _ = r.ptys.Kill(ctx, record.ID)
+				return CreatedSession{}, err
+			}
 		}
 	}
 	created, err := r.state.CreateSession(session.CreateSession{
@@ -466,6 +487,20 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 		r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: mainPtyID})
 	}
 	return CreatedSession{Session: created, WindowID: windowID, PaneID: paneID, PTYID: ptyID, MainPtyID: mainPtyID}, nil
+}
+
+func directPTYCommand(options *StartPTYOptions) string {
+	if options == nil || !options.Exec {
+		return ""
+	}
+	return options.Command
+}
+
+func directPTYArgs(options *StartPTYOptions) []string {
+	if options == nil || !options.Exec || len(options.Args) == 0 {
+		return nil
+	}
+	return append([]string(nil), options.Args...)
 }
 
 func (r *Runtime) ListSessions(_ context.Context) ([]session.Session, error) {
@@ -498,6 +533,8 @@ func (r *Runtime) SplitPane(ctx context.Context, req SplitPaneRequest) (SplitPan
 			Cols:       req.InitialPTY.Cols,
 			Rows:       req.InitialPTY.Rows,
 			Env:        r.ptyContextEnv(req.SessionID, newPtyID, req.InitialPTY.Env),
+			Command:    directPTYCommand(req.InitialPTY),
+			Args:       directPTYArgs(req.InitialPTY),
 		})
 		if err != nil {
 			return SplitPaneResult{}, err
@@ -517,9 +554,11 @@ func (r *Runtime) SplitPane(ctx context.Context, req SplitPaneRequest) (SplitPan
 			Status:         PTYStatusRunning,
 		})
 		r.watchPTYOutput(record.ID)
-		if err := r.writeInitialCommand(ctx, record.ID, req.InitialPTY.Command); err != nil {
-			_, _ = r.ptys.Kill(ctx, record.ID)
-			return SplitPaneResult{}, err
+		if !req.InitialPTY.Exec {
+			if err := r.writeInitialCommand(ctx, record.ID, req.InitialPTY.Command); err != nil {
+				_, _ = r.ptys.Kill(ctx, record.ID)
+				return SplitPaneResult{}, err
+			}
 		}
 	}
 	updated, err := r.state.SplitPane(session.SplitPane{
@@ -630,6 +669,8 @@ func (r *Runtime) StartPanePTY(ctx context.Context, req StartPanePTYRequest) (St
 		Cols:       req.Options.Cols,
 		Rows:       req.Options.Rows,
 		Env:        r.ptyContextEnv(req.SessionID, ptyID, req.Options.Env),
+		Command:    directPTYCommand(&req.Options),
+		Args:       directPTYArgs(&req.Options),
 	})
 	if err != nil {
 		return StartedPanePTY{}, err
@@ -647,9 +688,11 @@ func (r *Runtime) StartPanePTY(ctx context.Context, req StartPanePTYRequest) (St
 		Status:         PTYStatusRunning,
 	})
 	r.watchPTYOutput(record.ID)
-	if err := r.writeInitialCommand(ctx, record.ID, req.Options.Command); err != nil {
-		_, _ = r.ptys.Kill(ctx, record.ID)
-		return StartedPanePTY{}, err
+	if !req.Options.Exec {
+		if err := r.writeInitialCommand(ctx, record.ID, req.Options.Command); err != nil {
+			_, _ = r.ptys.Kill(ctx, record.ID)
+			return StartedPanePTY{}, err
+		}
 	}
 	updated, err := r.state.StartPanePTY(session.StartPanePTY{
 		SessionID: req.SessionID,
@@ -721,6 +764,8 @@ func (r *Runtime) RestartPanePTY(ctx context.Context, req RestartPanePTYRequest)
 		Cols:       req.Options.Cols,
 		Rows:       req.Options.Rows,
 		Env:        r.ptyContextEnv(req.SessionID, newPTYID, req.Options.Env),
+		Command:    directPTYCommand(&req.Options),
+		Args:       directPTYArgs(&req.Options),
 	})
 	if err != nil {
 		return RestartedPanePTY{}, err
@@ -738,9 +783,11 @@ func (r *Runtime) RestartPanePTY(ctx context.Context, req RestartPanePTYRequest)
 		Status:         PTYStatusRunning,
 	})
 	r.watchPTYOutput(record.ID)
-	if err := r.writeInitialCommand(ctx, record.ID, req.Options.Command); err != nil {
-		_, _ = r.ptys.Kill(ctx, record.ID)
-		return RestartedPanePTY{}, err
+	if !req.Options.Exec {
+		if err := r.writeInitialCommand(ctx, record.ID, req.Options.Command); err != nil {
+			_, _ = r.ptys.Kill(ctx, record.ID)
+			return RestartedPanePTY{}, err
+		}
 	}
 	updated, oldPTYID, err := r.state.RestartPanePTY(session.RestartPanePTY{
 		SessionID: req.SessionID,
@@ -769,6 +816,9 @@ func (r *Runtime) KillPTY(ctx context.Context, req KillPTYRequest) (PTYInfo, err
 		return PTYInfo{}, err
 	}
 	r.markPTYKilled(req.PTYID)
+	if err := r.cancelRunsLinkedToClosedTerminals(ctx, nil, []string{req.PTYID}); err != nil {
+		return PTYInfo{}, err
+	}
 	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: req.PTYID})
 	return r.ptyInfoForRecord(record), nil
 }
@@ -831,11 +881,117 @@ func (r *Runtime) CloseSession(ctx context.Context, req CloseSessionRequest) ([]
 	if err := r.persistSessions(ctx); err != nil {
 		return nil, err
 	}
+	if err := r.cancelRunsLinkedToClosedTerminals(ctx, []string{current.ID}, ptyIDs); err != nil {
+		return nil, err
+	}
 	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
 	for _, ptyID := range ptyIDs {
 		r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: ptyID})
 	}
 	return r.state.List(), nil
+}
+
+func (r *Runtime) cancelRunsLinkedToClosedTerminals(ctx context.Context, sessionIDs []string, ptyIDs []string) error {
+	sessionSet := map[string]struct{}{}
+	for _, id := range sessionIDs {
+		if id != "" {
+			sessionSet[id] = struct{}{}
+		}
+	}
+	ptySet := map[string]struct{}{}
+	for _, id := range ptyIDs {
+		if id != "" {
+			ptySet[id] = struct{}{}
+		}
+	}
+	if len(sessionSet) == 0 && len(ptySet) == 0 {
+		return nil
+	}
+	changed := false
+	now := time.Now().UTC()
+	for _, run := range r.workItems.ListRuns("") {
+		if terminalRunStatus(run.Status) {
+			continue
+		}
+		_, sessionMatch := sessionSet[run.SessionID]
+		_, ptyMatch := ptySet[run.PTYID]
+		if !sessionMatch && !ptyMatch {
+			continue
+		}
+		if _, err := r.workItems.CancelRun(workitem.CancelRun{
+			ID:           run.ID,
+			RunHistoryID: r.ids(),
+			Actor:        "runtime",
+			Now:          now,
+		}); err != nil {
+			return err
+		}
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return nil
+}
+
+func (r *Runtime) reconcileLoadedWorkItemRuns(ctx context.Context) error {
+	sessionIDs := map[string]struct{}{}
+	for _, sess := range r.state.List() {
+		sessionIDs[sess.ID] = struct{}{}
+	}
+	ptyIDs := map[string]struct{}{}
+	if r.ptys != nil {
+		records, err := r.ptys.List(ctx)
+		if err != nil {
+			return err
+		}
+		for _, record := range records {
+			if record.Running {
+				ptyIDs[record.ID] = struct{}{}
+			}
+		}
+	}
+	changed := false
+	now := time.Now().UTC()
+	for _, run := range r.workItems.ListRuns("") {
+		if run.Status != workitem.RunStateRunning && run.Status != workitem.RunStateAwaitingInput {
+			continue
+		}
+		missingSession := false
+		if run.SessionID != "" {
+			_, ok := sessionIDs[run.SessionID]
+			missingSession = !ok
+		}
+		missingPTY := false
+		if run.PTYID != "" {
+			_, ok := ptyIDs[run.PTYID]
+			missingPTY = !ok
+		}
+		if !missingSession && !missingPTY {
+			continue
+		}
+		if _, err := r.workItems.CancelRun(workitem.CancelRun{
+			ID:           run.ID,
+			RunHistoryID: r.ids(),
+			Actor:        "runtime",
+			Now:          now,
+		}); err != nil {
+			return err
+		}
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return nil
 }
 
 func (r *Runtime) ClosePane(ctx context.Context, req ClosePaneRequest) (session.Session, error) {
@@ -907,6 +1063,50 @@ func (r *Runtime) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	return r.ptys.Shutdown(ctx)
+}
+
+func (r *Runtime) ClearDaemon(ctx context.Context) (ClearDaemonResult, error) {
+	r.mu.Lock()
+	forwardsCleared := len(r.forwards.List())
+	r.forwards = httpforward.NewState()
+	r.ptyMeta = map[string]ptyMetadata{}
+	r.mu.Unlock()
+
+	result := ClearDaemonResult{
+		SessionsCleared:  len(r.state.List()),
+		BookmarksCleared: len(r.bookmarks.List("")),
+		ProjectsCleared:  len(r.workItems.ListProjects()),
+		WorkItemsCleared: len(r.workItems.ListWorkItems("")),
+		ForwardsCleared:  forwardsCleared,
+	}
+	if r.ptys != nil {
+		ptys, err := r.ptys.List(ctx)
+		if err != nil {
+			return ClearDaemonResult{}, err
+		}
+		result.PTYsCleared = len(ptys)
+		if err := r.ptys.Shutdown(ctx); err != nil {
+			return ClearDaemonResult{}, err
+		}
+	}
+
+	r.state = session.NewState()
+	r.bookmarks = ptybookmark.NewState()
+	r.workItems = workitem.NewState()
+
+	if err := r.persistSessions(ctx); err != nil {
+		return ClearDaemonResult{}, err
+	}
+	if err := r.persistBookmarks(ctx); err != nil {
+		return ClearDaemonResult{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return ClearDaemonResult{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged})
+	return result, nil
 }
 
 func (r *Runtime) generatedID() string {
@@ -1133,7 +1333,7 @@ func (r *Runtime) killSessionPTYs(ctx context.Context, sessionID string) ([]stri
 }
 
 func (r *Runtime) watchPTYOutput(ptyID string) {
-	if r.ptys == nil || (r.eventSink == nil && r.transcriptStore == nil) {
+	if r.ptys == nil {
 		return
 	}
 	attach, err := r.ptys.Attach(r.watchCtx, AttachPTYRequest{PtyID: ptyID})
@@ -1158,6 +1358,7 @@ func (r *Runtime) watchPTYOutput(ptyID string) {
 				case PTYExit:
 					r.markPTYTranscriptExit(r.watchCtx, ptyID, event.Code)
 					r.markPTYExited(ptyID, event.Code)
+					_ = r.cancelRunsLinkedToClosedTerminals(r.watchCtx, nil, []string{ptyID})
 					r.publish(r.watchCtx, RuntimeEvent{Type: EventPTYChanged, PtyID: ptyID})
 				}
 			case <-r.watchCtx.Done():

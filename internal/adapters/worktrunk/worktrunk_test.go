@@ -181,6 +181,32 @@ func TestListAcceptsBooleanWorkingTreeCounts(t *testing.T) {
 	}
 }
 
+func TestListAcceptsStringSymbols(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{
+		outputs: []Output{{
+			StatusCode: 0,
+			Stdout: []byte(`[
+				{
+					"branch":"feature",
+					"path":"/repo/.worktrees/feature",
+					"kind":"worktree",
+					"symbols":"*"
+				}
+			]`),
+		}},
+	}
+	client := NewClient(Binary{Path: "/bin/wt", Version: "0.44.0"}, runner)
+
+	items, err := client.List(ctx, "/repo")
+	if err != nil {
+		t.Fatalf("List error: %v", err)
+	}
+	if len(items) != 1 || !reflect.DeepEqual([]string(items[0].Symbols), []string{"*"}) {
+		t.Fatalf("items = %#v", items)
+	}
+}
+
 func TestListAcceptsPartialWorktreeJSON(t *testing.T) {
 	ctx := context.Background()
 	runner := &fakeRunner{

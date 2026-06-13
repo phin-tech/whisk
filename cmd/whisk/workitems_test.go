@@ -377,6 +377,11 @@ func TestRunWorkflowActionCommandsUseDaemonAPIAndEnvDefaults(t *testing.T) {
 				t.Fatalf("question request = %#v", req)
 			}
 			_ = json.NewEncoder(w).Encode(protocol.Question{ID: "question_01", WorkItemID: req.WorkItemID, RunID: req.RunID, Prompt: req.Prompt, Status: workitem.QuestionStatusOpen})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/questions":
+			if r.URL.Query().Get("workItemId") != "wi_env" {
+				t.Fatalf("question list query = %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode([]protocol.Question{{ID: "question_01", WorkItemID: "wi_env", Status: workitem.QuestionStatusOpen}})
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/questions/question_01/answer":
 			var req protocol.AnswerQuestionRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -395,6 +400,39 @@ func TestRunWorkflowActionCommandsUseDaemonAPIAndEnvDefaults(t *testing.T) {
 				t.Fatalf("feedback request = %#v", req)
 			}
 			_ = json.NewEncoder(w).Encode(protocol.Artifact{ID: "feedback_01", Kind: workitem.ArtifactKindFeedback, Status: workitem.ArtifactStatusApproved})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/artifacts":
+			if r.URL.Query().Get("workItemId") != "wi_env" {
+				t.Fatalf("artifact list query = %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode([]protocol.Artifact{{ID: "artifact_plan", WorkItemID: "wi_env", Kind: workitem.ArtifactKindPlan, Status: workitem.ArtifactStatusApproved}})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/workflow-events":
+			if r.URL.Query().Get("workItemId") != "wi_env" {
+				t.Fatalf("workflow event query = %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode([]protocol.WorkflowEvent{{ID: "workflow_01", WorkItemID: "wi_env", Type: workitem.WorkflowEventPlanApproved}})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/gate-reports":
+			if r.URL.Query().Get("workItemId") != "wi_env" {
+				t.Fatalf("gate list query = %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode([]protocol.GateReport{{ID: "gate_01", WorkItemID: "wi_env", Status: workitem.GateStatusPending, Blocking: true}})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/gate-reports/gate_01/complete":
+			var req protocol.CompleteGateRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode gate: %v", err)
+			}
+			if req.ID != "gate_01" || req.Status != workitem.GateStatusPassed || req.Actor != "agent" {
+				t.Fatalf("gate request = %#v", req)
+			}
+			_ = json.NewEncoder(w).Encode(protocol.GateReport{ID: "gate_01", Status: req.Status})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/work-items/wi_env/approve-done":
+			var req protocol.ApproveDoneRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode done: %v", err)
+			}
+			if req.WorkItemID != "wi_env" || req.Reason != "Reviewed." || req.Actor != "agent" {
+				t.Fatalf("done request = %#v", req)
+			}
+			_ = json.NewEncoder(w).Encode(protocol.WorkItem{ID: "wi_env", StageID: workitem.StageDone})
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.String())
 		}
@@ -408,8 +446,14 @@ func TestRunWorkflowActionCommandsUseDaemonAPIAndEnvDefaults(t *testing.T) {
 		{"workflow", "approve-plan", "-artifact", "artifact_plan", "-json"},
 		{"workflow", "start-execution", "-json"},
 		{"question", "ask", "-prompt", "Which key?", "-json"},
+		{"question", "list", "-json"},
 		{"question", "answer", "question_01", "-answer", "Staging.", "-json"},
 		{"workflow", "feedback", "-body", "Fix validation.", "-json"},
+		{"workflow", "artifacts", "-json"},
+		{"workflow", "events", "-json"},
+		{"gate", "list", "-json"},
+		{"gate", "complete", "gate_01", "-status", "passed", "-json"},
+		{"workflow", "approve-done", "-reason", "Reviewed.", "-json"},
 	}
 	for _, args := range cases {
 		if _, err := captureStdout(func() error { return run(args) }); err != nil {
@@ -418,7 +462,12 @@ func TestRunWorkflowActionCommandsUseDaemonAPIAndEnvDefaults(t *testing.T) {
 	}
 	if requests["POST /v1/work-items/wi_env/start-planning"] != 1 ||
 		requests["POST /v1/questions"] != 1 ||
-		requests["POST /v1/work-items/wi_env/review-feedback"] != 1 {
+		requests["GET /v1/questions"] != 1 ||
+		requests["POST /v1/work-items/wi_env/review-feedback"] != 1 ||
+		requests["GET /v1/artifacts"] != 1 ||
+		requests["GET /v1/workflow-events"] != 1 ||
+		requests["GET /v1/gate-reports"] != 1 ||
+		requests["POST /v1/work-items/wi_env/approve-done"] != 1 {
 		t.Fatalf("requests = %#v", requests)
 	}
 }

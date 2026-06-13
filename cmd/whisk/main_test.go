@@ -41,6 +41,43 @@ func TestRunDaemonStopUsesShutdownEndpoint(t *testing.T) {
 	}
 }
 
+func TestRunDaemonClearRequiresConfirmation(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := run([]string{"daemon", "clear", "-url", server.URL})
+	if err == nil || !strings.Contains(err.Error(), "requires -yes") {
+		t.Fatalf("clear error = %v", err)
+	}
+	if called {
+		t.Fatalf("clear endpoint was called without confirmation")
+	}
+}
+
+func TestRunDaemonClearUsesClearEndpoint(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/daemon/clear" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		called = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"sessionsCleared":1,"ptysCleared":2,"bookmarksCleared":3,"projectsCleared":4,"workItemsCleared":5,"forwardsCleared":6}`))
+	}))
+	defer server.Close()
+
+	if err := run([]string{"daemon", "clear", "-url", server.URL, "-yes"}); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if !called {
+		t.Fatalf("clear endpoint was not called")
+	}
+}
+
 func TestRunDaemonRunValidatesListenAddress(t *testing.T) {
 	err := run([]string{"daemon", "run", "-addr", "0.0.0.0:8787"})
 	if err == nil {

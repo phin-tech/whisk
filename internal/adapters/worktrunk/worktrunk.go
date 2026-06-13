@@ -109,7 +109,7 @@ type Item struct {
 	URL            string       `json:"url"`
 	URLActive      bool         `json:"url_active"`
 	StatusLine     string       `json:"statusline"`
-	Symbols        []string     `json:"symbols"`
+	Symbols        stringList   `json:"symbols"`
 	Vars           []string     `json:"vars"`
 	CI             CI           `json:"ci"`
 }
@@ -175,6 +175,30 @@ func decodeWorktreeCount(raw json.RawMessage) (int, error) {
 		return 0, nil
 	}
 	return 0, fmt.Errorf("expected integer or boolean, got %s", string(raw))
+}
+
+type stringList []string
+
+func (s *stringList) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		*s = nil
+		return nil
+	}
+	var values []string
+	if err := json.Unmarshal(data, &values); err == nil {
+		*s = values
+		return nil
+	}
+	var value string
+	if err := json.Unmarshal(data, &value); err == nil {
+		if strings.TrimSpace(value) == "" {
+			*s = nil
+			return nil
+		}
+		*s = []string{value}
+		return nil
+	}
+	return fmt.Errorf("expected string or string array, got %s", string(data))
 }
 
 type Main struct {

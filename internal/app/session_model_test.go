@@ -365,6 +365,78 @@ func TestRuntimeCloseSessionDeletesSessionKillsPTYsAndPersists(t *testing.T) {
 	}
 }
 
+func TestRuntimeClearDaemonResetsOwnedStateAndKillsPTYs(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	rootDir := t.TempDir()
+	ptyBackend := newMemoryPTYBackend()
+	sessionStore := &memorySessionStore{}
+	bookmarkStore := &memoryBookmarkStore{}
+	workItemStore := &memoryWorkItemStore{}
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend:    ptyBackend,
+		SessionStore:  sessionStore,
+		BookmarkStore: bookmarkStore,
+		WorkItemStore: workItemStore,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Clear me",
+		RootDir:    rootDir,
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := runtime.AddPTYBookmark(ctx, app.AddPTYBookmarkRequest{PTYID: created.MainPtyID, Offset: 12}); err != nil {
+		t.Fatalf("add bookmark: %v", err)
+	}
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: rootDir})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	if _, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Task"}); err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	if _, err := runtime.CreateHTTPForward(ctx, app.CreateHTTPForwardRequest{Name: "API", TargetURL: "http://127.0.0.1:3000"}); err != nil {
+		t.Fatalf("create forward: %v", err)
+	}
+
+	cleared, err := runtime.ClearDaemon(ctx)
+	if err != nil {
+		t.Fatalf("clear daemon: %v", err)
+	}
+	if cleared.SessionsCleared != 1 || cleared.PTYsCleared != 1 || cleared.BookmarksCleared != 1 || cleared.ProjectsCleared != 1 || cleared.WorkItemsCleared != 1 || cleared.ForwardsCleared != 1 {
+		t.Fatalf("cleared = %#v", cleared)
+	}
+	if sessions, _ := runtime.ListSessions(ctx); len(sessions) != 0 {
+		t.Fatalf("sessions = %#v", sessions)
+	}
+	if ptys, _ := runtime.ListPTYs(ctx); len(ptys) != 0 {
+		t.Fatalf("ptys = %#v", ptys)
+	}
+	if bookmarks, _ := runtime.ListPTYBookmarks(ctx, ""); len(bookmarks) != 0 {
+		t.Fatalf("bookmarks = %#v", bookmarks)
+	}
+	if projects, _ := runtime.ListProjects(ctx); len(projects) != 0 {
+		t.Fatalf("projects = %#v", projects)
+	}
+	if forwards, _ := runtime.ListHTTPForwards(ctx); len(forwards) != 0 {
+		t.Fatalf("forwards = %#v", forwards)
+	}
+	if len(sessionStore.saved[len(sessionStore.saved)-1]) != 0 {
+		t.Fatalf("saved sessions = %#v", sessionStore.saved)
+	}
+	if len(bookmarkStore.saved[len(bookmarkStore.saved)-1]) != 0 {
+		t.Fatalf("saved bookmarks = %#v", bookmarkStore.saved)
+	}
+	if len(workItemStore.saved.Items) != 0 || len(workItemStore.saved.Projects) != 0 {
+		t.Fatalf("saved work items = %#v", workItemStore.saved)
+	}
+}
+
 func TestRuntimeDetachPanePTYKeepsPTYSessionOwnership(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	ctx := context.Background()

@@ -151,6 +151,75 @@ func TestMarkRunRunningStoresSessionPTYAndTransitionsWorkItem(t *testing.T) {
 	}
 }
 
+func TestMarkRunRunningCanMarkDaemonOwnedSession(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", "proj_01")
+	run, err := state.StartRun(StartRun{
+		ID:           "run_01",
+		HistoryID:    "hist_run_01",
+		RunHistoryID: "run_hist_01",
+		WorkItemID:   item.ID,
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+
+	running, err := state.MarkRunRunning(MarkRunRunning{
+		ID:           run.ID,
+		RunHistoryID: "run_hist_running_01",
+		SessionID:    "sess_01",
+		PTYID:        "pty_01",
+		DaemonOwned:  true,
+		Actor:        "agent",
+		Now:          now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("mark running: %v", err)
+	}
+	owned := running.Metadata["whisk.daemon/owned_session"]
+	if owned.Type != MetadataTypeBool || !owned.Bool {
+		t.Fatalf("metadata = %#v", running.Metadata)
+	}
+}
+
+func TestCompleteRunTransitionsRunWithoutChangingStage(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", "proj_01")
+	run, err := state.StartRun(StartRun{
+		ID:           "run_01",
+		HistoryID:    "hist_run_01",
+		RunHistoryID: "run_hist_01",
+		WorkItemID:   item.ID,
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+
+	completed, err := state.CompleteRun(CompleteRun{
+		ID:           run.ID,
+		RunHistoryID: "run_hist_complete_01",
+		Actor:        "agent",
+		Message:      "planning accepted",
+		Now:          now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("complete run: %v", err)
+	}
+	if completed.Status != RunStateCompleted || completed.CompletedAt == nil {
+		t.Fatalf("completed = %#v", completed)
+	}
+	updated, _ := state.GetWorkItem(item.ID)
+	if updated.StageID != item.StageID || updated.RunState != RunStateCompleted {
+		t.Fatalf("updated item = %#v", updated)
+	}
+}
+
 func TestReportStatusQuestionBlockedAndDoneTransitionRunAndWorkItem(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)

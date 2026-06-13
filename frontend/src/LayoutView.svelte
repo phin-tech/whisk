@@ -9,21 +9,23 @@
   export let terminalFontSize = 13;
   export let terminalCursorBlink = true;
   export let onFocus: (paneId: string) => void;
-  export let onInput: () => void;
+  export let onInput: (ptyId: string) => void;
 </script>
 
 {#if node.kind === "leaf"}
   {@const pane = panes[node.paneId ?? ""]}
   {#if pane}
-    <TerminalPane
-      pane={pane}
-      outputChunks={pane.currentPtyId ? (outputChunks[pane.currentPtyId] ?? []) : []}
-      focused={activePaneId === pane.id}
-      fontSize={terminalFontSize}
-      cursorBlink={terminalCursorBlink}
-      onFocus={() => onFocus(pane.id)}
-      onInput={onInput}
-    />
+    {#key pane.currentPtyId ?? pane.id}
+      <TerminalPane
+        pane={pane}
+        outputChunks={pane.currentPtyId ? (outputChunks[pane.currentPtyId] ?? []) : []}
+        focused={activePaneId === pane.id}
+        fontSize={terminalFontSize}
+        cursorBlink={terminalCursorBlink}
+        onFocus={() => onFocus(pane.id)}
+        onInput={onInput}
+      />
+    {/key}
   {/if}
 {:else}
   <div

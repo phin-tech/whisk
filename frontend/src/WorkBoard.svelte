@@ -3,22 +3,48 @@
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import ClipboardCheck from "@lucide/svelte/icons/clipboard-check";
+  import Clock3 from "@lucide/svelte/icons/clock-3";
+  import FileText from "@lucide/svelte/icons/file-text";
   import GitBranch from "@lucide/svelte/icons/git-branch";
+  import History from "@lucide/svelte/icons/history";
+  import MoreHorizontal from "@lucide/svelte/icons/ellipsis";
   import Paperclip from "@lucide/svelte/icons/paperclip";
   import Play from "@lucide/svelte/icons/play";
   import Plus from "@lucide/svelte/icons/plus";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import Search from "@lucide/svelte/icons/search";
   import Square from "@lucide/svelte/icons/square";
+  import SquareTerminal from "@lucide/svelte/icons/square-terminal";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import X from "@lucide/svelte/icons/x";
   import type { WorkflowStage } from "../bindings/github.com/phin-tech/whisk/internal/domain/workitem/models";
-  import type { Project, WorkItem, WorkItemRun } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
-  import { adjacentStageTargets, canMoveToStage, groupWorkItemsByStage } from "./workView";
+  import type {
+    Artifact,
+    GateReport,
+    Project,
+    Question,
+    WorkItem,
+    WorkItemRun,
+    WorkflowEvent,
+  } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import {
+    adjacentStageTargets,
+    canMoveToStage,
+    collapsedStageStorageKey,
+    deriveWorkItemAttention,
+    groupWorkItemsByStage,
+    parseCollapsedStages,
+    selectDetailRun,
+    serializeCollapsedStages,
+  } from "./workView";
 
   export let projects: Project[] = [];
   export let workItems: WorkItem[] = [];
   export let workItemRuns: WorkItemRun[] = [];
+  export let artifacts: Artifact[] = [];
+  export let questions: Question[] = [];
+  export let gateReports: GateReport[] = [];
+  export let workflowEvents: WorkflowEvent[] = [];
   export let activeProjectId = "";
   export let loading = false;
   export let onRefresh: () => void;
@@ -33,19 +59,47 @@
   export let onGenerateWorktree: (request: { workItemId: string; branch: string }) => void;
   export let onAttachFile: (workItemId: string, path: string) => void;
   export let onDeleteWorkItem: (workItemId: string) => void;
-  export let onStartRun: (request: {
-    workItemId: string;
-    preset: string;
-    promptTemplateId: string;
-    agentProfileId: string;
-  }) => void;
   export let onCancelRun: (runId: string) => void;
+  export let onLaunchRun: (runId: string) => void;
+  export let onOpenRunTerminal: (run: WorkItemRun) => void;
+  export let onStartPlanning: (workItemId: string) => void;
+  export let onSubmitPlan: (request: {
+    workItemId: string;
+    runId: string;
+    title: string;
+    body: string;
+  }) => void;
+  export let onApprovePlan: (workItemId: string, artifactId: string) => void;
+  export let onQueueExecution: (workItemId: string) => void;
+  export let onLaunchExecution: (workItemId: string) => void;
+  export let onCompleteExecution: (request: {
+    workItemId: string;
+    runId: string;
+    message: string;
+  }) => void;
+  export let onSubmitReviewFeedback: (request: {
+    workItemId: string;
+    runId: string;
+    body: string;
+  }) => void;
+  export let onAskQuestion: (request: { workItemId: string; runId: string; prompt: string }) => void;
+  export let onAnswerQuestion: (questionId: string, answer: string) => void;
+  export let onCompleteGate: (request: { id: string; status: string; overrideReason: string }) => void;
+  export let onApproveDone: (workItemId: string, reason: string) => void;
 
   let newItemTitle = "";
   let newItemBody = "";
   let worktreeBranches: Record<string, string> = {};
+  let planBodies: Record<string, string> = {};
+  let feedbackBodies: Record<string, string> = {};
+  let questionPrompts: Record<string, string> = {};
+  let questionAnswers: Record<string, string> = {};
+  let gateOverrideReasons: Record<string, string> = {};
+  let doneReasons: Record<string, string> = {};
   let detailItemId = "";
-  let agentProfileId = "codex";
+  let createBodyOpen = false;
+  let collapsedStageIds = new Set<string>();
+  let collapsedProjectId = "";
 
   $: activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   $: stages = activeProject?.workflow?.stages ?? [];
@@ -53,6 +107,31 @@
   $: detailItem = workItems.find((item) => item.id === detailItemId) ?? null;
   $: runsByItem = groupRunsByItem(workItemRuns);
   $: detailRuns = detailItem ? (runsByItem[detailItem.id] ?? []) : [];
+  $: detailArtifacts = detailItem ? artifacts.filter((artifact) => artifact.workItemId === detailItem.id) : [];
+  $: detailQuestions = detailItem ? questions.filter((question) => question.workItemId === detailItem.id) : [];
+  $: detailGates = detailItem ? gateReports.filter((gate) => gate.workItemId === detailItem.id) : [];
+  $: detailWorkflowEvents = detailItem ? workflowEvents.filter((event) => event.workItemId === detailItem.id) : [];
+  $: detailLatestRun = detailRuns[0] ?? null;
+  $: detailCurrentRun = selectDetailRun(detailRuns);
+  $: detailPastRuns = detailCurrentRun
+    ? detailRuns.filter((run) => run.id !== detailCurrentRun.id)
+    : detailRuns;
+  $: latestDraftPlan = [...detailArtifacts]
+    .reverse()
+    .find((artifact) => artifact.kind === "plan" && artifact.status === "draft");
+  $: approvedPlan = [...detailArtifacts]
+    .reverse()
+    .find((artifact) => artifact.kind === "plan" && artifact.status === "approved");
+  $: planArtifacts = [...detailArtifacts]
+    .filter((artifact) => artifact.kind === "plan")
+    .sort((a, b) => timestamp(b.updatedAt || b.createdAt) - timestamp(a.updatedAt || a.createdAt));
+  $: if (activeProjectId !== collapsedProjectId) {
+    collapsedProjectId = activeProjectId;
+    collapsedStageIds =
+      typeof localStorage === "undefined"
+        ? new Set<string>()
+        : parseCollapsedStages(localStorage.getItem(collapsedStageStorageKey(activeProjectId)));
+  }
 
   function slugify(value: string) {
     return value
@@ -97,9 +176,165 @@
     return run.status === "queued" || run.status === "running" || run.status === "awaiting_input";
   }
 
-  function startRun(item: WorkItem, preset: string, promptTemplateId: string) {
+  function canOpenRunTerminal(run: WorkItemRun | null) {
+    return Boolean(run?.sessionId || run?.ptyId);
+  }
+
+  function hasApprovedPlan(itemId: string) {
+    return artifacts.some(
+      (artifact) =>
+        artifact.workItemId === itemId && artifact.kind === "plan" && artifact.status === "approved",
+    );
+  }
+
+  function hasActiveRun(run: WorkItemRun | null) {
+    return run?.status === "queued" || run?.status === "running" || run?.status === "awaiting_input";
+  }
+
+  function canQueueOrLaunchExecution(item: WorkItem, latestRun: WorkItemRun | null) {
+    return item.stageId === "ready" && hasApprovedPlan(item.id) && !hasActiveRun(latestRun);
+  }
+
+  function openRunTerminal(run: WorkItemRun) {
+    if (!canOpenRunTerminal(run)) return;
+    closeDetail();
+    onOpenRunTerminal(run);
+  }
+
+  function runStatusClass(status: string) {
+    if (status === "running" || status === "awaiting_input") {
+      return "border-green/35 bg-green/10 text-green";
+    }
+    if (status === "queued") return "border-blue/35 bg-blue/10 text-blue";
+    if (status === "failed" || status === "cancelled") return "border-red/35 bg-red/10 text-red";
+    return "border-border-subtle bg-bg-surface/50 text-text-secondary";
+  }
+
+  function stageRequiresPlan(stage: WorkflowStage) {
+    const value = `${stage.id} ${stage.name}`.toLowerCase();
+    return value.includes("execution") || value.includes("review") || value.includes("done");
+  }
+
+  function attentionFor(item: WorkItem, stage: WorkflowStage) {
+    return deriveWorkItemAttention(item, {
+      runs: runsByItem[item.id] ?? [],
+      questions: detailRecordsForItem(questions, item.id),
+      gates: detailRecordsForItem(gateReports, item.id),
+      artifacts: detailRecordsForItem(artifacts, item.id),
+      stageRequiresWorktree: Boolean(stage.provisionWorktree),
+      stageRequiresPlan: stageRequiresPlan(stage),
+    });
+  }
+
+  function detailRecordsForItem<T extends { workItemId: string }>(records: T[], itemId: string) {
+    return records.filter((record) => record.workItemId === itemId);
+  }
+
+  function attentionToneClass(tone: string) {
+    if (tone === "danger") return "border-red/40 bg-red/12 text-red";
+    if (tone === "warning") return "border-amber/45 bg-amber/12 text-amber";
+    if (tone === "success") return "border-green/40 bg-green/12 text-green";
+    return "border-blue/40 bg-blue/12 text-blue";
+  }
+
+  function cardRailClass(severity: string) {
+    if (severity === "danger") return "bg-red";
+    if (severity === "warning") return "bg-amber";
+    if (severity === "info") return "bg-blue";
+    return "bg-border";
+  }
+
+  function hasStageAttention(stage: WorkflowStage) {
+    return (itemsByStage[stage.id] ?? []).some(
+      (item) => attentionFor(item, stage).severity !== "none",
+    );
+  }
+
+  function stageAttentionClass(stage: WorkflowStage) {
+    const severities = (itemsByStage[stage.id] ?? []).map((item) => attentionFor(item, stage).severity);
+    if (severities.includes("danger")) return "bg-red";
+    if (severities.includes("warning")) return "bg-amber";
+    if (severities.includes("info")) return "bg-blue";
+    return "bg-border";
+  }
+
+  function toggleStageCollapsed(stageId: string) {
+    const next = new Set(collapsedStageIds);
+    if (next.has(stageId)) {
+      next.delete(stageId);
+    } else {
+      next.add(stageId);
+    }
+    collapsedStageIds = next;
+    if (typeof localStorage !== "undefined" && activeProjectId) {
+      localStorage.setItem(collapsedStageStorageKey(activeProjectId), serializeCollapsedStages(next));
+    }
+  }
+
+  function setAllColumnsCollapsed(collapsed: boolean) {
+    const next = collapsed ? new Set(stages.map((stage) => stage.id)) : new Set<string>();
+    collapsedStageIds = next;
+    if (typeof localStorage !== "undefined" && activeProjectId) {
+      localStorage.setItem(collapsedStageStorageKey(activeProjectId), serializeCollapsedStages(next));
+    }
+  }
+
+  function stageLabel(stageId: string) {
+    return stages.find((stage) => stage.id === stageId)?.name ?? stageId;
+  }
+
+  function submitPlan(item: WorkItem) {
+    const body = (planBodies[item.id] ?? "").trim();
+    if (!body || loading) return;
+    onSubmitPlan({
+      workItemId: item.id,
+      runId: detailLatestRun?.id ?? "",
+      title: "Plan",
+      body,
+    });
+    planBodies = { ...planBodies, [item.id]: "" };
+  }
+
+  function submitFeedback(item: WorkItem) {
+    const body = (feedbackBodies[item.id] ?? "").trim();
+    if (!body || loading) return;
+    onSubmitReviewFeedback({
+      workItemId: item.id,
+      runId: detailLatestRun?.id ?? "",
+      body,
+    });
+    feedbackBodies = { ...feedbackBodies, [item.id]: "" };
+  }
+
+  function askWorkflowQuestion(item: WorkItem) {
+    const prompt = (questionPrompts[item.id] ?? "").trim();
+    if (!prompt || loading) return;
+    onAskQuestion({
+      workItemId: item.id,
+      runId: detailLatestRun?.id ?? "",
+      prompt,
+    });
+    questionPrompts = { ...questionPrompts, [item.id]: "" };
+  }
+
+  function answerWorkflowQuestion(question: Question) {
+    const answer = (questionAnswers[question.id] ?? "").trim();
+    if (!answer || loading) return;
+    onAnswerQuestion(question.id, answer);
+    questionAnswers = { ...questionAnswers, [question.id]: "" };
+  }
+
+  function completeGate(gate: GateReport, status: string) {
+    const overrideReason = (gateOverrideReasons[gate.id] ?? "").trim();
     if (loading) return;
-    onStartRun({ workItemId: item.id, preset, promptTemplateId, agentProfileId });
+    onCompleteGate({ id: gate.id, status, overrideReason });
+    if (status === "overridden") gateOverrideReasons = { ...gateOverrideReasons, [gate.id]: "" };
+  }
+
+  function approveDone(item: WorkItem) {
+    const reason = (doneReasons[item.id] ?? "").trim();
+    if (loading) return;
+    onApproveDone(item.id, reason);
   }
 
   function createWorkItem() {
@@ -165,11 +400,11 @@
 
 <svelte:window on:keydown={handleKey} />
 
-<div class="flex min-h-0 flex-1 flex-col bg-bg-deep">
-  <div class="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-hairline bg-bg-base/80 px-3">
-    <div class="flex min-w-0 items-center gap-2">
+<div class="flex min-h-0 flex-1 flex-col bg-[#050506]">
+  <div class="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/12 bg-[#0a0a0c] px-3 py-2">
+    <div class="flex min-w-0 flex-1 items-center gap-2">
       <select
-        class="h-8 max-w-[280px] rounded border border-border bg-bg-surface px-2 text-[12px] text-text-secondary outline-none focus:border-accent-dim"
+        class="h-9 max-w-[300px] rounded-md border border-white/16 bg-[#111114] px-2.5 text-[13px] font-medium text-text-primary outline-none focus:border-accent-dim"
         value={activeProjectId}
         disabled={loading || projects.length === 0}
         on:change={(event) => onSelectProject(event.currentTarget.value)}
@@ -182,30 +417,70 @@
         {/each}
       </select>
       {#if activeProject}
-        <div class="hidden min-w-0 sm:block">
-          <div class="truncate text-[12px] font-semibold text-text-primary">
-            {activeProject.name}
-          </div>
-          <div class="truncate font-mono text-[10px] text-text-muted">
-            {activeProject.rootDir}
-          </div>
+        <div class="hidden min-w-0 lg:block">
+          <div class="truncate text-[12px] text-text-secondary">{activeProject.rootDir}</div>
         </div>
       {/if}
     </div>
-    <div class="flex shrink-0 items-center gap-1">
+
+    <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
+      {#if activeProject}
+        <div class="flex min-w-[260px] max-w-[520px] flex-1 items-center overflow-hidden rounded-md border border-white/16 bg-[#0d0d10] focus-within:border-accent-dim">
+          <input
+            class="h-9 min-w-0 flex-1 bg-transparent px-3 text-[14px] text-text-primary outline-none placeholder:text-text-muted"
+            type="text"
+            bind:value={newItemTitle}
+            placeholder="Create work item"
+            disabled={loading}
+          />
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 shrink-0 items-center justify-center text-text-muted transition-colors hover:text-text-primary"
+            aria-label={createBodyOpen ? "Hide work item body" : "Add work item body"}
+            title={createBodyOpen ? "Hide body" : "Add body"}
+            on:click={() => (createBodyOpen = !createBodyOpen)}
+          >
+            <MoreHorizontal size={16} />
+          </button>
+          <button
+            type="button"
+            class="mr-1 inline-flex h-7 shrink-0 items-center justify-center rounded border border-white/14 bg-white/8 px-2.5 text-[12px] font-semibold text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
+            disabled={loading || !newItemTitle.trim()}
+            on:click={createWorkItem}
+          >
+            Create
+          </button>
+        </div>
+      {/if}
       <button
         type="button"
-        class="inline-flex h-8 w-8 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/14 bg-white/6 text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
         disabled={loading}
         aria-label="Refresh work board"
         title="Refresh work board"
         on:click={onRefresh}
       >
-        <RefreshCw size={14} class={loading ? "animate-spin" : ""} />
+        <RefreshCw size={15} class={loading ? "animate-spin" : ""} />
       </button>
       <button
         type="button"
-        class="inline-flex h-8 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[12px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
+        class="hidden h-9 items-center justify-center rounded-md border border-white/14 bg-white/6 px-2.5 text-[12px] font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary sm:inline-flex"
+        disabled={loading || stages.length === 0}
+        on:click={() => setAllColumnsCollapsed(false)}
+      >
+        Expand
+      </button>
+      <button
+        type="button"
+        class="hidden h-9 items-center justify-center rounded-md border border-white/14 bg-white/6 px-2.5 text-[12px] font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary sm:inline-flex"
+        disabled={loading || stages.length === 0}
+        on:click={() => setAllColumnsCollapsed(true)}
+      >
+        Collapse
+      </button>
+      <button
+        type="button"
+        class="inline-flex h-9 items-center justify-center gap-1 rounded-md border border-white/14 bg-white/6 px-2.5 text-[12px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
         disabled={loading}
         on:click={onNewProject}
       >
@@ -216,131 +491,200 @@
   </div>
 
   {#if activeProject}
-    <div class="grid shrink-0 gap-2 border-b border-hairline p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_auto]">
-      <input
-        class="h-9 rounded border border-border bg-bg-deep px-2.5 text-[13px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
-        type="text"
-        bind:value={newItemTitle}
-        placeholder="Work item title"
-        disabled={loading}
-      />
-      <input
-        class="h-9 rounded border border-border bg-bg-deep px-2.5 text-[13px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
-        type="text"
-        bind:value={newItemBody}
-        placeholder="Markdown body"
-        disabled={loading}
-      />
-      <button
-        type="button"
-        class="inline-flex h-9 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-3 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
-        disabled={loading || !newItemTitle.trim()}
-        on:click={createWorkItem}
-      >
-        <Plus size={14} />
-        <span>Create</span>
-      </button>
-    </div>
+    {#if createBodyOpen}
+      <div class="shrink-0 border-b border-white/12 bg-[#080809] px-3 py-2">
+        <textarea
+          class="h-20 w-full resize-none rounded-md border border-white/14 bg-[#0d0d10] px-3 py-2 text-[13px] leading-5 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+          bind:value={newItemBody}
+          placeholder="Markdown body"
+          disabled={loading}
+        ></textarea>
+      </div>
+    {/if}
 
     <div class="app-scrollbar min-h-0 flex-1 overflow-auto p-3">
-      <div
-        class="grid min-h-full gap-3"
-        style="grid-template-columns: repeat({Math.max(stages.length, 1)}, minmax(260px, 1fr));"
-      >
+      <div class="flex min-h-full min-w-max items-stretch gap-3">
         {#each stages as stage (stage.id)}
           {@const stageItems = itemsByStage[stage.id] ?? []}
-          <section class="flex min-h-[360px] flex-col rounded border border-border-subtle/70 bg-bg-surface/20">
-            <div class="flex h-10 shrink-0 items-center justify-between border-b border-border-subtle/60 px-3">
-              <div class="truncate text-[12px] font-semibold text-text-primary">
-                {stage.name}
-              </div>
-              <div class="rounded bg-bg-deep px-1.5 py-0.5 font-mono text-[10px] text-text-muted">
-                {stageItems.length}
-              </div>
-            </div>
-            <div class="grid gap-2 p-2">
-              {#if stageItems.length === 0}
-                <div class="rounded border border-dashed border-border-subtle/70 px-3 py-6 text-center text-[12px] text-text-muted">
-                  Empty
+          {@const collapsed = collapsedStageIds.has(stage.id)}
+          {@const stageHasAttention = hasStageAttention(stage)}
+          {#if collapsed}
+            <button
+              type="button"
+              class="flex min-h-[420px] w-12 shrink-0 flex-col items-center justify-between rounded-md border border-white/14 bg-[#0b0b0d] px-2 py-3 text-text-secondary transition-colors hover:border-white/28 hover:bg-[#101014] hover:text-text-primary"
+              aria-label={`Expand ${stage.name}`}
+              title={`Expand ${stage.name}`}
+              on:click={() => toggleStageCollapsed(stage.id)}
+            >
+              <span class="writing-vertical truncate text-[13px] font-semibold">{stage.name}</span>
+              <span class="flex flex-col items-center gap-2">
+                {#if stageHasAttention}
+                  <span class="h-2 w-2 rounded-full {stageAttentionClass(stage)}"></span>
+                {/if}
+                <span class="rounded border border-white/14 bg-black/40 px-1.5 py-1 font-mono text-[12px]">
+                  {stageItems.length}
+                </span>
+              </span>
+            </button>
+          {:else}
+            <section class="flex min-h-[420px] w-[320px] shrink-0 flex-col overflow-hidden rounded-md border border-white/14 bg-[#0b0b0d]">
+              <div class="flex h-12 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-white/12 px-3">
+                <div class="flex min-w-0 items-center gap-2">
+                  {#if stageHasAttention}
+                    <span class="h-2 w-2 shrink-0 rounded-full {stageAttentionClass(stage)}"></span>
+                  {/if}
+                  <button
+                    type="button"
+                    class="min-w-0 truncate text-left text-[13px] font-semibold text-text-primary outline-none focus-visible:text-accent"
+                    aria-label={`Collapse ${stage.name}`}
+                    title="Double-click to collapse"
+                    on:dblclick={() => toggleStageCollapsed(stage.id)}
+                  >
+                    {stage.name}
+                  </button>
+                  <div class="rounded border border-white/12 bg-black/35 px-1.5 py-0.5 font-mono text-[12px] text-text-secondary">
+                    {stageItems.length}
+                  </div>
                 </div>
-              {:else}
-                {#each stageItems as item (item.id)}
-                  {@const targets = adjacentStageTargets(item, stages)}
-                  {@const itemRuns = runsByItem[item.id] ?? []}
-                  {@const latestRun = itemRuns[0]}
-                  <article class="rounded border border-border-subtle bg-bg-deep/90 p-2">
-                    <div class="flex min-w-0 items-start justify-between gap-2">
-                      <button
-                        type="button"
-                        class="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-text-primary transition-colors hover:text-accent"
-                        on:click={() => (detailItemId = item.id)}
-                      >
-                        #{item.number} {item.title}
-                      </button>
-                      <div class="flex shrink-0 gap-1">
-                        <button
-                          type="button"
-                          aria-label="Move previous"
-                          title="Move previous"
-                          class="inline-flex h-6 w-6 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-                          disabled={loading || !targets.previous}
-                          on:click={() => movePrevious(item)}
-                        >
-                          <ArrowLeft size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={targets.blockedNext ? "Generate worktree before moving" : "Move next"}
-                          title={targets.blockedNext ? "Generate worktree before moving" : "Move next"}
-                          class="inline-flex h-6 w-6 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-                          disabled={loading || !targets.next}
-                          on:click={() => moveNext(item)}
-                        >
-                          <ArrowRight size={12} />
-                        </button>
+                <button
+                  type="button"
+                  class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-white/14 hover:bg-white/8 hover:text-text-primary"
+                  aria-label={`Collapse ${stage.name}`}
+                  title={`Collapse ${stage.name}`}
+                  on:click={() => toggleStageCollapsed(stage.id)}
+                >
+                  <ArrowLeft size={13} />
+                </button>
+              </div>
+
+              <div class="grid min-w-0 content-start gap-2 p-2">
+                {#if stageItems.length === 0}
+                  <div class="min-h-24 rounded-md border border-dashed border-white/16 bg-black/20 px-3 py-7 text-center text-[13px] text-text-muted">
+                    Empty
+                  </div>
+                {:else}
+                  {#each stageItems as item (item.id)}
+                    {@const targets = adjacentStageTargets(item, stages)}
+                    {@const latestRun = (runsByItem[item.id] ?? [])[0] ?? null}
+                    {@const canExecute = canQueueOrLaunchExecution(item, latestRun)}
+                    {@const attention = attentionFor(item, stage)}
+                    {@const terminalRun = attention.terminalRunId
+                      ? (runsByItem[item.id] ?? []).find((run) => run.id === attention.terminalRunId)
+                      : null}
+                    <article class="group relative min-h-[76px] overflow-hidden rounded-md border border-white/12 bg-[#111114] shadow-[0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:border-white/28 hover:bg-[#151519] focus-within:border-white/28">
+                      <div class="absolute inset-y-0 left-0 w-1 {cardRailClass(attention.severity)}"></div>
+                      <div class="grid gap-2 px-3 py-2 pl-4">
+                        <div class="flex min-w-0 items-start gap-2">
+                          <button
+                            type="button"
+                            class="work-card-title min-w-0 flex-1 text-left text-[14px] font-semibold leading-5 text-text-primary outline-none transition-colors hover:text-accent focus-visible:text-accent"
+                            on:click={() => (detailItemId = item.id)}
+                          >
+                            <span class="font-mono text-[12px] font-medium text-text-muted">#{item.number}</span>
+                            {item.title}
+                          </button>
+                          {#if terminalRun}
+                            <button
+                              type="button"
+                              aria-label="Open running terminal"
+                              title="Open running terminal"
+                              class="inline-flex h-7 w-7 shrink-0 animate-pulse items-center justify-center rounded border border-green/45 bg-green/12 text-green shadow-[0_0_0_1px_rgba(56,211,159,0.08),0_0_18px_rgba(56,211,159,0.16)] transition-colors hover:border-green disabled:cursor-not-allowed"
+                              disabled={loading}
+                              on:click={() => openRunTerminal(terminalRun)}
+                            >
+                              <SquareTerminal size={14} />
+                            </button>
+                          {/if}
+                          <div class="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                            {#if latestRun?.status === "queued"}
+                              <button
+                                type="button"
+                                aria-label="Launch queued run"
+                                title="Launch queued run"
+                                class="inline-flex h-7 w-7 items-center justify-center rounded border border-blue/35 bg-blue/10 text-blue transition-colors hover:border-blue disabled:cursor-not-allowed"
+                                disabled={loading}
+                                on:click={() => onLaunchRun(latestRun.id)}
+                              >
+                                <Play size={13} />
+                              </button>
+                            {/if}
+                            {#if canExecute}
+                              <button
+                                type="button"
+                                aria-label="Queue execution"
+                                title="Queue execution"
+                                class="inline-flex h-7 w-7 items-center justify-center rounded border border-blue/35 bg-blue/10 text-blue transition-colors hover:border-blue disabled:cursor-not-allowed"
+                                disabled={loading}
+                                on:click={() => onQueueExecution(item.id)}
+                              >
+                                <Clock3 size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="Launch execution"
+                                title="Launch execution"
+                                class="inline-flex h-7 w-7 items-center justify-center rounded border border-green/35 bg-green/10 text-green transition-colors hover:border-green disabled:cursor-not-allowed"
+                                disabled={loading}
+                                on:click={() => onLaunchExecution(item.id)}
+                              >
+                                <Play size={13} />
+                              </button>
+                            {/if}
+                            {#if targets.blockedNext && !item.worktree}
+                              <button
+                                type="button"
+                                aria-label="Generate worktree"
+                                title="Generate worktree"
+                                class="inline-flex h-7 w-7 items-center justify-center rounded border border-white/14 bg-white/6 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
+                                disabled={loading}
+                                on:click={() => generateWorktree(item)}
+                              >
+                                <GitBranch size={13} />
+                              </button>
+                            {/if}
+                            <button
+                              type="button"
+                              aria-label="Move previous"
+                              title="Move previous"
+                              class="inline-flex h-7 w-7 items-center justify-center rounded border border-white/14 bg-white/6 text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                              disabled={loading || !targets.previous}
+                              on:click={() => movePrevious(item)}
+                            >
+                              <ArrowLeft size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={targets.blockedNext ? "Generate worktree before moving" : "Move next"}
+                              title={targets.blockedNext ? "Generate worktree before moving" : "Move next"}
+                              class="inline-flex h-7 w-7 items-center justify-center rounded border border-white/14 bg-white/6 text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                              disabled={loading || !targets.next}
+                              on:click={() => moveNext(item)}
+                            >
+                              <ArrowRight size={13} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                          {#if attention.signals.length > 0}
+                            {#each attention.signals as signal (signal.id)}
+                              <span class="rounded border px-1.5 py-0.5 text-[12px] font-medium {attentionToneClass(signal.tone)}">
+                                {signal.label}
+                              </span>
+                            {/each}
+                          {:else}
+                            <span class="text-[12px] text-text-muted">
+                              {item.runState || "Idle"}
+                            </span>
+                          {/if}
+                        </div>
                       </div>
-                    </div>
-                    <div class="mt-1 flex min-w-0 gap-1 text-[10px] text-text-muted">
-                      <span class="shrink-0">{latestRun?.status || item.runState || "idle"}</span>
-                      {#if item.worktree}
-                        <span class="min-w-0 truncate font-mono">{item.worktree.branch}</span>
-                      {/if}
-                    </div>
-                    {#if item.worktree}
-                      <div class="mt-2 truncate font-mono text-[10px] text-text-muted">
-                        {item.worktree.worktreePath}
-                      </div>
-                    {:else}
-                      <div class="mt-2 grid grid-cols-[minmax(0,1fr)_28px] gap-1">
-                        <input
-                          class="h-7 min-w-0 rounded border border-border bg-bg-surface px-1.5 font-mono text-[10px] text-text-secondary outline-none placeholder:text-text-muted focus:border-accent-dim"
-                          type="text"
-                          value={worktreeBranches[item.id] || defaultWorktreeBranch(item)}
-                          disabled={loading}
-                          aria-label="Worktree branch"
-                          on:input={(event) =>
-                            (worktreeBranches = {
-                              ...worktreeBranches,
-                              [item.id]: event.currentTarget.value,
-                            })}
-                        />
-                        <button
-                          type="button"
-                          aria-label="Generate worktree"
-                          title="Generate worktree"
-                          class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-accent disabled:cursor-not-allowed"
-                          disabled={loading}
-                          on:click={() => generateWorktree(item)}
-                        >
-                          <GitBranch size={12} />
-                        </button>
-                      </div>
-                    {/if}
-                  </article>
-                {/each}
-              {/if}
-            </div>
-          </section>
+                    </article>
+                  {/each}
+                {/if}
+              </div>
+            </section>
+          {/if}
         {/each}
       </div>
     </div>
@@ -363,264 +707,599 @@
 
 {#if detailItem && activeProject}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
     role="dialog"
     aria-modal="true"
-    aria-label="Work item detail"
+    aria-label="Work item editor"
   >
-    <div class="flex max-h-[88vh] w-full max-w-[760px] flex-col rounded-lg border border-border bg-bg-base shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-      <div class="flex h-11 shrink-0 items-center justify-between border-b border-hairline px-4">
-        <div class="min-w-0">
-          <div class="truncate text-sm font-semibold text-text-primary">
-            #{detailItem.number} {detailItem.title}
+    <div class="flex max-h-[92vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-md border border-white/16 bg-[#08080a] shadow-[0_28px_90px_rgba(0,0,0,0.7)]">
+      <div class="shrink-0 border-b border-white/12 bg-[#0b0b0d] px-5 py-4">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <div class="mb-2 flex min-w-0 flex-wrap items-center gap-2">
+              <span class="rounded border border-white/14 bg-white/6 px-2 py-1 font-mono text-[13px] text-text-secondary">
+                #{detailItem.number}
+              </span>
+              <span class="rounded border border-white/14 bg-white/6 px-2 py-1 text-[13px] font-medium text-text-secondary">
+                {stageLabel(detailItem.stageId)}
+              </span>
+              <span class="rounded border px-2 py-1 font-mono text-[12px] font-semibold {runStatusClass(detailCurrentRun?.status || detailItem.runState || 'idle')}">
+                {detailCurrentRun?.status || detailItem.runState || "idle"}
+              </span>
+            </div>
+            <h2 class="max-w-[860px] text-[20px] font-semibold leading-7 text-text-primary">
+              {detailItem.title}
+            </h2>
+            <div class="mt-2 truncate text-[13px] text-text-muted">
+              {activeProject.name}
+            </div>
           </div>
-          <div class="truncate font-mono text-[10px] text-text-muted">
-            {activeProject.name}
-          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/14 bg-white/6 text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+            on:click={closeDetail}
+          >
+            <X size={16} />
+          </button>
         </div>
-        <button
-          type="button"
-          aria-label="Close"
-          class="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-          on:click={closeDetail}
-        >
-          <X size={14} />
-        </button>
       </div>
 
-      <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <div class="grid gap-4">
-          <section class="grid gap-2">
-            <div class="text-[11px] font-semibold uppercase tracking-widest text-text-muted">
-              State
-            </div>
-            <div class="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
+      <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+          <main class="grid min-w-0 gap-5">
+            <section class="grid gap-2">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                  Description
+                </h3>
+              </div>
+              <div class="min-h-36 whitespace-pre-wrap rounded-md border border-white/12 bg-[#0d0d10] px-4 py-3 text-[14px] leading-6 text-text-secondary">
+                {detailItem.bodyMarkdown || "No body."}
+              </div>
+            </section>
+
+            <section class="grid gap-3">
+              <div class="flex min-w-0 items-center justify-between gap-3">
+                <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                  Plan
+                </h3>
+                {#if approvedPlan}
+                  <span class="rounded border border-green/35 bg-green/10 px-2 py-1 text-[12px] font-semibold text-green">
+                    Approved
+                  </span>
+                {:else if latestDraftPlan}
+                  <span class="rounded border border-amber/40 bg-amber/10 px-2 py-1 text-[12px] font-semibold text-amber">
+                    Draft ready
+                  </span>
+                {/if}
+              </div>
+
+              <div class="grid gap-2">
+                {#each planArtifacts as artifact (artifact.id)}
+                  <article
+                    class="grid gap-3 rounded-md border p-3 {artifact.status === 'draft'
+                      ? 'border-amber/35 bg-amber/8'
+                      : 'border-green/30 bg-green/8'}"
+                  >
+                    <div class="flex min-w-0 items-start justify-between gap-3">
+                      <div class="min-w-0">
+                        <div class="flex min-w-0 items-center gap-2 text-[14px] font-semibold text-text-primary">
+                          <FileText size={16} class="shrink-0" />
+                          <span class="truncate">{artifact.title || "Plan"}</span>
+                          <span class="shrink-0 rounded border border-white/16 bg-black/25 px-1.5 py-0.5 font-mono text-[11px] uppercase text-text-secondary">
+                            {artifact.status}
+                          </span>
+                        </div>
+                        <div class="mt-1 truncate text-[12px] text-text-muted">
+                          {formattedTime(artifact.updatedAt || artifact.createdAt)}
+                        </div>
+                      </div>
+                      {#if artifact.status === "draft"}
+                        <button
+                          type="button"
+                          class="shrink-0 rounded-md border border-amber/40 bg-black/30 px-3 py-1.5 text-[13px] font-medium text-amber transition-colors hover:border-amber hover:bg-amber/15 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={loading}
+                          on:click={() => onApprovePlan(detailItem.id, artifact.id)}
+                        >
+                          Approve
+                        </button>
+                      {/if}
+                    </div>
+                    {#if artifact.body}
+                      <pre class="app-scrollbar max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-white/12 bg-black/30 p-3 font-mono text-[13px] leading-6 text-text-primary">{artifact.body}</pre>
+                    {/if}
+                  </article>
+                {:else}
+                  <div class="rounded-md border border-white/12 bg-[#0d0d10] px-4 py-3 text-[14px] text-text-muted">
+                    No plan submitted.
+                  </div>
+                {/each}
+              </div>
+
+              <details class="rounded-md border border-white/12 bg-[#0d0d10]">
+                <summary class="cursor-pointer px-3 py-2 text-[13px] font-medium text-text-secondary">
+                  New draft plan
+                </summary>
+                <div class="grid gap-3 border-t border-white/12 p-3">
+                  <textarea
+                    class="min-h-32 resize-y rounded-md border border-white/14 bg-black/30 px-3 py-2 text-[14px] leading-6 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                    value={planBodies[detailItem.id] ?? ""}
+                    disabled={loading}
+                    placeholder="Draft plan"
+                    on:input={(event) =>
+                      (planBodies = {
+                        ...planBodies,
+                        [detailItem.id]: event.currentTarget.value,
+                      })}
+                  ></textarea>
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center justify-center rounded-md border border-white/14 bg-white/8 px-3 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={loading || !(planBodies[detailItem.id] ?? "").trim()}
+                    on:click={() => submitPlan(detailItem)}
+                  >
+                    Submit plan
+                  </button>
+                </div>
+              </details>
+            </section>
+
+            <section class="grid gap-3">
+              <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                Feedback
+              </h3>
+              <textarea
+                class="min-h-32 resize-y rounded-md border border-white/14 bg-[#0d0d10] px-3 py-2 text-[14px] leading-6 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                value={feedbackBodies[detailItem.id] ?? ""}
+                disabled={loading}
+                placeholder="Review feedback"
+                on:input={(event) =>
+                  (feedbackBodies = {
+                    ...feedbackBodies,
+                    [detailItem.id]: event.currentTarget.value,
+                  })}
+              ></textarea>
+              <button
+                type="button"
+                class="inline-flex h-9 items-center justify-center rounded-md border border-white/14 bg-white/8 px-3 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={loading || !(feedbackBodies[detailItem.id] ?? "").trim()}
+                on:click={() => submitFeedback(detailItem)}
+              >
+                Send feedback
+              </button>
+              {#if detailArtifacts.filter((artifact) => artifact.kind === "feedback").length > 0}
+                <div class="grid gap-2">
+                  {#each detailArtifacts.filter((artifact) => artifact.kind === "feedback") as artifact (artifact.id)}
+                    <div class="rounded-md border border-white/12 bg-[#0d0d10] px-3 py-2 text-[13px] leading-5 text-text-secondary">
+                      <span class="font-mono text-text-muted">{artifact.status}</span>
+                      {#if artifact.body}
+                        <span> {artifact.body}</span>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </section>
+          </main>
+
+          <aside class="grid min-w-0 content-start gap-4">
+            <section class="grid gap-3 rounded-md border border-white/12 bg-[#0d0d10] p-3">
+              <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                State
+              </h3>
               <select
-                class="h-8 rounded border border-border bg-bg-surface px-2 text-[12px] text-text-secondary outline-none focus:border-accent-dim"
+                class="h-10 rounded-md border border-white/14 bg-black/30 px-3 text-[14px] text-text-primary outline-none focus:border-accent-dim"
                 value={detailItem.stageId}
                 disabled={loading}
                 on:change={(event) => onMoveWorkItem(detailItem.id, event.currentTarget.value)}
               >
                 {#each stages as targetStage (targetStage.id)}
-                  <option
-                    value={targetStage.id}
-                    disabled={!canMoveToStage(detailItem, targetStage)}
-                  >
+                  <option value={targetStage.id} disabled={!canMoveToStage(detailItem, targetStage)}>
                     {targetStage.name}{!canMoveToStage(detailItem, targetStage)
                       ? " - generate worktree first"
                       : ""}
                   </option>
                 {/each}
               </select>
-              <div class="min-w-0 rounded border border-border-subtle bg-bg-surface/25 px-2 py-1.5">
-                {#if detailItem.worktree}
-                  <div class="truncate font-mono text-[11px] text-text-secondary">
+
+              {#if detailItem.worktree}
+                <div class="min-w-0 rounded-md border border-white/12 bg-black/25 px-3 py-2">
+                  <div class="truncate font-mono text-[13px] text-text-primary">
                     {detailItem.worktree.branch}
                   </div>
-                  <div class="truncate font-mono text-[10px] text-text-muted">
+                  <div class="mt-1 truncate font-mono text-[12px] text-text-muted">
                     {detailItem.worktree.worktreePath}
                   </div>
-                {:else}
-                  <div class="grid grid-cols-[minmax(0,1fr)_32px] gap-1.5">
-                    <input
-                      class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 font-mono text-[11px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
-                      type="text"
-                      value={worktreeBranches[detailItem.id] || defaultWorktreeBranch(detailItem)}
-                      disabled={loading}
-                      aria-label="Worktree branch"
-                      on:input={(event) =>
-                        (worktreeBranches = {
-                          ...worktreeBranches,
-                          [detailItem.id]: event.currentTarget.value,
-                        })}
-                    />
-                    <button
-                      type="button"
-                      aria-label="Generate worktree"
-                      title="Generate worktree"
-                      class="inline-flex h-8 w-8 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-accent disabled:cursor-not-allowed"
-                      disabled={loading}
-                      on:click={() => generateWorktree(detailItem)}
-                    >
-                      <GitBranch size={13} />
-                    </button>
-                  </div>
+                </div>
+              {:else}
+                <div class="grid grid-cols-[minmax(0,1fr)_40px] gap-2">
+                  <input
+                    class="h-10 min-w-0 rounded-md border border-white/14 bg-black/30 px-3 font-mono text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                    type="text"
+                    value={worktreeBranches[detailItem.id] || defaultWorktreeBranch(detailItem)}
+                    disabled={loading}
+                    aria-label="Worktree branch"
+                    on:input={(event) =>
+                      (worktreeBranches = {
+                        ...worktreeBranches,
+                        [detailItem.id]: event.currentTarget.value,
+                      })}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Generate worktree"
+                    title="Generate worktree"
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/14 bg-white/8 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
+                    disabled={loading}
+                    on:click={() => generateWorktree(detailItem)}
+                  >
+                    <GitBranch size={15} />
+                  </button>
+                </div>
+              {/if}
+            </section>
+
+            <section class="grid gap-3 rounded-md border border-white/12 bg-[#0d0d10] p-3">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                  Current Run
+                </h3>
+                {#if detailPastRuns.length > 0}
+                  <span class="inline-flex items-center gap-1 rounded border border-white/12 bg-white/6 px-2 py-1 text-[12px] text-text-muted">
+                    <History size={13} />
+                    {detailPastRuns.length}
+                  </span>
                 {/if}
               </div>
-            </div>
-          </section>
-
-          <section class="grid gap-2">
-            <div class="text-[11px] font-semibold uppercase tracking-widest text-text-muted">
-              Run
-            </div>
-            <div class="grid gap-1">
-              <label class="text-[11px] font-medium text-text-muted" for="agent-profile">
-                Agent
-              </label>
-              <select
-                id="agent-profile"
-                class="h-8 rounded border border-border bg-bg-surface px-2 text-[12px] text-text-secondary outline-none focus:border-accent-dim"
-                bind:value={agentProfileId}
-                disabled={loading}
-              >
-                <option value="codex">codex</option>
-                <option value="claude">claude</option>
-                <option value="claude-plan">claude-plan</option>
-                <option value="prompt-capture">prompt-capture</option>
-              </select>
-            </div>
-            <div class="grid gap-2 sm:grid-cols-3">
-              <button
-                type="button"
-                class="inline-flex h-8 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[12px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={loading}
-                on:click={() => startRun(detailItem, "manager", "plan")}
-              >
-                <ClipboardCheck size={13} />
-                <span>Plan</span>
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-8 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[12px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={loading}
-                on:click={() => startRun(detailItem, "writer", "implement")}
-              >
-                <Play size={13} />
-                <span>Implement</span>
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-8 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[12px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={loading}
-                on:click={() => startRun(detailItem, "reviewer", "review")}
-              >
-                <Search size={13} />
-                <span>Review</span>
-              </button>
-            </div>
-          </section>
-
-          <section class="grid gap-2">
-            <div class="text-[11px] font-semibold uppercase tracking-widest text-text-muted">
-              Body
-            </div>
-            <div class="min-h-28 whitespace-pre-wrap rounded border border-border-subtle bg-bg-deep px-3 py-2 text-[12px] leading-5 text-text-secondary">
-              {detailItem.bodyMarkdown || "No body."}
-            </div>
-          </section>
-
-          <section class="grid gap-2">
-            <div class="flex items-center justify-between">
-              <div class="text-[11px] font-semibold uppercase tracking-widest text-text-muted">
-                Attachments
-              </div>
-              <button
-                type="button"
-                class="inline-flex h-7 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-not-allowed"
-                disabled={loading}
-                on:click={() => attachFile(detailItem)}
-              >
-                <Paperclip size={12} />
-                <span>Attach</span>
-              </button>
-            </div>
-            {#if detailItem.attachments.length > 0}
-              <div class="grid gap-1">
-                {#each detailItem.attachments as attachment (attachment.id)}
-                  <div class="truncate rounded border border-border-subtle bg-bg-surface/25 px-2 py-1.5 font-mono text-[11px] text-text-secondary">
-                    {attachment.path || attachment.url || attachment.note}
+              {#if detailCurrentRun}
+                <button
+                  type="button"
+                  class="grid min-w-0 gap-2 rounded-md border border-white/12 bg-black/25 p-3 text-left transition-colors hover:border-white/24 hover:bg-white/6 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-default"
+                  disabled={!canOpenRunTerminal(detailCurrentRun)}
+                  title={canOpenRunTerminal(detailCurrentRun) ? "Open terminal" : "No terminal linked"}
+                  on:click={() => detailCurrentRun && openRunTerminal(detailCurrentRun)}
+                >
+                  <div class="flex min-w-0 flex-wrap items-center gap-2">
+                    <span class="rounded border px-2 py-1 font-mono text-[12px] font-semibold {runStatusClass(detailCurrentRun.status)}">
+                      {detailCurrentRun.status}
+                    </span>
+                    <span class="truncate text-[14px] font-semibold text-text-primary">
+                      {detailCurrentRun.preset || "agent"}
+                    </span>
                   </div>
-                {/each}
-              </div>
-            {:else}
-              <div class="rounded border border-border-subtle bg-bg-surface/25 px-2 py-2 text-[12px] text-text-muted">
-                No attachments.
-              </div>
-            {/if}
-          </section>
+                  <div class="truncate text-[13px] text-text-secondary">
+                    {detailCurrentRun.promptTemplateId || "prompt"}
+                  </div>
+                  <div class="inline-flex items-center gap-1 text-[12px] text-text-muted">
+                    <Clock3 size={13} />
+                    {formattedTime(detailCurrentRun.createdAt)}
+                  </div>
+                </button>
+                {#if detailCurrentRun.status === "queued"}
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-blue/35 bg-blue/10 px-3 text-[13px] font-medium text-blue transition-colors hover:border-blue disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={loading}
+                    on:click={() => onLaunchRun(detailCurrentRun.id)}
+                  >
+                    <Play size={13} />
+                    <span>Launch run</span>
+                  </button>
+                {/if}
+                {#if canCancelRun(detailCurrentRun)}
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-red/35 bg-red/10 px-3 text-[13px] font-medium text-red transition-colors hover:border-red disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={loading}
+                    on:click={() => onCancelRun(detailCurrentRun.id)}
+                  >
+                    <Square size={13} />
+                    <span>Cancel run</span>
+                  </button>
+                {/if}
+              {:else}
+                <div class="rounded-md border border-white/12 bg-black/25 px-3 py-3 text-[14px] text-text-muted">
+                  No run has been started.
+                </div>
+              {/if}
+            </section>
 
-          <section class="grid gap-2">
-            <div class="text-[11px] font-semibold uppercase tracking-widest text-text-muted">
-              Runs
-            </div>
-            {#if detailRuns.length > 0}
+            <section class="grid gap-2 rounded-md border border-white/12 bg-[#0d0d10] p-3">
+              <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                Workflow
+              </h3>
+              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/8 px-2 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={loading}
+                  on:click={() => onStartPlanning(detailItem.id)}
+                >
+                  <ClipboardCheck size={14} />
+                  <span>Planning</span>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-blue/35 bg-blue/10 px-2 text-[13px] font-medium text-blue transition-colors hover:border-blue disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={loading || detailItem.stageId !== "ready" || !approvedPlan || hasActiveRun(detailCurrentRun)}
+                  on:click={() => onQueueExecution(detailItem.id)}
+                >
+                  <Clock3 size={14} />
+                  <span>Queue execution</span>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-green/35 bg-green/10 px-2 text-[13px] font-medium text-green transition-colors hover:border-green disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={loading || detailItem.stageId !== "ready" || !approvedPlan || hasActiveRun(detailCurrentRun)}
+                  on:click={() => onLaunchExecution(detailItem.id)}
+                >
+                  <Play size={14} />
+                  <span>Launch execution</span>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/8 px-2 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={loading || !detailLatestRun}
+                  on:click={() =>
+                    onCompleteExecution({
+                      workItemId: detailItem.id,
+                      runId: detailLatestRun?.id ?? "",
+                      message: "ready for review",
+                    })}
+                >
+                  <Search size={14} />
+                  <span>Review</span>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/8 px-2 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={loading}
+                  on:click={() => approveDone(detailItem)}
+                >
+                  <ClipboardCheck size={14} />
+                  <span>Done</span>
+                </button>
+              </div>
+              <input
+                class="h-10 rounded-md border border-white/14 bg-black/30 px-3 text-[13px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                value={doneReasons[detailItem.id] ?? ""}
+                disabled={loading}
+                placeholder="Done approval reason"
+                on:input={(event) =>
+                  (doneReasons = {
+                    ...doneReasons,
+                    [detailItem.id]: event.currentTarget.value,
+                  })}
+              />
+            </section>
+
+            <section class="grid gap-3 rounded-md border border-white/12 bg-[#0d0d10] p-3">
+              <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                Questions
+              </h3>
+              <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                <input
+                  class="h-10 rounded-md border border-white/14 bg-black/30 px-3 text-[13px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                  value={questionPrompts[detailItem.id] ?? ""}
+                  disabled={loading}
+                  placeholder="Question for user"
+                  on:input={(event) =>
+                    (questionPrompts = {
+                      ...questionPrompts,
+                      [detailItem.id]: event.currentTarget.value,
+                    })}
+                />
+                <button
+                  type="button"
+                  class="rounded-md border border-white/14 bg-white/8 px-3 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={loading || !(questionPrompts[detailItem.id] ?? "").trim()}
+                  on:click={() => askWorkflowQuestion(detailItem)}
+                >
+                  Ask
+                </button>
+              </div>
               <div class="grid gap-2">
-                {#each detailRuns as run (run.id)}
-                  <div class="rounded border border-border-subtle bg-bg-surface/25">
-                    <div class="flex items-center justify-between gap-2 border-b border-border-subtle/60 px-2 py-1.5">
-                      <div class="min-w-0">
-                        <div class="flex min-w-0 items-center gap-2 text-[11px] text-text-secondary">
-                          <span class="shrink-0 font-semibold">{run.status}</span>
-                          <span class="shrink-0 font-mono text-text-muted">{run.preset}</span>
-                          <span class="min-w-0 truncate font-mono text-text-muted">{run.promptTemplateId}</span>
-                        </div>
-                        <div class="truncate font-mono text-[10px] text-text-muted">
-                          {formattedTime(run.createdAt)}
-                        </div>
-                      </div>
-                      {#if canCancelRun(run)}
+                {#each detailQuestions as question (question.id)}
+                  <div class="grid gap-2 rounded-md border border-white/12 bg-black/25 px-3 py-2">
+                    <div class="text-[13px] leading-5 text-text-secondary">
+                      <span class="font-mono text-text-muted">{question.status}</span> {question.prompt}
+                    </div>
+                    {#if question.status === "open"}
+                      <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                        <input
+                          class="h-9 rounded-md border border-white/14 bg-[#0d0d10] px-3 text-[13px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                          value={questionAnswers[question.id] ?? ""}
+                          disabled={loading}
+                          placeholder="Answer"
+                          on:input={(event) =>
+                            (questionAnswers = {
+                              ...questionAnswers,
+                              [question.id]: event.currentTarget.value,
+                            })}
+                        />
                         <button
                           type="button"
-                          aria-label="Cancel run"
-                          title="Cancel run"
-                          class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-deep/80 text-text-secondary transition-colors hover:border-red hover:text-red disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={loading}
-                          on:click={() => onCancelRun(run.id)}
+                          class="rounded-md border border-white/14 bg-white/8 px-3 text-[13px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
+                          disabled={loading || !(questionAnswers[question.id] ?? "").trim()}
+                          on:click={() => answerWorkflowQuestion(question)}
                         >
-                          <Square size={12} />
+                          Answer
                         </button>
-                      {/if}
-                    </div>
-                    {#if run.promptSnapshot}
-                      <pre class="app-scrollbar max-h-40 overflow-auto whitespace-pre-wrap px-2 py-2 font-mono text-[10px] leading-4 text-text-muted">{run.promptSnapshot}</pre>
+                      </div>
+                    {:else if question.answer}
+                      <div class="text-[13px] leading-5 text-text-muted">{question.answer}</div>
                     {/if}
                   </div>
                 {/each}
               </div>
-            {:else}
-              <div class="rounded border border-border-subtle bg-bg-surface/25 px-2 py-2 text-[12px] text-text-muted">
-                No runs.
-              </div>
-            {/if}
-          </section>
+            </section>
 
-          <section class="grid gap-2">
-            <div class="text-[11px] font-semibold uppercase tracking-widest text-text-muted">
-              History
-            </div>
-            <div class="grid gap-1">
-              {#each detailItem.history as event (event.id)}
-                <div class="rounded border border-border-subtle bg-bg-surface/25 px-2 py-1.5">
-                  <div class="text-[11px] text-text-secondary">
-                    {event.type}
-                    {#if event.stageId}
-                      <span class="font-mono text-text-muted"> {event.stageId}</span>
-                    {/if}
-                  </div>
-                  <div class="font-mono text-[10px] text-text-muted">
-                    {event.at?.toLocaleString?.() ?? event.at}
-                  </div>
+            <section class="grid gap-3 rounded-md border border-white/12 bg-[#0d0d10] p-3">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                  Attachments
+                </h3>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-white/14 bg-white/8 px-2 text-[13px] text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary disabled:cursor-not-allowed"
+                  disabled={loading}
+                  on:click={() => attachFile(detailItem)}
+                >
+                  <Paperclip size={13} />
+                  <span>Attach</span>
+                </button>
+              </div>
+              {#if detailItem.attachments.length > 0}
+                <div class="grid gap-2">
+                  {#each detailItem.attachments as attachment (attachment.id)}
+                    <div class="truncate rounded-md border border-white/12 bg-black/25 px-3 py-2 font-mono text-[12px] text-text-secondary">
+                      {attachment.path || attachment.url || attachment.note}
+                    </div>
+                  {/each}
                 </div>
-              {/each}
-            </div>
-          </section>
+              {:else}
+                <div class="rounded-md border border-white/12 bg-black/25 px-3 py-3 text-[14px] text-text-muted">
+                  No attachments.
+                </div>
+              {/if}
+            </section>
+
+            <section class="grid gap-3 rounded-md border border-white/12 bg-[#0d0d10] p-3">
+              <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                Gates
+              </h3>
+              {#if detailGates.length > 0}
+                <div class="grid gap-2">
+                  {#each detailGates as gate (gate.id)}
+                    <div class="grid gap-2 rounded-md border border-white/12 bg-black/25 px-3 py-2">
+                      <div class="flex items-center justify-between gap-2 text-[13px] text-text-secondary">
+                        <span>{gate.name}</span>
+                        <span class="font-mono text-text-muted">{gate.status}</span>
+                      </div>
+                      <input
+                        class="h-9 rounded-md border border-white/14 bg-[#0d0d10] px-3 text-[13px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                        value={gateOverrideReasons[gate.id] ?? ""}
+                        disabled={loading}
+                        placeholder="Override reason"
+                        on:input={(event) =>
+                          (gateOverrideReasons = {
+                            ...gateOverrideReasons,
+                            [gate.id]: event.currentTarget.value,
+                          })}
+                      />
+                      <div class="grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          class="rounded-md border border-white/14 bg-white/8 px-2 py-1.5 text-[13px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
+                          disabled={loading}
+                          on:click={() => completeGate(gate, "passed")}
+                        >
+                          Pass
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-md border border-white/14 bg-white/8 px-2 py-1.5 text-[13px] text-text-secondary transition-colors hover:border-red hover:text-red disabled:cursor-not-allowed"
+                          disabled={loading}
+                          on:click={() => completeGate(gate, "failed")}
+                        >
+                          Fail
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-md border border-white/14 bg-white/8 px-2 py-1.5 text-[13px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
+                          disabled={loading || !(gateOverrideReasons[gate.id] ?? "").trim()}
+                          on:click={() => completeGate(gate, "overridden")}
+                        >
+                          Override
+                        </button>
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                <div class="rounded-md border border-white/12 bg-black/25 px-3 py-3 text-[14px] text-text-muted">
+                  No gates.
+                </div>
+              {/if}
+            </section>
+
+            <details class="rounded-md border border-white/12 bg-[#0d0d10]">
+              <summary class="cursor-pointer px-3 py-2 text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                History
+              </summary>
+              <div class="grid gap-3 border-t border-white/12 p-3">
+                {#if detailPastRuns.length > 0}
+                  <div class="grid gap-2">
+                    <div class="text-[13px] font-semibold text-text-primary">Run history</div>
+                    {#each detailPastRuns as run (run.id)}
+                      <div class="grid gap-1 rounded-md border border-white/12 bg-black/25 px-3 py-2">
+                        <div class="flex min-w-0 flex-wrap items-center gap-2">
+                          <span class="rounded border px-1.5 py-0.5 font-mono text-[11px] font-semibold {runStatusClass(run.status)}">
+                            {run.status}
+                          </span>
+                          <span class="truncate text-[13px] text-text-secondary">
+                            {run.preset || "agent"} · {run.promptTemplateId || "prompt"}
+                          </span>
+                        </div>
+                        <div class="truncate text-[12px] text-text-muted">{formattedTime(run.createdAt)}</div>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+
+                {#if detailWorkflowEvents.length > 0}
+                  <div class="grid gap-2">
+                    <div class="text-[13px] font-semibold text-text-primary">Workflow events</div>
+                    {#each detailWorkflowEvents as event (event.id)}
+                      <div class="rounded-md border border-white/12 bg-black/25 px-3 py-2">
+                        <div class="text-[13px] text-text-secondary">
+                          {event.type}
+                          {#if event.actor}
+                            <span class="font-mono text-text-muted"> {event.actor}</span>
+                          {/if}
+                        </div>
+                        <div class="text-[12px] text-text-muted">{formattedTime(event.at)}</div>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+
+                <div class="grid gap-2">
+                  <div class="text-[13px] font-semibold text-text-primary">Item history</div>
+                  {#each detailItem.history as event (event.id)}
+                    <div class="rounded-md border border-white/12 bg-black/25 px-3 py-2">
+                      <div class="text-[13px] text-text-secondary">
+                        {event.type}
+                        {#if event.stageId}
+                          <span class="font-mono text-text-muted"> {event.stageId}</span>
+                        {/if}
+                      </div>
+                      <div class="text-[12px] text-text-muted">
+                        {event.at?.toLocaleString?.() ?? event.at}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            </details>
+          </aside>
         </div>
       </div>
 
-      <div class="flex shrink-0 justify-between gap-2 border-t border-hairline px-4 py-3">
+      <div class="flex shrink-0 items-center justify-between gap-2 border-t border-white/12 bg-[#0b0b0d] px-5 py-3">
         <button
           type="button"
-          class="inline-flex h-8 items-center justify-center gap-1 rounded border border-red/30 bg-red/10 px-3 text-[12px] text-red transition-colors hover:border-red disabled:cursor-not-allowed"
+          class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-red/35 bg-red/10 px-3 text-[13px] font-medium text-red transition-colors hover:border-red disabled:cursor-not-allowed"
           disabled={loading}
           on:click={() => deleteWorkItem(detailItem)}
         >
-          <Trash2 size={13} />
+          <Trash2 size={14} />
           <span>Delete</span>
         </button>
         <button
           type="button"
-          class="rounded border border-border-subtle bg-bg-surface/40 px-3 py-1.5 text-[12px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+          class="h-9 rounded-md border border-white/14 bg-white/8 px-4 text-[13px] font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary"
           on:click={closeDetail}
         >
           Close

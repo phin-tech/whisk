@@ -35,10 +35,15 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		workItems:         []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
 		runs:              []protocol.WorkItemRun{{ID: "run_01", WorkItemID: "wi_01", Status: "queued", Preset: "writer"}},
 		httpForwards:      []protocol.HTTPForward{{ID: "fwd_01", TargetURL: "http://127.0.0.1:4966"}},
+		clearResponse:     protocol.ClearDaemonResponse{SessionsCleared: 1},
 	}
 	service := wailsapp.NewService(fake)
 	ctx := context.Background()
 
+	cleared, err := service.ClearDaemon(ctx, protocol.ClearDaemonRequest{})
+	if err != nil || cleared.SessionsCleared != 1 || !fake.clearCalled {
+		t.Fatalf("clear daemon = %#v, called = %v, err = %v", cleared, fake.clearCalled, err)
+	}
 	sessions, err := service.ListSessions(ctx)
 	if err != nil || sessions[0].ID != "sess_01" {
 		t.Fatalf("list sessions = %#v, %v", sessions, err)
@@ -218,7 +223,9 @@ type runtimeClientFake struct {
 	workItems         []protocol.WorkItem
 	runs              []protocol.WorkItemRun
 	httpForwards      []protocol.HTTPForward
+	clearResponse     protocol.ClearDaemonResponse
 
+	clearCalled        bool
 	createReq          protocol.CreateSessionRequest
 	splitReq           protocol.SplitPaneRequest
 	setRootReq         protocol.SetSessionRootDirRequest
@@ -256,6 +263,11 @@ type runtimeClientFake struct {
 	markStatusReadReq        protocol.MarkStatusEventReadRequest
 	createForwardReq         protocol.CreateHTTPForwardRequest
 	deleteForwardID          string
+}
+
+func (f *runtimeClientFake) ClearDaemon(context.Context, protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error) {
+	f.clearCalled = true
+	return f.clearResponse, nil
 }
 
 func (f *runtimeClientFake) ListSessions(context.Context) ([]session.Session, error) {
@@ -403,6 +415,46 @@ func (f *runtimeClientFake) MoveWorkItem(_ context.Context, req protocol.MoveWor
 	return protocol.WorkItem{ID: req.ID, StageID: req.StageID}, nil
 }
 
+func (f *runtimeClientFake) StartPlanning(_ context.Context, req protocol.StartPlanningRequest) (protocol.WorkItemRun, error) {
+	return protocol.WorkItemRun{ID: "run_plan", WorkItemID: req.WorkItemID, PromptTemplateID: "plan"}, nil
+}
+
+func (f *runtimeClientFake) SubmitDraftPlan(_ context.Context, req protocol.SubmitDraftPlanRequest) (protocol.Artifact, error) {
+	return protocol.Artifact{ID: "artifact_plan", WorkItemID: req.WorkItemID, Kind: "plan", Status: "draft"}, nil
+}
+
+func (f *runtimeClientFake) ApprovePlan(_ context.Context, req protocol.ApprovePlanRequest) (protocol.WorkItem, error) {
+	return protocol.WorkItem{ID: req.WorkItemID, StageID: "ready"}, nil
+}
+
+func (f *runtimeClientFake) StartExecution(_ context.Context, req protocol.StartExecutionRequest) (protocol.WorkItemRun, error) {
+	return protocol.WorkItemRun{ID: "run_exec", WorkItemID: req.WorkItemID, PromptTemplateID: "implement"}, nil
+}
+
+func (f *runtimeClientFake) QueueExecution(_ context.Context, req protocol.QueueExecutionRequest) (protocol.WorkItemRun, error) {
+	return protocol.WorkItemRun{ID: "run_exec", WorkItemID: req.WorkItemID, PromptTemplateID: "implement", Status: "queued"}, nil
+}
+
+func (f *runtimeClientFake) LaunchExecution(_ context.Context, req protocol.LaunchExecutionRequest) (protocol.WorkItemRun, error) {
+	return protocol.WorkItemRun{ID: "run_exec", WorkItemID: req.WorkItemID, PromptTemplateID: "implement", Status: "running"}, nil
+}
+
+func (f *runtimeClientFake) AskQuestion(_ context.Context, req protocol.AskQuestionRequest) (protocol.Question, error) {
+	return protocol.Question{ID: "question_01", WorkItemID: req.WorkItemID, RunID: req.RunID, Prompt: req.Prompt, Status: "open"}, nil
+}
+
+func (f *runtimeClientFake) AnswerQuestion(_ context.Context, req protocol.AnswerQuestionRequest) (protocol.Question, error) {
+	return protocol.Question{ID: req.ID, Answer: req.Answer, Status: "answered"}, nil
+}
+
+func (f *runtimeClientFake) CompleteExecution(_ context.Context, req protocol.CompleteExecutionRequest) (protocol.WorkItem, error) {
+	return protocol.WorkItem{ID: req.WorkItemID, StageID: "review"}, nil
+}
+
+func (f *runtimeClientFake) SubmitReviewFeedback(_ context.Context, req protocol.SubmitReviewFeedbackRequest) (protocol.Artifact, error) {
+	return protocol.Artifact{ID: "feedback_01", WorkItemID: req.WorkItemID, RunID: req.RunID, Kind: "feedback", Status: "approved"}, nil
+}
+
 func (f *runtimeClientFake) BindWorkItemWorktree(_ context.Context, req protocol.BindWorkItemWorktreeRequest) (protocol.WorkItem, error) {
 	f.bindWorkItemReq = req
 	return protocol.WorkItem{ID: req.ID, Worktree: &protocol.WorktreeBinding{Branch: req.Branch, WorktreePath: req.WorktreePath}}, nil
@@ -428,9 +480,37 @@ func (f *runtimeClientFake) StartWorkItemRun(_ context.Context, req protocol.Sta
 	return protocol.WorkItemRun{ID: "run_02", WorkItemID: req.WorkItemID, Status: "queued", Preset: req.Preset, PromptTemplateID: req.PromptTemplateID}, nil
 }
 
+func (f *runtimeClientFake) LaunchWorkItemRun(_ context.Context, req protocol.LaunchWorkItemRunRequest) (protocol.WorkItemRun, error) {
+	return protocol.WorkItemRun{ID: req.ID, Status: "running"}, nil
+}
+
 func (f *runtimeClientFake) CancelWorkItemRun(_ context.Context, req protocol.CancelWorkItemRunRequest) (protocol.WorkItemRun, error) {
 	f.cancelRunReq = req
 	return protocol.WorkItemRun{ID: req.ID, Status: "cancelled"}, nil
+}
+
+func (f *runtimeClientFake) ApproveDone(_ context.Context, req protocol.ApproveDoneRequest) (protocol.WorkItem, error) {
+	return protocol.WorkItem{ID: req.WorkItemID, StageID: "done"}, nil
+}
+
+func (f *runtimeClientFake) ListArtifacts(_ context.Context, workItemID string) ([]protocol.Artifact, error) {
+	return []protocol.Artifact{{ID: "artifact_01", WorkItemID: workItemID, Kind: "plan"}}, nil
+}
+
+func (f *runtimeClientFake) ListQuestions(_ context.Context, workItemID string) ([]protocol.Question, error) {
+	return []protocol.Question{{ID: "question_01", WorkItemID: workItemID, Status: "open"}}, nil
+}
+
+func (f *runtimeClientFake) ListGateReports(_ context.Context, workItemID string) ([]protocol.GateReport, error) {
+	return []protocol.GateReport{{ID: "gate_01", WorkItemID: workItemID, Status: "pending"}}, nil
+}
+
+func (f *runtimeClientFake) CompleteGate(_ context.Context, req protocol.CompleteGateRequest) (protocol.GateReport, error) {
+	return protocol.GateReport{ID: req.ID, Status: req.Status, OverrideReason: req.OverrideReason}, nil
+}
+
+func (f *runtimeClientFake) ListWorkflowEvents(_ context.Context, workItemID string) ([]protocol.WorkflowEvent, error) {
+	return []protocol.WorkflowEvent{{ID: "event_01", WorkItemID: workItemID, Type: "planning_started"}}, nil
 }
 
 func (f *runtimeClientFake) ReportStatus(_ context.Context, req protocol.ReportStatusRequest) (protocol.ReportStatusResponse, error) {

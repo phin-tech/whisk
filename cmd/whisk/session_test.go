@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -204,6 +205,111 @@ func TestRunSessionPTYOutputUsesPTYOutputEndpoint(t *testing.T) {
 	}
 }
 
+func TestRunSessionPTYOutputCanStripANSIEscapes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/ptys/pty_01/output" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.OutputSnapshot{
+			PtyID:        "pty_01",
+			Offset:       42,
+			OutputBase64: base64.StdEncoding.EncodeToString([]byte("\x1b[31mPlan\x1b[0m\r\n\x1b]0;title\aReady")),
+		})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"session", "pty", "output", "-url", server.URL, "-plain", "pty_01"})
+	})
+	if err != nil {
+		t.Fatalf("session pty output: %v", err)
+	}
+	if output != "Plan\nReady" {
+		t.Fatalf("output = %q", output)
+	}
+}
+
+func TestRunSessionPTYTailPollsPTYOutputEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/ptys/pty_01/output" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if r.URL.Query().Get("from") != "19" {
+			t.Fatalf("query = %s", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.OutputSnapshot{
+			PtyID:        "pty_01",
+			Offset:       31,
+			OutputBase64: base64.StdEncoding.EncodeToString([]byte("next output")),
+		})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"session", "pty", "tail", "-url", server.URL, "-from", "19", "-once", "pty_01"})
+	})
+	if err != nil {
+		t.Fatalf("session pty tail: %v", err)
+	}
+	if output != "next output" {
+		t.Fatalf("output = %q", output)
+	}
+}
+
+func TestRunSessionPTYTailDefaultsToEndOffset(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/ptys/pty_01/output" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if r.URL.Query().Get("from") != "18446744073709551615" {
+			t.Fatalf("query = %s", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.OutputSnapshot{
+			PtyID:  "pty_01",
+			Offset: math.MaxUint64,
+		})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"session", "pty", "tail", "-url", server.URL, "-once", "pty_01"})
+	})
+	if err != nil {
+		t.Fatalf("session pty tail: %v", err)
+	}
+	if output != "" {
+		t.Fatalf("output = %q", output)
+	}
+}
+
+func TestRunSessionPTYTailCanStripANSIEscapes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/ptys/pty_01/output" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.OutputSnapshot{
+			PtyID:        "pty_01",
+			Offset:       31,
+			OutputBase64: base64.StdEncoding.EncodeToString([]byte("\x1b[1mnext\x1b[22m output")),
+		})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"session", "pty", "tail", "-url", server.URL, "-plain", "-once", "pty_01"})
+	})
+	if err != nil {
+		t.Fatalf("session pty tail: %v", err)
+	}
+	if output != "next output" {
+		t.Fatalf("output = %q", output)
+	}
+}
+
 func TestRunSessionRejectsInvalidUsage(t *testing.T) {
 	if err := run([]string{"session", "create"}); err == nil {
 		t.Fatalf("expected create usage error")
@@ -219,5 +325,11 @@ func TestRunSessionRejectsInvalidUsage(t *testing.T) {
 	}
 	if err := run([]string{"session", "pty", "output"}); err == nil {
 		t.Fatalf("expected pty output usage error")
+	}
+	if err := run([]string{"session", "pty", "tail"}); err == nil {
+		t.Fatalf("expected pty tail usage error")
+	}
+	if err := run([]string{"session", "pty", "tail", "-from", "nope", "pty_01"}); err == nil {
+		t.Fatalf("expected pty tail from usage error")
 	}
 }

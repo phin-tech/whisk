@@ -96,3 +96,17 @@ def run_json(daemon, args: list[str]):
         return json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         raise AssertionError(f"expected JSON from {args}, got stdout={result.stdout!r} stderr={result.stderr!r}") from exc
+
+
+def run_failure(daemon, args: list[str]):
+    result = subprocess.run(
+        [str(daemon["whisk"]), *args],
+        env=daemon["env"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        raise AssertionError(f"expected failure from {args}, got stdout={result.stdout!r}")
+    return result

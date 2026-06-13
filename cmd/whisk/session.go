@@ -6,7 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"strconv"
 	"text/tabwriter"
 	"time"
 
@@ -145,17 +147,19 @@ func runSessionClose(args []string) error {
 
 func runSessionPTY(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk session pty <list|output|kill>")
+		return fmt.Errorf("usage: whisk session pty <list|output|tail|kill>")
 	}
 	switch args[0] {
 	case "list":
 		return runSessionPTYList(args[1:])
 	case "output":
 		return runSessionPTYOutput(args[1:])
+	case "tail":
+		return runSessionPTYTail(args[1:])
 	case "kill":
 		return runSessionPTYKill(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk session pty <list|output|kill>")
+		return fmt.Errorf("usage: whisk session pty <list|output|tail|kill>")
 	}
 }
 
@@ -197,20 +201,25 @@ func runSessionPTYOutput(args []string) error {
 	flags := flag.NewFlagSet("session pty output", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
 	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
-	fromOffset := flags.Uint64("from", 0, "replay from byte offset")
+	fromValue := flags.String("from", "0", "replay from byte offset or end")
 	outputJSON := flags.Bool("json", false, "write JSON output")
+	plain := flags.Bool("plain", false, "strip terminal control sequences")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 1 {
-		return fmt.Errorf("usage: whisk session pty output [-url http://127.0.0.1:8787] [-from offset] [-json] <pty-id>")
+		return fmt.Errorf("usage: whisk session pty output [-url http://127.0.0.1:8787] [-from offset|end] [-plain] [-json] <pty-id>")
+	}
+	fromOffset, err := parseOutputOffset(*fromValue)
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	snapshot, err := client.NewHTTP(*baseURL, nil).Output(ctx, protocol.OutputRequest{
 		PtyID:      flags.Arg(0),
-		FromOffset: *fromOffset,
+		FromOffset: fromOffset,
 	})
 	if err != nil {
 		return err
@@ -218,16 +227,142 @@ func runSessionPTYOutput(args []string) error {
 	if *outputJSON {
 		return printJSON(snapshot)
 	}
+	return writeOutputSnapshot(snapshot, *plain)
+}
+
+func runSessionPTYTail(args []string) error {
+	flags := flag.NewFlagSet("session pty tail", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	fromValue := flags.String("from", "end", "tail from byte offset or end")
+	pollInterval := flags.Duration("poll", 500*time.Millisecond, "poll interval")
+	plain := flags.Bool("plain", false, "strip terminal control sequences")
+	once := flags.Bool("once", false, "fetch once and exit")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return fmt.Errorf("usage: whisk session pty tail [-url http://127.0.0.1:8787] [-from offset|end] [-poll 500ms] [-plain] [-once] <pty-id>")
+	}
+	if *pollInterval <= 0 {
+		return fmt.Errorf("poll interval must be positive")
+	}
+	fromOffset, err := parseOutputOffset(*fromValue)
+	if err != nil {
+		return err
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	daemon := client.NewHTTP(*baseURL, nil)
+	offset := fromOffset
+	for {
+		requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		snapshot, err := daemon.Output(requestCtx, protocol.OutputRequest{
+			PtyID:      flags.Arg(0),
+			FromOffset: offset,
+		})
+		cancel()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		if err := writeOutputSnapshot(snapshot, *plain); err != nil {
+			return err
+		}
+		if snapshot.Offset > offset {
+			offset = snapshot.Offset
+		}
+		if *once {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(*pollInterval):
+		}
+	}
+}
+
+func parseOutputOffset(value string) (uint64, error) {
+	if value == "end" {
+		return ^uint64(0), nil
+	}
+	offset, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid from offset %q", value)
+	}
+	return offset, nil
+}
+
+func writeOutputSnapshot(snapshot protocol.OutputSnapshot, plain bool) error {
+	var output []byte
 	if snapshot.OutputBase64 != "" {
 		decoded, err := base64.StdEncoding.DecodeString(snapshot.OutputBase64)
 		if err != nil {
 			return err
 		}
-		_, err = os.Stdout.Write(decoded)
-		return err
+		output = decoded
+	} else {
+		output = []byte(snapshot.Output)
 	}
-	fmt.Print(snapshot.Output)
-	return nil
+	if plain {
+		output = stripTerminalControls(output)
+	}
+	_, err := os.Stdout.Write(output)
+	return err
+}
+
+func stripTerminalControls(input []byte) []byte {
+	out := make([]byte, 0, len(input))
+	for i := 0; i < len(input); i++ {
+		b := input[i]
+		switch b {
+		case 0x1b:
+			i = skipEscapeSequence(input, i)
+		case '\r':
+			if i+1 < len(input) && input[i+1] == '\n' {
+				out = append(out, '\n')
+				i++
+			}
+		case '\n', '\t':
+			out = append(out, b)
+		default:
+			if b >= 0x20 && b != 0x7f {
+				out = append(out, b)
+			}
+		}
+	}
+	return out
+}
+
+func skipEscapeSequence(input []byte, start int) int {
+	if start+1 >= len(input) {
+		return start
+	}
+	switch input[start+1] {
+	case '[':
+		for i := start + 2; i < len(input); i++ {
+			if input[i] >= 0x40 && input[i] <= 0x7e {
+				return i
+			}
+		}
+		return len(input) - 1
+	case ']':
+		for i := start + 2; i < len(input); i++ {
+			if input[i] == 0x07 {
+				return i
+			}
+			if input[i] == 0x1b && i+1 < len(input) && input[i+1] == '\\' {
+				return i + 1
+			}
+		}
+		return len(input) - 1
+	default:
+		return start + 1
+	}
 }
 
 func runSessionPTYKill(args []string) error {

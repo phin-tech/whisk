@@ -82,6 +82,20 @@ func (c *HTTPClient) StartExecution(ctx context.Context, req protocol.StartExecu
 	return run, err
 }
 
+func (c *HTTPClient) QueueExecution(ctx context.Context, req protocol.QueueExecutionRequest) (protocol.WorkItemRun, error) {
+	var run protocol.WorkItemRun
+	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/queue-execution"
+	err := c.post(ctx, path, req, &run)
+	return run, err
+}
+
+func (c *HTTPClient) LaunchExecution(ctx context.Context, req protocol.LaunchExecutionRequest) (protocol.WorkItemRun, error) {
+	var run protocol.WorkItemRun
+	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/launch-execution"
+	err := c.post(ctx, path, req, &run)
+	return run, err
+}
+
 func (c *HTTPClient) AskQuestion(ctx context.Context, req protocol.AskQuestionRequest) (protocol.Question, error) {
 	var question protocol.Question
 	err := c.post(ctx, "/v1/questions", req, &question)
@@ -110,6 +124,60 @@ func (c *HTTPClient) SubmitReviewFeedback(ctx context.Context, req protocol.Subm
 	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/review-feedback"
 	err := c.post(ctx, path, req, &artifact)
 	return artifact, err
+}
+
+func (c *HTTPClient) ApproveDone(ctx context.Context, req protocol.ApproveDoneRequest) (protocol.WorkItem, error) {
+	var item protocol.WorkItem
+	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/approve-done"
+	err := c.post(ctx, path, req, &item)
+	return item, err
+}
+
+func (c *HTTPClient) ListArtifacts(ctx context.Context, workItemID string) ([]protocol.Artifact, error) {
+	query := url.Values{}
+	if workItemID != "" {
+		query.Set("workItemId", workItemID)
+	}
+	var artifacts []protocol.Artifact
+	err := c.get(ctx, "/v1/artifacts", query, &artifacts)
+	return artifacts, err
+}
+
+func (c *HTTPClient) ListQuestions(ctx context.Context, workItemID string) ([]protocol.Question, error) {
+	query := url.Values{}
+	if workItemID != "" {
+		query.Set("workItemId", workItemID)
+	}
+	var questions []protocol.Question
+	err := c.get(ctx, "/v1/questions", query, &questions)
+	return questions, err
+}
+
+func (c *HTTPClient) ListGateReports(ctx context.Context, workItemID string) ([]protocol.GateReport, error) {
+	query := url.Values{}
+	if workItemID != "" {
+		query.Set("workItemId", workItemID)
+	}
+	var gates []protocol.GateReport
+	err := c.get(ctx, "/v1/gate-reports", query, &gates)
+	return gates, err
+}
+
+func (c *HTTPClient) CompleteGate(ctx context.Context, req protocol.CompleteGateRequest) (protocol.GateReport, error) {
+	var gate protocol.GateReport
+	path := "/v1/gate-reports/" + url.PathEscape(req.ID) + "/complete"
+	err := c.post(ctx, path, req, &gate)
+	return gate, err
+}
+
+func (c *HTTPClient) ListWorkflowEvents(ctx context.Context, workItemID string) ([]protocol.WorkflowEvent, error) {
+	query := url.Values{}
+	if workItemID != "" {
+		query.Set("workItemId", workItemID)
+	}
+	var events []protocol.WorkflowEvent
+	err := c.get(ctx, "/v1/workflow-events", query, &events)
+	return events, err
 }
 
 func (c *HTTPClient) BindWorkItemWorktree(ctx context.Context, req protocol.BindWorkItemWorktreeRequest) (protocol.WorkItem, error) {
@@ -146,6 +214,13 @@ func (c *HTTPClient) ListWorkItemRuns(ctx context.Context, workItemID string) ([
 func (c *HTTPClient) StartWorkItemRun(ctx context.Context, req protocol.StartWorkItemRunRequest) (protocol.WorkItemRun, error) {
 	var run protocol.WorkItemRun
 	err := c.post(ctx, "/v1/work-item-runs", req, &run)
+	return run, err
+}
+
+func (c *HTTPClient) LaunchWorkItemRun(ctx context.Context, req protocol.LaunchWorkItemRunRequest) (protocol.WorkItemRun, error) {
+	var run protocol.WorkItemRun
+	path := "/v1/work-item-runs/" + url.PathEscape(req.ID) + "/launch"
+	err := c.post(ctx, path, req, &run)
 	return run, err
 }
 

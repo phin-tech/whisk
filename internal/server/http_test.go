@@ -102,6 +102,19 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 		t.Fatalf("event = %#v", event)
 	}
 
+	cleared := postJSON[protocol.ClearDaemonResponse](t, handler, "/v1/daemon/clear", protocol.ClearDaemonRequest{}, http.StatusOK)
+	if cleared.SessionsCleared != 1 || cleared.PTYsCleared != 2 {
+		t.Fatalf("cleared = %#v", cleared)
+	}
+	sessions = getJSON[[]map[string]any](t, handler, "/v1/sessions", http.StatusOK)
+	if len(sessions) != 0 {
+		t.Fatalf("sessions after clear = %#v", sessions)
+	}
+	ptys = getJSON[[]protocol.PTYInfo](t, handler, "/v1/ptys", http.StatusOK)
+	if len(ptys) != 0 {
+		t.Fatalf("ptys after clear = %#v", ptys)
+	}
+
 }
 
 func TestHTTPServerSessionLifecycleActions(t *testing.T) {
@@ -145,6 +158,28 @@ func TestHTTPServerSessionLifecycleActions(t *testing.T) {
 	}
 	if string(backend.outputs[started.PTYID]) != "echo server-command\n" {
 		t.Fatalf("initial command output = %q", string(backend.outputs[started.PTYID]))
+	}
+	execCreated := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:    "Exec",
+		RootDir: rootDir,
+		InitialPTY: &protocol.StartPTYOptions{
+			Cols:    81,
+			Rows:    25,
+			Command: "codex",
+			Args:    []string{"--ask-for-approval=never", "Plan"},
+			Env:     map[string]string{"WHISK_TEST": "1"},
+			Exec:    true,
+		},
+	}, http.StatusCreated)
+	if execCreated.PTYID == nil {
+		t.Fatalf("exec created missing pty: %#v", execCreated)
+	}
+	execSpawn := backend.spawns[*execCreated.PTYID]
+	if execSpawn.Command != "codex" || len(execSpawn.Args) != 2 || execSpawn.Args[1] != "Plan" || execSpawn.Env["WHISK_TEST"] != "1" {
+		t.Fatalf("exec spawn = %#v", execSpawn)
+	}
+	if string(backend.outputs[*execCreated.PTYID]) != "" {
+		t.Fatalf("exec pty should not receive command via stdin: %q", string(backend.outputs[*execCreated.PTYID]))
 	}
 	detached := postJSON[protocol.DetachedPanePTY](t, handler, "/v1/sessions/"+created.Session.ID+"/panes/"+created.PaneID+"/detach-pty", protocol.DetachPanePTYRequest{}, http.StatusOK)
 	if detached.PTYID != started.PTYID {
@@ -334,12 +369,14 @@ func TestHTTPServerReportsBadRequests(t *testing.T) {
 type fakePTYBackend struct {
 	records map[string]app.PTYRecord
 	outputs map[string][]byte
+	spawns  map[string]app.SpawnPTYRequest
 }
 
 func newFakePTYBackend() *fakePTYBackend {
 	return &fakePTYBackend{
 		records: map[string]app.PTYRecord{},
 		outputs: map[string][]byte{},
+		spawns:  map[string]app.SpawnPTYRequest{},
 	}
 }
 
@@ -352,6 +389,7 @@ func (b *fakePTYBackend) Spawn(_ context.Context, req app.SpawnPTYRequest) (app.
 		Running:    true,
 	}
 	b.records[req.ID] = record
+	b.spawns[req.ID] = req
 	return record, nil
 }
 
@@ -415,6 +453,8 @@ func (b *fakePTYBackend) List(context.Context) ([]app.PTYRecord, error) {
 }
 
 func (b *fakePTYBackend) Shutdown(context.Context) error {
+	b.records = map[string]app.PTYRecord{}
+	b.outputs = map[string][]byte{}
 	return nil
 }
 

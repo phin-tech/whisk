@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -69,6 +68,25 @@ type StartWorkItemRunRequest struct {
 	Actor            string
 }
 
+type LaunchWorkItemRunRequest struct {
+	ID             string
+	AgentProfileID string
+	SystemPrompt   string
+	Actor          string
+}
+
+type QueueExecutionRequest struct {
+	WorkItemID string
+	Actor      string
+}
+
+type LaunchExecutionRequest struct {
+	WorkItemID     string
+	AgentProfileID string
+	SystemPrompt   string
+	Actor          string
+}
+
 type StartPlanningRequest struct {
 	WorkItemID     string
 	SessionID      string
@@ -131,6 +149,19 @@ type SubmitReviewFeedbackRequest struct {
 	Actor      string
 }
 
+type ApproveDoneRequest struct {
+	WorkItemID string
+	Reason     string
+	Actor      string
+}
+
+type CompleteGateRequest struct {
+	ID             string
+	Status         string
+	OverrideReason string
+	Actor          string
+}
+
 type CancelWorkItemRunRequest struct {
 	ID    string
 	Actor string
@@ -165,6 +196,15 @@ type ListStatusEventsRequest struct {
 type MarkStatusEventReadRequest struct {
 	ID string
 }
+
+const daemonOwnedSessionMetadataKey = "whisk.daemon/owned_session"
+
+type runCloseMode string
+
+const (
+	runCloseNone     runCloseMode = "none"
+	runCloseComplete runCloseMode = "complete"
+)
 
 func (r *Runtime) ListProjects(context.Context) ([]workitem.Project, error) {
 	return r.workItems.ListProjects(), nil
@@ -293,6 +333,27 @@ func (r *Runtime) AddWorkItemAttachment(ctx context.Context, req AddWorkItemAtta
 }
 
 func (r *Runtime) DeleteWorkItem(ctx context.Context, req DeleteWorkItemRequest) (workitem.WorkItem, error) {
+	runs := r.workItems.ListRuns(req.ID)
+	closedSessions := map[string]struct{}{}
+	for _, run := range runs {
+		if run.SessionID != "" {
+			if _, seen := closedSessions[run.SessionID]; seen {
+				continue
+			}
+			closedSessions[run.SessionID] = struct{}{}
+			if _, ok := r.state.Get(run.SessionID); ok {
+				if _, err := r.CloseSession(ctx, CloseSessionRequest{SessionID: run.SessionID}); err != nil {
+					return workitem.WorkItem{}, err
+				}
+			}
+			continue
+		}
+		if run.PTYID != "" && r.ptys != nil {
+			if _, err := r.KillPTY(ctx, KillPTYRequest{PTYID: run.PTYID}); err != nil {
+				return workitem.WorkItem{}, err
+			}
+		}
+	}
 	item, err := r.workItems.DeleteWorkItem(workitem.DeleteWorkItem{
 		ID:        req.ID,
 		HistoryID: r.ids(),
@@ -354,6 +415,7 @@ func (r *Runtime) StartWorkItemRun(ctx context.Context, req StartWorkItemRunRequ
 			RunHistoryID: r.ids(),
 			SessionID:    sessionID,
 			PTYID:        ptyID,
+			DaemonOwned:  true,
 			Actor:        req.Actor,
 			Now:          time.Now().UTC(),
 		})
@@ -366,6 +428,46 @@ func (r *Runtime) StartWorkItemRun(ctx context.Context, req StartWorkItemRunRequ
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	return run, nil
+}
+
+func (r *Runtime) LaunchWorkItemRun(ctx context.Context, req LaunchWorkItemRunRequest) (workitem.WorkItemRun, error) {
+	run, ok := r.workItems.GetRun(req.ID)
+	if !ok {
+		return workitem.WorkItemRun{}, fmt.Errorf("work item run %s not found", req.ID)
+	}
+	if run.Status != workitem.RunStateQueued {
+		return workitem.WorkItemRun{}, fmt.Errorf("work item run %s is %s, not queued", req.ID, run.Status)
+	}
+	launched, err := r.launchAndMarkWorkItemRun(ctx, run, StartWorkItemRunRequest{
+		WorkItemID:       run.WorkItemID,
+		Preset:           run.Preset,
+		PromptTemplateID: run.PromptTemplateID,
+		AgentProfileID:   req.AgentProfileID,
+		SystemPrompt:     req.SystemPrompt,
+		Actor:            req.Actor,
+	})
+	if err != nil {
+		failed, failErr := r.workItems.FailRun(workitem.FailRun{
+			ID:           run.ID,
+			RunHistoryID: r.ids(),
+			Actor:        req.Actor,
+			Message:      err.Error(),
+			Now:          time.Now().UTC(),
+		})
+		if failErr == nil {
+			_ = r.persistWorkItems(ctx)
+			r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+		}
+		if failErr != nil {
+			return workitem.WorkItemRun{}, failErr
+		}
+		return failed, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkItemRun{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return launched, nil
 }
 
 func (r *Runtime) StartPlanning(ctx context.Context, req StartPlanningRequest) (workitem.WorkItemRun, error) {
@@ -432,6 +534,14 @@ func (r *Runtime) ApprovePlan(ctx context.Context, req ApprovePlanRequest) (work
 	if err != nil {
 		return workitem.WorkItem{}, err
 	}
+	if err := r.closeDaemonOwnedRunSessions(ctx, item.ID, req.Actor, runCloseComplete, func(run workitem.WorkItemRun) bool {
+		return run.PromptTemplateID == workitem.PromptTemplatePlan
+	}); err != nil {
+		return workitem.WorkItem{}, err
+	}
+	if refreshed, ok := r.workItems.GetWorkItem(item.ID); ok {
+		item = refreshed
+	}
 	if err := r.persistWorkItems(ctx); err != nil {
 		return workitem.WorkItem{}, err
 	}
@@ -440,6 +550,27 @@ func (r *Runtime) ApprovePlan(ctx context.Context, req ApprovePlanRequest) (work
 }
 
 func (r *Runtime) StartExecution(ctx context.Context, req StartExecutionRequest) (workitem.WorkItemRun, error) {
+	return r.startExecution(ctx, req)
+}
+
+func (r *Runtime) QueueExecution(ctx context.Context, req QueueExecutionRequest) (workitem.WorkItemRun, error) {
+	return r.startExecution(ctx, StartExecutionRequest{
+		WorkItemID: req.WorkItemID,
+		Actor:      req.Actor,
+	})
+}
+
+func (r *Runtime) LaunchExecution(ctx context.Context, req LaunchExecutionRequest) (workitem.WorkItemRun, error) {
+	return r.startExecution(ctx, StartExecutionRequest{
+		WorkItemID:     req.WorkItemID,
+		Launch:         true,
+		AgentProfileID: req.AgentProfileID,
+		SystemPrompt:   req.SystemPrompt,
+		Actor:          req.Actor,
+	})
+}
+
+func (r *Runtime) startExecution(ctx context.Context, req StartExecutionRequest) (workitem.WorkItemRun, error) {
 	run, err := r.workItems.StartExecution(workitem.StartExecution{
 		ID:           r.ids(),
 		HistoryID:    r.ids(),
@@ -520,6 +651,11 @@ func (r *Runtime) CompleteExecution(ctx context.Context, req CompleteExecutionRe
 	if err != nil {
 		return workitem.WorkItem{}, err
 	}
+	if err := r.closeDaemonOwnedRunSessions(ctx, item.ID, req.Actor, runCloseNone, func(run workitem.WorkItemRun) bool {
+		return run.ID == req.RunID
+	}); err != nil {
+		return workitem.WorkItem{}, err
+	}
 	if err := r.persistWorkItems(ctx); err != nil {
 		return workitem.WorkItem{}, err
 	}
@@ -539,12 +675,17 @@ func (r *Runtime) SubmitReviewFeedback(ctx context.Context, req SubmitReviewFeed
 	if err != nil {
 		return workitem.Artifact{}, err
 	}
-	for _, run := range r.workItems.ListRuns(req.WorkItemID) {
-		if run.ID == req.RunID && run.PTYID != "" {
-			envelope := "\n<whisk-review-feedback>\n" + req.Body + "\n</whisk-review-feedback>\n"
-			if err := r.WritePTY(ctx, run.PTYID, []byte(envelope)); err != nil {
-				return workitem.Artifact{}, err
+	if r.ptys != nil {
+		for _, run := range r.workItems.ListRuns(req.WorkItemID) {
+			if run.ID != req.RunID || run.PTYID == "" {
+				continue
 			}
+			snapshot, err := r.PTYOutput(ctx, run.PTYID, 0)
+			if err != nil || !snapshot.Record.Running {
+				break
+			}
+			envelope := "\n<whisk-review-feedback>\n" + req.Body + "\n</whisk-review-feedback>\n"
+			_ = r.WritePTY(ctx, run.PTYID, []byte(envelope))
 			break
 		}
 	}
@@ -553,6 +694,65 @@ func (r *Runtime) SubmitReviewFeedback(ctx context.Context, req SubmitReviewFeed
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	return artifact, nil
+}
+
+func (r *Runtime) ListArtifacts(_ context.Context, workItemID string) ([]workitem.Artifact, error) {
+	return r.workItems.ListArtifacts(workItemID), nil
+}
+
+func (r *Runtime) ListQuestions(_ context.Context, workItemID string) ([]workitem.Question, error) {
+	return r.workItems.ListQuestions(workItemID), nil
+}
+
+func (r *Runtime) ListGateReports(_ context.Context, workItemID string) ([]workitem.GateReport, error) {
+	return r.workItems.ListGateReports(workItemID), nil
+}
+
+func (r *Runtime) ListWorkflowEvents(_ context.Context, workItemID string) ([]workitem.WorkflowEvent, error) {
+	return r.workItems.ListWorkflowEvents(workItemID), nil
+}
+
+func (r *Runtime) CompleteGate(ctx context.Context, req CompleteGateRequest) (workitem.GateReport, error) {
+	gate, err := r.workItems.CompleteGate(workitem.CompleteGate{
+		ID:             req.ID,
+		Status:         req.Status,
+		OverrideReason: req.OverrideReason,
+		Actor:          req.Actor,
+		Now:            time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.GateReport{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.GateReport{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return gate, nil
+}
+
+func (r *Runtime) ApproveDone(ctx context.Context, req ApproveDoneRequest) (workitem.WorkItem, error) {
+	item, err := r.workItems.ApproveDone(workitem.ApproveDone{
+		WorkItemID: req.WorkItemID,
+		Reason:     req.Reason,
+		Actor:      req.Actor,
+		Now:        time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.WorkItem{}, err
+	}
+	if err := r.closeDaemonOwnedRunSessions(ctx, item.ID, req.Actor, runCloseComplete, func(workitem.WorkItemRun) bool {
+		return true
+	}); err != nil {
+		return workitem.WorkItem{}, err
+	}
+	if refreshed, ok := r.workItems.GetWorkItem(item.ID); ok {
+		item = refreshed
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkItem{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return item, nil
 }
 
 func (r *Runtime) launchAndMarkWorkItemRun(ctx context.Context, run workitem.WorkItemRun, req StartWorkItemRunRequest) (workitem.WorkItemRun, error) {
@@ -565,9 +765,59 @@ func (r *Runtime) launchAndMarkWorkItemRun(ctx context.Context, run workitem.Wor
 		RunHistoryID: r.ids(),
 		SessionID:    sessionID,
 		PTYID:        ptyID,
+		DaemonOwned:  true,
 		Actor:        req.Actor,
 		Now:          time.Now().UTC(),
 	})
+}
+
+func (r *Runtime) closeDaemonOwnedRunSessions(ctx context.Context, workItemID string, actor string, mode runCloseMode, match func(workitem.WorkItemRun) bool) error {
+	closedSessions := map[string]struct{}{}
+	for _, run := range r.workItems.ListRuns(workItemID) {
+		if !match(run) || !daemonOwnedRunSession(run) {
+			continue
+		}
+		if !terminalRunStatus(run.Status) {
+			switch mode {
+			case runCloseComplete:
+				if _, err := r.workItems.CompleteRun(workitem.CompleteRun{
+					ID:           run.ID,
+					RunHistoryID: r.ids(),
+					Actor:        actor,
+					Message:      "workflow phase completed",
+					Now:          time.Now().UTC(),
+				}); err != nil {
+					return err
+				}
+			case runCloseNone:
+			default:
+				return fmt.Errorf("unknown run close mode %q", mode)
+			}
+		}
+		if run.SessionID == "" {
+			continue
+		}
+		if _, seen := closedSessions[run.SessionID]; seen {
+			continue
+		}
+		closedSessions[run.SessionID] = struct{}{}
+		if _, ok := r.state.Get(run.SessionID); !ok {
+			continue
+		}
+		if _, err := r.CloseSession(ctx, CloseSessionRequest{SessionID: run.SessionID}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func daemonOwnedRunSession(run workitem.WorkItemRun) bool {
+	value, ok := run.Metadata[daemonOwnedSessionMetadataKey]
+	return ok && value.Type == workitem.MetadataTypeBool && value.Bool
+}
+
+func terminalRunStatus(status string) bool {
+	return status == workitem.RunStateCompleted || status == workitem.RunStateFailed || status == workitem.RunStateCancelled
 }
 
 func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRun, req StartWorkItemRunRequest) (string, string, error) {
@@ -599,13 +849,14 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	if err != nil {
 		return "", "", err
 	}
-	command := shellCommand(launch.Command, launch.Args, launch.Env)
-	name := fmt.Sprintf("Run #%d %s", item.Number, item.Title)
+	name := workItemRunSessionName(item, run)
 	created, err := r.CreateSession(ctx, CreateSessionRequest{
 		Name:    name,
 		RootDir: launch.WorkingDir,
 		InitialPTY: &StartPTYOptions{
-			Command: command,
+			Command: launch.Command,
+			Args:    launch.Args,
+			Exec:    true,
 			Env: map[string]string{
 				"WHISK_PROJECT_ID":   project.ID,
 				"WHISK_WORK_ITEM_ID": item.ID,
@@ -628,6 +879,27 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	return created.Session.ID, created.MainPtyID, nil
 }
 
+func workItemRunSessionName(item workitem.WorkItem, run workitem.WorkItemRun) string {
+	title := strings.TrimSpace(item.Title)
+	if title == "" {
+		title = item.ID
+	}
+	return fmt.Sprintf("#%d %s - %s", item.Number, runPhaseLabel(run), title)
+}
+
+func runPhaseLabel(run workitem.WorkItemRun) string {
+	switch run.PromptTemplateID {
+	case workitem.PromptTemplatePlan:
+		return "Planning"
+	case workitem.PromptTemplateImplement:
+		return "Execution"
+	case workitem.PromptTemplateReview:
+		return "Review"
+	default:
+		return "Run"
+	}
+}
+
 func defaultAgentProfileForPreset(preset string) string {
 	switch preset {
 	case workitem.RunPresetReader, workitem.RunPresetManager, workitem.RunPresetReviewer, workitem.RunPresetWriter:
@@ -635,31 +907,6 @@ func defaultAgentProfileForPreset(preset string) string {
 	default:
 		return "codex"
 	}
-}
-
-func shellCommand(command string, args []string, env map[string]string) string {
-	parts := make([]string, 0, len(env)+1+len(args))
-	keys := make([]string, 0, len(env))
-	for key := range env {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		value := env[key]
-		parts = append(parts, key+"="+shellQuote(value))
-	}
-	parts = append(parts, shellQuote(command))
-	for _, arg := range args {
-		parts = append(parts, shellQuote(arg))
-	}
-	return strings.Join(parts, " ")
-}
-
-func shellQuote(value string) string {
-	if value == "" {
-		return "''"
-	}
-	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func (r *Runtime) CancelWorkItemRun(ctx context.Context, req CancelWorkItemRunRequest) (workitem.WorkItemRun, error) {

@@ -556,11 +556,20 @@ type CancelRun struct {
 	Now          time.Time
 }
 
+type CompleteRun struct {
+	ID           string
+	RunHistoryID string
+	Actor        string
+	Message      string
+	Now          time.Time
+}
+
 type MarkRunRunning struct {
 	ID           string
 	RunHistoryID string
 	SessionID    string
 	PTYID        string
+	DaemonOwned  bool
 	Actor        string
 	Now          time.Time
 }
@@ -653,7 +662,18 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		}
 		state.templates[template.ID] = cloneTemplate(template)
 	}
+	builtinPrompts := map[string]PromptTemplate{}
+	for _, prompt := range DefaultPromptTemplates(time.Time{}) {
+		builtinPrompts[prompt.ID] = prompt
+	}
 	for _, prompt := range snapshot.PromptTemplates {
+		if prompt.Source == "builtin" {
+			if builtin, ok := builtinPrompts[prompt.ID]; ok {
+				builtin.CreatedAt = prompt.CreatedAt
+				builtin.UpdatedAt = prompt.UpdatedAt
+				prompt = builtin
+			}
+		}
 		if err := validatePromptTemplate(prompt); err != nil {
 			return nil, err
 		}
@@ -681,6 +701,9 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		state.items[item.ID] = cloneWorkItem(item)
 	}
 	for _, run := range snapshot.Runs {
+		if _, ok := state.items[run.WorkItemID]; !ok {
+			continue
+		}
 		if err := state.validateRun(run); err != nil {
 			return nil, err
 		}
@@ -690,6 +713,9 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		state.runs[run.ID] = cloneRun(run)
 	}
 	for _, artifact := range snapshot.Artifacts {
+		if _, ok := state.items[artifact.WorkItemID]; !ok {
+			continue
+		}
 		if err := state.validateArtifact(artifact); err != nil {
 			return nil, err
 		}
@@ -699,6 +725,9 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		state.artifacts[artifact.ID] = cloneArtifact(artifact)
 	}
 	for _, question := range snapshot.Questions {
+		if _, ok := state.items[question.WorkItemID]; !ok {
+			continue
+		}
 		if err := state.validateQuestion(question); err != nil {
 			return nil, err
 		}
@@ -708,6 +737,9 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		state.questions[question.ID] = cloneQuestion(question)
 	}
 	for _, gate := range snapshot.GateReports {
+		if _, ok := state.items[gate.WorkItemID]; !ok {
+			continue
+		}
 		if err := state.validateGateReport(gate); err != nil {
 			return nil, err
 		}
@@ -717,6 +749,16 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		state.gateReports[gate.ID] = cloneGateReport(gate)
 	}
 	for _, event := range snapshot.WorkflowEvents {
+		if event.WorkItemID != "" {
+			if _, ok := state.items[event.WorkItemID]; !ok {
+				continue
+			}
+		}
+		if event.RunID != "" {
+			if _, ok := state.runs[event.RunID]; !ok {
+				continue
+			}
+		}
 		if event.ID == "" {
 			return nil, fmt.Errorf("workflow event id required")
 		}
@@ -726,6 +768,16 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		state.workflowEvents[event.ID] = event
 	}
 	for _, event := range snapshot.StatusEvents {
+		if event.WorkItemID != "" {
+			if _, ok := state.items[event.WorkItemID]; !ok {
+				continue
+			}
+		}
+		if event.RunID != "" {
+			if _, ok := state.runs[event.RunID]; !ok {
+				continue
+			}
+		}
 		if err := state.validateStatusEvent(event); err != nil {
 			return nil, err
 		}
@@ -763,7 +815,7 @@ func DefaultPromptTemplates(now time.Time) []PromptTemplate {
 			ID:        PromptTemplatePlan,
 			Name:      "Plan",
 			Source:    "builtin",
-			Body:      "Plan the work item.\n\nProject: {{project.name}}\nRoot: {{project.rootDir}}\nWork item: #{{work_item.number}} {{work_item.title}}\n\n{{work_item.bodyMarkdown}}\n\nAttachments:\n{{attachments}}\n",
+			Body:      "Plan the work item.\n\nProject: {{project.name}}\nRoot: {{project.rootDir}}\nWork item: #{{work_item.number}} {{work_item.title}}\n\n{{work_item.bodyMarkdown}}\n\nAttachments:\n{{attachments}}\n\nWhen the draft plan is ready, submit it to Whisk. Use the exact CLI callback, replacing the placeholder with the plan markdown:\n${WHISK_CLI:-whisk} workflow submit-plan -body '<plan markdown>'\n\nDo not treat the plan as complete until the Whisk command succeeds.\n",
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
@@ -870,6 +922,11 @@ func (s *State) ListRuns(workItemID string) []WorkItemRun {
 		return out[i].ID < out[j].ID
 	})
 	return out
+}
+
+func (s *State) GetRun(id string) (WorkItemRun, bool) {
+	run, ok := s.runs[id]
+	return cloneRun(run), ok
 }
 
 func (s *State) ListArtifacts(workItemID string) []Artifact {
@@ -1218,6 +1275,36 @@ func (s *State) DeleteWorkItem(req DeleteWorkItem) (WorkItem, error) {
 		return WorkItem{}, err
 	}
 	delete(s.items, req.ID)
+	for id, run := range s.runs {
+		if run.WorkItemID == req.ID {
+			delete(s.runs, id)
+		}
+	}
+	for id, artifact := range s.artifacts {
+		if artifact.WorkItemID == req.ID {
+			delete(s.artifacts, id)
+		}
+	}
+	for id, question := range s.questions {
+		if question.WorkItemID == req.ID {
+			delete(s.questions, id)
+		}
+	}
+	for id, gate := range s.gateReports {
+		if gate.WorkItemID == req.ID {
+			delete(s.gateReports, id)
+		}
+	}
+	for id, event := range s.workflowEvents {
+		if event.WorkItemID == req.ID {
+			delete(s.workflowEvents, id)
+		}
+	}
+	for id, event := range s.statusEvents {
+		if event.WorkItemID == req.ID {
+			delete(s.statusEvents, id)
+		}
+	}
 	return cloneWorkItem(item), nil
 }
 
@@ -1767,6 +1854,38 @@ func (s *State) CancelRun(req CancelRun) (WorkItemRun, error) {
 	return cloneRun(run), nil
 }
 
+func (s *State) CompleteRun(req CompleteRun) (WorkItemRun, error) {
+	run, ok := s.runs[req.ID]
+	if !ok {
+		return WorkItemRun{}, fmt.Errorf("work item run %s not found", req.ID)
+	}
+	if run.Status == RunStateCompleted || run.Status == RunStateFailed || run.Status == RunStateCancelled {
+		return WorkItemRun{}, fmt.Errorf("work item run %s is already terminal", req.ID)
+	}
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		message = "completed work item run"
+	}
+	run.Status = RunStateCompleted
+	run.UpdatedAt = req.Now
+	run.CompletedAt = &req.Now
+	if err := appendRunEvent(&run, RunEvent{
+		ID:      req.RunHistoryID,
+		Type:    RunStateCompleted,
+		At:      req.Now,
+		Actor:   req.Actor,
+		Message: message,
+	}); err != nil {
+		return WorkItemRun{}, err
+	}
+	item := s.items[run.WorkItemID]
+	item.RunState = RunStateCompleted
+	item.UpdatedAt = req.Now
+	s.items[item.ID] = item
+	s.runs[run.ID] = run
+	return cloneRun(run), nil
+}
+
 func (s *State) MarkRunRunning(req MarkRunRunning) (WorkItemRun, error) {
 	run, ok := s.runs[req.ID]
 	if !ok {
@@ -1786,6 +1905,12 @@ func (s *State) MarkRunRunning(req MarkRunRunning) (WorkItemRun, error) {
 	run.SessionID = sessionID
 	run.PTYID = ptyID
 	run.Status = RunStateRunning
+	if req.DaemonOwned {
+		if run.Metadata == nil {
+			run.Metadata = map[string]MetadataValue{}
+		}
+		run.Metadata["whisk.daemon/owned_session"] = MetadataValue{Type: MetadataTypeBool, Bool: true}
+	}
 	run.UpdatedAt = req.Now
 	if err := appendRunEvent(&run, RunEvent{
 		ID:      req.RunHistoryID,

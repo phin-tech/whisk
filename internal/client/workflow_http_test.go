@@ -77,12 +77,12 @@ func TestHTTPClientDrivesExplicitWorkflowActions(t *testing.T) {
 	if ready.StageID != workitem.StageReady {
 		t.Fatalf("ready = %#v", ready)
 	}
-	execution, err := daemon.StartExecution(ctx, protocol.StartExecutionRequest{
+	execution, err := daemon.QueueExecution(ctx, protocol.QueueExecutionRequest{
 		WorkItemID: item.ID,
 		Actor:      "agent",
 	})
 	if err != nil {
-		t.Fatalf("start execution: %v", err)
+		t.Fatalf("queue execution: %v", err)
 	}
 	question, err := daemon.AskQuestion(ctx, protocol.AskQuestionRequest{
 		WorkItemID: item.ID,
@@ -107,6 +107,13 @@ func TestHTTPClientDrivesExplicitWorkflowActions(t *testing.T) {
 	if answered.Status != workitem.QuestionStatusAnswered {
 		t.Fatalf("answered = %#v", answered)
 	}
+	questions, err := daemon.ListQuestions(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("list questions: %v", err)
+	}
+	if len(questions) != 1 || questions[0].ID != question.ID {
+		t.Fatalf("questions = %#v", questions)
+	}
 	review, err := daemon.CompleteExecution(ctx, protocol.CompleteExecutionRequest{
 		RunID:   execution.ID,
 		Message: "Done.",
@@ -117,6 +124,16 @@ func TestHTTPClientDrivesExplicitWorkflowActions(t *testing.T) {
 	}
 	if review.StageID != workitem.StageReview {
 		t.Fatalf("review = %#v", review)
+	}
+	gates, err := daemon.ListGateReports(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("list gates: %v", err)
+	}
+	if len(gates) != 1 || !gates[0].Blocking || gates[0].Status != workitem.GateStatusPending {
+		t.Fatalf("gates = %#v", gates)
+	}
+	if _, err := daemon.ApproveDone(ctx, protocol.ApproveDoneRequest{WorkItemID: item.ID, Actor: "human"}); err == nil {
+		t.Fatalf("approve done should fail with pending gate")
 	}
 	feedback, err := daemon.SubmitReviewFeedback(ctx, protocol.SubmitReviewFeedbackRequest{
 		WorkItemID: item.ID,
@@ -129,5 +146,41 @@ func TestHTTPClientDrivesExplicitWorkflowActions(t *testing.T) {
 	}
 	if feedback.Kind != workitem.ArtifactKindFeedback {
 		t.Fatalf("feedback = %#v", feedback)
+	}
+	artifacts, err := daemon.ListArtifacts(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("list artifacts: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("artifacts = %#v", artifacts)
+	}
+	passed, err := daemon.CompleteGate(ctx, protocol.CompleteGateRequest{
+		ID:     gates[0].ID,
+		Status: workitem.GateStatusPassed,
+		Actor:  "agent",
+	})
+	if err != nil {
+		t.Fatalf("complete gate: %v", err)
+	}
+	if passed.Status != workitem.GateStatusPassed {
+		t.Fatalf("passed = %#v", passed)
+	}
+	done, err := daemon.ApproveDone(ctx, protocol.ApproveDoneRequest{
+		WorkItemID: item.ID,
+		Reason:     "review passed",
+		Actor:      "human",
+	})
+	if err != nil {
+		t.Fatalf("approve done: %v", err)
+	}
+	if done.StageID != workitem.StageDone {
+		t.Fatalf("done = %#v", done)
+	}
+	events, err := daemon.ListWorkflowEvents(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("list workflow events: %v", err)
+	}
+	if len(events) == 0 || events[len(events)-1].Type != workitem.WorkflowEventDoneApproved {
+		t.Fatalf("events = %#v", events)
 	}
 }

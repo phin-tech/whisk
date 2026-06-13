@@ -67,13 +67,25 @@ Frontend and Wails code render daemon read models and send protocol commands.
 They do not directly construct PTYs, update session stores, or persist runtime
 state.
 
-When changing the protocol, update together:
+When changing the protocol, update in this order:
 
-- protocol DTOs
-- daemon server handler
-- typed client
-- Wails adapter
-- integration tests
+1. Protocol DTOs and protocol API route metadata/catalog.
+2. Daemon runtime/server handler.
+3. Typed client.
+4. In-process daemon/client integration tests.
+5. CLI command contract, when the behavior is agent/script-facing.
+6. CLI smoke or black-box integration tests, when a CLI path exists.
+7. OpenAPI spec generation.
+8. Generated SDKs.
+9. SDK smoke tests for generated Python/TypeScript clients, when SDK paths exist.
+10. Wails adapter.
+11. Generated Wails bindings.
+12. Frontend behavior, when the GUI should expose the behavior.
+
+Protocol changes are not complete until the generated artifacts are refreshed
+and the relevant smoke tests prove the exposed route works against a real
+daemon. Do not merge a feature with only domain coverage if it adds or changes a
+daemon API surface.
 
 Prefer a small stable protocol over capability negotiation. Avoid Roux-style
 "who owns this right now?" branches.

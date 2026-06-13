@@ -252,6 +252,39 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 			t.Fatalf("timed out waiting for output; got %q", output.String())
 		}
 	}
+
+	cleared, err := daemon.ClearDaemon(ctx, protocol.ClearDaemonRequest{})
+	if err != nil {
+		t.Fatalf("clear daemon: %v", err)
+	}
+	if cleared.SessionsCleared == 0 || cleared.PTYsCleared == 0 {
+		t.Fatalf("cleared = %#v", cleared)
+	}
+	sessions, err = daemon.ListSessions(ctx)
+	if err != nil {
+		t.Fatalf("list sessions after clear: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("sessions after clear = %#v", sessions)
+	}
+	ptys, err = daemon.ListPTYs(ctx)
+	if err != nil {
+		t.Fatalf("list ptys after clear: %v", err)
+	}
+	if len(ptys) != 0 {
+		t.Fatalf("ptys after clear = %#v", ptys)
+	}
+
+	afterClear, err := daemon.CreateSession(ctx, protocol.CreateSessionRequest{
+		Name:    "After clear",
+		RootDir: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("create after clear: %v", err)
+	}
+	if afterClear.Session.ID == "" {
+		t.Fatalf("after clear session = %#v", afterClear)
+	}
 }
 
 func TestHTTPClientNextEventTimeoutReturnsNoop(t *testing.T) {

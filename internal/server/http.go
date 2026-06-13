@@ -22,6 +22,7 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", server.health)
 	mux.HandleFunc("GET /v1/compat", server.compatibility)
+	mux.HandleFunc("POST /v1/daemon/clear", server.clearDaemon)
 	mux.HandleFunc("GET /v1/sessions", server.listSessions)
 	mux.HandleFunc("POST /v1/sessions", server.createSession)
 	mux.HandleFunc("DELETE /v1/sessions/{sessionID}", server.closeSession)
@@ -61,21 +62,50 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/plan-drafts", server.submitDraftPlan)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/approve-plan", server.approvePlan)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/start-execution", server.startExecution)
+	mux.HandleFunc("POST /v1/work-items/{workItemID}/queue-execution", server.queueExecution)
+	mux.HandleFunc("POST /v1/work-items/{workItemID}/launch-execution", server.launchExecution)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/complete-execution", server.completeExecution)
 	mux.HandleFunc("POST /v1/work-item-runs/{runID}/complete-execution", server.completeExecution)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/review-feedback", server.submitReviewFeedback)
+	mux.HandleFunc("POST /v1/work-items/{workItemID}/approve-done", server.approveDone)
+	mux.HandleFunc("GET /v1/artifacts", server.listArtifacts)
+	mux.HandleFunc("GET /v1/questions", server.listQuestions)
 	mux.HandleFunc("POST /v1/questions", server.askQuestion)
 	mux.HandleFunc("POST /v1/questions/{questionID}/answer", server.answerQuestion)
+	mux.HandleFunc("GET /v1/gate-reports", server.listGateReports)
+	mux.HandleFunc("POST /v1/gate-reports/{gateReportID}/complete", server.completeGate)
+	mux.HandleFunc("GET /v1/workflow-events", server.listWorkflowEvents)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/bind-worktree", server.bindWorkItemWorktree)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/attachments", server.addWorkItemAttachment)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/delete", server.deleteWorkItem)
 	mux.HandleFunc("GET /v1/work-item-runs", server.listWorkItemRuns)
 	mux.HandleFunc("POST /v1/work-item-runs", server.startWorkItemRun)
+	mux.HandleFunc("POST /v1/work-item-runs/{runID}/launch", server.launchWorkItemRun)
 	mux.HandleFunc("POST /v1/work-item-runs/{runID}/cancel", server.cancelWorkItemRun)
 	mux.HandleFunc("POST /v1/status", server.reportStatus)
 	mux.HandleFunc("GET /v1/status-events", server.listStatusEvents)
 	mux.HandleFunc("POST /v1/status-events/{statusEventID}/read", server.markStatusEventRead)
 	return mux
+}
+
+func (s *HTTPServer) clearDaemon(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ClearDaemonRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	cleared, err := s.runtime.ClearDaemon(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, protocol.ClearDaemonResponse{
+		SessionsCleared:  cleared.SessionsCleared,
+		PTYsCleared:      cleared.PTYsCleared,
+		BookmarksCleared: cleared.BookmarksCleared,
+		ProjectsCleared:  cleared.ProjectsCleared,
+		WorkItemsCleared: cleared.WorkItemsCleared,
+		ForwardsCleared:  cleared.ForwardsCleared,
+	})
 }
 
 func (s *HTTPServer) addPTYBookmark(w http.ResponseWriter, r *http.Request) {
@@ -372,7 +402,7 @@ func toAppStartPTYOptions(options *protocol.StartPTYOptions) *app.StartPTYOption
 	if options == nil {
 		return nil
 	}
-	return &app.StartPTYOptions{Cols: options.Cols, Rows: options.Rows, Command: options.Command}
+	return &app.StartPTYOptions{Cols: options.Cols, Rows: options.Rows, Command: options.Command, Env: options.Env, Args: options.Args, Exec: options.Exec}
 }
 
 func (s *HTTPServer) writePTY(w http.ResponseWriter, r *http.Request) {

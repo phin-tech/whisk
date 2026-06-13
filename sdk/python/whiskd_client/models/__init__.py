@@ -3,6 +3,7 @@
 from .add_pty_bookmark_request import AddPTYBookmarkRequest
 from .add_work_item_attachment_request import AddWorkItemAttachmentRequest
 from .answer_question_request import AnswerQuestionRequest
+from .approve_done_request import ApproveDoneRequest
 from .approve_plan_request import ApprovePlanRequest
 from .artifact import Artifact
 from .artifact_metadata import ArtifactMetadata
@@ -11,9 +12,12 @@ from .attachment import Attachment
 from .bind_work_item_worktree_request import BindWorkItemWorktreeRequest
 from .bookmark import Bookmark
 from .cancel_work_item_run_request import CancelWorkItemRunRequest
+from .clear_daemon_request import ClearDaemonRequest
+from .clear_daemon_response import ClearDaemonResponse
 from .close_pane_request import ClosePaneRequest
 from .compatibility_response import CompatibilityResponse
 from .complete_execution_request import CompleteExecutionRequest
+from .complete_gate_request import CompleteGateRequest
 from .create_http_forward_request import CreateHTTPForwardRequest
 from .create_project_request import CreateProjectRequest
 from .create_session_request import CreateSessionRequest
@@ -27,6 +31,7 @@ from .detached_pane_pty import DetachedPanePTY
 from .detect_worktrunk_request import DetectWorktrunkRequest
 from .error_response import ErrorResponse
 from .gate_config import GateConfig
+from .gate_report import GateReport
 from .history_event import HistoryEvent
 from .http_forward import HTTPForward
 from .kill_pty_request import KillPTYRequest
@@ -67,6 +72,7 @@ from .start_execution_request import StartExecutionRequest
 from .start_pane_pty_request import StartPanePTYRequest
 from .start_planning_request import StartPlanningRequest
 from .start_pty_options import StartPTYOptions
+from .start_pty_options_env import StartPTYOptionsEnv
 from .start_work_item_run_request import StartWorkItemRunRequest
 from .started_pane_pty import StartedPanePTY
 from .status_event import StatusEvent
@@ -77,6 +83,7 @@ from .work_item import WorkItem
 from .work_item_metadata import WorkItemMetadata
 from .work_item_run import WorkItemRun
 from .work_item_run_metadata import WorkItemRunMetadata
+from .workflow_event import WorkflowEvent
 from .workflow_stage import WorkflowStage
 from .workflow_template import WorkflowTemplate
 from .worktree import Worktree
@@ -89,6 +96,7 @@ __all__ = (
     "AddPTYBookmarkRequest",
     "AddWorkItemAttachmentRequest",
     "AnswerQuestionRequest",
+    "ApproveDoneRequest",
     "ApprovePlanRequest",
     "Artifact",
     "ArtifactMetadata",
@@ -97,9 +105,12 @@ __all__ = (
     "BindWorkItemWorktreeRequest",
     "Bookmark",
     "CancelWorkItemRunRequest",
+    "ClearDaemonRequest",
+    "ClearDaemonResponse",
     "ClosePaneRequest",
     "CompatibilityResponse",
     "CompleteExecutionRequest",
+    "CompleteGateRequest",
     "CreatedSession",
     "CreatedWorktree",
     "CreateHTTPForwardRequest",
@@ -113,6 +124,7 @@ __all__ = (
     "DetectWorktrunkRequest",
     "ErrorResponse",
     "GateConfig",
+    "GateReport",
     "HistoryEvent",
     "HTTPForward",
     "KillPTYRequest",
@@ -152,11 +164,13 @@ __all__ = (
     "StartPanePTYRequest",
     "StartPlanningRequest",
     "StartPTYOptions",
+    "StartPTYOptionsEnv",
     "StartWorkItemRunRequest",
     "StatusEvent",
     "SubmitDraftPlanRequest",
     "SubmitReviewFeedbackRequest",
     "TransitionRule",
+    "WorkflowEvent",
     "WorkflowStage",
     "WorkflowTemplate",
     "WorkItem",

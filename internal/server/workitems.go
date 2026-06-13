@@ -117,6 +117,42 @@ func (s *HTTPServer) startExecution(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, run)
 }
 
+func (s *HTTPServer) queueExecution(w http.ResponseWriter, r *http.Request) {
+	var req protocol.QueueExecutionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
+	run, err := s.runtime.QueueExecution(r.Context(), app.QueueExecutionRequest{
+		WorkItemID: req.WorkItemID,
+		Actor:      req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, run)
+}
+
+func (s *HTTPServer) launchExecution(w http.ResponseWriter, r *http.Request) {
+	var req protocol.LaunchExecutionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
+	run, err := s.runtime.LaunchExecution(r.Context(), app.LaunchExecutionRequest{
+		WorkItemID:     req.WorkItemID,
+		AgentProfileID: req.AgentProfileID,
+		SystemPrompt:   req.SystemPrompt,
+		Actor:          req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, run)
+}
+
 func (s *HTTPServer) askQuestion(w http.ResponseWriter, r *http.Request) {
 	var req protocol.AskQuestionRequest
 	if !decodeJSON(w, r, &req) {
@@ -190,6 +226,79 @@ func (s *HTTPServer) submitReviewFeedback(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusCreated, artifact)
+}
+
+func (s *HTTPServer) approveDone(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ApproveDoneRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
+	item, err := s.runtime.ApproveDone(r.Context(), app.ApproveDoneRequest{
+		WorkItemID: req.WorkItemID,
+		Reason:     req.Reason,
+		Actor:      req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *HTTPServer) listArtifacts(w http.ResponseWriter, r *http.Request) {
+	artifacts, err := s.runtime.ListArtifacts(r.Context(), r.URL.Query().Get("workItemId"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, artifacts)
+}
+
+func (s *HTTPServer) listQuestions(w http.ResponseWriter, r *http.Request) {
+	questions, err := s.runtime.ListQuestions(r.Context(), r.URL.Query().Get("workItemId"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, questions)
+}
+
+func (s *HTTPServer) listGateReports(w http.ResponseWriter, r *http.Request) {
+	gates, err := s.runtime.ListGateReports(r.Context(), r.URL.Query().Get("workItemId"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, gates)
+}
+
+func (s *HTTPServer) completeGate(w http.ResponseWriter, r *http.Request) {
+	var req protocol.CompleteGateRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.ID = pathValue(r, "gateReportID", req.ID)
+	gate, err := s.runtime.CompleteGate(r.Context(), app.CompleteGateRequest{
+		ID:             req.ID,
+		Status:         req.Status,
+		OverrideReason: req.OverrideReason,
+		Actor:          req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, gate)
+}
+
+func (s *HTTPServer) listWorkflowEvents(w http.ResponseWriter, r *http.Request) {
+	events, err := s.runtime.ListWorkflowEvents(r.Context(), r.URL.Query().Get("workItemId"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, events)
 }
 
 func (s *HTTPServer) listWorkflowTemplates(w http.ResponseWriter, r *http.Request) {
@@ -346,6 +455,25 @@ func (s *HTTPServer) startWorkItemRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, run)
+}
+
+func (s *HTTPServer) launchWorkItemRun(w http.ResponseWriter, r *http.Request) {
+	var req protocol.LaunchWorkItemRunRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.ID = pathValue(r, "runID", req.ID)
+	run, err := s.runtime.LaunchWorkItemRun(r.Context(), app.LaunchWorkItemRunRequest{
+		ID:             req.ID,
+		AgentProfileID: req.AgentProfileID,
+		SystemPrompt:   req.SystemPrompt,
+		Actor:          req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, run)
 }
 
 func (s *HTTPServer) cancelWorkItemRun(w http.ResponseWriter, r *http.Request) {

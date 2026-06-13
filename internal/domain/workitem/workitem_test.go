@@ -212,6 +212,256 @@ func TestDeleteWorkItemRemovesItemButReturnsHistory(t *testing.T) {
 	}
 }
 
+func TestDeleteWorkItemRemovesOwnedWorkflowRecords(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", "proj_01")
+	other := mustWorkItem(t, state, "wi_02", "proj_01")
+
+	run, err := state.StartPlanning(StartPlanning{
+		ID:           "run_01",
+		HistoryID:    "hist_run_01",
+		RunHistoryID: "run_hist_01",
+		WorkItemID:   item.ID,
+		SessionID:    "sess_01",
+		PTYID:        "pty_01",
+		Actor:        "agent",
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	if _, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "artifact_01",
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Title:      "Plan",
+		Body:       "Test then implement.",
+		Actor:      "agent",
+		Now:        now,
+	}); err != nil {
+		t.Fatalf("submit plan: %v", err)
+	}
+	if _, err := state.AskQuestion(AskQuestion{
+		ID:         "question_01",
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Prompt:     "Which branch?",
+		Actor:      "agent",
+		Now:        now,
+	}); err != nil {
+		t.Fatalf("ask question: %v", err)
+	}
+	if _, err := state.ReportStatus(ReportStatus{
+		ID:           "status_01",
+		RunHistoryID: "run_hist_status_01",
+		Kind:         StatusKindQuestion,
+		Message:      "Need input.",
+		Actor:        "agent",
+		RunID:        run.ID,
+		Now:          now,
+	}); err != nil {
+		t.Fatalf("report status: %v", err)
+	}
+	if _, err := state.StartPlanning(StartPlanning{
+		ID:           "run_other",
+		HistoryID:    "hist_run_other",
+		RunHistoryID: "run_hist_other",
+		WorkItemID:   other.ID,
+		Actor:        "agent",
+		Now:          now,
+	}); err != nil {
+		t.Fatalf("start other planning: %v", err)
+	}
+
+	if _, err := state.DeleteWorkItem(DeleteWorkItem{
+		ID:        item.ID,
+		HistoryID: "hist_delete_01",
+		Actor:     "user",
+		Now:       now,
+	}); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	if got := state.ListRuns(item.ID); len(got) != 0 {
+		t.Fatalf("runs remain = %#v", got)
+	}
+	if got := state.ListArtifacts(item.ID); len(got) != 0 {
+		t.Fatalf("artifacts remain = %#v", got)
+	}
+	if got := state.ListQuestions(item.ID); len(got) != 0 {
+		t.Fatalf("questions remain = %#v", got)
+	}
+	if got := state.ListWorkflowEvents(item.ID); len(got) != 0 {
+		t.Fatalf("workflow events remain = %#v", got)
+	}
+	if got := state.ListStatusEvents(ListStatusEvents{WorkItemID: item.ID}); len(got) != 0 {
+		t.Fatalf("status events remain = %#v", got)
+	}
+	if got := state.ListRuns(other.ID); len(got) != 1 || got[0].ID != "run_other" {
+		t.Fatalf("other runs = %#v", got)
+	}
+}
+
+func TestPlanPromptTellsAgentToSubmitDraftPlan(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", "proj_01")
+
+	run, err := state.StartPlanning(StartPlanning{
+		ID:           "run_01",
+		HistoryID:    "hist_run_01",
+		RunHistoryID: "run_hist_01",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	if !strings.Contains(run.PromptSnapshot, "${WHISK_CLI:-whisk} workflow submit-plan") ||
+		!strings.Contains(run.PromptSnapshot, "-body '<plan markdown>'") ||
+		!strings.Contains(run.PromptSnapshot, "Do not treat the plan as complete") {
+		t.Fatalf("prompt snapshot = %q", run.PromptSnapshot)
+	}
+}
+
+func TestSnapshotLoadRefreshesBuiltinPromptTemplates(t *testing.T) {
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	base := NewState()
+	project := mustProject(t, base, "proj_01", "One")
+	oldPlan := PromptTemplate{
+		ID:        PromptTemplatePlan,
+		Name:      "Plan",
+		Source:    "builtin",
+		Body:      "Plan the work item.",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	custom := PromptTemplate{
+		ID:        "custom",
+		Name:      "Custom",
+		Source:    "user",
+		Body:      "Keep this custom prompt.",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	restored, err := NewStateFromSnapshot(Snapshot{
+		Projects:        []Project{project},
+		PromptTemplates: []PromptTemplate{oldPlan, custom},
+	})
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	templates := restored.ListPromptTemplates()
+	byID := map[string]PromptTemplate{}
+	for _, template := range templates {
+		byID[template.ID] = template
+	}
+	if !strings.Contains(byID[PromptTemplatePlan].Body, "${WHISK_CLI:-whisk} workflow submit-plan") {
+		t.Fatalf("plan template = %q", byID[PromptTemplatePlan].Body)
+	}
+	if byID["custom"].Body != custom.Body {
+		t.Fatalf("custom template = %q", byID["custom"].Body)
+	}
+}
+
+func TestSnapshotLoadDropsWorkflowRecordsForMissingWorkItems(t *testing.T) {
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	base := NewState()
+	project := mustProject(t, base, "proj_01", "One")
+	snapshot := Snapshot{
+		Projects: []Project{project},
+		Runs: []WorkItemRun{{
+			ID:               "run_orphan",
+			WorkItemID:       "wi_missing",
+			ProjectID:        project.ID,
+			Preset:           RunPresetReader,
+			PromptTemplateID: PromptTemplatePlan,
+			PromptSnapshot:   "Plan.",
+			Status:           RunStateRunning,
+			CreatedAt:        now,
+			UpdatedAt:        now,
+			History: []RunEvent{{
+				ID:   "run_hist_01",
+				Type: RunStateRunning,
+				At:   now,
+			}},
+		}},
+		Artifacts: []Artifact{{
+			ID:         "artifact_orphan",
+			ProjectID:  project.ID,
+			WorkItemID: "wi_missing",
+			Kind:       ArtifactKindPlan,
+			Status:     ArtifactStatusDraft,
+			Body:       "Plan.",
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		}},
+		Questions: []Question{{
+			ID:         "question_orphan",
+			ProjectID:  project.ID,
+			WorkItemID: "wi_missing",
+			Prompt:     "Question?",
+			Status:     QuestionStatusOpen,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		}},
+		GateReports: []GateReport{{
+			ID:         "gate_orphan",
+			ProjectID:  project.ID,
+			WorkItemID: "wi_missing",
+			Name:       "review",
+			Status:     GateStatusPending,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		}},
+		WorkflowEvents: []WorkflowEvent{{
+			ID:         "workflow_event_orphan",
+			ProjectID:  project.ID,
+			WorkItemID: "wi_missing",
+			Type:       WorkflowEventPlanningStarted,
+			At:         now,
+		}},
+		StatusEvents: []StatusEvent{{
+			ID:         "status_orphan",
+			Scope:      StatusScopeRun,
+			Kind:       StatusKindQuestion,
+			Message:    "Need input.",
+			ProjectID:  project.ID,
+			WorkItemID: "wi_missing",
+			RunID:      "run_orphan",
+			CreatedAt:  now,
+		}},
+	}
+
+	restored, err := NewStateFromSnapshot(snapshot)
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if got := restored.ListRuns(""); len(got) != 0 {
+		t.Fatalf("runs = %#v", got)
+	}
+	if got := restored.ListArtifacts(""); len(got) != 0 {
+		t.Fatalf("artifacts = %#v", got)
+	}
+	if got := restored.ListQuestions(""); len(got) != 0 {
+		t.Fatalf("questions = %#v", got)
+	}
+	if got := restored.ListGateReports(""); len(got) != 0 {
+		t.Fatalf("gates = %#v", got)
+	}
+	if got := restored.ListWorkflowEvents(""); len(got) != 0 {
+		t.Fatalf("events = %#v", got)
+	}
+	if got := restored.ListStatusEvents(ListStatusEvents{}); len(got) != 0 {
+		t.Fatalf("status events = %#v", got)
+	}
+}
+
 func TestListsAreDeterministic(t *testing.T) {
 	state := NewState()
 	mustProject(t, state, "proj_b", "B")

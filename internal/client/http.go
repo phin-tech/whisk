@@ -47,6 +47,12 @@ func (c *HTTPClient) Compatibility(ctx context.Context) (protocol.CompatibilityR
 	return response, err
 }
 
+func (c *HTTPClient) ClearDaemon(ctx context.Context, req protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error) {
+	var response protocol.ClearDaemonResponse
+	err := c.post(ctx, "/v1/daemon/clear", req, &response)
+	return response, err
+}
+
 func (c *HTTPClient) ListSessions(ctx context.Context) ([]session.Session, error) {
 	var sessions []session.Session
 	err := c.get(ctx, "/v1/sessions", nil, &sessions)

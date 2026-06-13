@@ -126,6 +126,18 @@
   width: var(--dock-width);
 }
 
+.work-card-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.writing-vertical {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
 @media (max-width: 700px) {
   .dock-panel {
     width: calc(100vw - 36px);

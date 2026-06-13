@@ -22,6 +22,27 @@ describe.skipIf(!baseUrl)("whiskd headless TS client", () => {
     expect(data).toEqual([]);
   });
 
+  it("daemon clear resets work item state", async () => {
+    const project = await client.POST("/v1/projects", {
+      body: { name: "TS Clear", rootDir: process.cwd() },
+    });
+    expect(project.error).toBeUndefined();
+
+    const item = await client.POST("/v1/work-items", {
+      body: { projectId: project.data!.id, title: "clear me" },
+    });
+    expect(item.error).toBeUndefined();
+
+    const cleared = await client.POST("/v1/daemon/clear", { body: {} });
+    expect(cleared.error).toBeUndefined();
+    expect(cleared.data!.projectsCleared).toBeGreaterThanOrEqual(1);
+    expect(cleared.data!.workItemsCleared).toBeGreaterThanOrEqual(1);
+
+    const list = await client.GET("/v1/work-items");
+    expect(list.error).toBeUndefined();
+    expect(list.data).toEqual([]);
+  });
+
   it("work item round trip", async () => {
     const project = await client.POST("/v1/projects", {
       body: { name: "TS Integration", rootDir: process.cwd() },
@@ -107,6 +128,13 @@ describe.skipIf(!baseUrl)("whiskd headless TS client", () => {
     expect(answered.error).toBeUndefined();
     expect(answered.data!.status).toEqual("answered");
 
+    const questions = await client.GET("/v1/questions", {
+      params: { query: { workItemId: workItemId } },
+    });
+    expect(questions.error).toBeUndefined();
+    expect(questions.data).toHaveLength(1);
+    expect(questions.data![0].id).toEqual(question.data!.id);
+
     const review = await client.POST("/v1/work-items/{workItemID}/complete-execution", {
       params: { path: { workItemID: workItemId } },
       body: {
@@ -130,5 +158,58 @@ describe.skipIf(!baseUrl)("whiskd headless TS client", () => {
     });
     expect(feedback.error).toBeUndefined();
     expect(feedback.data!.kind).toEqual("feedback");
+
+    const artifacts = await client.GET("/v1/artifacts", {
+      params: { query: { workItemId: workItemId } },
+    });
+    expect(artifacts.error).toBeUndefined();
+    expect(artifacts.data!.map((artifact) => artifact.kind).sort()).toEqual(["feedback", "plan"]);
+
+    const secondReview = await client.POST("/v1/work-items/{workItemID}/complete-execution", {
+      params: { path: { workItemID: workItemId } },
+      body: {
+        workItemId: workItemId,
+        runId: execution.data!.id,
+        message: "ready after feedback",
+        actor: "vitest",
+      },
+    });
+    expect(secondReview.error).toBeUndefined();
+    expect(secondReview.data!.stageId).toEqual("review");
+
+    const gates = await client.GET("/v1/gate-reports", {
+      params: { query: { workItemId: workItemId } },
+    });
+    expect(gates.error).toBeUndefined();
+    expect(gates.data).toHaveLength(1);
+    expect(gates.data![0].blocking).toEqual(true);
+    expect(gates.data![0].status).toEqual("pending");
+
+    const blockedDone = await client.POST("/v1/work-items/{workItemID}/approve-done", {
+      params: { path: { workItemID: workItemId } },
+      body: { workItemId: workItemId, actor: "human" },
+    });
+    expect(blockedDone.data).toBeUndefined();
+    expect(blockedDone.error).toBeDefined();
+
+    const passedGate = await client.POST("/v1/gate-reports/{gateReportID}/complete", {
+      params: { path: { gateReportID: gates.data![0].id } },
+      body: { id: gates.data![0].id, status: "passed", actor: "vitest" },
+    });
+    expect(passedGate.error).toBeUndefined();
+    expect(passedGate.data!.status).toEqual("passed");
+
+    const done = await client.POST("/v1/work-items/{workItemID}/approve-done", {
+      params: { path: { workItemID: workItemId } },
+      body: { workItemId: workItemId, reason: "review gate passed", actor: "human" },
+    });
+    expect(done.error).toBeUndefined();
+    expect(done.data!.stageId).toEqual("done");
+
+    const events = await client.GET("/v1/workflow-events", {
+      params: { query: { workItemId: workItemId } },
+    });
+    expect(events.error).toBeUndefined();
+    expect(events.data!.at(-1)!.type).toEqual("done_approved");
   });
 });

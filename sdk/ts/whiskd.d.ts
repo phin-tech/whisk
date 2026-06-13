@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/v1/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listArtifacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/compat": {
         parameters: {
             query?: never;
@@ -21,6 +37,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/daemon/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear daemon-owned runtime state */
+        post: operations["clearDaemon"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/events/next": {
         parameters: {
             query?: never;
@@ -31,6 +64,38 @@ export interface paths {
         get: operations["nextEvent"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/gate-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listGateReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/gate-reports/{gateReportID}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["completeGate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -220,7 +285,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["listQuestions"];
         put?: never;
         post: operations["askQuestion"];
         delete?: never;
@@ -501,6 +566,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/work-items/{workItemID}/approve-done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approveDone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/work-items/{workItemID}/approve-plan": {
         parameters: {
             query?: never;
@@ -661,6 +742,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workflow-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listWorkflowEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workflow-templates": {
         parameters: {
             query?: never;
@@ -766,6 +863,11 @@ export interface components {
             answer: string;
             id: string;
         };
+        ApproveDoneRequest: {
+            actor?: string;
+            reason?: string;
+            workItemId: string;
+        };
         ApprovePlanRequest: {
             actor?: string;
             artifactId: string;
@@ -830,6 +932,21 @@ export interface components {
             actor?: string;
             id: string;
         };
+        ClearDaemonRequest: Record<string, never>;
+        ClearDaemonResponse: {
+            /** Format: int64 */
+            bookmarksCleared: number;
+            /** Format: int64 */
+            forwardsCleared: number;
+            /** Format: int64 */
+            projectsCleared: number;
+            /** Format: int64 */
+            ptysCleared: number;
+            /** Format: int64 */
+            sessionsCleared: number;
+            /** Format: int64 */
+            workItemsCleared: number;
+        };
         ClosePaneRequest: {
             paneId: string;
             sessionId: string;
@@ -845,6 +962,12 @@ export interface components {
             message?: string;
             runId: string;
             workItemId?: string;
+        };
+        CompleteGateRequest: {
+            actor?: string;
+            id: string;
+            overrideReason?: string;
+            status: string;
         };
         CreateHTTPForwardRequest: {
             name: string;
@@ -913,6 +1036,20 @@ export interface components {
             name: string;
             phase?: string;
             skill?: string;
+        };
+        GateReport: {
+            blocking: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            name: string;
+            overrideReason?: string;
+            projectId: string;
+            runId?: string;
+            status: string;
+            /** Format: date-time */
+            updatedAt: string;
+            workItemId: string;
         };
         HTTPForward: {
             id: string;
@@ -1153,9 +1290,14 @@ export interface components {
             workItemId: string;
         };
         StartPTYOptions: {
+            args?: string[];
             /** Format: int64 */
             cols: number;
             command?: string;
+            env?: {
+                [key: string]: string;
+            };
+            exec?: boolean;
             /** Format: int64 */
             rows: number;
         };
@@ -1270,6 +1412,17 @@ export interface components {
             updatedAt: string;
             workItemId: string;
         };
+        WorkflowEvent: {
+            actor?: string;
+            /** Format: date-time */
+            at: string;
+            id: string;
+            message?: string;
+            projectId: string;
+            runId?: string;
+            type: string;
+            workItemId?: string;
+        };
         WorkflowStage: {
             defaultPromptTemplateId?: string;
             defaultRunPreset?: string;
@@ -1329,6 +1482,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listArtifacts: {
+        parameters: {
+            query?: {
+                workItemId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getCompatibility: {
         parameters: {
             query?: never;
@@ -1345,6 +1529,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompatibilityResponse"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    clearDaemon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClearDaemonRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearDaemonResponse"];
                 };
             };
             /** @description error */
@@ -1376,6 +1593,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuntimeEvent"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listGateReports: {
+        parameters: {
+            query?: {
+                workItemId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GateReport"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    completeGate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gateReportID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteGateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GateReport"];
                 };
             };
             /** @description error */
@@ -1817,6 +2100,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listQuestions: {
+        parameters: {
+            query?: {
+                workItemId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Question"][];
+                };
             };
             /** @description error */
             default: {
@@ -2543,6 +2857,41 @@ export interface operations {
             };
         };
     };
+    approveDone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveDoneRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     approvePlan: {
         parameters: {
             query?: never;
@@ -2880,6 +3229,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkItemRun"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listWorkflowEvents: {
+        parameters: {
+            query?: {
+                workItemId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowEvent"][];
                 };
             };
             /** @description error */

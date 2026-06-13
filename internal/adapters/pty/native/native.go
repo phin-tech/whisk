@@ -48,11 +48,15 @@ func (b *Backend) Spawn(_ context.Context, req app.SpawnPTYRequest) (app.PTYReco
 	if rows <= 0 {
 		rows = 24
 	}
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "sh"
+	command := req.Command
+	args := append([]string(nil), req.Args...)
+	if command == "" {
+		command = os.Getenv("SHELL")
+		if command == "" {
+			command = "sh"
+		}
 	}
-	cmd := exec.Command(shell)
+	cmd := exec.Command(command, args...)
 	cmd.Dir = workingDir
 	if len(req.Env) > 0 {
 		cmd.Env = os.Environ()

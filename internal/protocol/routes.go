@@ -27,21 +27,26 @@ type APIQueryParam struct {
 }
 
 var (
-	apiSessionList  = []session.Session(nil)
-	apiPTYList      = []PTYInfo(nil)
-	apiBookmarkList = []ptybookmark.Bookmark(nil)
-	apiWorktreeList = []Worktree(nil)
-	apiForwardList  = []HTTPForward(nil)
-	apiProjectList  = []Project(nil)
-	apiWorkflowList = []WorkflowTemplate(nil)
-	apiPromptList   = []PromptTemplate(nil)
-	apiWorkItemList = []WorkItem(nil)
-	apiRunList      = []WorkItemRun(nil)
-	apiStatusList   = []StatusEvent(nil)
+	apiSessionList          = []session.Session(nil)
+	apiPTYList              = []PTYInfo(nil)
+	apiBookmarkList         = []ptybookmark.Bookmark(nil)
+	apiWorktreeList         = []Worktree(nil)
+	apiForwardList          = []HTTPForward(nil)
+	apiProjectList          = []Project(nil)
+	apiWorkflowTemplateList = []WorkflowTemplate(nil)
+	apiPromptList           = []PromptTemplate(nil)
+	apiWorkItemList         = []WorkItem(nil)
+	apiRunList              = []WorkItemRun(nil)
+	apiArtifactList         = []Artifact(nil)
+	apiQuestionList         = []Question(nil)
+	apiGateList             = []GateReport(nil)
+	apiWorkflowEventList    = []WorkflowEvent(nil)
+	apiStatusList           = []StatusEvent(nil)
 )
 
 var APIRoutes = []APIRoute{
 	{Method: "GET", Path: "/v1/compat", OperationID: "getCompatibility", Tag: "system", Summary: "Daemon API version and git SHA", Response: CompatibilityResponse{}},
+	{Method: "POST", Path: "/v1/daemon/clear", OperationID: "clearDaemon", Tag: "system", Summary: "Clear daemon-owned runtime state", Request: ClearDaemonRequest{}, Response: ClearDaemonResponse{}},
 
 	{Method: "GET", Path: "/v1/sessions", OperationID: "listSessions", Tag: "sessions", Response: apiSessionList},
 	{Method: "POST", Path: "/v1/sessions", OperationID: "createSession", Tag: "sessions", Request: CreateSessionRequest{}, Response: CreatedSession{}, Status: 201},
@@ -76,7 +81,7 @@ var APIRoutes = []APIRoute{
 
 	{Method: "GET", Path: "/v1/projects", OperationID: "listProjects", Tag: "workitems", Response: apiProjectList},
 	{Method: "POST", Path: "/v1/projects", OperationID: "createProject", Tag: "workitems", Request: CreateProjectRequest{}, Response: Project{}, Status: 201},
-	{Method: "GET", Path: "/v1/workflow-templates", OperationID: "listWorkflowTemplates", Tag: "workitems", Response: apiWorkflowList},
+	{Method: "GET", Path: "/v1/workflow-templates", OperationID: "listWorkflowTemplates", Tag: "workitems", Response: apiWorkflowTemplateList},
 	{Method: "GET", Path: "/v1/prompt-templates", OperationID: "listPromptTemplates", Tag: "workitems", Response: apiPromptList},
 	{Method: "GET", Path: "/v1/work-items", OperationID: "listWorkItems", Tag: "workitems", Response: apiWorkItemList, Query: []APIQueryParam{{Name: "projectId", Type: "string"}}},
 	{Method: "POST", Path: "/v1/work-items", OperationID: "createWorkItem", Tag: "workitems", Request: CreateWorkItemRequest{}, Response: WorkItem{}, Status: 201},
@@ -85,17 +90,26 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/plan-drafts", OperationID: "submitDraftPlan", Tag: "workitems", Request: SubmitDraftPlanRequest{}, Response: Artifact{}, Status: 201},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/approve-plan", OperationID: "approvePlan", Tag: "workitems", Request: ApprovePlanRequest{}, Response: WorkItem{}},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/start-execution", OperationID: "startExecution", Tag: "workitems", Request: StartExecutionRequest{}, Response: WorkItemRun{}, Status: 201},
+	{Method: "POST", Path: "/v1/work-items/{workItemID}/queue-execution", OperationID: "queueExecution", Tag: "workitems", Request: QueueExecutionRequest{}, Response: WorkItemRun{}, Status: 201},
+	{Method: "POST", Path: "/v1/work-items/{workItemID}/launch-execution", OperationID: "launchExecution", Tag: "workitems", Request: LaunchExecutionRequest{}, Response: WorkItemRun{}, Status: 201},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/complete-execution", OperationID: "completeExecutionForWorkItem", Tag: "workitems", Request: CompleteExecutionRequest{}, Response: WorkItem{}},
 	{Method: "POST", Path: "/v1/work-item-runs/{runID}/complete-execution", OperationID: "completeExecution", Tag: "workitems", Request: CompleteExecutionRequest{}, Response: WorkItem{}},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/review-feedback", OperationID: "submitReviewFeedback", Tag: "workitems", Request: SubmitReviewFeedbackRequest{}, Response: Artifact{}, Status: 201},
+	{Method: "POST", Path: "/v1/work-items/{workItemID}/approve-done", OperationID: "approveDone", Tag: "workitems", Request: ApproveDoneRequest{}, Response: WorkItem{}},
+	{Method: "GET", Path: "/v1/artifacts", OperationID: "listArtifacts", Tag: "workitems", Response: apiArtifactList, Query: []APIQueryParam{{Name: "workItemId", Type: "string"}}},
+	{Method: "GET", Path: "/v1/questions", OperationID: "listQuestions", Tag: "workitems", Response: apiQuestionList, Query: []APIQueryParam{{Name: "workItemId", Type: "string"}}},
 	{Method: "POST", Path: "/v1/questions", OperationID: "askQuestion", Tag: "workitems", Request: AskQuestionRequest{}, Response: Question{}, Status: 201},
 	{Method: "POST", Path: "/v1/questions/{questionID}/answer", OperationID: "answerQuestion", Tag: "workitems", Request: AnswerQuestionRequest{}, Response: Question{}},
+	{Method: "GET", Path: "/v1/gate-reports", OperationID: "listGateReports", Tag: "workitems", Response: apiGateList, Query: []APIQueryParam{{Name: "workItemId", Type: "string"}}},
+	{Method: "POST", Path: "/v1/gate-reports/{gateReportID}/complete", OperationID: "completeGate", Tag: "workitems", Request: CompleteGateRequest{}, Response: GateReport{}},
+	{Method: "GET", Path: "/v1/workflow-events", OperationID: "listWorkflowEvents", Tag: "workitems", Response: apiWorkflowEventList, Query: []APIQueryParam{{Name: "workItemId", Type: "string"}}},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/bind-worktree", OperationID: "bindWorkItemWorktree", Tag: "workitems", Request: BindWorkItemWorktreeRequest{}, Response: WorkItem{}},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/attachments", OperationID: "addWorkItemAttachment", Tag: "workitems", Request: AddWorkItemAttachmentRequest{}, Response: WorkItem{}, Status: 201},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/delete", OperationID: "deleteWorkItem", Tag: "workitems", Request: DeleteWorkItemRequest{}, Response: WorkItem{}},
 
 	{Method: "GET", Path: "/v1/work-item-runs", OperationID: "listWorkItemRuns", Tag: "workitems", Response: apiRunList, Query: []APIQueryParam{{Name: "workItemId", Type: "string"}}},
 	{Method: "POST", Path: "/v1/work-item-runs", OperationID: "startWorkItemRun", Tag: "workitems", Request: StartWorkItemRunRequest{}, Response: WorkItemRun{}, Status: 201},
+	{Method: "POST", Path: "/v1/work-item-runs/{runID}/launch", OperationID: "launchWorkItemRun", Tag: "workitems", Request: LaunchWorkItemRunRequest{}, Response: WorkItemRun{}},
 	{Method: "POST", Path: "/v1/work-item-runs/{runID}/cancel", OperationID: "cancelWorkItemRun", Tag: "workitems", Request: CancelWorkItemRunRequest{}, Response: WorkItemRun{}},
 	{Method: "POST", Path: "/v1/status", OperationID: "reportStatus", Tag: "workitems", Request: ReportStatusRequest{}, Response: ReportStatusResponse{}, Status: 201},
 	{Method: "GET", Path: "/v1/status-events", OperationID: "listStatusEvents", Tag: "workitems", Response: apiStatusList, Query: []APIQueryParam{

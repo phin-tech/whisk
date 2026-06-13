@@ -7,15 +7,21 @@ mapping, RFC3339 time parsing, nested arrays, and query parameters.
 import datetime as dt
 
 from whiskd_client.api.sessions import list_sessions
-from whiskd_client.api.system import get_compatibility
+from whiskd_client.api.system import clear_daemon, get_compatibility
 from whiskd_client.api.workitems import (
     answer_question,
+    approve_done,
     approve_plan,
     ask_question,
+    complete_gate,
     complete_execution_for_work_item,
     create_project,
     create_work_item,
+    list_artifacts,
+    list_gate_reports,
+    list_questions,
     list_work_items,
+    list_workflow_events,
     start_execution,
     start_planning,
     submit_draft_plan,
@@ -24,12 +30,17 @@ from whiskd_client.api.workitems import (
 from whiskd_client.client import Client
 from whiskd_client.models import (
     AnswerQuestionRequest,
+    ApproveDoneRequest,
     ApprovePlanRequest,
     Artifact,
     AskQuestionRequest,
+    ClearDaemonRequest,
+    ClearDaemonResponse,
+    CompleteGateRequest,
     CompleteExecutionRequest,
     CreateProjectRequest,
     CreateWorkItemRequest,
+    GateReport,
     Project,
     Question,
     StartExecutionRequest,
@@ -38,6 +49,7 @@ from whiskd_client.models import (
     SubmitReviewFeedbackRequest,
     WorkItem,
     WorkItemRun,
+    WorkflowEvent,
 )
 
 
@@ -53,6 +65,29 @@ def test_sessions_start_empty(base_url):
     client = Client(base_url=base_url)
     sessions = list_sessions.sync(client=client)
     assert sessions == []
+
+
+def test_daemon_clear_resets_work_item_state(base_url, tmp_path):
+    client = Client(base_url=base_url)
+
+    project = create_project.sync(
+        client=client,
+        body=CreateProjectRequest(name="SDK Clear", root_dir=str(tmp_path)),
+    )
+    assert isinstance(project, Project), f"unexpected: {project!r}"
+
+    item = create_work_item.sync(
+        client=client,
+        body=CreateWorkItemRequest(project_id=project.id, title="clear me"),
+    )
+    assert isinstance(item, WorkItem), f"unexpected: {item!r}"
+
+    cleared = clear_daemon.sync(client=client, body=ClearDaemonRequest())
+    assert isinstance(cleared, ClearDaemonResponse), f"unexpected: {cleared!r}"
+    assert cleared.projects_cleared >= 1
+    assert cleared.work_items_cleared >= 1
+
+    assert list_work_items.sync(client=client) == []
 
 
 def test_work_item_round_trip(base_url, tmp_path):
@@ -157,6 +192,11 @@ def test_workflow_round_trip(base_url, tmp_path):
     assert answered.status == "answered"
     assert answered.answer == "Use the current branch."
 
+    questions = list_questions.sync(client=client, work_item_id=item.id)
+    assert isinstance(questions, list), f"unexpected: {questions!r}"
+    assert len(questions) == 1
+    assert questions[0].id == question.id
+
     review = complete_execution_for_work_item.sync(
         item.id,
         client=client,
@@ -182,3 +222,56 @@ def test_workflow_round_trip(base_url, tmp_path):
     )
     assert isinstance(feedback, Artifact), f"unexpected: {feedback!r}"
     assert feedback.kind == "feedback"
+
+    artifacts = list_artifacts.sync(client=client, work_item_id=item.id)
+    assert isinstance(artifacts, list), f"unexpected: {artifacts!r}"
+    assert sorted(a.kind for a in artifacts) == ["feedback", "plan"]
+
+    review = complete_execution_for_work_item.sync(
+        item.id,
+        client=client,
+        body=CompleteExecutionRequest(
+            work_item_id=item.id,
+            run_id=execution.id,
+            message="ready after feedback",
+            actor="pytest",
+        ),
+    )
+    assert isinstance(review, WorkItem), f"unexpected: {review!r}"
+    assert review.stage_id == "review"
+
+    gates = list_gate_reports.sync(client=client, work_item_id=item.id)
+    assert isinstance(gates, list), f"unexpected: {gates!r}"
+    assert len(gates) == 1
+    gate = gates[0]
+    assert isinstance(gate, GateReport)
+    assert gate.blocking is True
+    assert gate.status == "pending"
+
+    blocked_done = approve_done.sync_detailed(
+        item.id,
+        client=client,
+        body=ApproveDoneRequest(work_item_id=item.id, actor="human"),
+    )
+    assert blocked_done.status_code == 400
+
+    passed_gate = complete_gate.sync(
+        gate.id,
+        client=client,
+        body=CompleteGateRequest(id=gate.id, status="passed", actor="pytest"),
+    )
+    assert isinstance(passed_gate, GateReport), f"unexpected: {passed_gate!r}"
+    assert passed_gate.status == "passed"
+
+    done = approve_done.sync(
+        item.id,
+        client=client,
+        body=ApproveDoneRequest(work_item_id=item.id, reason="review gate passed", actor="human"),
+    )
+    assert isinstance(done, WorkItem), f"unexpected: {done!r}"
+    assert done.stage_id == "done"
+
+    events = list_workflow_events.sync(client=client, work_item_id=item.id)
+    assert isinstance(events, list), f"unexpected: {events!r}"
+    assert all(isinstance(event, WorkflowEvent) for event in events)
+    assert events[-1].type_ == "done_approved"

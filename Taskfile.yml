@@ -145,6 +145,19 @@ tasks:
     cmds:
       - sh scripts/smoke-agent.sh
 
+  dev:seed:workitems:
+    desc: Resets and reseeds the dev daemon with UAT work items
+    summary: |
+      Clears UAT seed work items and creates examples across Backlog, Planning,
+      Ready, Execution, Review, Done, and Blocked. Optionally pass a
+      port/address/URL, for example: task dev:seed:workitems -- 8877
+    deps:
+      - build:cli
+    cmds:
+      - sh scripts/dev-seed-workitems.sh {{.CLI_ARGS}}
+    env:
+      WHISKD_DEV_ADDR: "{{.DEV_DAEMON_ADDR}}"
+
   integration:test:
     desc: Runs pytest black-box integration tests against a real whisk daemon
     summary: Builds the CLI, then runs the isolated uv pytest suite in tests/integration

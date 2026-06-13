@@ -14,7 +14,7 @@ import (
 
 func runWorkflow(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk workflow <start-planning|submit-plan|approve-plan|start-execution|complete-execution|feedback>")
+		return fmt.Errorf("usage: whisk workflow <start-planning|submit-plan|approve-plan|start-execution|complete-execution|feedback|approve-done|artifacts|events>")
 	}
 	switch args[0] {
 	case "start-planning":
@@ -29,8 +29,14 @@ func runWorkflow(args []string) error {
 		return runWorkflowCompleteExecution(args[1:])
 	case "feedback":
 		return runWorkflowFeedback(args[1:])
+	case "approve-done":
+		return runWorkflowApproveDone(args[1:])
+	case "artifacts":
+		return runWorkflowArtifacts(args[1:])
+	case "events":
+		return runWorkflowEvents(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk workflow <start-planning|submit-plan|approve-plan|start-execution|complete-execution|feedback>")
+		return fmt.Errorf("usage: whisk workflow <start-planning|submit-plan|approve-plan|start-execution|complete-execution|feedback|approve-done|artifacts|events>")
 	}
 }
 
@@ -179,18 +185,186 @@ func runWorkflowFeedback(args []string) error {
 	return printMaybeJSON(artifact, *outputJSON)
 }
 
-func runQuestion(args []string) error {
+func runWorkflowApproveDone(args []string) error {
+	flags := workflowFlagSet("workflow approve-done")
+	baseURL, outputJSON, workItemID, actor := workflowCommonFlags(flags)
+	reason := flags.String("reason", "", "approval reason")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 || *workItemID == "" {
+		return fmt.Errorf("usage: whisk workflow approve-done [-work-item id] [-reason text] [-actor actor] [-json] [-url url]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	item, err := client.NewHTTP(*baseURL, nil).ApproveDone(ctx, protocol.ApproveDoneRequest{
+		WorkItemID: *workItemID,
+		Reason:     *reason,
+		Actor:      *actor,
+	})
+	if err != nil {
+		return err
+	}
+	return printMaybeJSON(item, *outputJSON)
+}
+
+func runWorkflowArtifacts(args []string) error {
+	flags := workflowFlagSet("workflow artifacts")
+	baseURL, outputJSON, workItemID, _ := workflowCommonFlags(flags)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: whisk workflow artifacts [-work-item id] [-json] [-url url]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	artifacts, err := client.NewHTTP(*baseURL, nil).ListArtifacts(ctx, *workItemID)
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(artifacts)
+	}
+	for _, artifact := range artifacts {
+		fmt.Printf("%s\t%s\t%s\t%s\n", artifact.ID, artifact.WorkItemID, artifact.Kind, artifact.Status)
+	}
+	return nil
+}
+
+func runWorkflowEvents(args []string) error {
+	flags := workflowFlagSet("workflow events")
+	baseURL, outputJSON, workItemID, _ := workflowCommonFlags(flags)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: whisk workflow events [-work-item id] [-json] [-url url]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	events, err := client.NewHTTP(*baseURL, nil).ListWorkflowEvents(ctx, *workItemID)
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(events)
+	}
+	for _, event := range events {
+		fmt.Printf("%s\t%s\t%s\t%s\n", event.ID, event.WorkItemID, event.Type, event.Actor)
+	}
+	return nil
+}
+
+func runGate(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk question <ask|answer>")
+		return fmt.Errorf("usage: whisk gate <list|complete>")
 	}
 	switch args[0] {
+	case "list":
+		return runGateList(args[1:])
+	case "complete":
+		return runGateComplete(args[1:])
+	default:
+		return fmt.Errorf("usage: whisk gate <list|complete>")
+	}
+}
+
+func runGateList(args []string) error {
+	flags := workflowFlagSet("gate list")
+	baseURL, outputJSON, workItemID, _ := workflowCommonFlags(flags)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: whisk gate list [-work-item id] [-json] [-url url]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	gates, err := client.NewHTTP(*baseURL, nil).ListGateReports(ctx, *workItemID)
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(gates)
+	}
+	for _, gate := range gates {
+		fmt.Printf("%s\t%s\t%s\t%t\n", gate.ID, gate.WorkItemID, gate.Status, gate.Blocking)
+	}
+	return nil
+}
+
+func runGateComplete(args []string) error {
+	flags := workflowFlagSet("gate complete")
+	baseURL, outputJSON, _, actor := workflowCommonFlags(flags)
+	status := flags.String("status", "", "gate status: passed, failed, or overridden")
+	overrideReason := flags.String("override-reason", "", "reason required when status is overridden")
+	gateID := ""
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		gateID = args[0]
+		args = args[1:]
+	}
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if gateID == "" && flags.NArg() == 1 {
+		gateID = flags.Arg(0)
+	}
+	if flags.NArg() > 1 || gateID == "" || *status == "" {
+		return fmt.Errorf("usage: whisk gate complete <gate-report-id> -status <passed|failed|overridden> [-override-reason text] [-actor actor] [-json] [-url url]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	gate, err := client.NewHTTP(*baseURL, nil).CompleteGate(ctx, protocol.CompleteGateRequest{
+		ID:             gateID,
+		Status:         *status,
+		OverrideReason: *overrideReason,
+		Actor:          *actor,
+	})
+	if err != nil {
+		return err
+	}
+	return printMaybeJSON(gate, *outputJSON)
+}
+
+func runQuestion(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: whisk question <list|ask|answer>")
+	}
+	switch args[0] {
+	case "list":
+		return runQuestionList(args[1:])
 	case "ask":
 		return runQuestionAsk(args[1:])
 	case "answer":
 		return runQuestionAnswer(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk question <ask|answer>")
+		return fmt.Errorf("usage: whisk question <list|ask|answer>")
 	}
+}
+
+func runQuestionList(args []string) error {
+	flags := workflowFlagSet("question list")
+	baseURL, outputJSON, workItemID, _ := workflowCommonFlags(flags)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: whisk question list [-work-item id] [-json] [-url url]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	questions, err := client.NewHTTP(*baseURL, nil).ListQuestions(ctx, *workItemID)
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(questions)
+	}
+	for _, question := range questions {
+		fmt.Printf("%s\t%s\t%s\n", question.ID, question.WorkItemID, question.Status)
+	}
+	return nil
 }
 
 func runQuestionAsk(args []string) error {

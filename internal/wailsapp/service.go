@@ -22,6 +22,10 @@ func NewService(runtimeClient client.RuntimeClient) *Service {
 	return service
 }
 
+func (s *Service) ClearDaemon(ctx context.Context, req protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error) {
+	return s.client.ClearDaemon(ctx, req)
+}
+
 func (s *Service) ListSessions(ctx context.Context) ([]session.Session, error) {
 	return s.client.ListSessions(ctx)
 }
@@ -142,6 +146,46 @@ func (s *Service) MoveWorkItem(ctx context.Context, req protocol.MoveWorkItemReq
 	return s.client.MoveWorkItem(ctx, req)
 }
 
+func (s *Service) StartPlanning(ctx context.Context, req protocol.StartPlanningRequest) (protocol.WorkItemRun, error) {
+	return s.client.StartPlanning(ctx, req)
+}
+
+func (s *Service) SubmitDraftPlan(ctx context.Context, req protocol.SubmitDraftPlanRequest) (protocol.Artifact, error) {
+	return s.client.SubmitDraftPlan(ctx, req)
+}
+
+func (s *Service) ApprovePlan(ctx context.Context, req protocol.ApprovePlanRequest) (protocol.WorkItem, error) {
+	return s.client.ApprovePlan(ctx, req)
+}
+
+func (s *Service) StartExecution(ctx context.Context, req protocol.StartExecutionRequest) (protocol.WorkItemRun, error) {
+	return s.client.StartExecution(ctx, req)
+}
+
+func (s *Service) QueueExecution(ctx context.Context, req protocol.QueueExecutionRequest) (protocol.WorkItemRun, error) {
+	return s.client.QueueExecution(ctx, req)
+}
+
+func (s *Service) LaunchExecution(ctx context.Context, req protocol.LaunchExecutionRequest) (protocol.WorkItemRun, error) {
+	return s.client.LaunchExecution(ctx, req)
+}
+
+func (s *Service) AskQuestion(ctx context.Context, req protocol.AskQuestionRequest) (protocol.Question, error) {
+	return s.client.AskQuestion(ctx, req)
+}
+
+func (s *Service) AnswerQuestion(ctx context.Context, req protocol.AnswerQuestionRequest) (protocol.Question, error) {
+	return s.client.AnswerQuestion(ctx, req)
+}
+
+func (s *Service) CompleteExecution(ctx context.Context, req protocol.CompleteExecutionRequest) (protocol.WorkItem, error) {
+	return s.client.CompleteExecution(ctx, req)
+}
+
+func (s *Service) SubmitReviewFeedback(ctx context.Context, req protocol.SubmitReviewFeedbackRequest) (protocol.Artifact, error) {
+	return s.client.SubmitReviewFeedback(ctx, req)
+}
+
 func (s *Service) BindWorkItemWorktree(ctx context.Context, req protocol.BindWorkItemWorktreeRequest) (protocol.WorkItem, error) {
 	return s.client.BindWorkItemWorktree(ctx, req)
 }
@@ -162,8 +206,36 @@ func (s *Service) StartWorkItemRun(ctx context.Context, req protocol.StartWorkIt
 	return s.client.StartWorkItemRun(ctx, req)
 }
 
+func (s *Service) LaunchWorkItemRun(ctx context.Context, req protocol.LaunchWorkItemRunRequest) (protocol.WorkItemRun, error) {
+	return s.client.LaunchWorkItemRun(ctx, req)
+}
+
 func (s *Service) CancelWorkItemRun(ctx context.Context, req protocol.CancelWorkItemRunRequest) (protocol.WorkItemRun, error) {
 	return s.client.CancelWorkItemRun(ctx, req)
+}
+
+func (s *Service) ApproveDone(ctx context.Context, req protocol.ApproveDoneRequest) (protocol.WorkItem, error) {
+	return s.client.ApproveDone(ctx, req)
+}
+
+func (s *Service) ListArtifacts(ctx context.Context, workItemID string) ([]protocol.Artifact, error) {
+	return s.client.ListArtifacts(ctx, workItemID)
+}
+
+func (s *Service) ListQuestions(ctx context.Context, workItemID string) ([]protocol.Question, error) {
+	return s.client.ListQuestions(ctx, workItemID)
+}
+
+func (s *Service) ListGateReports(ctx context.Context, workItemID string) ([]protocol.GateReport, error) {
+	return s.client.ListGateReports(ctx, workItemID)
+}
+
+func (s *Service) CompleteGate(ctx context.Context, req protocol.CompleteGateRequest) (protocol.GateReport, error) {
+	return s.client.CompleteGate(ctx, req)
+}
+
+func (s *Service) ListWorkflowEvents(ctx context.Context, workItemID string) ([]protocol.WorkflowEvent, error) {
+	return s.client.ListWorkflowEvents(ctx, workItemID)
 }
 
 func (s *Service) ReportStatus(ctx context.Context, req protocol.ReportStatusRequest) (protocol.ReportStatusResponse, error) {

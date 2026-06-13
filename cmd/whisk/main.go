@@ -44,7 +44,7 @@ func defaultRunDeps() runDeps {
 
 func runWithDeps(args []string, deps runDeps) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|workflow|question|status>")
+		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|workflow|question|gate|status>")
 	}
 	switch args[0] {
 	case "daemon":
@@ -63,16 +63,18 @@ func runWithDeps(args []string, deps runDeps) error {
 		return runWorkflow(args[1:])
 	case "question":
 		return runQuestion(args[1:])
+	case "gate":
+		return runGate(args[1:])
 	case "status":
 		return runStatus(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|workflow|question|status>")
+		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|workflow|question|gate|status>")
 	}
 }
 
 func runDaemon(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: whisk daemon <run|start|stop|status> [-url http://127.0.0.1:8787]")
+		return fmt.Errorf("usage: whisk daemon <run|start|stop|status|clear> [-url http://127.0.0.1:8787]")
 	}
 	if args[0] == "run" {
 		return runDaemonRun(args[1:])
@@ -81,6 +83,7 @@ func runDaemon(args []string) error {
 	flags := flag.NewFlagSet("daemon "+args[0], flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
 	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	yes := flags.Bool("yes", false, "confirm clearing daemon-owned runtime state")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -103,6 +106,24 @@ func runDaemon(args []string) error {
 		return nil
 	case "stop":
 		return stop(ctx, *baseURL)
+	case "clear":
+		if !*yes {
+			return fmt.Errorf("daemon clear requires -yes")
+		}
+		cleared, err := client.NewHTTP(*baseURL, nil).ClearDaemon(ctx, protocol.ClearDaemonRequest{})
+		if err != nil {
+			return err
+		}
+		fmt.Printf(
+			"cleared daemon state: sessions=%d ptys=%d bookmarks=%d projects=%d workItems=%d forwards=%d\n",
+			cleared.SessionsCleared,
+			cleared.PTYsCleared,
+			cleared.BookmarksCleared,
+			cleared.ProjectsCleared,
+			cleared.WorkItemsCleared,
+			cleared.ForwardsCleared,
+		)
+		return nil
 	default:
 		return fmt.Errorf("unknown daemon command %q", args[0])
 	}

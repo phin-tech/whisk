@@ -6,31 +6,50 @@
     PTYInfo,
     RuntimeEvent,
     StatusEvent,
+    Artifact,
+    GateReport,
+    Question,
     WorkItem,
     WorkItemRun,
+    WorkflowEvent,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
     AddWorkItemAttachment,
+    AnswerQuestion,
+    ApproveDone,
+    ApprovePlan,
+    AskQuestion,
     BindWorkItemWorktree,
     CancelWorkItemRun,
     CloseSession,
+    CompleteExecution,
+    CompleteGate,
     CreateProject,
     CreateSession,
     CreateWorkItem,
     CreateWorktree,
     DeleteWorkItem,
+    ListArtifacts,
+    ListGateReports,
     ListPTYs,
     ListProjects,
+    ListQuestions,
     ListSessions,
     ListStatusEvents,
     ListWorkItemRuns,
     ListWorkItems,
+    ListWorkflowEvents,
+    LaunchExecution,
+    LaunchWorkItemRun,
     MarkStatusEventRead,
     MoveWorkItem,
     NextEvent,
     Output,
+    QueueExecution,
     SplitPane,
-    StartWorkItemRun,
+    StartPlanning,
+    SubmitDraftPlan,
+    SubmitReviewFeedback,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
   import LayoutView from "./LayoutView.svelte";
@@ -53,6 +72,10 @@
   let projects: Project[] = [];
   let workItems: WorkItem[] = [];
   let workItemRuns: WorkItemRun[] = [];
+  let artifacts: Artifact[] = [];
+  let questions: Question[] = [];
+  let gateReports: GateReport[] = [];
+  let workflowEvents: WorkflowEvent[] = [];
   let statusEvents: StatusEvent[] = [];
   let activeSessionId = "";
   let activePaneId = "";
@@ -72,7 +95,8 @@
   let loadingStatusEvents = false;
   let outputChunks: Record<string, string[]> = {};
   let offsets: Record<string, number> = {};
-  let reconcileTimer: number | undefined;
+  let outputReconcileTimer: number | undefined;
+  let workReconcileTimer: number | undefined;
   let eventLoopRunning = false;
   let settingsLoaded = false;
   let stopped = false;
@@ -156,8 +180,7 @@
       if (activeProjectId && !projects.some((project) => project.id === activeProjectId)) {
         activeProjectId = projects[0]?.id ?? "";
       }
-      await refreshWorkItems();
-      await refreshWorkItemRuns();
+      await refreshWorkState();
     } finally {
       loadingWork = false;
     }
@@ -173,6 +196,41 @@
 
   async function refreshWorkItemRuns() {
     workItemRuns = await ListWorkItemRuns("");
+  }
+
+  async function refreshWorkflowRecords() {
+    if (!activeProjectId) {
+      artifacts = [];
+      questions = [];
+      gateReports = [];
+      workflowEvents = [];
+      return;
+    }
+    const [nextArtifacts, nextQuestions, nextGates, nextEvents] = await Promise.all([
+      ListArtifacts(""),
+      ListQuestions(""),
+      ListGateReports(""),
+      ListWorkflowEvents(""),
+    ]);
+    artifacts = nextArtifacts;
+    questions = nextQuestions;
+    gateReports = nextGates;
+    workflowEvents = nextEvents;
+  }
+
+  async function refreshWorkState() {
+    await refreshWorkItems();
+    await refreshWorkItemRuns();
+    await refreshWorkflowRecords();
+  }
+
+  async function refreshVisibleWorkState() {
+    if (activeMain !== "work" && activeSidebar !== "work") return;
+    await Promise.all([
+      refreshSessions(),
+      refreshPTYs(),
+      activeProjectId ? refreshWorkState() : Promise.resolve(),
+    ]);
   }
 
   async function refreshStatusEvents() {
@@ -286,7 +344,7 @@
     if (targets.ptys) await refreshPTYs();
     if (targets.outputPtyId) await refreshOutput(targets.outputPtyId);
     if (targets.statusEvents) await refreshStatusEvents();
-    if (targets.work) await refreshProjects();
+    if (targets.work) await refreshWorkState();
   }
 
   async function runEventLoop() {
@@ -316,7 +374,7 @@
   function selectProject(projectId: string) {
     activeMain = "work";
     activeProjectId = projectId;
-    void Promise.all([refreshWorkItems(), refreshWorkItemRuns()]).catch((err) => {
+    void refreshWorkState().catch((err) => {
       error = backendError(err);
     });
   }
@@ -334,9 +392,33 @@
     try {
       await MarkStatusEventRead({ id: event.id });
       await refreshStatusEvents();
+      if (target.main === "work") await refreshWorkState();
       if (target.main === "session") await refreshVisibleOutput();
     } catch (err) {
       error = backendError(err);
+    }
+  }
+
+  async function openWorkItemRun(run: WorkItemRun) {
+    try {
+      const nextSessions = await ListSessions();
+      sessions = nextSessions;
+      const target = targetForStatusEvent(
+        {
+          id: run.id,
+          kind: "run",
+          sessionId: run.sessionId,
+          ptyId: run.ptyId,
+        },
+        nextSessions,
+      );
+      activeMain = "session";
+      activeSidebar = "sessions";
+      if (target.sessionId) activeSessionId = target.sessionId;
+      if (target.paneId) activePaneId = target.paneId;
+      if (run.ptyId) await refreshOutput(run.ptyId);
+    } catch (err) {
+      error = `Open run failed: ${backendError(err)}`;
     }
   }
 
@@ -379,8 +461,7 @@
         title: request.title,
         bodyMarkdown: request.bodyMarkdown,
       });
-      await refreshWorkItems();
-      await refreshWorkItemRuns();
+      await refreshWorkState();
     } catch (err) {
       error = `Create work item failed: ${backendError(err)}`;
     } finally {
@@ -393,8 +474,7 @@
     loadingWork = true;
     try {
       await MoveWorkItem({ id: workItemId, stageId });
-      await refreshWorkItems();
-      await refreshWorkItemRuns();
+      await refreshWorkState();
     } catch (err) {
       error = `Move work item failed: ${backendError(err)}`;
       await refreshWorkItems().catch(() => undefined);
@@ -425,8 +505,7 @@
         branch: request.branch,
         worktreePath: created.path,
       });
-      await refreshWorkItems();
-      await refreshWorkItemRuns();
+      await refreshWorkState();
     } catch (err) {
       error = `Generate worktree failed: ${backendError(err)}`;
     } finally {
@@ -444,8 +523,7 @@
         scope: "external",
         path,
       });
-      await refreshWorkItems();
-      await refreshWorkItemRuns();
+      await refreshWorkState();
     } catch (err) {
       error = `Attach file failed: ${backendError(err)}`;
     } finally {
@@ -458,35 +536,9 @@
     loadingWork = true;
     try {
       await DeleteWorkItem({ id: workItemId });
-      await refreshWorkItems();
-      await refreshWorkItemRuns();
+      await refreshWorkState();
     } catch (err) {
       error = `Delete work item failed: ${backendError(err)}`;
-    } finally {
-      loadingWork = false;
-    }
-  }
-
-  async function startWorkItemRun(request: {
-    workItemId: string;
-    preset: string;
-    promptTemplateId: string;
-    agentProfileId: string;
-  }) {
-    error = "";
-    loadingWork = true;
-    try {
-      await StartWorkItemRun({
-        workItemId: request.workItemId,
-        preset: request.preset,
-        promptTemplateId: request.promptTemplateId,
-        launch: true,
-        agentProfileId: request.agentProfileId,
-      });
-      await refreshWorkItems();
-      await refreshWorkItemRuns();
-    } catch (err) {
-      error = `Start run failed: ${backendError(err)}`;
     } finally {
       loadingWork = false;
     }
@@ -497,10 +549,171 @@
     loadingWork = true;
     try {
       await CancelWorkItemRun({ id: runId });
-      await refreshWorkItems();
-      await refreshWorkItemRuns();
+      await refreshWorkState();
     } catch (err) {
       error = `Cancel run failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function launchWorkItemRun(runId: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await LaunchWorkItemRun({ id: runId });
+      await refreshWorkState();
+      await refreshSessions();
+      await refreshPTYs();
+    } catch (err) {
+      error = `Launch run failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function startPlanning(workItemId: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await StartPlanning({ workItemId, launch: true });
+      await refreshWorkState();
+      await refreshSessions();
+      await refreshPTYs();
+    } catch (err) {
+      error = `Start planning failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function submitPlan(request: { workItemId: string; runId: string; title: string; body: string }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await SubmitDraftPlan(request);
+      await refreshWorkState();
+    } catch (err) {
+      error = `Submit plan failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function approvePlan(workItemId: string, artifactId: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await ApprovePlan({ workItemId, artifactId });
+      await refreshWorkState();
+    } catch (err) {
+      error = `Approve plan failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function queueExecution(workItemId: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await QueueExecution({ workItemId });
+      await refreshWorkState();
+    } catch (err) {
+      error = `Queue execution failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function launchExecution(workItemId: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await LaunchExecution({ workItemId });
+      await refreshWorkState();
+      await refreshSessions();
+      await refreshPTYs();
+    } catch (err) {
+      error = `Launch execution failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function completeExecution(request: { workItemId: string; runId: string; message: string }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await CompleteExecution(request);
+      await refreshWorkState();
+    } catch (err) {
+      error = `Complete execution failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function submitReviewFeedback(request: { workItemId: string; runId: string; body: string }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await SubmitReviewFeedback(request);
+      await refreshWorkState();
+    } catch (err) {
+      error = `Submit feedback failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function askQuestion(request: { workItemId: string; runId: string; prompt: string }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await AskQuestion(request);
+      await refreshWorkState();
+    } catch (err) {
+      error = `Ask question failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function answerQuestion(questionId: string, answer: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await AnswerQuestion({ id: questionId, answer });
+      await refreshWorkState();
+    } catch (err) {
+      error = `Answer question failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function completeGate(request: { id: string; status: string; overrideReason: string }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await CompleteGate(request);
+      await refreshWorkState();
+    } catch (err) {
+      error = `Complete gate failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function approveDone(workItemId: string, reason: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await ApproveDone({ workItemId, reason });
+      await refreshWorkState();
+    } catch (err) {
+      error = `Approve done failed: ${backendError(err)}`;
     } finally {
       loadingWork = false;
     }
@@ -525,7 +738,12 @@
   }
 
   function toggleSidebar(id: SidebarId) {
-    if (id === "work") activeMain = "work";
+    if (id === "work") {
+      activeMain = "work";
+      void refreshVisibleWorkState().catch((err) => {
+        error = backendError(err);
+      });
+    }
     if (id === "sessions" || id === "ptys") activeMain = "session";
     activeSidebar = activeSidebar === id ? null : id;
     settingsOpen = false;
@@ -547,8 +765,13 @@
         error = backendError(err);
       });
     void runEventLoop();
-    reconcileTimer = window.setInterval(() => {
+    outputReconcileTimer = window.setInterval(() => {
       refreshVisibleOutput().catch((err) => {
+        error = backendError(err);
+      });
+    }, 2000);
+    workReconcileTimer = window.setInterval(() => {
+      refreshVisibleWorkState().catch((err) => {
         error = backendError(err);
       });
     }, 2000);
@@ -558,7 +781,8 @@
 
   onDestroy(() => {
     stopped = true;
-    if (reconcileTimer) window.clearInterval(reconcileTimer);
+    if (outputReconcileTimer) window.clearInterval(outputReconcileTimer);
+    if (workReconcileTimer) window.clearInterval(workReconcileTimer);
   });
 </script>
 
@@ -650,6 +874,10 @@
             {projects}
             {workItems}
             {workItemRuns}
+            {artifacts}
+            {questions}
+            {gateReports}
+            {workflowEvents}
             {activeProjectId}
             loading={loadingWork}
             onRefresh={() => void refreshProjects()}
@@ -660,8 +888,20 @@
             onGenerateWorktree={generateWorktree}
             onAttachFile={attachFile}
             onDeleteWorkItem={deleteWorkItem}
-            onStartRun={startWorkItemRun}
             onCancelRun={cancelWorkItemRun}
+            onLaunchRun={launchWorkItemRun}
+            onOpenRunTerminal={(run) => void openWorkItemRun(run)}
+            onStartPlanning={startPlanning}
+            onSubmitPlan={submitPlan}
+            onApprovePlan={approvePlan}
+            onQueueExecution={queueExecution}
+            onLaunchExecution={launchExecution}
+            onCompleteExecution={completeExecution}
+            onSubmitReviewFeedback={submitReviewFeedback}
+            onAskQuestion={askQuestion}
+            onAnswerQuestion={answerQuestion}
+            onCompleteGate={completeGate}
+            onApproveDone={approveDone}
           />
         {:else if activeSession}
           {#if activeSessionWindow}
@@ -673,7 +913,7 @@
               {terminalFontSize}
               {terminalCursorBlink}
               onFocus={(paneId) => (activePaneId = paneId)}
-              onInput={() => refreshVisibleOutput().catch((err) => (error = backendError(err)))}
+              onInput={(ptyId) => refreshOutput(ptyId).catch((err) => (error = backendError(err)))}
             />
           {/if}
         {:else}

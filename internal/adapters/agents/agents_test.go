@@ -34,8 +34,8 @@ func TestCodexLaunchUsesInstructionsConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildLaunch error: %v", err)
 	}
-	wantArgs := []string{"-c", "instructions=Be terse"}
-	if launch.Command != "codex" || !reflect.DeepEqual(launch.Args, wantArgs) || launch.Stdin != "Implement it" {
+	wantArgs := []string{"-c", "instructions=Be terse", "Implement it"}
+	if launch.Command != "codex" || !reflect.DeepEqual(launch.Args, wantArgs) || launch.Stdin != "" {
 		t.Fatalf("launch = %#v", launch)
 	}
 }
