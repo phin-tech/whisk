@@ -223,42 +223,14 @@ tasks:
       - task: sign:op
 
   publish:
-    desc: "Create or update the GitHub release for the current build/config.yml version"
+    desc: "Create or update the GitHub release with the verified macOS DMG"
     preconditions:
       - sh: "command -v gh >/dev/null 2>&1"
         msg: "GitHub CLI 'gh' is required"
       - sh: '[ -d "bin/Whisk.app" ]'
         msg: "bin/Whisk.app is required; run task sign first"
     cmds:
-      - |
-        set -euo pipefail
-        VERSION=$(scripts/current-version.sh)
-        TAG="v${VERSION}"
-        APP_ZIP="bin/Whisk_${VERSION}.app.zip"
-
-        ditto -c -k --sequesterRsrc --keepParent bin/Whisk.app "${APP_ZIP}"
-
-        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-        if [ -n "$PREV_TAG" ]; then
-          CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges || true)
-        else
-          CHANGELOG=$(git log --pretty=format:"- %s" --no-merges || true)
-        fi
-        if [ -z "$CHANGELOG" ]; then
-          CHANGELOG="Signed macOS Whisk build."
-        fi
-
-        PRE_FLAG=""
-        if echo "$VERSION" | grep -q '-'; then
-          PRE_FLAG="--prerelease"
-        fi
-
-        if ! gh release view "$TAG" &>/dev/null; then
-          gh release create "$TAG" --title "$TAG" --notes "$CHANGELOG" $PRE_FLAG
-        else
-          gh release edit "$TAG" --notes "$CHANGELOG" $PRE_FLAG
-        fi
-        gh release upload "$TAG" "${APP_ZIP}" --clobber
+      - task: publish:verified
 
   publish:op:
     desc: "Sign with 1Password-backed secrets, then publish the current version"
@@ -267,7 +239,7 @@ tasks:
       - task: publish
 
   publish:verified:
-    desc: "Package, verify, and upload the current signed macOS app zip"
+    desc: "Package, verify, upload, download, and re-verify the current signed macOS DMG"
     platforms: [darwin]
     preconditions:
       - sh: "command -v gh >/dev/null 2>&1"
@@ -277,37 +249,40 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        ROOT_DIR=$PWD
         VERSION=$(scripts/current-version.sh)
         TAG="v${VERSION}"
-        APP_ZIP="bin/Whisk-${TAG}-macos.zip"
-        VERIFY_DIR=$(mktemp -d)
-        CERT_DIR=$(mktemp -d)
+        APP_DMG="bin/Whisk-${TAG}-macos.dmg"
+        DOWNLOAD_DIR=$(mktemp -d)
         cleanup() {
-          rm -rf "${VERIFY_DIR}" "${CERT_DIR}"
+          rm -rf "${DOWNLOAD_DIR}"
         }
         trap cleanup EXIT
 
-        codesign --verify --deep --strict --verbose=4 bin/Whisk.app
-        spctl -a -vvv -t execute bin/Whisk.app
+        scripts/verify-macos-artifact.sh bin/Whisk.app
+        KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE:-whisk-notary}" \
+          scripts/package-notarized-dmg.sh bin/Whisk.app "${APP_DMG}"
+        scripts/verify-macos-artifact.sh "${APP_DMG}"
 
-        (
-          cd "${CERT_DIR}"
-          codesign -d --extract-certificates "${ROOT_DIR}/bin/Whisk.app" >/dev/null
-          test -e codesign0
-        )
+        shasum -a 256 "${APP_DMG}"
 
-        ditto -c -k --keepParent bin/Whisk.app "${APP_ZIP}"
-        ditto -x -k "${APP_ZIP}" "${VERIFY_DIR}"
+        PRE_FLAG=""
+        if echo "$VERSION" | grep -q '-'; then
+          PRE_FLAG="--prerelease"
+        fi
 
-        codesign --verify --deep --strict --verbose=4 "${VERIFY_DIR}/Whisk.app"
-        spctl -a -vvv -t execute "${VERIFY_DIR}/Whisk.app"
+        if ! gh release view "$TAG" --repo phin-tech/whisk >/dev/null 2>&1; then
+          gh release create "$TAG" --repo phin-tech/whisk --title "$TAG" --notes "Signed macOS Whisk build." $PRE_FLAG
+        elif [ -n "$PRE_FLAG" ]; then
+          gh release edit "$TAG" --repo phin-tech/whisk $PRE_FLAG
+        fi
 
-        shasum -a 256 "${APP_ZIP}"
-        gh release upload "${TAG}" "${APP_ZIP}" --repo phin-tech/whisk --clobber
+        gh release upload "${TAG}" "${APP_DMG}" --repo phin-tech/whisk --clobber
+        gh release download "${TAG}" --repo phin-tech/whisk --pattern "$(basename "${APP_DMG}")" --dir "${DOWNLOAD_DIR}" --clobber
+        shasum -a 256 "${DOWNLOAD_DIR}/$(basename "${APP_DMG}")"
+        scripts/verify-macos-artifact.sh "${DOWNLOAD_DIR}/$(basename "${APP_DMG}")"
 
   release:local:
-    desc: "Sign locally with 1Password, verify the macOS zip on this Mac, and upload it"
+    desc: "Sign locally with 1Password, verify the macOS DMG on this Mac, upload it, and verify the uploaded copy"
     platforms: [darwin]
     cmds:
       - task: sign:op

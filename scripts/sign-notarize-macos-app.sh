@@ -29,7 +29,7 @@ assert_embedded_certificates() {
 # Remove any stale stapled ticket before replacing the app signature.
 rm -f "${APP_PATH}/Contents/CodeResources"
 
-codesign_args=(--force --deep --options runtime --timestamp)
+codesign_args=(--force --options runtime --timestamp)
 if [ -n "${SIGN_KEYCHAIN:-}" ]; then
   codesign_args+=(--keychain "${SIGN_KEYCHAIN}")
 fi

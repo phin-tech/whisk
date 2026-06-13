@@ -5,6 +5,7 @@ set -euo pipefail
 : "${APPLE_CERTIFICATE_PASSWORD:?.p12 password required}"
 : "${RUNNER_TEMP:?RUNNER_TEMP must be set}"
 
+RUNNER_TEMP="$(cd "${RUNNER_TEMP}" && pwd -P)"
 KEYCHAIN_NAME="${RUNNER_TEMP}/whisk-build.keychain"
 KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
 CERT_PATH="${RUNNER_TEMP}/cert.p12"
@@ -29,9 +30,7 @@ security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_NAME}"
 security set-keychain-settings -lut 21600 "${KEYCHAIN_NAME}"
 security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_NAME}"
 
-EXISTING_KEYCHAINS=$(security list-keychains -d user | sed -E 's/^[[:space:]]*"?//; s/"?$//')
-# shellcheck disable=SC2086
-security list-keychains -d user -s "${KEYCHAIN_NAME}" ${EXISTING_KEYCHAINS}
+security list-keychains -d user -s "${KEYCHAIN_NAME}"
 
 security import "${APPLE_ROOT_CA_PATH}" \
   -k "${KEYCHAIN_NAME}" \
