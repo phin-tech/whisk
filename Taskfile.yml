@@ -195,6 +195,7 @@ tasks:
         msg: "APPLE_ID, APPLE_PASSWORD, and APPLE_TEAM_ID are required"
     cmds:
       - KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE:-whisk-notary}" scripts/ci-setup-notary-profile.sh
+      - task: build:cli
       - |
         KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE:-whisk-notary}"
         task darwin:sign:notarize \

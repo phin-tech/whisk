@@ -209,3 +209,26 @@ func TestSupervisorRejectsInvalidDaemonURLAndPIDFiles(t *testing.T) {
 		t.Fatalf("expected ensure URL error")
 	}
 }
+
+func TestDaemonPathCanFindBundledWhiskHelper(t *testing.T) {
+	t.Setenv("PATH", "")
+	t.Setenv("WHISKD_PATH", "")
+
+	bundleDir := t.TempDir()
+	appExecutable := filepath.Join(bundleDir, "Whisk")
+	helper := filepath.Join(bundleDir, "whisk")
+	if err := os.WriteFile(appExecutable, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write app executable: %v", err)
+	}
+	if err := os.WriteFile(helper, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write helper: %v", err)
+	}
+
+	path, err := daemon.DaemonPathForTest(appExecutable)
+	if err != nil {
+		t.Fatalf("daemon path: %v", err)
+	}
+	if path != helper {
+		t.Fatalf("daemon path = %q, want %q", path, helper)
+	}
+}

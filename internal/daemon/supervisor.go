@@ -189,15 +189,29 @@ func addrFromURL(baseURL string) (string, error) {
 }
 
 func daemonPath() (string, error) {
+	return daemonPathForExecutable("")
+}
+
+func daemonPathForExecutable(executable string) (string, error) {
 	candidates := []string{}
 	if path := os.Getenv("WHISKD_PATH"); path != "" {
 		candidates = append(candidates, path)
 	}
-	if executable, err := os.Executable(); err == nil {
+	if executable == "" {
+		if path, err := os.Executable(); err == nil {
+			executable = path
+		}
+	}
+	if executable != "" {
 		candidates = append(candidates, filepath.Join(filepath.Dir(executable), "whiskd"))
+		candidates = append(candidates, filepath.Join(filepath.Dir(executable), "whisk"))
 	}
 	candidates = append(candidates, filepath.Join("bin", "whiskd"))
+	candidates = append(candidates, filepath.Join("bin", "whisk"))
 	if path, err := exec.LookPath("whiskd"); err == nil {
+		candidates = append(candidates, path)
+	}
+	if path, err := exec.LookPath("whisk"); err == nil {
 		candidates = append(candidates, path)
 	}
 
