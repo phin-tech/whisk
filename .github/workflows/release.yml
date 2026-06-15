@@ -58,6 +58,24 @@ jobs:
           task darwin:sign:notarize \
             SIGN_IDENTITY="${APPLE_SIGNING_IDENTITY}" \
             KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE}"
+      - name: Verify bundled binaries are present and hardened-signed
+        run: |
+          set -euo pipefail
+          # Guard against the case-collision/fork-loop regression: the GUI (whisk-app) and
+          # the CLI/daemon helper (whisk) must both be bundled as distinct files and each
+          # carry a Developer ID signature with the hardened runtime.
+          for bin in whisk-app whisk; do
+            path="bin/Whisk.app/Contents/MacOS/${bin}"
+            if [ ! -f "${path}" ]; then
+              echo "missing bundled binary: ${path}" >&2
+              exit 1
+            fi
+            if ! codesign -dv --verbose=4 "${path}" 2>&1 | grep -q 'flags=.*runtime'; then
+              echo "binary is not signed with the hardened runtime: ${path}" >&2
+              codesign -dv --verbose=4 "${path}" || true
+              exit 1
+            fi
+          done
       - name: Package notarized DMG
         run: scripts/package-notarized-dmg.sh bin/Whisk.app "bin/Whisk-${{ inputs.version }}-macos.dmg"
       - name: Verify release DMG

@@ -215,7 +215,9 @@ func TestDaemonPathCanFindBundledWhiskHelper(t *testing.T) {
 	t.Setenv("WHISKD_PATH", "")
 
 	bundleDir := t.TempDir()
-	appExecutable := filepath.Join(bundleDir, "Whisk")
+	// The GUI binary is "whisk-app" and the bundled CLI/daemon helper is "whisk". These names
+	// must differ so they do not collide on case-insensitive filesystems.
+	appExecutable := filepath.Join(bundleDir, "whisk-app")
 	helper := filepath.Join(bundleDir, "whisk")
 	if err := os.WriteFile(appExecutable, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write app executable: %v", err)
@@ -230,5 +232,29 @@ func TestDaemonPathCanFindBundledWhiskHelper(t *testing.T) {
 	}
 	if path != helper {
 		t.Fatalf("daemon path = %q, want %q", path, helper)
+	}
+}
+
+// TestDaemonPathRejectsRunningExecutable guards against the fork loop: if daemon discovery
+// ever resolves to the running executable itself (e.g. a name collision aliases the GUI
+// binary into a daemon-candidate path), it must be skipped rather than relaunched.
+func TestDaemonPathRejectsRunningExecutable(t *testing.T) {
+	t.Setenv("PATH", "")
+	t.Setenv("WHISKD_PATH", "")
+
+	bundleDir := t.TempDir()
+	appExecutable := filepath.Join(bundleDir, "whisk-app")
+	if err := os.WriteFile(appExecutable, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write app executable: %v", err)
+	}
+	// Hard-link a "whisk" candidate to the same inode as the running executable. os.SameFile
+	// must detect the alias and refuse it, leaving no valid daemon path.
+	alias := filepath.Join(bundleDir, "whisk")
+	if err := os.Link(appExecutable, alias); err != nil {
+		t.Fatalf("link alias: %v", err)
+	}
+
+	if path, err := daemon.DaemonPathForTest(appExecutable); err == nil {
+		t.Fatalf("expected no daemon path, got %q", path)
 	}
 }

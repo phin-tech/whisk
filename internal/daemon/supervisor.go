@@ -215,11 +215,26 @@ func daemonPathForExecutable(executable string) (string, error) {
 		candidates = append(candidates, path)
 	}
 
+	var selfInfo os.FileInfo
+	if executable != "" {
+		if info, err := os.Stat(executable); err == nil {
+			selfInfo = info
+		}
+	}
+
 	for _, candidate := range candidates {
 		info, err := os.Stat(candidate)
-		if err == nil && !info.IsDir() {
-			return candidate, nil
+		if err != nil || info.IsDir() {
+			continue
 		}
+		// Never select the currently running executable as the daemon. macOS filesystems
+		// are case-insensitive by default, so a GUI binary ("whisk-app") and a sibling
+		// candidate path can resolve to the same file; relaunching ourselves with daemon
+		// args would fork-loop instead of starting the real daemon.
+		if selfInfo != nil && os.SameFile(selfInfo, info) {
+			continue
+		}
+		return candidate, nil
 	}
 	return "", fmt.Errorf("whisk daemon executable not found; run `task build:daemon` or set WHISKD_PATH")
 }
