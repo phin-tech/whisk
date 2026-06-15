@@ -12,6 +12,10 @@ if [ ! -d "${APP_PATH}" ]; then
   exit 1
 fi
 
+# The app must already be signed, notarized, and stapled before it is placed into the DMG,
+# so the copy inside the DMG carries its own offline ticket. Fail fast otherwise.
+xcrun stapler validate "${APP_PATH}"
+
 mkdir -p "$(dirname "${DMG_PATH}")"
 rm -f "${DMG_PATH}"
 

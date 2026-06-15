@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Optional hardened-runtime entitlements for the Whisk macOS app.
+
+  This file is NOT used by default. A Wails (WKWebView) app whose bundled `whisk` helper is
+  Developer-ID signed by the same team needs no entitlements: JS runs out-of-process, so JIT
+  exceptions are unnecessary, and same-team signing satisfies library validation.
+
+  Only enable this if a concrete `notarytool log` or runtime crash demands a specific
+  exception. To use it, set ENTITLEMENTS in build/darwin/Taskfile.yml (or pass
+  ENTITLEMENTS=build/darwin/entitlements.plist to the sign:notarize task) and uncomment the
+  exact key(s) you need below.
+-->
+<plist version="1.0">
+	<dict>
+		<!-- Allow loading libraries/plugins not signed by this team (e.g. cgo-loaded dylibs). -->
+		<!-- <key>com.apple.security.cs.disable-library-validation</key> -->
+		<!-- <true/> -->
+
+		<!-- Allow creating writable+executable memory (only if a dependency requires JIT). -->
+		<!-- <key>com.apple.security.cs.allow-jit</key> -->
+		<!-- <true/> -->
+		<!-- <key>com.apple.security.cs.allow-unsigned-executable-memory</key> -->
+		<!-- <true/> -->
+	</dict>
+</plist>
