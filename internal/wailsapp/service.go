@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/appmenu"
 	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/daemon"
@@ -21,10 +22,19 @@ type AppSettingsStore interface {
 	Save(context.Context, appsettings.Settings) (appsettings.Settings, error)
 }
 
+// MenuController is the subset of the native menu controller the service drives: it re-applies
+// accelerators and the session list to the menu bar. main.go injects the concrete
+// *appmenu.Controller; tests substitute a fake.
+type MenuController interface {
+	SetKeybindings(appsettings.Settings)
+	SetSessions([]appmenu.SessionRef)
+}
+
 type Service struct {
 	client    client.RuntimeClient
 	forwarder *client.LocalForwarder
 	settings  AppSettingsStore
+	menu      MenuController
 }
 
 func NewService(runtimeClient client.RuntimeClient) *Service {
@@ -51,6 +61,68 @@ func (s *Service) SaveAppSettings(ctx context.Context, settings appsettings.Sett
 		return appsettings.Normalize(settings)
 	}
 	return s.settings.Save(ctx, settings)
+}
+
+// AttachMenuController wires the native menu controller into the service. It is a package-level
+// function rather than a Service method so the Wails binding generator does not expose it to the
+// frontend (it takes an interface that cannot cross the JSON boundary). The service is constructed
+// before the Wails app — and therefore the menu — exists, so main.go calls this afterwards.
+func AttachMenuController(s *Service, controller MenuController) {
+	s.menu = controller
+}
+
+// LoadKeybindings returns the command registry with each command's effective accelerator for the
+// Keyboard Shortcuts panel.
+func (s *Service) LoadKeybindings(ctx context.Context) (appmenu.KeybindingsView, error) {
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return appmenu.KeybindingsView{}, err
+	}
+	return appmenu.View(settings), nil
+}
+
+// SaveKeybindings validates the proposed overrides, persists them, re-applies them to the live
+// menu, and returns the resulting effective bindings. The panel sends the full set of editable
+// bindings; only entries that differ from their default are persisted.
+func (s *Service) SaveKeybindings(ctx context.Context, overrides map[string]string) (appmenu.KeybindingsView, error) {
+	cleaned, err := appmenu.SanitizeOverrides(overrides)
+	if err != nil {
+		return appmenu.KeybindingsView{}, err
+	}
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return appmenu.KeybindingsView{}, err
+	}
+	settings.Keybindings = cleaned
+
+	saved := settings
+	if s.settings != nil {
+		saved, err = s.settings.Save(ctx, settings)
+		if err != nil {
+			return appmenu.KeybindingsView{}, err
+		}
+	}
+	if s.menu != nil {
+		s.menu.SetKeybindings(saved)
+	}
+	return appmenu.View(saved), nil
+}
+
+// SyncSessionMenu replaces the Sessions menu contents with the supplied list (in session-bar
+// order), keeping the native menu's names and Cmd+1..Cmd+0 shortcuts in step with the UI.
+func (s *Service) SyncSessionMenu(_ context.Context, sessions []appmenu.SessionRef) error {
+	if s.menu != nil {
+		s.menu.SetSessions(sessions)
+	}
+	return nil
+}
+
+// loadSettings returns persisted settings, or defaults when no store is configured.
+func (s *Service) loadSettings(ctx context.Context) (appsettings.Settings, error) {
+	if s.settings == nil {
+		return appsettings.Default(), nil
+	}
+	return s.settings.Load(ctx)
 }
 
 // DaemonStatus describes the daemon the app talks to, for the daemon preferences panel.

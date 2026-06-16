@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -21,6 +22,10 @@ type Settings struct {
 	KeepDaemonAlive          bool  `json:"keepDaemonAlive"`
 	HookLogEnabled           *bool `json:"hookLogEnabled,omitempty"`
 	ClearHookLogAfterSession bool  `json:"clearHookLogAfterSession,omitempty"`
+	// Keybindings holds user overrides for editable keyboard shortcuts, keyed by command id
+	// (e.g. "open-preferences") with an accelerator value (e.g. "Cmd+Shift+P"). Commands absent
+	// from the map use their built-in default; an empty map means all defaults.
+	Keybindings map[string]string `json:"keybindings,omitempty"`
 }
 
 type Store struct {
@@ -44,12 +49,35 @@ func Normalize(settings Settings) (Settings, error) {
 		enabled := true
 		settings.HookLogEnabled = &enabled
 	}
+	settings.Keybindings = normalizeKeybindings(settings.Keybindings)
 	switch settings.StartupView {
 	case StartupViewSessions, StartupViewKanban:
 		return settings, nil
 	default:
 		return Settings{}, fmt.Errorf("invalid startup view %q", settings.StartupView)
 	}
+}
+
+// normalizeKeybindings drops entries with a blank command id or blank accelerator and trims
+// surrounding whitespace. It returns nil when no usable overrides remain so the persisted JSON
+// omits the field entirely (the map uses the "omitempty" tag).
+func normalizeKeybindings(bindings map[string]string) map[string]string {
+	if len(bindings) == 0 {
+		return nil
+	}
+	cleaned := make(map[string]string, len(bindings))
+	for id, accelerator := range bindings {
+		id = strings.TrimSpace(id)
+		accelerator = strings.TrimSpace(accelerator)
+		if id == "" || accelerator == "" {
+			continue
+		}
+		cleaned[id] = accelerator
+	}
+	if len(cleaned) == 0 {
+		return nil
+	}
+	return cleaned
 }
 
 func DefaultPath() (string, error) {

@@ -17,6 +17,13 @@ export class Settings {
     "hookLogEnabled"?: boolean | null;
     "clearHookLogAfterSession"?: boolean;
 
+    /**
+     * Keybindings holds user overrides for editable keyboard shortcuts, keyed by command id
+     * (e.g. "open-preferences") with an accelerator value (e.g. "Cmd+Shift+P"). Commands absent
+     * from the map use their built-in default; an empty map means all defaults.
+     */
+    "keybindings"?: { [_ in string]?: string };
+
     /** Creates a new Settings instance. */
     constructor($$source: Partial<Settings> = {}) {
         if (!("startupView" in $$source)) {
@@ -33,7 +40,14 @@ export class Settings {
      * Creates a new Settings instance from a string or object.
      */
     static createFrom($$source: any = {}): Settings {
+        const $$createField4_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("keybindings" in $$parsedSource) {
+            $$parsedSource["keybindings"] = $$createField4_0($$parsedSource["keybindings"]);
+        }
         return new Settings($$parsedSource as Partial<Settings>);
     }
 }
+
+// Private type creation functions
+const $$createType0 = $Create.Map($Create.Any, $Create.Any);

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/phin-tech/whisk/internal/appmenu"
 	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
@@ -338,6 +339,106 @@ func TestServiceLoadsAndSavesAppSettings(t *testing.T) {
 	if !store.saved || saved.StartupView != appsettings.StartupViewSessions || store.settings.StartupView != appsettings.StartupViewSessions {
 		t.Fatalf("saved = %#v, store = %#v, saved flag = %v", saved, store.settings, store.saved)
 	}
+}
+
+func TestServiceLoadKeybindingsReportsEffectiveAccelerators(t *testing.T) {
+	store := &appSettingsStoreFake{settings: appsettings.Settings{
+		Keybindings: map[string]string{appmenu.CommandOpenPreferences: "Cmd+Shift+P"},
+	}}
+	service := wailsapp.NewServiceWithSettings(&runtimeClientFake{}, store)
+
+	view, err := service.LoadKeybindings(context.Background())
+	if err != nil {
+		t.Fatalf("load keybindings: %v", err)
+	}
+	var found bool
+	for _, cmd := range view.Commands {
+		if cmd.ID == appmenu.CommandOpenPreferences {
+			found = true
+			if cmd.Accelerator != "Cmd+Shift+P" {
+				t.Fatalf("accelerator = %q, want override", cmd.Accelerator)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("view missing open-preferences")
+	}
+}
+
+func TestServiceSaveKeybindingsPersistsAndUpdatesMenu(t *testing.T) {
+	store := &appSettingsStoreFake{settings: appsettings.Settings{StartupView: appsettings.StartupViewSessions}}
+	menu := &menuControllerFake{}
+	service := wailsapp.NewServiceWithSettings(&runtimeClientFake{}, store)
+	wailsapp.AttachMenuController(service, menu)
+
+	view, err := service.SaveKeybindings(context.Background(), map[string]string{appmenu.CommandOpenPreferences: "Cmd+Shift+P"})
+	if err != nil {
+		t.Fatalf("save keybindings: %v", err)
+	}
+	if !store.saved || store.settings.Keybindings[appmenu.CommandOpenPreferences] != "Cmd+Shift+P" {
+		t.Fatalf("store = %#v, saved = %v", store.settings, store.saved)
+	}
+	if menu.keybindingsCalls != 1 || menu.lastSettings.Keybindings[appmenu.CommandOpenPreferences] != "Cmd+Shift+P" {
+		t.Fatalf("menu calls = %d, last = %#v", menu.keybindingsCalls, menu.lastSettings)
+	}
+	if len(view.Commands) == 0 {
+		t.Fatalf("view should report commands")
+	}
+}
+
+func TestServiceSaveKeybindingsRejectsInvalidOverride(t *testing.T) {
+	store := &appSettingsStoreFake{}
+	menu := &menuControllerFake{}
+	service := wailsapp.NewServiceWithSettings(&runtimeClientFake{}, store)
+	wailsapp.AttachMenuController(service, menu)
+
+	if _, err := service.SaveKeybindings(context.Background(), map[string]string{"std-quit": "Cmd+Escape"}); err == nil {
+		t.Fatalf("expected error for non-editable command")
+	}
+	if store.saved {
+		t.Fatalf("invalid override must not persist")
+	}
+	if menu.keybindingsCalls != 0 {
+		t.Fatalf("invalid override must not touch the menu")
+	}
+}
+
+func TestServiceSyncSessionMenuForwardsToController(t *testing.T) {
+	menu := &menuControllerFake{}
+	service := wailsapp.NewService(&runtimeClientFake{})
+	wailsapp.AttachMenuController(service, menu)
+
+	sessions := []appmenu.SessionRef{{ID: "sess_01", Name: "alpha"}}
+	if err := service.SyncSessionMenu(context.Background(), sessions); err != nil {
+		t.Fatalf("sync session menu: %v", err)
+	}
+	if menu.sessionCalls != 1 || len(menu.lastSessions) != 1 || menu.lastSessions[0].Name != "alpha" {
+		t.Fatalf("menu sessions = %#v, calls = %d", menu.lastSessions, menu.sessionCalls)
+	}
+}
+
+func TestServiceSyncSessionMenuWithoutControllerIsNoOp(t *testing.T) {
+	service := wailsapp.NewService(&runtimeClientFake{})
+	if err := service.SyncSessionMenu(context.Background(), []appmenu.SessionRef{{ID: "s"}}); err != nil {
+		t.Fatalf("sync session menu without controller: %v", err)
+	}
+}
+
+type menuControllerFake struct {
+	keybindingsCalls int
+	sessionCalls     int
+	lastSettings     appsettings.Settings
+	lastSessions     []appmenu.SessionRef
+}
+
+func (f *menuControllerFake) SetKeybindings(settings appsettings.Settings) {
+	f.keybindingsCalls++
+	f.lastSettings = settings
+}
+
+func (f *menuControllerFake) SetSessions(sessions []appmenu.SessionRef) {
+	f.sessionCalls++
+	f.lastSessions = sessions
 }
 
 type appSettingsStoreFake struct {

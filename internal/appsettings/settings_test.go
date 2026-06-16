@@ -70,6 +70,51 @@ func TestNormalizeSettingsAllowsOnlyKnownStartupViews(t *testing.T) {
 	}
 }
 
+func TestStoreRoundTripsKeybindings(t *testing.T) {
+	store := appsettings.NewStore(filepath.Join(t.TempDir(), "whisk.json"))
+
+	overrides := map[string]string{"open-preferences": "Cmd+Shift+P"}
+	if _, err := store.Save(context.Background(), appsettings.Settings{Keybindings: overrides}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if loaded.Keybindings["open-preferences"] != "Cmd+Shift+P" {
+		t.Fatalf("keybindings = %#v", loaded.Keybindings)
+	}
+}
+
+func TestNormalizeDropsBlankKeybindings(t *testing.T) {
+	got, err := appsettings.Normalize(appsettings.Settings{
+		Keybindings: map[string]string{
+			"open-preferences": " Cmd+Shift+P ",
+			"  ":               "Cmd+J",
+			"select-session-1": "   ",
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if len(got.Keybindings) != 1 {
+		t.Fatalf("keybindings = %#v, want only the trimmed open-preferences entry", got.Keybindings)
+	}
+	if got.Keybindings["open-preferences"] != "Cmd+Shift+P" {
+		t.Fatalf("open-preferences = %q, want trimmed value", got.Keybindings["open-preferences"])
+	}
+}
+
+func TestNormalizeNilKeybindingsStaysNil(t *testing.T) {
+	got, err := appsettings.Normalize(appsettings.Settings{})
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if got.Keybindings != nil {
+		t.Fatalf("keybindings = %#v, want nil", got.Keybindings)
+	}
+}
+
 func TestDefaultPathUsesXDGConfigHome(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", configDir)
