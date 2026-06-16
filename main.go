@@ -29,13 +29,14 @@ func main() {
 	daemonURL := envOrDefault("WHISKD_URL", "http://127.0.0.1:8787")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := daemon.Ensure(ctx, daemonURL); err != nil {
+	startedDaemon, err := daemon.Ensure(ctx, daemonURL)
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	settingsStore, err := appsettings.NewDefaultStore()
-	if err != nil {
-		log.Fatal(err)
+	settingsStore, settingsErr := appsettings.NewDefaultStore()
+	if settingsErr != nil {
+		log.Fatal(settingsErr)
 	}
 	whisk := wailsapp.NewServiceWithSettings(client.NewHTTP(daemonURL, nil), settingsStore)
 
@@ -50,6 +51,15 @@ func main() {
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
+		},
+		// Only tear down a daemon this process started. A daemon already running when the app
+		// launched (e.g. `whisk daemon run` in a dev terminal) was adopted, not owned, so we
+		// leave it alive. This stops app-spawned daemons from piling up across restarts without
+		// killing one the developer is managing themselves.
+		OnShutdown: func() {
+			if startedDaemon {
+				_ = daemon.StopPID(daemonURL)
+			}
 		},
 	})
 

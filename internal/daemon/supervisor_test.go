@@ -35,8 +35,12 @@ func TestEnsureStartsDaemonWhenDown(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if err := daemon.Ensure(ctx, "http://"+addr); err != nil {
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	if err != nil {
 		t.Fatalf("ensure daemon: %v", err)
+	}
+	if !started {
+		t.Fatalf("expected Ensure to report it started the daemon")
 	}
 }
 
@@ -75,8 +79,12 @@ func TestEnsureRestartsIncompatibleDaemon(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if err := daemon.Ensure(ctx, "http://"+addr); err != nil {
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	if err != nil {
 		t.Fatalf("ensure daemon: %v", err)
+	}
+	if !started {
+		t.Fatalf("expected Ensure to report it started the replacement daemon")
 	}
 	select {
 	case <-shutdownCalled:
@@ -205,7 +213,7 @@ func TestSupervisorRejectsInvalidDaemonURLAndPIDFiles(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	if err := daemon.Ensure(ctx, "http:///missing-host"); err == nil {
+	if _, err := daemon.Ensure(ctx, "http:///missing-host"); err == nil {
 		t.Fatalf("expected ensure URL error")
 	}
 }

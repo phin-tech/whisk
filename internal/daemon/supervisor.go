@@ -16,44 +16,61 @@ import (
 	"github.com/phin-tech/whisk/internal/protocol"
 )
 
-func Ensure(ctx context.Context, baseURL string) error {
+// Ensure makes sure a compatible daemon is reachable at baseURL, starting one if needed.
+// It reports whether it started a new daemon (started == true) versus adopting one that was
+// already running (started == false). Callers use this to decide ownership: a daemon the app
+// started itself should be stopped when the app exits, while one started elsewhere (e.g. a
+// developer's `whisk daemon run`) must be left alone.
+func Ensure(ctx context.Context, baseURL string) (started bool, err error) {
 	daemonClient := client.NewHTTP(baseURL, nil)
 	compatibilityErr := compatibilityCheck(ctx, daemonClient)
 	if compatibilityErr == nil {
-		return nil
+		return false, nil
 	}
 	if healthCheck(ctx, daemonClient) == nil {
 		log.Printf("whiskd at %s is incompatible (%v); shutting it down", baseURL, compatibilityErr)
+		// Capture the PID before StopPID removes the file so we can wait for the actual
+		// process to exit, not just for the HTTP server to stop answering.
+		existingPID, _ := readPIDFile(baseURL)
 		if err := shutdownExisting(ctx, baseURL); err != nil {
 			log.Printf("shutdown incompatible whiskd: %v", err)
 		}
 		_ = StopPID(baseURL)
 		if err := waitUntilDown(ctx, daemonClient); err != nil {
-			return fmt.Errorf("stop incompatible whiskd: %w", err)
+			return false, fmt.Errorf("stop incompatible whiskd: %w", err)
+		}
+		// httpServer.Shutdown stops answering health immediately, but the process keeps
+		// draining (PTYs/NATS/sqlite) for some time afterwards. Wait for the process itself
+		// to be gone before spawning a replacement, otherwise the old and new daemons
+		// coexist on the same address.
+		if existingPID > 0 {
+			if err := waitForProcessExit(ctx, existingPID); err != nil {
+				return false, fmt.Errorf("stop incompatible whiskd: %w", err)
+			}
 		}
 	}
 
 	addr, err := addrFromURL(baseURL)
 	if err != nil {
-		return err
+		return false, err
 	}
 	path, err := daemonPath()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	log.Printf("starting whisk daemon at %s from %s", baseURL, path)
 	cmd := exec.CommandContext(context.Background(), path, "daemon", "run", "-addr", addr)
 	logFile, err := os.OpenFile(filepath.Join(os.TempDir(), "whiskd.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
-		return fmt.Errorf("open whiskd log: %w", err)
+		return false, fmt.Errorf("open whiskd log: %w", err)
 	}
 	defer logFile.Close()
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start whiskd: %w", err)
+		return false, fmt.Errorf("start whiskd: %w", err)
 	}
 	if err := writePIDFile(baseURL, cmd.Process.Pid); err != nil {
 		log.Printf("write whiskd pid file: %v", err)
@@ -69,12 +86,12 @@ func Ensure(ctx context.Context, baseURL string) error {
 	for {
 		if err := compatibilityCheck(ctx, daemonClient); err == nil {
 			log.Printf("whiskd ready at %s", baseURL)
-			return nil
+			return true, nil
 		}
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			return fmt.Errorf("wait for whiskd: %w", ctx.Err())
+			return false, fmt.Errorf("wait for whiskd: %w", ctx.Err())
 		}
 	}
 }
@@ -97,12 +114,55 @@ func StopPID(baseURL string) error {
 		return err
 	}
 	if err := process.Signal(os.Interrupt); err != nil {
+		// Interrupt is unsupported (e.g. Windows) or the process is already gone; force-kill.
 		if killErr := process.Kill(); killErr != nil {
 			return err
+		}
+	} else {
+		// Give the daemon a moment to shut down gracefully, then force-kill if it lingers so
+		// we never leave an orphaned process holding the port.
+		deadline := 2 * time.Second
+		interval := 50 * time.Millisecond
+		for waited := time.Duration(0); waited < deadline && processAlive(pid); waited += interval {
+			time.Sleep(interval)
+		}
+		if processAlive(pid) {
+			_ = process.Kill()
 		}
 	}
 	_ = os.Remove(pidPath)
 	return nil
+}
+
+func readPIDFile(baseURL string) (int, error) {
+	pidPath, err := PIDPath(baseURL)
+	if err != nil {
+		return 0, err
+	}
+	data, err := os.ReadFile(pidPath)
+	if err != nil {
+		return 0, err
+	}
+	pid := 0
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &pid); err != nil {
+		return 0, err
+	}
+	return pid, nil
+}
+
+func waitForProcessExit(ctx context.Context, pid int) error {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if !processAlive(pid) {
+			return nil
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 func PIDPath(baseURL string) (string, error) {
