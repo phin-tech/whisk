@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRunDaemonStatusUsesHealthEndpoint(t *testing.T) {
@@ -117,6 +120,46 @@ func TestRunDaemonStopReportsServerError(t *testing.T) {
 
 	if err := run([]string{"daemon", "stop", "-url", server.URL}); err == nil {
 		t.Fatalf("expected stop error")
+	}
+}
+
+func TestRunDaemonRestartStopsThenStarts(t *testing.T) {
+	t.Setenv("PATH", "")
+	t.Setenv("WHISKD_PATH", "")
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	shutdownCalled := false
+	server := &http.Server{ReadHeaderTimeout: time.Second}
+	mux := http.NewServeMux()
+	server.Handler = mux
+	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.HandleFunc("/v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		shutdownCalled = true
+		w.WriteHeader(http.StatusNoContent)
+		go func() { _ = server.Shutdown(context.Background()) }()
+	})
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
+
+	// With no daemon binary available, restart stops the running daemon and then fails to bring a
+	// fresh one up. That is enough to prove the CLI wires stop -> start like the GUI does.
+	err = run([]string{"daemon", "restart", "-url", "http://" + addr})
+	if err == nil {
+		t.Fatalf("expected restart to fail without a daemon binary")
+	}
+	if !strings.Contains(err.Error(), "restart whiskd") {
+		t.Fatalf("restart error = %v", err)
+	}
+	if !shutdownCalled {
+		t.Fatalf("restart did not stop the running daemon")
 	}
 }
 
