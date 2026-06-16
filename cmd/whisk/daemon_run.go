@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -42,6 +43,26 @@ func serveDaemon(addr string) error {
 	if err := validateListenAddr(addr); err != nil {
 		return err
 	}
+
+	// Bind the listener before any other setup so a duplicate instance fails fast and
+	// cheaply. Building NATS/sqlite/the runtime first would leave a heavyweight process
+	// lingering only to discover the port is already taken — that is how duplicate
+	// daemons piled up on the same address. If someone else already owns this addr we are
+	// not needed, so exit cleanly rather than erroring.
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		if errors.Is(err, syscall.EADDRINUSE) {
+			log.Printf("whisk daemon: another instance is already listening on %s; exiting", addr)
+			return nil
+		}
+		return fmt.Errorf("listen %s: %w", addr, err)
+	}
+	serveStarted := false
+	defer func() {
+		if !serveStarted {
+			_ = listener.Close()
+		}
+	}()
 
 	eventBus, err := events.NewNATSBus()
 	if err != nil {
@@ -98,9 +119,10 @@ func serveDaemon(addr string) error {
 	})
 
 	serveErr := make(chan error, 1)
+	serveStarted = true
 	go func() {
 		log.Printf("whisk daemon listening on http://%s", addr)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 			serveErr <- err
 			return
 		}

@@ -3,12 +3,18 @@ package wailsapp
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/client"
+	"github.com/phin-tech/whisk/internal/daemon"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/protocol"
 )
+
+// daemonControlTimeout bounds start/stop/restart operations so a frontend action can't hang the
+// UI waiting on a wedged daemon.
+const daemonControlTimeout = 12 * time.Second
 
 type AppSettingsStore interface {
 	Load(context.Context) (appsettings.Settings, error)
@@ -45,6 +51,103 @@ func (s *Service) SaveAppSettings(ctx context.Context, settings appsettings.Sett
 		return appsettings.Normalize(settings)
 	}
 	return s.settings.Save(ctx, settings)
+}
+
+// DaemonStatus describes the daemon the app talks to, for the daemon preferences panel.
+type DaemonStatus struct {
+	// Running is true when the daemon answers health checks.
+	Running bool `json:"running"`
+	// Address is the daemon URL (e.g. http://127.0.0.1:8787).
+	Address string `json:"address"`
+	// Managed is true when this app started the daemon (a live PID file names it), as opposed to
+	// one started independently (e.g. `whisk daemon run`).
+	Managed bool `json:"managed"`
+	// APIVersion and GitSHA come from the daemon's compatibility endpoint when it is reachable.
+	APIVersion int    `json:"apiVersion"`
+	GitSHA     string `json:"gitSha"`
+	// Error holds a human-readable reason when the daemon is unreachable or incompatible.
+	Error string `json:"error"`
+}
+
+func (s *Service) httpClient() (*client.HTTPClient, error) {
+	httpClient, ok := s.client.(*client.HTTPClient)
+	if !ok {
+		return nil, fmt.Errorf("daemon control requires an HTTP daemon client")
+	}
+	return httpClient, nil
+}
+
+func (s *Service) daemonStatus(ctx context.Context, httpClient *client.HTTPClient) DaemonStatus {
+	baseURL := httpClient.BaseURL()
+	status := DaemonStatus{Address: baseURL, Managed: daemon.IsManaged(baseURL)}
+	if err := httpClient.Health(ctx); err != nil {
+		status.Error = err.Error()
+		return status
+	}
+	status.Running = true
+	compat, err := httpClient.Compatibility(ctx)
+	if err != nil {
+		status.Error = err.Error()
+		return status
+	}
+	status.APIVersion = compat.APIVersion
+	status.GitSHA = compat.GitSHA
+	return status
+}
+
+// DaemonStatus reports the current state of the daemon for display in the preferences panel.
+func (s *Service) DaemonStatus(ctx context.Context) (DaemonStatus, error) {
+	httpClient, err := s.httpClient()
+	if err != nil {
+		return DaemonStatus{}, err
+	}
+	return s.daemonStatus(ctx, httpClient), nil
+}
+
+// StartDaemon starts a daemon if one is not already running, then returns the resulting status.
+func (s *Service) StartDaemon(ctx context.Context) (DaemonStatus, error) {
+	httpClient, err := s.httpClient()
+	if err != nil {
+		return DaemonStatus{}, err
+	}
+	opCtx, cancel := context.WithTimeout(ctx, daemonControlTimeout)
+	defer cancel()
+	if _, err := daemon.Ensure(opCtx, httpClient.BaseURL()); err != nil {
+		return s.daemonStatus(ctx, httpClient), err
+	}
+	return s.daemonStatus(ctx, httpClient), nil
+}
+
+// StopDaemon shuts the daemon down and returns the resulting status.
+func (s *Service) StopDaemon(ctx context.Context) (DaemonStatus, error) {
+	httpClient, err := s.httpClient()
+	if err != nil {
+		return DaemonStatus{}, err
+	}
+	opCtx, cancel := context.WithTimeout(ctx, daemonControlTimeout)
+	defer cancel()
+	if err := daemon.Stop(opCtx, httpClient.BaseURL()); err != nil {
+		return s.daemonStatus(ctx, httpClient), err
+	}
+	return s.daemonStatus(ctx, httpClient), nil
+}
+
+// RestartDaemon stops the daemon and starts a fresh one, returning the resulting status.
+func (s *Service) RestartDaemon(ctx context.Context) (DaemonStatus, error) {
+	httpClient, err := s.httpClient()
+	if err != nil {
+		return DaemonStatus{}, err
+	}
+	opCtx, cancel := context.WithTimeout(ctx, daemonControlTimeout)
+	defer cancel()
+	baseURL := httpClient.BaseURL()
+	if err := daemon.Stop(opCtx, baseURL); err != nil {
+		return s.daemonStatus(ctx, httpClient), err
+	}
+	if _, err := daemon.Ensure(opCtx, baseURL); err != nil {
+		return s.daemonStatus(ctx, httpClient), err
+	}
+	return s.daemonStatus(ctx, httpClient), nil
 }
 
 func (s *Service) ClearDaemon(ctx context.Context, req protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error) {

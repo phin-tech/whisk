@@ -93,7 +93,7 @@ func runDaemon(args []string) error {
 
 	switch args[0] {
 	case "start":
-		if err := daemon.Ensure(ctx, *baseURL); err != nil {
+		if _, err := daemon.Ensure(ctx, *baseURL); err != nil {
 			return err
 		}
 		fmt.Printf("whiskd running at %s\n", *baseURL)

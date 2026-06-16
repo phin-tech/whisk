@@ -35,8 +35,12 @@ func TestEnsureStartsDaemonWhenDown(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if err := daemon.Ensure(ctx, "http://"+addr); err != nil {
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	if err != nil {
 		t.Fatalf("ensure daemon: %v", err)
+	}
+	if !started {
+		t.Fatalf("expected Ensure to report it started the daemon")
 	}
 }
 
@@ -75,8 +79,12 @@ func TestEnsureRestartsIncompatibleDaemon(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if err := daemon.Ensure(ctx, "http://"+addr); err != nil {
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	if err != nil {
 		t.Fatalf("ensure daemon: %v", err)
+	}
+	if !started {
+		t.Fatalf("expected Ensure to report it started the replacement daemon")
 	}
 	select {
 	case <-shutdownCalled:
@@ -182,6 +190,59 @@ func TestStopPIDSignalsRecordedProcess(t *testing.T) {
 	}
 }
 
+func TestIsManagedReflectsLivePIDFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signal-based liveness check is unix-only")
+	}
+
+	baseURL := "http://127.0.0.1:19993"
+	if daemon.IsManaged(baseURL) {
+		t.Fatalf("expected not managed with no pid file")
+	}
+
+	script := filepath.Join(t.TempDir(), "wait.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\ntrap 'exit 0' INT TERM\nwhile true; do sleep 1; done\n"), 0o755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	cmd := exec.Command(script)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start script: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	})
+
+	pidPath, err := daemon.PIDPath(baseURL)
+	if err != nil {
+		t.Fatalf("pid path: %v", err)
+	}
+	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0o600); err != nil {
+		t.Fatalf("write pid: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(pidPath) })
+
+	if !daemon.IsManaged(baseURL) {
+		t.Fatalf("expected managed while pid file names a live process")
+	}
+
+	if err := cmd.Process.Kill(); err != nil {
+		t.Fatalf("kill process: %v", err)
+	}
+	_, _ = cmd.Process.Wait()
+	if daemon.IsManaged(baseURL) {
+		t.Fatalf("expected not managed after process exits")
+	}
+}
+
+func TestStopReturnsNilWhenDaemonAlreadyDown(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := daemon.Stop(ctx, "http://127.0.0.1:19994"); err != nil {
+		t.Fatalf("stop already-down daemon: %v", err)
+	}
+}
+
 func TestSupervisorRejectsInvalidDaemonURLAndPIDFiles(t *testing.T) {
 	if _, err := daemon.PIDPath("://bad-url"); err == nil {
 		t.Fatalf("expected invalid pid path URL error")
@@ -205,7 +266,7 @@ func TestSupervisorRejectsInvalidDaemonURLAndPIDFiles(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	if err := daemon.Ensure(ctx, "http:///missing-host"); err == nil {
+	if _, err := daemon.Ensure(ctx, "http:///missing-host"); err == nil {
 		t.Fatalf("expected ensure URL error")
 	}
 }

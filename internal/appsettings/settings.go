@@ -15,6 +15,10 @@ const (
 
 type Settings struct {
 	StartupView string `json:"startupView"`
+	// KeepDaemonAlive controls whether a daemon the app started is left running after the app
+	// quits. It defaults to true so sessions persist across app restarts; setting it false makes
+	// the app stop the daemon it started on quit.
+	KeepDaemonAlive bool `json:"keepDaemonAlive"`
 }
 
 type Store struct {
@@ -22,7 +26,7 @@ type Store struct {
 }
 
 func Default() Settings {
-	return Settings{StartupView: StartupViewSessions}
+	return Settings{StartupView: StartupViewSessions, KeepDaemonAlive: true}
 }
 
 func Normalize(settings Settings) (Settings, error) {

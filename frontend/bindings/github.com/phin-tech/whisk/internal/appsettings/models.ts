@@ -8,10 +8,20 @@ import { Create as $Create } from "@wailsio/runtime";
 export class Settings {
     "startupView": string;
 
+    /**
+     * KeepDaemonAlive controls whether a daemon the app started is left running after the app
+     * quits. It defaults to true so sessions persist across app restarts; setting it false makes
+     * the app stop the daemon it started on quit.
+     */
+    "keepDaemonAlive": boolean;
+
     /** Creates a new Settings instance. */
     constructor($$source: Partial<Settings> = {}) {
         if (!("startupView" in $$source)) {
             this["startupView"] = "";
+        }
+        if (!("keepDaemonAlive" in $$source)) {
+            this["keepDaemonAlive"] = false;
         }
 
         Object.assign(this, $$source);

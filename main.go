@@ -29,13 +29,14 @@ func main() {
 	daemonURL := envOrDefault("WHISKD_URL", "http://127.0.0.1:8787")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := daemon.Ensure(ctx, daemonURL); err != nil {
+	startedDaemon, err := daemon.Ensure(ctx, daemonURL)
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	settingsStore, err := appsettings.NewDefaultStore()
-	if err != nil {
-		log.Fatal(err)
+	settingsStore, settingsErr := appsettings.NewDefaultStore()
+	if settingsErr != nil {
+		log.Fatal(settingsErr)
 	}
 	whisk := wailsapp.NewServiceWithSettings(client.NewHTTP(daemonURL, nil), settingsStore)
 
@@ -50,6 +51,20 @@ func main() {
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
+		},
+		// Leave the daemon running by default so sessions persist across app restarts. Only stop
+		// it when the user opted out via the KeepDaemonAlive preference, and only if this process
+		// started it — a daemon adopted from elsewhere (e.g. `whisk daemon run` in a dev terminal)
+		// is owned by whoever launched it, so we never kill that one on quit.
+		OnShutdown: func() {
+			if !startedDaemon {
+				return
+			}
+			settings, loadErr := settingsStore.Load(context.Background())
+			if loadErr != nil || settings.KeepDaemonAlive {
+				return
+			}
+			_ = daemon.StopPID(daemonURL)
 		},
 	})
 
