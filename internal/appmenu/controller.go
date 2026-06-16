@@ -78,7 +78,7 @@ func (c *Controller) SetKeybindings(settings appsettings.Settings) {
 	c.mu.Lock()
 	c.settings = settings
 	c.mu.Unlock()
-	c.Rebuild()
+	c.rebuildOnMainThread()
 }
 
 // SetSessions replaces the session list and rebuilds the Sessions menu.
@@ -86,11 +86,23 @@ func (c *Controller) SetSessions(sessions []SessionRef) {
 	c.mu.Lock()
 	c.sessions = append(c.sessions[:0:0], sessions...)
 	c.mu.Unlock()
-	c.Rebuild()
+	c.rebuildOnMainThread()
 }
 
-// Rebuild constructs a fresh native menu from current state and installs it. It is a no-op when no
-// app is attached (e.g. in unit tests).
+// rebuildOnMainThread marshals the rebuild onto the UI thread. SetSessions/SetKeybindings are
+// called from Wails binding goroutines, but macOS requires all menu (AppKit) mutation to happen on
+// the main thread — doing it off-thread crashes the process. InvokeAsync queues Rebuild on the main
+// thread without blocking the RPC response.
+func (c *Controller) rebuildOnMainThread() {
+	if c.app == nil {
+		return
+	}
+	application.InvokeAsync(c.Rebuild)
+}
+
+// Rebuild constructs a fresh native menu from current state and installs it. It must run on the
+// main thread: call it directly only during startup (before Run()); at runtime go through
+// rebuildOnMainThread. It is a no-op when no app is attached (e.g. in unit tests).
 func (c *Controller) Rebuild() {
 	if c.app == nil {
 		return
