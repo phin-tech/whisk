@@ -12,7 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
@@ -376,6 +378,137 @@ func TestHTTPServerAgentBridgeHooksValidateTokenAndReturnProviderOutput(t *testi
 	hookSpecific, ok := deny.Output["hookSpecificOutput"].(map[string]any)
 	if !ok || hookSpecific["permissionDecision"] != "deny" || hookSpecific["permissionDecisionReason"] != "blocked by policy" {
 		t.Fatalf("deny output = %#v", deny.Output)
+	}
+}
+
+func TestHTTPServerAgentHookLogAndBridgeRoutes(t *testing.T) {
+	tmp := t.TempDir()
+	logPaths := agenthooklog.Paths{
+		ConfigRoot: tmp,
+		LogPath:    filepath.Join(tmp, "agent-hooks", "hooks.jsonl"),
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{AgentHookLogPaths: &logPaths})
+	handler := server.NewHTTP(runtime)
+
+	enabled := true
+	status := postJSON[protocol.AgentHookLogStatus](t, handler, "/v1/agent-hook-log/settings",
+		protocol.SetAgentHookLogSettingsRequest{Enabled: &enabled}, http.StatusOK)
+	if !status.Enabled {
+		t.Fatalf("settings status = %#v", status)
+	}
+
+	event := postJSON[protocol.AgentBridgeEvent](t, handler, "/v1/agent-hook-events",
+		protocol.AgentBridgeHookRequest{Provider: "claude", EventName: "Notification", Message: "ping"},
+		http.StatusCreated)
+	if event.ID == "" {
+		t.Fatalf("event = %#v", event)
+	}
+
+	events := getJSON[[]protocol.AgentBridgeEvent](t, handler, "/v1/agent-bridge-events", http.StatusOK)
+	if len(events) != 1 || events[0].ID != event.ID {
+		t.Fatalf("events = %#v", events)
+	}
+
+	approvals := getJSON[[]protocol.AgentBridgeApproval](t, handler, "/v1/agent-bridge-approvals?status=pending", http.StatusOK)
+	if len(approvals) != 0 {
+		t.Fatalf("approvals = %#v", approvals)
+	}
+
+	// Resolving an unknown approval is a bad request.
+	assertStatus(t, handler, http.MethodPost, "/v1/agent-bridge-approvals/missing/resolve", `{"action":"allow"}`, http.StatusBadRequest)
+
+	logStatus := getJSON[protocol.AgentHookLogStatus](t, handler, "/v1/agent-hook-log", http.StatusOK)
+	if !logStatus.Enabled || logStatus.SizeBytes == 0 {
+		t.Fatalf("log status = %#v", logStatus)
+	}
+
+	cleared := postJSON[protocol.AgentHookLogStatus](t, handler, "/v1/agent-hook-log/clear", struct{}{}, http.StatusOK)
+	if cleared.SizeBytes != 0 {
+		t.Fatalf("cleared = %#v", cleared)
+	}
+}
+
+func TestHTTPServerAgentBridgeApprovalLifecycle(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	backend := newFakePTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend:                 backend,
+		IDGenerator:                func() string { nextID++; return "id_" + strconv.Itoa(nextID) },
+		DaemonURL:                  "http://127.0.0.1:8787",
+		AgentBridgeApprovalTimeout: 5 * time.Second,
+	})
+	handler := server.NewHTTP(runtime)
+
+	project := postJSON[protocol.Project](t, handler, "/v1/projects", protocol.CreateProjectRequest{
+		Name:    "App",
+		RootDir: t.TempDir(),
+	}, http.StatusCreated)
+	item := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
+		ProjectID: project.ID,
+		Title:     "Bridge approval",
+		Actor:     "human",
+	}, http.StatusCreated)
+	run := postJSON[protocol.WorkItemRun](t, handler, "/v1/work-item-runs", protocol.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		Launch:           true,
+		AgentProfileID:   "claude",
+		Actor:            "agent",
+	}, http.StatusCreated)
+	spawn := backend.spawns[run.PTYID]
+	bridgeID := spawn.Env["WHISK_AGENT_BRIDGE_ID"]
+	token := spawn.Env["WHISK_AGENT_BRIDGE_TOKEN"]
+	if bridgeID == "" || token == "" {
+		t.Fatalf("spawn bridge env = %#v", spawn.Env)
+	}
+
+	// A tool-call hook with no pre-supplied decision blocks until the approval is resolved.
+	hookBody, err := json.Marshal(protocol.AgentBridgeHookRequest{
+		Token:     token,
+		Provider:  "claude",
+		EventName: "PreToolUse",
+		ToolName:  "Bash",
+		ToolInput: map[string]any{"command": "ls"},
+	})
+	if err != nil {
+		t.Fatalf("marshal hook: %v", err)
+	}
+	hookStatus := make(chan int, 1)
+	go func() {
+		recorder := httptest.NewRecorder()
+		recorder.Body = &bytes.Buffer{}
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/v1/agent-bridges/"+bridgeID+"/hooks", bytes.NewReader(hookBody)))
+		hookStatus <- recorder.Code
+	}()
+
+	var approvalID string
+	for i := 0; i < 200; i++ {
+		approvals := getJSON[[]protocol.AgentBridgeApproval](t, handler, "/v1/agent-bridge-approvals?status=pending", http.StatusOK)
+		if len(approvals) == 1 {
+			approvalID = approvals[0].ID
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if approvalID == "" {
+		t.Fatalf("no pending approval appeared")
+	}
+
+	resolved := postJSON[protocol.AgentBridgeApproval](t, handler, "/v1/agent-bridge-approvals/"+approvalID+"/resolve",
+		protocol.ResolveAgentBridgeApprovalRequest{Action: "allow"}, http.StatusOK)
+	if resolved.ID != approvalID || resolved.Decision.Action != "allow" {
+		t.Fatalf("resolved approval = %#v", resolved)
+	}
+
+	select {
+	case code := <-hookStatus:
+		if code != http.StatusOK {
+			t.Fatalf("hook status = %d", code)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("hook did not return after approval")
 	}
 }
 

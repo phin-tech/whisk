@@ -291,6 +291,24 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || agentEvent.ID != "event_01" || fake.markAgentEventReadReq.ID != "event_01" {
 		t.Fatalf("mark agent event read = %#v, req = %#v, err = %v", agentEvent, fake.markAgentEventReadReq, err)
 	}
+	events, err := service.ListAgentBridgeEvents(ctx, protocol.ListAgentBridgeEventsRequest{Status: "open"})
+	if err != nil || fake.listAgentEventsReq.Status != "open" {
+		t.Fatalf("agent events = %#v, req = %#v, err = %v", events, fake.listAgentEventsReq, err)
+	}
+	if _, err := service.AgentHookLogStatus(ctx); err != nil {
+		t.Fatalf("agent hook log status: %v", err)
+	}
+	hookLogEnabled := true
+	logStatus, err := service.SetAgentHookLogSettings(ctx, protocol.SetAgentHookLogSettingsRequest{Enabled: &hookLogEnabled})
+	if err != nil || !logStatus.Enabled || fake.setAgentHookLogReq.Enabled == nil || !*fake.setAgentHookLogReq.Enabled {
+		t.Fatalf("set agent hook log = %#v, req = %#v, err = %v", logStatus, fake.setAgentHookLogReq, err)
+	}
+	if _, err := service.ClearAgentHookLog(ctx); err != nil || !fake.clearAgentHookLogCalled {
+		t.Fatalf("clear agent hook log: called = %v, err = %v", fake.clearAgentHookLogCalled, err)
+	}
+	if _, err := service.OpenAgentHookLog(ctx); err != nil || !fake.openAgentHookLogCalled {
+		t.Fatalf("open agent hook log: called = %v, err = %v", fake.openAgentHookLogCalled, err)
+	}
 	integrations, err := service.ListAgentHookIntegrations(ctx)
 	if err != nil || len(integrations) != 1 || integrations[0].Provider != "claude" {
 		t.Fatalf("agent hook integrations = %#v, err = %v", integrations, err)
