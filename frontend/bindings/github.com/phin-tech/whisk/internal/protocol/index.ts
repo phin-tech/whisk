@@ -42,6 +42,7 @@ export {
     ListAgentBridgeEventsRequest,
     ListStatusEventsRequest,
     ListWorktreesRequest,
+    MarkAgentBridgeEventReadRequest,
     MarkStatusEventReadRequest,
     MoveWorkItemRequest,
     NextEventRequest,

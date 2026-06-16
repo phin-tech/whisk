@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "11",
+    "version": "12",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -132,6 +132,57 @@
                     "$ref": "#/components/schemas/AgentBridgeEvent"
                   },
                   "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-bridge-events/{eventID}/read": {
+      "post": {
+        "operationId": "markAgentBridgeEventRead",
+        "summary": "Mark a passive provider hook event read",
+        "tags": [
+          "agent-bridges"
+        ],
+        "parameters": [
+          {
+            "name": "eventID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkAgentBridgeEventReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentBridgeEvent"
                 }
               }
             },
@@ -4471,6 +4522,17 @@
         },
         "required": [
           "repoPath"
+        ],
+        "type": "object"
+      },
+      "MarkAgentBridgeEventReadRequest": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
         ],
         "type": "object"
       },

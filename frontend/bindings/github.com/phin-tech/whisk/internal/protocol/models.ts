@@ -1085,6 +1085,27 @@ export class ListWorktreesRequest {
     }
 }
 
+export class MarkAgentBridgeEventReadRequest {
+    "id": string;
+
+    /** Creates a new MarkAgentBridgeEventReadRequest instance. */
+    constructor($$source: Partial<MarkAgentBridgeEventReadRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MarkAgentBridgeEventReadRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): MarkAgentBridgeEventReadRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new MarkAgentBridgeEventReadRequest($$parsedSource as Partial<MarkAgentBridgeEventReadRequest>);
+    }
+}
+
 export class MarkStatusEventReadRequest {
     "id": string;
 

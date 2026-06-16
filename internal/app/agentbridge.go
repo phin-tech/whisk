@@ -43,6 +43,10 @@ type ListAgentBridgeEventsRequest struct {
 	Status string
 }
 
+type MarkAgentBridgeEventReadRequest struct {
+	ID string
+}
+
 type ResolveAgentBridgeApprovalRequest struct {
 	ID     string
 	Action string
@@ -108,6 +112,19 @@ func (r *Runtime) ListAgentBridgeEvents(_ context.Context, req ListAgentBridgeEv
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.agentBridges.ListEvents(agentbridge.ListEvents{Status: agentbridge.EventStatus(req.Status)}), nil
+}
+
+func (r *Runtime) MarkAgentBridgeEventRead(ctx context.Context, req MarkAgentBridgeEventReadRequest) (agentbridge.Event, error) {
+	r.mu.Lock()
+	next, event, err := r.agentBridges.MarkEventRead(agentbridge.MarkEventRead{ID: req.ID})
+	if err != nil {
+		r.mu.Unlock()
+		return agentbridge.Event{}, err
+	}
+	r.agentBridges = next
+	r.mu.Unlock()
+	r.publish(ctx, RuntimeEvent{Type: EventAgentHookEventsChanged})
+	return event, nil
 }
 
 func (r *Runtime) RecordAgentHookEvent(ctx context.Context, req AgentBridgeHookRequest) (agentbridge.Event, error) {

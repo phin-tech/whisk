@@ -390,6 +390,10 @@ func (s *Service) ListAgentBridgeEvents(ctx context.Context, req protocol.ListAg
 	return s.client.ListAgentBridgeEvents(ctx, req)
 }
 
+func (s *Service) MarkAgentBridgeEventRead(ctx context.Context, req protocol.MarkAgentBridgeEventReadRequest) (protocol.AgentBridgeEvent, error) {
+	return s.client.MarkAgentBridgeEventRead(ctx, req)
+}
+
 func (s *Service) ListAgentHookIntegrations(ctx context.Context) ([]protocol.AgentHookIntegration, error) {
 	return s.client.ListAgentHookIntegrations(ctx)
 }

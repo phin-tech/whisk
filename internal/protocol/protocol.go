@@ -8,7 +8,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 11
+const DaemonAPIVersion = 12
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -253,6 +253,10 @@ type AgentBridgeEvent struct {
 
 type ListAgentBridgeEventsRequest struct {
 	Status string `json:"status,omitempty"`
+}
+
+type MarkAgentBridgeEventReadRequest struct {
+	ID string `json:"id"`
 }
 
 type ListAgentBridgeApprovalsRequest struct {

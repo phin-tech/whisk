@@ -5,6 +5,7 @@
   import CircleHelp from "@lucide/svelte/icons/circle-help";
   import ShieldQuestion from "@lucide/svelte/icons/shield-question";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
   import X from "@lucide/svelte/icons/x";
   import type { AgentBridgeApproval, AgentBridgeEvent, StatusEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { notificationRows } from "./notificationsView";
@@ -16,6 +17,7 @@
   export let loading = false;
   export let onclose: () => void;
   export let onRefresh: () => void;
+  export let onClearNotifications: () => void;
   export let onSelectStatusEvent: (event: StatusEvent) => void;
   export let onResolveAgentBridgeApproval: (id: string, action: "allow" | "deny") => void;
 
@@ -38,7 +40,17 @@
     <div slot="actions" class="flex items-center gap-1">
       <button
         type="button"
-        class="inline-flex h-6 w-6 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-wait disabled:opacity-60"
+        class="inline-flex h-6 w-6 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-default disabled:opacity-60"
+        disabled={loading || (rows.length === 0 && agentBridgeEvents.length === 0)}
+        aria-label="Clear notifications"
+        title="Clear notifications"
+        on:click={onClearNotifications}
+      >
+        <Trash2 size={13} />
+      </button>
+      <button
+        type="button"
+        class="inline-flex h-6 w-6 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-default disabled:opacity-60"
         disabled={loading}
         aria-label="Refresh notifications"
         title="Refresh notifications"
@@ -78,7 +90,7 @@
                 <div class="mt-2 grid grid-cols-2 gap-1">
                   <button
                     type="button"
-                    class="inline-flex h-7 items-center justify-center gap-1 rounded border border-green/30 bg-green/10 text-[12px] font-semibold text-text-primary transition-colors hover:border-green/60 hover:bg-green/15 disabled:cursor-wait disabled:opacity-60"
+                    class="inline-flex h-7 items-center justify-center gap-1 rounded border border-green/30 bg-green/10 text-[12px] font-semibold text-text-primary transition-colors hover:border-green/60 hover:bg-green/15 disabled:cursor-default disabled:opacity-60"
                     disabled={loading}
                     on:click={() => onResolveAgentBridgeApproval(approval.id, "allow")}
                   >
@@ -87,7 +99,7 @@
                   </button>
                   <button
                     type="button"
-                    class="inline-flex h-7 items-center justify-center gap-1 rounded border border-red/30 bg-red/10 text-[12px] font-semibold text-text-primary transition-colors hover:border-red/60 hover:bg-red/15 disabled:cursor-wait disabled:opacity-60"
+                    class="inline-flex h-7 items-center justify-center gap-1 rounded border border-red/30 bg-red/10 text-[12px] font-semibold text-text-primary transition-colors hover:border-red/60 hover:bg-red/15 disabled:cursor-default disabled:opacity-60"
                     disabled={loading}
                     on:click={() => onResolveAgentBridgeApproval(approval.id, "deny")}
                   >

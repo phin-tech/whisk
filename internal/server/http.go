@@ -29,6 +29,7 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("GET /v1/agent-bridge-approvals", server.listAgentBridgeApprovals)
 	mux.HandleFunc("POST /v1/agent-bridge-approvals/{approvalID}/resolve", server.resolveAgentBridgeApproval)
 	mux.HandleFunc("GET /v1/agent-bridge-events", server.listAgentBridgeEvents)
+	mux.HandleFunc("POST /v1/agent-bridge-events/{eventID}/read", server.markAgentBridgeEventRead)
 	mux.HandleFunc("GET /v1/agent-hook-integrations", server.listAgentHookIntegrations)
 	mux.HandleFunc("POST /v1/agent-hook-integrations/check", server.checkAgentHookIntegration)
 	mux.HandleFunc("POST /v1/agent-hook-integrations/install", server.installAgentHookIntegration)
@@ -230,6 +231,20 @@ func (s *HTTPServer) listAgentBridgeEvents(w http.ResponseWriter, r *http.Reques
 		out = append(out, toProtocolAgentBridgeEvent(event))
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *HTTPServer) markAgentBridgeEventRead(w http.ResponseWriter, r *http.Request) {
+	var req protocol.MarkAgentBridgeEventReadRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.ID = pathValue(r, "eventID", req.ID)
+	event, err := s.runtime.MarkAgentBridgeEventRead(r.Context(), app.MarkAgentBridgeEventReadRequest{ID: req.ID})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolAgentBridgeEvent(event))
 }
 
 func (s *HTTPServer) listAgentHookIntegrations(w http.ResponseWriter, r *http.Request) {

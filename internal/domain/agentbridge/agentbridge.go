@@ -145,6 +145,10 @@ type ListEvents struct {
 	Status EventStatus
 }
 
+type MarkEventRead struct {
+	ID string
+}
+
 type RecordPendingQuestion struct {
 	ID       string
 	BridgeID string
@@ -336,6 +340,17 @@ func (s State) ListEvents(filter ListEvents) []Event {
 		out = append(out, cloneEvent(event))
 	}
 	return out
+}
+
+func (s State) MarkEventRead(req MarkEventRead) (State, Event, error) {
+	event, ok := s.events[req.ID]
+	if !ok {
+		return State{}, Event{}, fmt.Errorf("event %s not found", req.ID)
+	}
+	next := s.clone()
+	event.Status = EventRead
+	next.events[event.ID] = event
+	return next, cloneEvent(event), nil
 }
 
 func (s State) AddBridge(bridge Bridge) (State, error) {

@@ -174,6 +174,39 @@ func TestBridgeStateTracksApprovalLifecycle(t *testing.T) {
 	}
 }
 
+func TestBridgeStateMarksPassiveEventRead(t *testing.T) {
+	state, err := agentbridge.NewState()
+	if err != nil {
+		t.Fatalf("new state: %v", err)
+	}
+	pending, event, err := state.RecordEvent(agentbridge.RecordEvent{
+		ID:        "event_01",
+		Provider:  agentbridge.ProviderClaude,
+		EventName: "Notification",
+		Message:   "Need input.",
+	})
+	if err != nil {
+		t.Fatalf("record event: %v", err)
+	}
+	if event.Status != agentbridge.EventPending {
+		t.Fatalf("event = %#v", event)
+	}
+
+	readState, read, err := pending.MarkEventRead(agentbridge.MarkEventRead{ID: "event_01"})
+	if err != nil {
+		t.Fatalf("mark event read: %v", err)
+	}
+	if read.Status != agentbridge.EventRead {
+		t.Fatalf("read = %#v", read)
+	}
+	if pendingEvents := readState.ListEvents(agentbridge.ListEvents{Status: agentbridge.EventPending}); len(pendingEvents) != 0 {
+		t.Fatalf("pending events = %#v", pendingEvents)
+	}
+	if _, _, err := readState.MarkEventRead(agentbridge.MarkEventRead{ID: "missing"}); err == nil {
+		t.Fatalf("expected missing event error")
+	}
+}
+
 func TestBridgeStateTimeoutApprovalDenies(t *testing.T) {
 	state, err := agentbridge.NewState(agentbridge.Bridge{
 		ID:        "bridge_01",

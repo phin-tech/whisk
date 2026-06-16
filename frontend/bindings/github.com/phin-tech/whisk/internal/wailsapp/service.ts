@@ -310,6 +310,12 @@ export function LoadAppSettings(): $CancellablePromise<appsettings$0.Settings> {
     });
 }
 
+export function MarkAgentBridgeEventRead(req: protocol$0.MarkAgentBridgeEventReadRequest): $CancellablePromise<protocol$0.AgentBridgeEvent> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.MarkAgentBridgeEventRead", req).then(($result: any) => {
+        return $$createType19($result);
+    });
+}
+
 export function MarkStatusEventRead(req: protocol$0.MarkStatusEventReadRequest): $CancellablePromise<protocol$0.StatusEvent> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.MarkStatusEventRead", req).then(($result: any) => {
         return $$createType33($result);

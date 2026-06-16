@@ -29,6 +29,7 @@
   export let onCloseSession: (session: Session) => void;
   export let onRefreshPtys: () => void;
   export let onRefreshStatusEvents: () => void;
+  export let onClearNotifications: () => void;
   export let onSelectStatusEvent: (event: StatusEvent) => void;
   export let onResolveAgentBridgeApproval: (id: string, action: "allow" | "deny") => void;
   export let onRefreshWork: () => void;
@@ -130,6 +131,7 @@
             loading={loadingStatusEvents}
             onclose={onClose}
             onRefresh={onRefreshStatusEvents}
+            {onClearNotifications}
             {onSelectStatusEvent}
             {onResolveAgentBridgeApproval}
           />

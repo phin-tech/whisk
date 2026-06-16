@@ -286,6 +286,10 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || approval.ID != "approval_01" || fake.resolveAgentApprovalID != "approval_01" || fake.resolveAgentApprovalReq.Action != "allow" {
 		t.Fatalf("resolve agent approval = %#v, id = %q, req = %#v, err = %v", approval, fake.resolveAgentApprovalID, fake.resolveAgentApprovalReq, err)
 	}
+	agentEvent, err := service.MarkAgentBridgeEventRead(ctx, protocol.MarkAgentBridgeEventReadRequest{ID: "event_01"})
+	if err != nil || agentEvent.ID != "event_01" || fake.markAgentEventReadReq.ID != "event_01" {
+		t.Fatalf("mark agent event read = %#v, req = %#v, err = %v", agentEvent, fake.markAgentEventReadReq, err)
+	}
 	integrations, err := service.ListAgentHookIntegrations(ctx)
 	if err != nil || len(integrations) != 1 || integrations[0].Provider != "claude" {
 		t.Fatalf("agent hook integrations = %#v, err = %v", integrations, err)
@@ -416,6 +420,7 @@ type runtimeClientFake struct {
 	recordAgentHookReq       protocol.AgentBridgeHookRequest
 	listAgentApprovalsReq    protocol.ListAgentBridgeApprovalsRequest
 	listAgentEventsReq       protocol.ListAgentBridgeEventsRequest
+	markAgentEventReadReq    protocol.MarkAgentBridgeEventReadRequest
 	resolveAgentApprovalID   string
 	resolveAgentApprovalReq  protocol.ResolveAgentBridgeApprovalRequest
 	checkAgentHookReq        protocol.AgentHookIntegrationRequest
@@ -716,6 +721,11 @@ func (f *runtimeClientFake) ResolveAgentBridgeApproval(_ context.Context, id str
 func (f *runtimeClientFake) ListAgentBridgeEvents(_ context.Context, req protocol.ListAgentBridgeEventsRequest) ([]protocol.AgentBridgeEvent, error) {
 	f.listAgentEventsReq = req
 	return f.agentEvents, nil
+}
+
+func (f *runtimeClientFake) MarkAgentBridgeEventRead(_ context.Context, req protocol.MarkAgentBridgeEventReadRequest) (protocol.AgentBridgeEvent, error) {
+	f.markAgentEventReadReq = req
+	return protocol.AgentBridgeEvent{ID: req.ID, Status: "read"}, nil
 }
 
 func (f *runtimeClientFake) ListAgentHookIntegrations(context.Context) ([]protocol.AgentHookIntegration, error) {

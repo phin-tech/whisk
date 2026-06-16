@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Events } from "@wailsio/runtime";
   import { onDestroy, onMount } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import type {
@@ -53,6 +54,7 @@
     LoadAppSettings,
     LaunchExecution,
     LaunchWorkItemRun,
+    MarkAgentBridgeEventRead,
     MarkStatusEventRead,
     MoveWorkItem,
     NextEvent,
@@ -69,6 +71,7 @@
     SubmitReviewFeedback,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
+  import CommandPalette from "./CommandPalette.svelte";
   import LayoutView from "./LayoutView.svelte";
   import NewProjectDialog from "./NewProjectDialog.svelte";
   import NewSessionDialog from "./NewSessionDialog.svelte";
@@ -76,6 +79,8 @@
   import SidebarDock from "./SidebarDock.svelte";
   import WorkBoard from "./WorkBoard.svelte";
   import { upsertAgentHookIntegration as upsertAgentHookIntegrationView } from "./agentHooksView";
+  import type { Command } from "./commands";
+  import { runCommand } from "./commands";
   import { notificationBadgeCount, targetForStatusEvent } from "./notificationsView";
   import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
@@ -106,11 +111,13 @@
   let agentHookLogStatus: AgentHookLogStatus | null = null;
   let agentHookAction = "";
   let agentHookNotice = "";
+  let commands: Command[] = [];
   let activeSessionId = "";
   let activePaneId = "";
   let activeProjectId = "";
   let activeMain: MainView = "session";
   let activeSidebar: SidebarId | null = "sessions";
+  let commandPaletteOpen = false;
   let newProjectOpen = false;
   let newSessionOpen = false;
   let settingsOpen = false;
@@ -130,6 +137,7 @@
   let offsets: Record<string, number> = {};
   let outputReconcileTimer: number | undefined;
   let workReconcileTimer: number | undefined;
+  let stopCommandEvents: (() => void) | undefined;
   let eventLoopRunning = false;
   let settingsLoaded = false;
   let stopped = false;
@@ -140,6 +148,37 @@
   $: activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   $: activeSessionWindow = activeWindow(activeSession, activePaneId);
   $: notificationCount = notificationBadgeCount(statusEvents) + agentBridgeApprovals.length + agentBridgeEvents.length;
+  $: commands = [
+    {
+      id: "palette.open",
+      title: "Open Command Palette",
+      shortcut: "Cmd/Ctrl K",
+      run: () => {
+        commandPaletteOpen = true;
+      },
+    },
+    {
+      id: "notifications.clear",
+      title: "Clear Notifications",
+      enabled: () => statusEvents.length > 0 || agentBridgeEvents.length > 0,
+      run: clearNotifications,
+    },
+    {
+      id: "notifications.refresh",
+      title: "Refresh Notifications",
+      run: refreshStatusEvents,
+    },
+    {
+      id: "session.new",
+      title: "New Session",
+      run: openNewSession,
+    },
+    {
+      id: "work.refresh",
+      title: "Refresh Work",
+      run: refreshProjects,
+    },
+  ] satisfies Command[];
   $: if (activeSession && (!activePaneId || !activeSession.panes[activePaneId])) {
     activePaneId = firstPaneId(activeSession);
   }
@@ -332,6 +371,22 @@
       statusEvents = nextStatusEvents;
       agentBridgeApprovals = nextApprovals;
       agentBridgeEvents = nextBridgeEvents;
+    } finally {
+      loadingStatusEvents = false;
+    }
+  }
+
+  async function clearNotifications() {
+    if (statusEvents.length === 0 && agentBridgeEvents.length === 0) return;
+    loadingStatusEvents = true;
+    try {
+      await Promise.all([
+        ...statusEvents.map((event) => MarkStatusEventRead({ id: event.id })),
+        ...agentBridgeEvents.map((event) => MarkAgentBridgeEventRead({ id: event.id })),
+      ]);
+      await refreshStatusEvents();
+    } catch (err) {
+      error = `Clear notifications failed: ${backendError(err)}`;
     } finally {
       loadingStatusEvents = false;
     }
@@ -984,7 +1039,26 @@
     });
   }
 
+  async function executeCommand(id: string) {
+    try {
+      const ran = await runCommand(commands, id);
+      if (ran) commandPaletteOpen = false;
+    } catch (err) {
+      error = `Command failed: ${backendError(err)}`;
+    }
+  }
+
+  function handleCommandKey(event: KeyboardEvent) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      void executeCommand("palette.open");
+    }
+  }
+
   onMount(() => {
+    stopCommandEvents = Events.On("command:run", (event) => {
+      void executeCommand(String(event.data));
+    });
     loadSettings()
       .then(() => {
         settingsLoaded = true;
@@ -1014,10 +1088,13 @@
 
   onDestroy(() => {
     stopped = true;
+    stopCommandEvents?.();
     if (outputReconcileTimer) window.clearInterval(outputReconcileTimer);
     if (workReconcileTimer) window.clearInterval(workReconcileTimer);
   });
 </script>
+
+<svelte:window on:keydown={handleCommandKey} />
 
 <main class="flex h-screen flex-col overflow-hidden bg-bg-deep text-text-primary">
   <div class="flex min-h-0 flex-1 flex-row">
@@ -1053,6 +1130,7 @@
         onCloseSession={closeSession}
         onRefreshPtys={() => void refreshPTYs()}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
+        onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
         onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
         onRefreshWork={() => void refreshProjects()}
@@ -1245,6 +1323,7 @@
         onCloseSession={closeSession}
         onRefreshPtys={() => void refreshPTYs()}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
+        onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
         onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
         onRefreshWork={() => void refreshProjects()}
@@ -1267,4 +1346,10 @@
       </div>
     {/if}
   </div>
+  <CommandPalette
+    visible={commandPaletteOpen}
+    {commands}
+    onclose={() => (commandPaletteOpen = false)}
+    onrun={(id) => void executeCommand(id)}
+  />
 </main>

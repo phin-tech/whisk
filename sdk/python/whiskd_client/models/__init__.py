@@ -52,6 +52,7 @@ from .launch_execution_request import LaunchExecutionRequest
 from .launch_work_item_run_request import LaunchWorkItemRunRequest
 from .layout_node import LayoutNode
 from .list_worktrees_request import ListWorktreesRequest
+from .mark_agent_bridge_event_read_request import MarkAgentBridgeEventReadRequest
 from .mark_status_event_read_request import MarkStatusEventReadRequest
 from .metadata_value import MetadataValue
 from .move_work_item_request import MoveWorkItemRequest
@@ -164,6 +165,7 @@ __all__ = (
     "LaunchWorkItemRunRequest",
     "LayoutNode",
     "ListWorktreesRequest",
+    "MarkAgentBridgeEventReadRequest",
     "MarkStatusEventReadRequest",
     "MetadataValue",
     "MoveWorkItemRequest",

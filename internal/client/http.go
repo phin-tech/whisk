@@ -98,6 +98,13 @@ func (c *HTTPClient) ListAgentBridgeEvents(ctx context.Context, req protocol.Lis
 	return events, err
 }
 
+func (c *HTTPClient) MarkAgentBridgeEventRead(ctx context.Context, req protocol.MarkAgentBridgeEventReadRequest) (protocol.AgentBridgeEvent, error) {
+	var event protocol.AgentBridgeEvent
+	path := "/v1/agent-bridge-events/" + url.PathEscape(req.ID) + "/read"
+	err := c.post(ctx, path, req, &event)
+	return event, err
+}
+
 func (c *HTTPClient) ListAgentHookIntegrations(ctx context.Context) ([]protocol.AgentHookIntegration, error) {
 	var integrations []protocol.AgentHookIntegration
 	err := c.get(ctx, "/v1/agent-hook-integrations", nil, &integrations)

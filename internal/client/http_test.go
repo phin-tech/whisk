@@ -41,6 +41,28 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	if compatibility.APIVersion != protocol.DaemonAPIVersion || compatibility.GitSHA == "" {
 		t.Fatalf("compatibility = %#v", compatibility)
 	}
+	agentEvent, err := daemon.RecordAgentHookEvent(ctx, protocol.AgentBridgeHookRequest{
+		Provider:  "claude",
+		EventName: "Notification",
+		Message:   "Need input.",
+	})
+	if err != nil {
+		t.Fatalf("record agent hook event: %v", err)
+	}
+	readAgentEvent, err := daemon.MarkAgentBridgeEventRead(ctx, protocol.MarkAgentBridgeEventReadRequest{ID: agentEvent.ID})
+	if err != nil || readAgentEvent.Status != "read" {
+		t.Fatalf("mark agent event read = %#v, err = %v", readAgentEvent, err)
+	}
+	pendingAgentEvents, err := daemon.ListAgentBridgeEvents(ctx, protocol.ListAgentBridgeEventsRequest{Status: "pending"})
+	if err != nil || len(pendingAgentEvents) != 0 {
+		t.Fatalf("pending agent events = %#v, err = %v", pendingAgentEvents, err)
+	}
+	for range 2 {
+		event, err := daemon.NextEvent(ctx, protocol.NextEventRequest{TimeoutMs: 10})
+		if err != nil || event.Type != "agent_hook_events.changed" {
+			t.Fatalf("agent hook event = %#v, err = %v", event, err)
+		}
+	}
 
 	created, err := daemon.CreateSession(ctx, protocol.CreateSessionRequest{
 		Name:       "Whisk",

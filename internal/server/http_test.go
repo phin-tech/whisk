@@ -37,6 +37,25 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	if compatibility.GitSHA == "" {
 		t.Fatalf("compatibility missing git sha: %#v", compatibility)
 	}
+	agentEvent := postJSON[protocol.AgentBridgeEvent](t, handler, "/v1/agent-hook-events", protocol.AgentBridgeHookRequest{
+		Provider:  "claude",
+		EventName: "Notification",
+		Message:   "Need input.",
+	}, http.StatusCreated)
+	readAgentEvent := postJSON[protocol.AgentBridgeEvent](t, handler, "/v1/agent-bridge-events/"+agentEvent.ID+"/read", protocol.MarkAgentBridgeEventReadRequest{}, http.StatusOK)
+	if readAgentEvent.Status != "read" {
+		t.Fatalf("read agent event = %#v", readAgentEvent)
+	}
+	pendingAgentEvents := getJSON[[]protocol.AgentBridgeEvent](t, handler, "/v1/agent-bridge-events?status=pending", http.StatusOK)
+	if len(pendingAgentEvents) != 0 {
+		t.Fatalf("pending agent events = %#v", pendingAgentEvents)
+	}
+	for range 2 {
+		event := getJSON[protocol.RuntimeEvent](t, handler, "/v1/events/next?timeoutMs=10", http.StatusOK)
+		if event.Type != "agent_hook_events.changed" {
+			t.Fatalf("agent hook event = %#v", event)
+		}
+	}
 
 	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
 		Name:       "Whisk",
