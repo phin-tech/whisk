@@ -15,6 +15,24 @@ func TestDefaultSettingsOpenToSessions(t *testing.T) {
 	if settings.StartupView != appsettings.StartupViewSessions {
 		t.Fatalf("startup view = %q, want %q", settings.StartupView, appsettings.StartupViewSessions)
 	}
+	if !settings.KeepDaemonAlive {
+		t.Fatalf("keep daemon alive = false, want true by default")
+	}
+}
+
+func TestStoreRoundTripsKeepDaemonAlive(t *testing.T) {
+	store := appsettings.NewStore(filepath.Join(t.TempDir(), "whisk.json"))
+
+	if _, err := store.Save(context.Background(), appsettings.Settings{StartupView: appsettings.StartupViewSessions, KeepDaemonAlive: false}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if loaded.KeepDaemonAlive {
+		t.Fatalf("keep daemon alive = true, want false after saving false")
+	}
 }
 
 func TestNormalizeSettingsAllowsOnlyKnownStartupViews(t *testing.T) {
@@ -91,7 +109,7 @@ func TestNewDefaultStoreUsesDefaultPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read default file: %v", err)
 	}
-	if string(bytes) != "{\n  \"startupView\": \"kanban\"\n}\n" {
+	if string(bytes) != "{\n  \"startupView\": \"kanban\",\n  \"keepDaemonAlive\": false\n}\n" {
 		t.Fatalf("file = %q", string(bytes))
 	}
 }
@@ -164,7 +182,7 @@ func TestStoreSavesAndLoadsSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
-	if string(bytes) != "{\n  \"startupView\": \"kanban\"\n}\n" {
+	if string(bytes) != "{\n  \"startupView\": \"kanban\",\n  \"keepDaemonAlive\": false\n}\n" {
 		t.Fatalf("file = %q", string(bytes))
 	}
 }

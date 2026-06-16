@@ -134,6 +134,33 @@ func StopPID(baseURL string) error {
 	return nil
 }
 
+// Stop shuts down the daemon at baseURL whether or not this process started it. It first asks the
+// daemon to shut itself down over HTTP, then signals the recorded PID as a fallback, and waits for
+// it to stop answering health checks. A daemon that is already down is treated as success.
+func Stop(ctx context.Context, baseURL string) error {
+	daemonClient := client.NewHTTP(baseURL, nil)
+	if healthCheck(ctx, daemonClient) != nil {
+		_ = StopPID(baseURL) // clean up a stale PID file if one is lying around
+		return nil
+	}
+	if err := shutdownExisting(ctx, baseURL); err != nil {
+		log.Printf("shutdown whiskd at %s: %v", baseURL, err)
+	}
+	_ = StopPID(baseURL)
+	return waitUntilDown(ctx, daemonClient)
+}
+
+// IsManaged reports whether the daemon at baseURL was started by this machine's whisk app, i.e. a
+// PID file exists and names a live process. Used to distinguish a daemon the app owns from one a
+// developer started independently.
+func IsManaged(baseURL string) bool {
+	pid, err := readPIDFile(baseURL)
+	if err != nil {
+		return false
+	}
+	return processAlive(pid)
+}
+
 func readPIDFile(baseURL string) (int, error) {
 	pidPath, err := PIDPath(baseURL)
 	if err != nil {

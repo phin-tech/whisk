@@ -1,21 +1,25 @@
 <script lang="ts">
   import FolderTree from "@lucide/svelte/icons/folder-tree";
+  import Server from "@lucide/svelte/icons/server";
   import Settings from "@lucide/svelte/icons/settings";
   import TerminalIcon from "@lucide/svelte/icons/terminal";
   import X from "@lucide/svelte/icons/x";
+  import DaemonSettings from "./DaemonSettings.svelte";
 
   export let visible = false;
   export let railSide: "left" | "right" = "right";
   export let startupView: "sessions" | "kanban" = "sessions";
   export let terminalFontSize = 13;
   export let terminalCursorBlink = true;
+  export let keepDaemonAlive = true;
   export let onclose: () => void;
   export let onRailSide: (side: "left" | "right") => void;
   export let onStartupView: (view: "sessions" | "kanban") => void;
   export let onTerminalFontSize: (size: number) => void;
   export let onTerminalCursorBlink: (blink: boolean) => void;
+  export let onKeepDaemonAlive: (keep: boolean) => void;
 
-  type Category = "general" | "sessions" | "terminal";
+  type Category = "general" | "sessions" | "terminal" | "daemon";
 
   let selected: Category = "general";
 
@@ -23,6 +27,7 @@
     { id: "general" as const, label: "General", icon: Settings },
     { id: "sessions" as const, label: "Sessions", icon: FolderTree },
     { id: "terminal" as const, label: "Terminal", icon: TerminalIcon },
+    { id: "daemon" as const, label: "Daemon", icon: Server },
   ];
 
   function handleKey(event: KeyboardEvent) {
@@ -203,6 +208,8 @@
               ></div>
             </button>
           </div>
+        {:else if selected === "daemon"}
+          <DaemonSettings {keepDaemonAlive} onKeepDaemonAlive={onKeepDaemonAlive} />
         {/if}
       </div>
     </div>

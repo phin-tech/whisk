@@ -28,6 +28,11 @@ func NewHTTP(baseURL string, httpClient *http.Client) *HTTPClient {
 	}
 }
 
+// BaseURL returns the daemon URL this client targets, e.g. http://127.0.0.1:8787.
+func (c *HTTPClient) BaseURL() string {
+	return c.baseURL
+}
+
 func (c *HTTPClient) Health(ctx context.Context) error {
 	var response struct {
 		OK bool `json:"ok"`

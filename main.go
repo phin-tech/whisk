@@ -52,14 +52,19 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
-		// Only tear down a daemon this process started. A daemon already running when the app
-		// launched (e.g. `whisk daemon run` in a dev terminal) was adopted, not owned, so we
-		// leave it alive. This stops app-spawned daemons from piling up across restarts without
-		// killing one the developer is managing themselves.
+		// Leave the daemon running by default so sessions persist across app restarts. Only stop
+		// it when the user opted out via the KeepDaemonAlive preference, and only if this process
+		// started it — a daemon adopted from elsewhere (e.g. `whisk daemon run` in a dev terminal)
+		// is owned by whoever launched it, so we never kill that one on quit.
 		OnShutdown: func() {
-			if startedDaemon {
-				_ = daemon.StopPID(daemonURL)
+			if !startedDaemon {
+				return
 			}
+			settings, loadErr := settingsStore.Load(context.Background())
+			if loadErr != nil || settings.KeepDaemonAlive {
+				return
+			}
+			_ = daemon.StopPID(daemonURL)
 		},
 	})
 

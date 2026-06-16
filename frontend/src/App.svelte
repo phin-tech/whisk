@@ -96,6 +96,7 @@
   let startupView: StartupView = "sessions";
   let terminalFontSize = 13;
   let terminalCursorBlink = true;
+  let keepDaemonAlive = true;
   let error = "";
   let loadingSession = false;
   let loadingPtys = false;
@@ -157,6 +158,7 @@
     try {
       const loaded = await LoadAppSettings();
       startupView = normalizeStartupView(loaded.startupView);
+      keepDaemonAlive = loaded.keepDaemonAlive;
       applyStartupView(startupView);
     } catch (err) {
       error = `Load settings failed: ${backendError(err)}`;
@@ -174,14 +176,24 @@
     }
   }
 
-  async function setStartupView(view: StartupView) {
-    startupView = view;
+  async function persistAppSettings() {
     try {
-      const saved = await SaveAppSettings({ startupView: view });
+      const saved = await SaveAppSettings({ startupView, keepDaemonAlive });
       startupView = normalizeStartupView(saved.startupView);
+      keepDaemonAlive = saved.keepDaemonAlive;
     } catch (err) {
       error = `Save settings failed: ${backendError(err)}`;
     }
+  }
+
+  async function setStartupView(view: StartupView) {
+    startupView = view;
+    await persistAppSettings();
+  }
+
+  async function setKeepDaemonAlive(keep: boolean) {
+    keepDaemonAlive = keep;
+    await persistAppSettings();
   }
 
   async function refreshSessions() {
@@ -999,11 +1011,13 @@
           {startupView}
           {terminalFontSize}
           {terminalCursorBlink}
+          {keepDaemonAlive}
           onclose={() => (settingsOpen = false)}
           onRailSide={(side) => (railSide = side)}
           onStartupView={(view) => void setStartupView(view)}
           onTerminalFontSize={(size) => (terminalFontSize = size)}
           onTerminalCursorBlink={(blink) => (terminalCursorBlink = blink)}
+          onKeepDaemonAlive={(keep) => void setKeepDaemonAlive(keep)}
         />
       </div>
     </section>
