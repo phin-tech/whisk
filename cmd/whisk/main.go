@@ -74,7 +74,7 @@ func runWithDeps(args []string, deps runDeps) error {
 
 func runDaemon(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: whisk daemon <run|start|stop|status|clear> [-url http://127.0.0.1:8787]")
+		return fmt.Errorf("usage: whisk daemon <run|start|stop|restart|status|clear> [-url http://127.0.0.1:8787]")
 	}
 	if args[0] == "run" {
 		return runDaemonRun(args[1:])
@@ -106,6 +106,8 @@ func runDaemon(args []string) error {
 		return nil
 	case "stop":
 		return stop(ctx, *baseURL)
+	case "restart":
+		return restart(*baseURL)
 	case "clear":
 		if !*yes {
 			return fmt.Errorf("daemon clear requires -yes")
@@ -224,6 +226,22 @@ func stop(ctx context.Context, baseURL string) error {
 		return fmt.Errorf("stop whiskd: %s", response.Status)
 	}
 	fmt.Printf("whiskd stopped at %s\n", baseURL)
+	return nil
+}
+
+// restart stops the daemon and starts a fresh one, mirroring the GUI's Restart action so agents and
+// the desktop drive the same supervision behaviour. It uses its own timeout because a stop followed
+// by a start needs more headroom than a single command.
+func restart(baseURL string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := daemon.Stop(ctx, baseURL); err != nil {
+		return fmt.Errorf("restart whiskd: %w", err)
+	}
+	if _, err := daemon.Ensure(ctx, baseURL); err != nil {
+		return fmt.Errorf("restart whiskd: %w", err)
+	}
+	fmt.Printf("whiskd restarted at %s\n", baseURL)
 	return nil
 }
 
