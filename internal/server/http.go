@@ -13,6 +13,7 @@ import (
 
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/buildinfo"
+	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/protocol"
 )
@@ -23,6 +24,19 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("GET /v1/health", server.health)
 	mux.HandleFunc("GET /v1/compat", server.compatibility)
 	mux.HandleFunc("POST /v1/daemon/clear", server.clearDaemon)
+	mux.HandleFunc("POST /v1/agent-bridges/{bridgeID}/hooks", server.agentBridgeHook)
+	mux.HandleFunc("POST /v1/agent-hook-events", server.recordAgentHookEvent)
+	mux.HandleFunc("GET /v1/agent-bridge-approvals", server.listAgentBridgeApprovals)
+	mux.HandleFunc("POST /v1/agent-bridge-approvals/{approvalID}/resolve", server.resolveAgentBridgeApproval)
+	mux.HandleFunc("GET /v1/agent-bridge-events", server.listAgentBridgeEvents)
+	mux.HandleFunc("GET /v1/agent-hook-integrations", server.listAgentHookIntegrations)
+	mux.HandleFunc("POST /v1/agent-hook-integrations/check", server.checkAgentHookIntegration)
+	mux.HandleFunc("POST /v1/agent-hook-integrations/install", server.installAgentHookIntegration)
+	mux.HandleFunc("POST /v1/agent-hook-integrations/remove", server.removeAgentHookIntegration)
+	mux.HandleFunc("GET /v1/agent-hook-log", server.agentHookLogStatus)
+	mux.HandleFunc("POST /v1/agent-hook-log/settings", server.setAgentHookLogSettings)
+	mux.HandleFunc("POST /v1/agent-hook-log/clear", server.clearAgentHookLog)
+	mux.HandleFunc("POST /v1/agent-hook-log/open", server.openAgentHookLog)
 	mux.HandleFunc("GET /v1/sessions", server.listSessions)
 	mux.HandleFunc("POST /v1/sessions", server.createSession)
 	mux.HandleFunc("DELETE /v1/sessions/{sessionID}", server.closeSession)
@@ -106,6 +120,274 @@ func (s *HTTPServer) clearDaemon(w http.ResponseWriter, r *http.Request) {
 		WorkItemsCleared: cleared.WorkItemsCleared,
 		ForwardsCleared:  cleared.ForwardsCleared,
 	})
+}
+
+func (s *HTTPServer) agentBridgeHook(w http.ResponseWriter, r *http.Request) {
+	var req protocol.AgentBridgeHookRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	bridgeID := pathValue(r, "bridgeID", "")
+	resp, err := s.runtime.HandleAgentBridgeHook(r.Context(), app.AgentBridgeHookRequest{
+		BridgeID:         bridgeID,
+		Token:            req.Token,
+		Provider:         req.Provider,
+		EventName:        req.EventName,
+		ToolName:         req.ToolName,
+		ToolInput:        req.ToolInput,
+		ToolOutput:       req.ToolOutput,
+		Message:          req.Message,
+		NotificationType: req.NotificationType,
+		ElicitationID:    req.ElicitationID,
+		Action:           req.Action,
+		SessionID:        req.SessionID,
+		PTYID:            req.PTYID,
+		RawPayload:       req.RawPayload,
+		Decision: app.AgentBridgeHookDecision{
+			Action: req.Decision.Action,
+			Reason: req.Decision.Reason,
+		},
+	})
+	if err != nil {
+		if errors.Is(err, app.ErrUnauthorizedAgentBridgeHook) {
+			writeError(w, http.StatusUnauthorized, err)
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, protocol.AgentBridgeHookResponse{Output: resp.Output})
+}
+
+func (s *HTTPServer) recordAgentHookEvent(w http.ResponseWriter, r *http.Request) {
+	var req protocol.AgentBridgeHookRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	event, err := s.runtime.RecordAgentHookEvent(r.Context(), app.AgentBridgeHookRequest{
+		Provider:         req.Provider,
+		EventName:        req.EventName,
+		ToolName:         req.ToolName,
+		ToolInput:        req.ToolInput,
+		ToolOutput:       req.ToolOutput,
+		Message:          req.Message,
+		NotificationType: req.NotificationType,
+		ElicitationID:    req.ElicitationID,
+		Action:           req.Action,
+		SessionID:        req.SessionID,
+		PTYID:            req.PTYID,
+		RawPayload:       req.RawPayload,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, toProtocolAgentBridgeEvent(event))
+}
+
+func (s *HTTPServer) listAgentBridgeApprovals(w http.ResponseWriter, r *http.Request) {
+	approvals, err := s.runtime.ListAgentBridgeApprovals(r.Context(), app.ListAgentBridgeApprovalsRequest{
+		Status: r.URL.Query().Get("status"),
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	out := make([]protocol.AgentBridgeApproval, 0, len(approvals))
+	for _, approval := range approvals {
+		out = append(out, toProtocolAgentBridgeApproval(approval))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *HTTPServer) resolveAgentBridgeApproval(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ResolveAgentBridgeApprovalRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	approval, err := s.runtime.ResolveAgentBridgeApproval(r.Context(), app.ResolveAgentBridgeApprovalRequest{
+		ID:     pathValue(r, "approvalID", ""),
+		Action: req.Action,
+		Reason: req.Reason,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolAgentBridgeApproval(approval))
+}
+
+func (s *HTTPServer) listAgentBridgeEvents(w http.ResponseWriter, r *http.Request) {
+	events, err := s.runtime.ListAgentBridgeEvents(r.Context(), app.ListAgentBridgeEventsRequest{
+		Status: r.URL.Query().Get("status"),
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	out := make([]protocol.AgentBridgeEvent, 0, len(events))
+	for _, event := range events {
+		out = append(out, toProtocolAgentBridgeEvent(event))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *HTTPServer) listAgentHookIntegrations(w http.ResponseWriter, r *http.Request) {
+	integrations, err := s.runtime.ListAgentHookIntegrations(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	out := make([]protocol.AgentHookIntegration, 0, len(integrations))
+	for _, integration := range integrations {
+		out = append(out, toProtocolAgentHookIntegration(integration))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *HTTPServer) checkAgentHookIntegration(w http.ResponseWriter, r *http.Request) {
+	var req protocol.AgentHookIntegrationRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	integration, err := s.runtime.CheckAgentHookIntegration(r.Context(), app.AgentHookIntegrationRequest{Provider: req.Provider})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolAgentHookIntegration(integration))
+}
+
+func (s *HTTPServer) installAgentHookIntegration(w http.ResponseWriter, r *http.Request) {
+	var req protocol.AgentHookIntegrationRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	integration, err := s.runtime.InstallAgentHookIntegration(r.Context(), app.AgentHookIntegrationRequest{Provider: req.Provider})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolAgentHookIntegration(integration))
+}
+
+func (s *HTTPServer) removeAgentHookIntegration(w http.ResponseWriter, r *http.Request) {
+	var req protocol.AgentHookIntegrationRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	integration, err := s.runtime.RemoveAgentHookIntegration(r.Context(), app.AgentHookIntegrationRequest{Provider: req.Provider})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolAgentHookIntegration(integration))
+}
+
+func (s *HTTPServer) agentHookLogStatus(w http.ResponseWriter, r *http.Request) {
+	status, err := s.runtime.AgentHookLogStatus(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolAgentHookLogStatus(status))
+}
+
+func (s *HTTPServer) setAgentHookLogSettings(w http.ResponseWriter, r *http.Request) {
+	var req protocol.SetAgentHookLogSettingsRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	status, err := s.runtime.SetAgentHookLogSettings(r.Context(), app.SetAgentHookLogSettingsRequest{
+		Enabled:           req.Enabled,
+		ClearAfterSession: req.ClearAfterSession,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolAgentHookLogStatus(status))
+}
+
+func (s *HTTPServer) clearAgentHookLog(w http.ResponseWriter, r *http.Request) {
+	status, err := s.runtime.ClearAgentHookLog(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolAgentHookLogStatus(status))
+}
+
+func (s *HTTPServer) openAgentHookLog(w http.ResponseWriter, r *http.Request) {
+	status, err := s.runtime.OpenAgentHookLog(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolAgentHookLogStatus(status))
+}
+
+func toProtocolAgentBridgeApproval(approval agentbridge.Approval) protocol.AgentBridgeApproval {
+	return protocol.AgentBridgeApproval{
+		ID:        approval.ID,
+		BridgeID:  approval.BridgeID,
+		SessionID: approval.SessionID,
+		PTYID:     approval.PTYID,
+		RunID:     approval.RunID,
+		Provider:  string(approval.Provider),
+		EventName: approval.EventName,
+		ToolName:  approval.ToolName,
+		ToolInput: approval.ToolInput,
+		Status:    string(approval.Status),
+		Decision: protocol.AgentBridgeHookDecision{
+			Action: string(approval.Decision.Action),
+			Reason: approval.Decision.Reason,
+		},
+		CreatedAt:  approval.CreatedAt,
+		ResolvedAt: approval.ResolvedAt,
+	}
+}
+
+func toProtocolAgentBridgeEvent(event agentbridge.Event) protocol.AgentBridgeEvent {
+	return protocol.AgentBridgeEvent{
+		ID:               event.ID,
+		BridgeID:         event.BridgeID,
+		SessionID:        event.SessionID,
+		PTYID:            event.PTYID,
+		Provider:         string(event.Provider),
+		EventName:        event.EventName,
+		ToolName:         event.ToolName,
+		Message:          event.Message,
+		NotificationType: event.NotificationType,
+		ElicitationID:    event.ElicitationID,
+		Action:           event.Action,
+		Result:           event.Result,
+		Status:           string(event.Status),
+		CreatedAt:        event.CreatedAt,
+		Raw:              event.Raw,
+	}
+}
+
+func toProtocolAgentHookLogStatus(status app.AgentHookLogStatus) protocol.AgentHookLogStatus {
+	return protocol.AgentHookLogStatus{
+		Enabled:           status.Enabled,
+		ClearAfterSession: status.ClearAfterSession,
+		Path:              status.Path,
+		SizeBytes:         status.SizeBytes,
+	}
+}
+
+func toProtocolAgentHookIntegration(integration app.AgentHookIntegration) protocol.AgentHookIntegration {
+	return protocol.AgentHookIntegration{
+		Provider:         integration.Provider,
+		Status:           integration.Status,
+		InstalledVersion: integration.InstalledVersion,
+		LatestVersion:    integration.LatestVersion,
+		HelperPath:       integration.HelperPath,
+		ConfigPath:       integration.ConfigPath,
+		ManifestPath:     integration.ManifestPath,
+		Detail:           integration.Detail,
+	}
 }
 
 func (s *HTTPServer) addPTYBookmark(w http.ResponseWriter, r *http.Request) {
@@ -402,7 +684,25 @@ func toAppStartPTYOptions(options *protocol.StartPTYOptions) *app.StartPTYOption
 	if options == nil {
 		return nil
 	}
-	return &app.StartPTYOptions{Cols: options.Cols, Rows: options.Rows, Command: options.Command, Env: options.Env, Args: options.Args, Exec: options.Exec}
+	return &app.StartPTYOptions{
+		Cols:        options.Cols,
+		Rows:        options.Rows,
+		Command:     options.Command,
+		Env:         options.Env,
+		Args:        options.Args,
+		Exec:        options.Exec,
+		AgentBridge: toAppStartPTYAgentBridgeOptions(options.AgentBridge),
+	}
+}
+
+func toAppStartPTYAgentBridgeOptions(options *protocol.StartPTYAgentBridgeOptions) *app.StartPTYAgentBridgeOptions {
+	if options == nil {
+		return nil
+	}
+	return &app.StartPTYAgentBridgeOptions{
+		Enabled:  options.Enabled,
+		Provider: options.Provider,
+	}
 }
 
 func (s *HTTPServer) writePTY(w http.ResponseWriter, r *http.Request) {

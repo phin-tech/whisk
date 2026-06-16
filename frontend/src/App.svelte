@@ -2,6 +2,10 @@
   import { onDestroy, onMount } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import type {
+    AgentBridgeApproval,
+    AgentBridgeEvent,
+    AgentHookIntegration,
+    AgentHookLogStatus,
     Project,
     PTYInfo,
     RuntimeEvent,
@@ -29,6 +33,13 @@
     CreateWorkItem,
     CreateWorktree,
     DeleteWorkItem,
+    CheckAgentHookIntegration,
+    AgentHookLogStatus as LoadAgentHookLogStatus,
+    ClearAgentHookLog,
+    InstallAgentHookIntegration,
+    ListAgentBridgeApprovals,
+    ListAgentBridgeEvents,
+    ListAgentHookIntegrations,
     ListArtifacts,
     ListGateReports,
     ListPTYs,
@@ -46,8 +57,12 @@
     MoveWorkItem,
     NextEvent,
     Output,
+    OpenAgentHookLog,
     QueueExecution,
+    RemoveAgentHookIntegration,
+    ResolveAgentBridgeApproval,
     SaveAppSettings,
+    SetAgentHookLogSettings,
     SplitPane,
     StartPlanning,
     SubmitDraftPlan,
@@ -60,6 +75,7 @@
   import SettingsView from "./SettingsView.svelte";
   import SidebarDock from "./SidebarDock.svelte";
   import WorkBoard from "./WorkBoard.svelte";
+  import { upsertAgentHookIntegration as upsertAgentHookIntegrationView } from "./agentHooksView";
   import { notificationBadgeCount, targetForStatusEvent } from "./notificationsView";
   import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
@@ -84,6 +100,12 @@
   let gateReports: GateReport[] = [];
   let workflowEvents: WorkflowEvent[] = [];
   let statusEvents: StatusEvent[] = [];
+  let agentBridgeApprovals: AgentBridgeApproval[] = [];
+  let agentBridgeEvents: AgentBridgeEvent[] = [];
+  let agentHookIntegrations: AgentHookIntegration[] = [];
+  let agentHookLogStatus: AgentHookLogStatus | null = null;
+  let agentHookAction = "";
+  let agentHookNotice = "";
   let activeSessionId = "";
   let activePaneId = "";
   let activeProjectId = "";
@@ -97,6 +119,8 @@
   let terminalFontSize = 13;
   let terminalCursorBlink = true;
   let keepDaemonAlive = true;
+  let hookLogEnabled = true;
+  let clearHookLogAfterSession = false;
   let error = "";
   let loadingSession = false;
   let loadingPtys = false;
@@ -115,7 +139,7 @@
 
   $: activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   $: activeSessionWindow = activeWindow(activeSession, activePaneId);
-  $: notificationCount = notificationBadgeCount(statusEvents);
+  $: notificationCount = notificationBadgeCount(statusEvents) + agentBridgeApprovals.length + agentBridgeEvents.length;
   $: if (activeSession && (!activePaneId || !activeSession.panes[activePaneId])) {
     activePaneId = firstPaneId(activeSession);
   }
@@ -159,7 +183,15 @@
       const loaded = await LoadAppSettings();
       startupView = normalizeStartupView(loaded.startupView);
       keepDaemonAlive = loaded.keepDaemonAlive;
+      if (typeof loaded.hookLogEnabled === "boolean") hookLogEnabled = loaded.hookLogEnabled;
+      if (typeof loaded.clearHookLogAfterSession === "boolean") {
+        clearHookLogAfterSession = loaded.clearHookLogAfterSession;
+      }
       applyStartupView(startupView);
+      await SetAgentHookLogSettings({
+        enabled: hookLogEnabled,
+        clearAfterSession: clearHookLogAfterSession,
+      });
     } catch (err) {
       error = `Load settings failed: ${backendError(err)}`;
     }
@@ -178,9 +210,18 @@
 
   async function persistAppSettings() {
     try {
-      const saved = await SaveAppSettings({ startupView, keepDaemonAlive });
+      const saved = await SaveAppSettings({
+        startupView,
+        keepDaemonAlive,
+        hookLogEnabled,
+        clearHookLogAfterSession,
+      });
       startupView = normalizeStartupView(saved.startupView);
       keepDaemonAlive = saved.keepDaemonAlive;
+      if (typeof saved.hookLogEnabled === "boolean") hookLogEnabled = saved.hookLogEnabled;
+      if (typeof saved.clearHookLogAfterSession === "boolean") {
+        clearHookLogAfterSession = saved.clearHookLogAfterSession;
+      }
     } catch (err) {
       error = `Save settings failed: ${backendError(err)}`;
     }
@@ -283,7 +324,14 @@
   async function refreshStatusEvents() {
     loadingStatusEvents = true;
     try {
-      statusEvents = await ListStatusEvents({ unreadOnly: true });
+      const [nextStatusEvents, nextApprovals, nextBridgeEvents] = await Promise.all([
+        ListStatusEvents({ unreadOnly: true }),
+        ListAgentBridgeApprovals({ status: "pending" }),
+        ListAgentBridgeEvents({ status: "pending" }),
+      ]);
+      statusEvents = nextStatusEvents;
+      agentBridgeApprovals = nextApprovals;
+      agentBridgeEvents = nextBridgeEvents;
     } finally {
       loadingStatusEvents = false;
     }
@@ -363,6 +411,123 @@
     }
   }
 
+  async function refreshAgentHookIntegrations() {
+    const [integrations, logStatus] = await Promise.all([
+      ListAgentHookIntegrations(),
+      LoadAgentHookLogStatus(),
+    ]);
+    agentHookIntegrations = integrations;
+    agentHookLogStatus = logStatus;
+    hookLogEnabled = logStatus.enabled;
+    clearHookLogAfterSession = logStatus.clearAfterSession;
+  }
+
+  async function setHookLogEnabled(enabled: boolean) {
+    hookLogEnabled = enabled;
+    await runAgentHookAction("hook-log:settings", async () => {
+      agentHookLogStatus = await SetAgentHookLogSettings({ enabled });
+      await SaveAppSettings({
+        startupView,
+        keepDaemonAlive,
+        hookLogEnabled: agentHookLogStatus.enabled,
+        clearHookLogAfterSession,
+      });
+      agentHookNotice = `Hook logging ${agentHookLogStatus.enabled ? "enabled" : "disabled"}.`;
+    });
+  }
+
+  async function setClearHookLogAfterSession(enabled: boolean) {
+    clearHookLogAfterSession = enabled;
+    await runAgentHookAction("hook-log:settings", async () => {
+      agentHookLogStatus = await SetAgentHookLogSettings({ clearAfterSession: enabled });
+      await SaveAppSettings({
+        startupView,
+        keepDaemonAlive,
+        hookLogEnabled,
+        clearHookLogAfterSession: agentHookLogStatus.clearAfterSession,
+      });
+      agentHookNotice = `Clear hook log after session ${agentHookLogStatus.clearAfterSession ? "enabled" : "disabled"}.`;
+    });
+  }
+
+  async function clearAgentHookLog() {
+    await runAgentHookAction("hook-log:clear", async () => {
+      agentHookLogStatus = await ClearAgentHookLog();
+      agentHookNotice = "Hook log cleared.";
+    });
+  }
+
+  async function openAgentHookLog() {
+    await runAgentHookAction("hook-log:open", async () => {
+      agentHookLogStatus = await OpenAgentHookLog();
+      agentHookNotice = "Hook log opened.";
+    });
+  }
+
+  async function copyAgentHookLogPath(path: string) {
+    await runAgentHookAction("hook-log:copy", async () => {
+      await navigator.clipboard.writeText(path);
+      agentHookNotice = "Hook log path copied.";
+    });
+  }
+
+  async function checkAgentHookIntegration(provider: string) {
+    agentHookNotice = `Checking ${agentHookProviderLabel(provider)} hooks...`;
+    await runAgentHookAction(`check:${provider}`, async () => {
+      const integration = await CheckAgentHookIntegration({ provider });
+      upsertAgentHookIntegration(integration, provider);
+      await refreshAgentHookIntegrations();
+      agentHookNotice = `${agentHookProviderLabel(provider)} hooks are ${integration.status}.`;
+    });
+  }
+
+  async function installAgentHookIntegration(provider: string) {
+    agentHookNotice = `Installing ${agentHookProviderLabel(provider)} hooks...`;
+    await runAgentHookAction(`install:${provider}`, async () => {
+      const integration = await InstallAgentHookIntegration({ provider });
+      upsertAgentHookIntegration(integration, provider);
+      await refreshAgentHookIntegrations();
+      agentHookNotice = `${agentHookProviderLabel(provider)} hooks are ${integration.status}.`;
+    });
+  }
+
+  async function removeAgentHookIntegration(provider: string) {
+    agentHookNotice = `Removing ${agentHookProviderLabel(provider)} hooks...`;
+    await runAgentHookAction(`remove:${provider}`, async () => {
+      const integration = await RemoveAgentHookIntegration({ provider });
+      upsertAgentHookIntegration(integration, provider);
+      await refreshAgentHookIntegrations();
+      agentHookNotice = `${agentHookProviderLabel(provider)} hooks are ${integration.status}.`;
+    });
+  }
+
+  async function runAgentHookAction(action: string, run: () => Promise<void>) {
+    error = "";
+    agentHookAction = action;
+    try {
+      await run();
+    } catch (err) {
+      error = backendError(err);
+      agentHookNotice = `Agent hook action failed: ${backendError(err)}`;
+    } finally {
+      agentHookAction = "";
+    }
+  }
+
+  function upsertAgentHookIntegration(integration: AgentHookIntegration, provider: string) {
+    agentHookIntegrations = upsertAgentHookIntegrationView(
+      agentHookIntegrations,
+      integration,
+      provider,
+    );
+  }
+
+  function agentHookProviderLabel(provider: string) {
+    if (provider === "claude") return "Claude Code";
+    if (provider === "codex") return "Codex";
+    return provider;
+  }
+
   async function split(direction: "horizontal" | "vertical") {
     if (!activeSession || !activePaneId) return;
     error = "";
@@ -391,6 +556,8 @@
     if (targets.ptys) await refreshPTYs();
     if (targets.outputPtyId) await refreshOutput(targets.outputPtyId);
     if (targets.statusEvents) await refreshStatusEvents();
+    if (targets.agentBridgeApprovals) await refreshStatusEvents();
+    if (targets.agentHookEvents) await refreshStatusEvents();
     if (targets.work) await refreshWorkState();
   }
 
@@ -443,6 +610,19 @@
       if (target.main === "session") await refreshVisibleOutput();
     } catch (err) {
       error = backendError(err);
+    }
+  }
+
+  async function resolveAgentBridgeApproval(approvalId: string, action: "allow" | "deny") {
+    error = "";
+    loadingStatusEvents = true;
+    try {
+      await ResolveAgentBridgeApproval(approvalId, { action });
+      await refreshStatusEvents();
+    } catch (err) {
+      error = `Resolve approval failed: ${backendError(err)}`;
+    } finally {
+      loadingStatusEvents = false;
     }
   }
 
@@ -798,6 +978,10 @@
 
   function toggleSettings() {
     settingsOpen = !settingsOpen;
+    if (!settingsOpen) return;
+    void refreshAgentHookIntegrations().catch((err) => {
+      error = backendError(err);
+    });
   }
 
   onMount(() => {
@@ -853,7 +1037,9 @@
         {ptys}
         {projects}
         {workItems}
-        {statusEvents}
+          {statusEvents}
+          {agentBridgeApprovals}
+          {agentBridgeEvents}
         {activeSessionId}
         {activeProjectId}
         {loadingSession}
@@ -868,6 +1054,7 @@
         onRefreshPtys={() => void refreshPTYs()}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
+        onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
         onSelectProject={selectProject}
@@ -1012,12 +1199,25 @@
           {terminalFontSize}
           {terminalCursorBlink}
           {keepDaemonAlive}
+          {agentHookIntegrations}
+          {agentHookLogStatus}
+          {agentHookAction}
+          {agentHookNotice}
           onclose={() => (settingsOpen = false)}
           onRailSide={(side) => (railSide = side)}
           onStartupView={(view) => void setStartupView(view)}
           onTerminalFontSize={(size) => (terminalFontSize = size)}
           onTerminalCursorBlink={(blink) => (terminalCursorBlink = blink)}
           onKeepDaemonAlive={(keep) => void setKeepDaemonAlive(keep)}
+          onRefreshAgentHookIntegrations={() => void refreshAgentHookIntegrations()}
+          onCheckAgentHookIntegration={(provider) => void checkAgentHookIntegration(provider)}
+          onInstallAgentHookIntegration={(provider) => void installAgentHookIntegration(provider)}
+          onRemoveAgentHookIntegration={(provider) => void removeAgentHookIntegration(provider)}
+          onHookLogEnabled={(enabled) => void setHookLogEnabled(enabled)}
+          onClearHookLogAfterSession={(enabled) => void setClearHookLogAfterSession(enabled)}
+          onClearAgentHookLog={() => void clearAgentHookLog()}
+          onOpenAgentHookLog={() => void openAgentHookLog()}
+          onCopyAgentHookLogPath={(path) => void copyAgentHookLogPath(path)}
         />
       </div>
     </section>
@@ -1030,6 +1230,8 @@
         {projects}
         {workItems}
         {statusEvents}
+        {agentBridgeApprovals}
+        {agentBridgeEvents}
         {activeSessionId}
         {activeProjectId}
         {loadingSession}
@@ -1044,6 +1246,7 @@
         onRefreshPtys={() => void refreshPTYs()}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
+        onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
         onSelectProject={selectProject}

@@ -14,6 +14,8 @@ export class Settings {
      * the app stop the daemon it started on quit.
      */
     "keepDaemonAlive": boolean;
+    "hookLogEnabled"?: boolean | null;
+    "clearHookLogAfterSession"?: boolean;
 
     /** Creates a new Settings instance. */
     constructor($$source: Partial<Settings> = {}) {

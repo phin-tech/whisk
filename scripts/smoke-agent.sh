@@ -28,7 +28,7 @@ trap cleanup EXIT INT TERM
 printf 'starting smoke daemon: %s\n' "$URL"
 (
   cd "$ROOT_DIR"
-  XDG_CONFIG_HOME="$CONFIG_DIR" SHELL=/bin/sh "$BIN_DIR/whiskd" -addr "$ADDR"
+  XDG_CONFIG_HOME="$CONFIG_DIR" SHELL=/bin/sh "$BIN_DIR/whisk" daemon run -addr "$ADDR"
 ) >"$LOG_FILE" 2>&1 &
 DAEMON_PID=$!
 

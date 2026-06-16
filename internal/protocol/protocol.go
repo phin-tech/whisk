@@ -1,12 +1,14 @@
 package protocol
 
 import (
+	"time"
+
 	"github.com/phin-tech/whisk/internal/domain/ptybookmark"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 8
+const DaemonAPIVersion = 11
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -47,12 +49,18 @@ type SplitPaneRequest struct {
 }
 
 type StartPTYOptions struct {
-	Cols    int               `json:"cols"`
-	Rows    int               `json:"rows"`
-	Command string            `json:"command,omitempty"`
-	Env     map[string]string `json:"env,omitempty"`
-	Args    []string          `json:"args,omitempty"`
-	Exec    bool              `json:"exec,omitempty"`
+	Cols        int                         `json:"cols"`
+	Rows        int                         `json:"rows"`
+	Command     string                      `json:"command,omitempty"`
+	Env         map[string]string           `json:"env,omitempty"`
+	Args        []string                    `json:"args,omitempty"`
+	Exec        bool                        `json:"exec,omitempty"`
+	AgentBridge *StartPTYAgentBridgeOptions `json:"agentBridge,omitempty"`
+}
+
+type StartPTYAgentBridgeOptions struct {
+	Enabled  bool   `json:"enabled"`
+	Provider string `json:"provider,omitempty"`
 }
 
 type SplitPaneResult struct {
@@ -181,6 +189,106 @@ type RuntimeEvent struct {
 	Type   string `json:"type"`
 	PtyID  string `json:"ptyId,omitempty"`
 	Offset uint64 `json:"offset,omitempty"`
+}
+
+type AgentBridgeHookDecision struct {
+	Action string `json:"action,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+type AgentBridgeHookRequest struct {
+	Token            string                  `json:"token"`
+	Provider         string                  `json:"provider"`
+	EventName        string                  `json:"eventName"`
+	ToolName         string                  `json:"toolName,omitempty"`
+	ToolInput        map[string]any          `json:"toolInput,omitempty"`
+	ToolOutput       string                  `json:"toolOutput,omitempty"`
+	Message          string                  `json:"message,omitempty"`
+	NotificationType string                  `json:"notificationType,omitempty"`
+	ElicitationID    string                  `json:"elicitationId,omitempty"`
+	Action           string                  `json:"action,omitempty"`
+	SessionID        string                  `json:"sessionId,omitempty"`
+	PTYID            string                  `json:"ptyId,omitempty"`
+	RawPayload       map[string]any          `json:"rawPayload,omitempty"`
+	Decision         AgentBridgeHookDecision `json:"decision,omitempty"`
+}
+
+type AgentBridgeHookResponse struct {
+	Output map[string]any `json:"output,omitempty"`
+}
+
+type AgentBridgeApproval struct {
+	ID         string                  `json:"id"`
+	BridgeID   string                  `json:"bridgeId"`
+	SessionID  string                  `json:"sessionId,omitempty"`
+	PTYID      string                  `json:"ptyId,omitempty"`
+	RunID      string                  `json:"runId,omitempty"`
+	Provider   string                  `json:"provider"`
+	EventName  string                  `json:"eventName"`
+	ToolName   string                  `json:"toolName"`
+	ToolInput  map[string]any          `json:"toolInput,omitempty"`
+	Status     string                  `json:"status"`
+	Decision   AgentBridgeHookDecision `json:"decision,omitempty"`
+	CreatedAt  time.Time               `json:"createdAt"`
+	ResolvedAt *time.Time              `json:"resolvedAt,omitempty"`
+}
+
+type AgentBridgeEvent struct {
+	ID               string         `json:"id"`
+	BridgeID         string         `json:"bridgeId,omitempty"`
+	SessionID        string         `json:"sessionId,omitempty"`
+	PTYID            string         `json:"ptyId,omitempty"`
+	Provider         string         `json:"provider"`
+	EventName        string         `json:"eventName"`
+	ToolName         string         `json:"toolName,omitempty"`
+	Message          string         `json:"message,omitempty"`
+	NotificationType string         `json:"notificationType,omitempty"`
+	ElicitationID    string         `json:"elicitationId,omitempty"`
+	Action           string         `json:"action,omitempty"`
+	Result           string         `json:"result,omitempty"`
+	Status           string         `json:"status"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	Raw              map[string]any `json:"raw,omitempty"`
+}
+
+type ListAgentBridgeEventsRequest struct {
+	Status string `json:"status,omitempty"`
+}
+
+type ListAgentBridgeApprovalsRequest struct {
+	Status string `json:"status,omitempty"`
+}
+
+type ResolveAgentBridgeApprovalRequest struct {
+	Action string `json:"action"`
+	Reason string `json:"reason,omitempty"`
+}
+
+type AgentHookIntegration struct {
+	Provider         string `json:"provider"`
+	Status           string `json:"status"`
+	InstalledVersion string `json:"installedVersion,omitempty"`
+	LatestVersion    string `json:"latestVersion"`
+	HelperPath       string `json:"helperPath"`
+	ConfigPath       string `json:"configPath"`
+	ManifestPath     string `json:"manifestPath"`
+	Detail           string `json:"detail,omitempty"`
+}
+
+type AgentHookIntegrationRequest struct {
+	Provider string `json:"provider"`
+}
+
+type AgentHookLogStatus struct {
+	Enabled           bool   `json:"enabled"`
+	ClearAfterSession bool   `json:"clearAfterSession"`
+	Path              string `json:"path"`
+	SizeBytes         int64  `json:"sizeBytes"`
+}
+
+type SetAgentHookLogSettingsRequest struct {
+	Enabled           *bool `json:"enabled,omitempty"`
+	ClearAfterSession *bool `json:"clearAfterSession,omitempty"`
 }
 
 type Project = workitem.Project

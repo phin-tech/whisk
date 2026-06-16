@@ -290,14 +290,9 @@ func daemonPathForExecutable(executable string) (string, error) {
 		}
 	}
 	if executable != "" {
-		candidates = append(candidates, filepath.Join(filepath.Dir(executable), "whiskd"))
 		candidates = append(candidates, filepath.Join(filepath.Dir(executable), "whisk"))
 	}
-	candidates = append(candidates, filepath.Join("bin", "whiskd"))
 	candidates = append(candidates, filepath.Join("bin", "whisk"))
-	if path, err := exec.LookPath("whiskd"); err == nil {
-		candidates = append(candidates, path)
-	}
 	if path, err := exec.LookPath("whisk"); err == nil {
 		candidates = append(candidates, path)
 	}
@@ -323,5 +318,5 @@ func daemonPathForExecutable(executable string) (string, error) {
 		}
 		return candidate, nil
 	}
-	return "", fmt.Errorf("whisk daemon executable not found; run `task build:daemon` or set WHISKD_PATH")
+	return "", fmt.Errorf("whisk daemon executable not found; run `task build:daemon` or set WHISKD_PATH to the whisk CLI")
 }

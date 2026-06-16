@@ -1,4 +1,4 @@
-"""Pytest fixtures that boot a real whiskd daemon for the SDK integration suite.
+"""Pytest fixtures that boot a real whisk daemon for the SDK integration suite.
 
 The daemon is launched on an ephemeral loopback port with an isolated XDG state
 directory so the suite never touches a developer's real session state. Requires
@@ -45,7 +45,7 @@ def base_url(tmp_path_factory) -> str:
         "XDG_CACHE_HOME": str(state / "cache"),
     }
     proc = subprocess.Popen(
-        [binary, "-addr", addr],
+        [binary, "daemon", "run", "-addr", addr],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

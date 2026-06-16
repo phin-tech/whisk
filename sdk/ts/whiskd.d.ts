@@ -4,6 +4,227 @@
  */
 
 export interface paths {
+    "/v1/agent-bridge-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List pending or resolved daemon-owned agent bridge approvals */
+        get: operations["listAgentBridgeApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-bridge-approvals/{approvalID}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a pending daemon-owned agent bridge approval */
+        post: operations["resolveAgentBridgeApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-bridge-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List passive provider hook events */
+        get: operations["listAgentBridgeEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-bridges/{bridgeID}/hooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Handle provider hook callback for a daemon-owned agent bridge */
+        post: operations["agentBridgeHook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-hook-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a passive provider hook event */
+        post: operations["recordAgentHookEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-hook-integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List globally installed provider hook integrations */
+        get: operations["listAgentHookIntegrations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-hook-integrations/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check one global provider hook integration */
+        post: operations["checkAgentHookIntegration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-hook-integrations/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Install or update one global provider hook integration */
+        post: operations["installAgentHookIntegration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-hook-integrations/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove one global provider hook integration */
+        post: operations["removeAgentHookIntegration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-hook-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get hook log status and path */
+        get: operations["getAgentHookLogStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-hook-log/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear hook log files */
+        post: operations["clearAgentHookLog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-hook-log/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open hook log in the platform editor */
+        post: operations["openAgentHookLog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-hook-log/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update hook log settings */
+        post: operations["setAgentHookLogSettings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/artifacts": {
         parameters: {
             query?: never;
@@ -550,6 +771,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/work-item-runs/{runID}/launch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["launchWorkItemRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/work-items": {
         parameters: {
             query?: never;
@@ -662,6 +899,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/work-items/{workItemID}/launch-execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["launchExecution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/work-items/{workItemID}/move": {
         parameters: {
             query?: never;
@@ -688,6 +941,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["submitDraftPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/work-items/{workItemID}/queue-execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["queueExecution"];
         delete?: never;
         options?: never;
         head?: never;
@@ -857,6 +1126,94 @@ export interface components {
             scope?: string;
             url?: string;
             workItemId: string;
+        };
+        AgentBridgeApproval: {
+            bridgeId: string;
+            /** Format: date-time */
+            createdAt: string;
+            decision?: components["schemas"]["AgentBridgeHookDecision"];
+            eventName: string;
+            id: string;
+            provider: string;
+            ptyId?: string;
+            /** Format: date-time */
+            resolvedAt?: string | null;
+            runId?: string;
+            sessionId?: string;
+            status: string;
+            toolInput?: {
+                [key: string]: unknown;
+            };
+            toolName: string;
+        };
+        AgentBridgeEvent: {
+            action?: string;
+            bridgeId?: string;
+            /** Format: date-time */
+            createdAt: string;
+            elicitationId?: string;
+            eventName: string;
+            id: string;
+            message?: string;
+            notificationType?: string;
+            provider: string;
+            ptyId?: string;
+            raw?: {
+                [key: string]: unknown;
+            };
+            result?: string;
+            sessionId?: string;
+            status: string;
+            toolName?: string;
+        };
+        AgentBridgeHookDecision: {
+            action?: string;
+            reason?: string;
+        };
+        AgentBridgeHookRequest: {
+            action?: string;
+            decision?: components["schemas"]["AgentBridgeHookDecision"];
+            elicitationId?: string;
+            eventName: string;
+            message?: string;
+            notificationType?: string;
+            provider: string;
+            ptyId?: string;
+            rawPayload?: {
+                [key: string]: unknown;
+            };
+            sessionId?: string;
+            token: string;
+            toolInput?: {
+                [key: string]: unknown;
+            };
+            toolName?: string;
+            toolOutput?: string;
+        };
+        AgentBridgeHookResponse: {
+            output?: {
+                [key: string]: unknown;
+            };
+        };
+        AgentHookIntegration: {
+            configPath: string;
+            detail?: string;
+            helperPath: string;
+            installedVersion?: string;
+            latestVersion: string;
+            manifestPath: string;
+            provider: string;
+            status: string;
+        };
+        AgentHookIntegrationRequest: {
+            provider: string;
+        };
+        AgentHookLogStatus: {
+            clearAfterSession: boolean;
+            enabled: boolean;
+            path: string;
+            /** Format: int64 */
+            sizeBytes: number;
         };
         AnswerQuestionRequest: {
             actor?: string;
@@ -1072,6 +1429,18 @@ export interface components {
         KillPTYRequest: {
             ptyId: string;
         };
+        LaunchExecutionRequest: {
+            actor?: string;
+            agentProfileId?: string;
+            systemPrompt?: string;
+            workItemId: string;
+        };
+        LaunchWorkItemRunRequest: {
+            actor?: string;
+            agentProfileId?: string;
+            id: string;
+            systemPrompt?: string;
+        };
         LayoutNode: {
             children?: components["schemas"]["LayoutNode"][];
             direction?: string;
@@ -1189,6 +1558,10 @@ export interface components {
             updatedAt: string;
             workItemId: string;
         };
+        QueueExecutionRequest: {
+            actor?: string;
+            workItemId: string;
+        };
         RemoveWorktreeRequest: {
             alsoBranch: boolean;
             force: boolean;
@@ -1216,6 +1589,10 @@ export interface components {
             ptyId: string;
             /** Format: int64 */
             rows: number;
+        };
+        ResolveAgentBridgeApprovalRequest: {
+            action: string;
+            reason?: string;
         };
         RestartPanePTYRequest: {
             options: components["schemas"]["StartPTYOptions"];
@@ -1258,6 +1635,10 @@ export interface components {
             name: string;
             sessionId: string;
         };
+        SetAgentHookLogSettingsRequest: {
+            clearAfterSession?: boolean | null;
+            enabled?: boolean | null;
+        };
         SetPaneWorkingDirRequest: {
             paneId: string;
             sessionId: string;
@@ -1289,7 +1670,12 @@ export interface components {
             systemPrompt?: string;
             workItemId: string;
         };
+        StartPTYAgentBridgeOptions: {
+            enabled: boolean;
+            provider?: string;
+        };
         StartPTYOptions: {
+            agentBridge?: components["schemas"]["StartPTYAgentBridgeOptions"] | null;
             args?: string[];
             /** Format: int64 */
             cols: number;
@@ -1482,6 +1868,419 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listAgentBridgeApprovals: {
+        parameters: {
+            query?: {
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentBridgeApproval"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    resolveAgentBridgeApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approvalID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveAgentBridgeApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentBridgeApproval"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listAgentBridgeEvents: {
+        parameters: {
+            query?: {
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentBridgeEvent"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    agentBridgeHook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bridgeID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentBridgeHookRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentBridgeHookResponse"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    recordAgentHookEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentBridgeHookRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentBridgeEvent"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listAgentHookIntegrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHookIntegration"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    checkAgentHookIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentHookIntegrationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHookIntegration"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    installAgentHookIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentHookIntegrationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHookIntegration"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    removeAgentHookIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentHookIntegrationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHookIntegration"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getAgentHookLogStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHookLogStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    clearAgentHookLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHookLogStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    openAgentHookLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHookLogStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    setAgentHookLogSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAgentHookLogSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHookLogStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listArtifacts: {
         parameters: {
             query?: {
@@ -2793,6 +3592,41 @@ export interface operations {
             };
         };
     };
+    launchWorkItemRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchWorkItemRunRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemRun"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listWorkItems: {
         parameters: {
             query?: {
@@ -3067,6 +3901,41 @@ export interface operations {
             };
         };
     };
+    launchExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchExecutionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemRun"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     moveWorkItem: {
         parameters: {
             query?: never;
@@ -3124,6 +3993,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Artifact"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    queueExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueExecutionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemRun"];
                 };
             };
             /** @description error */

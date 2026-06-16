@@ -378,6 +378,50 @@ func (s *Service) MarkStatusEventRead(ctx context.Context, req protocol.MarkStat
 	return s.client.MarkStatusEventRead(ctx, req)
 }
 
+func (s *Service) ListAgentBridgeApprovals(ctx context.Context, req protocol.ListAgentBridgeApprovalsRequest) ([]protocol.AgentBridgeApproval, error) {
+	return s.client.ListAgentBridgeApprovals(ctx, req)
+}
+
+func (s *Service) ResolveAgentBridgeApproval(ctx context.Context, id string, req protocol.ResolveAgentBridgeApprovalRequest) (protocol.AgentBridgeApproval, error) {
+	return s.client.ResolveAgentBridgeApproval(ctx, id, req)
+}
+
+func (s *Service) ListAgentBridgeEvents(ctx context.Context, req protocol.ListAgentBridgeEventsRequest) ([]protocol.AgentBridgeEvent, error) {
+	return s.client.ListAgentBridgeEvents(ctx, req)
+}
+
+func (s *Service) ListAgentHookIntegrations(ctx context.Context) ([]protocol.AgentHookIntegration, error) {
+	return s.client.ListAgentHookIntegrations(ctx)
+}
+
+func (s *Service) CheckAgentHookIntegration(ctx context.Context, req protocol.AgentHookIntegrationRequest) (protocol.AgentHookIntegration, error) {
+	return s.client.CheckAgentHookIntegration(ctx, req)
+}
+
+func (s *Service) InstallAgentHookIntegration(ctx context.Context, req protocol.AgentHookIntegrationRequest) (protocol.AgentHookIntegration, error) {
+	return s.client.InstallAgentHookIntegration(ctx, req)
+}
+
+func (s *Service) RemoveAgentHookIntegration(ctx context.Context, req protocol.AgentHookIntegrationRequest) (protocol.AgentHookIntegration, error) {
+	return s.client.RemoveAgentHookIntegration(ctx, req)
+}
+
+func (s *Service) AgentHookLogStatus(ctx context.Context) (protocol.AgentHookLogStatus, error) {
+	return s.client.AgentHookLogStatus(ctx)
+}
+
+func (s *Service) SetAgentHookLogSettings(ctx context.Context, req protocol.SetAgentHookLogSettingsRequest) (protocol.AgentHookLogStatus, error) {
+	return s.client.SetAgentHookLogSettings(ctx, req)
+}
+
+func (s *Service) ClearAgentHookLog(ctx context.Context) (protocol.AgentHookLogStatus, error) {
+	return s.client.ClearAgentHookLog(ctx)
+}
+
+func (s *Service) OpenAgentHookLog(ctx context.Context) (protocol.AgentHookLogStatus, error) {
+	return s.client.OpenAgentHookLog(ctx)
+}
+
 func (s *Service) ListHTTPForwards(ctx context.Context) ([]protocol.HTTPForward, error) {
 	return s.client.ListHTTPForwards(ctx)
 }

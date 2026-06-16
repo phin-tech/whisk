@@ -5,9 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
+	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
+	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/httpforward"
 	"github.com/phin-tech/whisk/internal/domain/ptybookmark"
 	"github.com/phin-tech/whisk/internal/domain/session"
@@ -123,38 +128,49 @@ type AttachPTYRequest struct {
 }
 
 type RuntimeConfig struct {
-	PTYBackend      PTYBackend
-	Worktrees       WorktreeBackend
-	IDGenerator     func() string
-	EventSink       EventSink
-	SessionStore    SessionStore
-	TranscriptStore TranscriptStore
-	BookmarkStore   BookmarkStore
-	WorkItemStore   WorkItemStore
-	DaemonURL       string
-	CLIPath         string
+	PTYBackend                 PTYBackend
+	Worktrees                  WorktreeBackend
+	IDGenerator                func() string
+	EventSink                  EventSink
+	SessionStore               SessionStore
+	TranscriptStore            TranscriptStore
+	BookmarkStore              BookmarkStore
+	WorkItemStore              WorkItemStore
+	DaemonURL                  string
+	CLIPath                    string
+	AgentHookPaths             *agenthooks.Paths
+	AgentHookLogPaths          *agenthooklog.Paths
+	AgentBridgeApprovalTimeout time.Duration
 }
 
 type Runtime struct {
-	mu              sync.Mutex
-	ids             func() string
-	ptys            PTYBackend
-	worktrees       WorktreeBackend
-	state           *session.State
-	bookmarks       *ptybookmark.State
-	sessionStore    SessionStore
-	transcriptStore TranscriptStore
-	bookmarkStore   BookmarkStore
-	workItemStore   WorkItemStore
-	daemonURL       string
-	cliPath         string
-	ptyMeta         map[string]ptyMetadata
-	forwards        *httpforward.State
-	workItems       *workitem.State
-	nextID          int
-	eventSink       EventSink
-	watchCtx        context.Context
-	watchCancel     context.CancelFunc
+	mu                         sync.Mutex
+	ids                        func() string
+	ptys                       PTYBackend
+	worktrees                  WorktreeBackend
+	state                      *session.State
+	bookmarks                  *ptybookmark.State
+	sessionStore               SessionStore
+	transcriptStore            TranscriptStore
+	bookmarkStore              BookmarkStore
+	workItemStore              WorkItemStore
+	daemonURL                  string
+	cliPath                    string
+	agentHookPaths             *agenthooks.Paths
+	agentHookLogPaths          *agenthooklog.Paths
+	agentHookLogEnabled        bool
+	clearHookLogAfterSession   bool
+	agentHookEvents            []agentbridge.Event
+	ptyMeta                    map[string]ptyMetadata
+	forwards                   *httpforward.State
+	workItems                  *workitem.State
+	agentBridges               agentbridge.State
+	agentBridgeApprovalWaiters map[string]chan agentbridge.EvaluationDecision
+	agentBridgeApprovalTimeout time.Duration
+	nextID                     int
+	eventSink                  EventSink
+	watchCtx                   context.Context
+	watchCancel                context.CancelFunc
 }
 
 type ptyMetadata struct {
@@ -170,11 +186,13 @@ type ptyMetadata struct {
 type RuntimeEventType string
 
 const (
-	EventSessionChanged   RuntimeEventType = "session.changed"
-	EventPTYChanged       RuntimeEventType = "pty.changed"
-	EventPTYOutput        RuntimeEventType = "pty.output"
-	EventWorkItemsChanged RuntimeEventType = "workitems.changed"
-	EventStatusChanged    RuntimeEventType = "status.changed"
+	EventSessionChanged              RuntimeEventType = "session.changed"
+	EventPTYChanged                  RuntimeEventType = "pty.changed"
+	EventPTYOutput                   RuntimeEventType = "pty.output"
+	EventWorkItemsChanged            RuntimeEventType = "workitems.changed"
+	EventStatusChanged               RuntimeEventType = "status.changed"
+	EventAgentBridgeApprovalsChanged RuntimeEventType = "agent_bridge_approvals.changed"
+	EventAgentHookEventsChanged      RuntimeEventType = "agent_hook_events.changed"
 )
 
 type RuntimeEvent struct {
@@ -256,12 +274,18 @@ type SplitPaneRequest struct {
 }
 
 type StartPTYOptions struct {
-	Cols    int
-	Rows    int
-	Command string
-	Env     map[string]string
-	Args    []string
-	Exec    bool
+	Cols        int
+	Rows        int
+	Command     string
+	Env         map[string]string
+	Args        []string
+	Exec        bool
+	AgentBridge *StartPTYAgentBridgeOptions
+}
+
+type StartPTYAgentBridgeOptions struct {
+	Enabled  bool
+	Provider string
 }
 
 type SplitPaneResult struct {
@@ -352,12 +376,14 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 	ids := config.IDGenerator
 	watchCtx, watchCancel := context.WithCancel(context.Background())
 	state := session.NewState()
+	nextID := 0
 	if config.SessionStore != nil {
 		sessions, err := config.SessionStore.LoadSessions(context.Background())
 		if err != nil {
 			watchCancel()
 			return nil, err
 		}
+		nextID = maxWhiskIDFromSessions(sessions)
 		state, err = session.NewStateFromSessions(clearRestoredCurrentPTYs(sessions))
 		if err != nil {
 			watchCancel()
@@ -390,24 +416,40 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 			return nil, err
 		}
 	}
+	agentBridges, err := agentbridge.NewState()
+	if err != nil {
+		watchCancel()
+		return nil, err
+	}
+	approvalTimeout := config.AgentBridgeApprovalTimeout
+	if approvalTimeout <= 0 {
+		approvalTimeout = 25 * time.Second
+	}
 	r := &Runtime{
-		ids:             ids,
-		ptys:            config.PTYBackend,
-		worktrees:       config.Worktrees,
-		state:           state,
-		bookmarks:       bookmarks,
-		sessionStore:    config.SessionStore,
-		transcriptStore: config.TranscriptStore,
-		bookmarkStore:   config.BookmarkStore,
-		workItemStore:   config.WorkItemStore,
-		daemonURL:       config.DaemonURL,
-		cliPath:         config.CLIPath,
-		ptyMeta:         map[string]ptyMetadata{},
-		forwards:        httpforward.NewState(),
-		workItems:       workItems,
-		eventSink:       config.EventSink,
-		watchCtx:        watchCtx,
-		watchCancel:     watchCancel,
+		ids:                        ids,
+		ptys:                       config.PTYBackend,
+		worktrees:                  config.Worktrees,
+		state:                      state,
+		bookmarks:                  bookmarks,
+		sessionStore:               config.SessionStore,
+		transcriptStore:            config.TranscriptStore,
+		bookmarkStore:              config.BookmarkStore,
+		workItemStore:              config.WorkItemStore,
+		daemonURL:                  config.DaemonURL,
+		cliPath:                    config.CLIPath,
+		agentHookPaths:             config.AgentHookPaths,
+		agentHookLogPaths:          config.AgentHookLogPaths,
+		agentHookLogEnabled:        true,
+		ptyMeta:                    map[string]ptyMetadata{},
+		forwards:                   httpforward.NewState(),
+		workItems:                  workItems,
+		agentBridges:               agentBridges,
+		agentBridgeApprovalWaiters: map[string]chan agentbridge.EvaluationDecision{},
+		agentBridgeApprovalTimeout: approvalTimeout,
+		eventSink:                  config.EventSink,
+		watchCtx:                   watchCtx,
+		watchCancel:                watchCancel,
+		nextID:                     nextID,
 	}
 	if r.ids == nil {
 		r.ids = r.generatedID
@@ -434,12 +476,16 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 			return CreatedSession{}, fmt.Errorf("pty backend required")
 		}
 		nextPTYID := r.ids()
+		bridgeLaunch, err := r.preparePTYAgentBridge(req.InitialPTY, nextPTYID, rootDir)
+		if err != nil {
+			return CreatedSession{}, err
+		}
 		record, err := r.ptys.Spawn(ctx, SpawnPTYRequest{
 			ID:         nextPTYID,
 			WorkingDir: rootDir,
 			Cols:       req.InitialPTY.Cols,
 			Rows:       req.InitialPTY.Rows,
-			Env:        r.ptyContextEnv(sessionID, nextPTYID, req.InitialPTY.Env),
+			Env:        r.ptyContextEnv(sessionID, nextPTYID, mergedAgentBridgeEnv(req.InitialPTY.Env, bridgeLaunch)),
 			Command:    directPTYCommand(req.InitialPTY),
 			Args:       directPTYArgs(req.InitialPTY),
 		})
@@ -461,6 +507,15 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 			Status:         PTYStatusRunning,
 		})
 		r.watchPTYOutput(record.ID)
+		if bridgeLaunch != nil {
+			bridge := bridgeLaunch.Bridge
+			bridge.SessionID = sessionID
+			bridge.PTYID = record.ID
+			if err := r.registerAgentBridge(bridge); err != nil {
+				_, _ = r.ptys.Kill(ctx, record.ID)
+				return CreatedSession{}, err
+			}
+		}
 		if !req.InitialPTY.Exec {
 			if err := r.writeInitialCommand(ctx, record.ID, req.InitialPTY.Command); err != nil {
 				_, _ = r.ptys.Kill(ctx, record.ID)
@@ -503,6 +558,38 @@ func directPTYArgs(options *StartPTYOptions) []string {
 	return append([]string(nil), options.Args...)
 }
 
+func (r *Runtime) preparePTYAgentBridge(options *StartPTYOptions, ownerID string, workingDir string) (*agentBridgeLaunch, error) {
+	if options == nil || options.AgentBridge == nil || !options.AgentBridge.Enabled {
+		return nil, nil
+	}
+	if strings.TrimSpace(r.daemonURL) == "" {
+		return nil, fmt.Errorf("daemon URL required for agent bridge terminal")
+	}
+	provider := strings.TrimSpace(options.AgentBridge.Provider)
+	if provider == "" {
+		provider = string(agentbridge.ProviderClaude)
+	}
+	bridgeProvider, ok := agentBridgeProviderFromString(provider)
+	if !ok {
+		return nil, fmt.Errorf("unsupported agent bridge provider %q", options.AgentBridge.Provider)
+	}
+	return prepareAgentBridgeLaunchForProvider(r, bridgeProvider, ownerID, workingDir)
+}
+
+func mergedAgentBridgeEnv(base map[string]string, launch *agentBridgeLaunch) map[string]string {
+	if launch == nil {
+		return base
+	}
+	merged := map[string]string{}
+	for key, value := range base {
+		merged[key] = value
+	}
+	for key, value := range launch.Env {
+		merged[key] = value
+	}
+	return merged
+}
+
 func (r *Runtime) ListSessions(_ context.Context) ([]session.Session, error) {
 	return r.state.List(), nil
 }
@@ -527,12 +614,16 @@ func (r *Runtime) SplitPane(ctx context.Context, req SplitPaneRequest) (SplitPan
 			return SplitPaneResult{}, fmt.Errorf("pty backend required")
 		}
 		newPtyID := r.ids()
+		bridgeLaunch, err := r.preparePTYAgentBridge(req.InitialPTY, newPtyID, target.WorkingDir)
+		if err != nil {
+			return SplitPaneResult{}, err
+		}
 		record, err := r.ptys.Spawn(ctx, SpawnPTYRequest{
 			ID:         newPtyID,
 			WorkingDir: target.WorkingDir,
 			Cols:       req.InitialPTY.Cols,
 			Rows:       req.InitialPTY.Rows,
-			Env:        r.ptyContextEnv(req.SessionID, newPtyID, req.InitialPTY.Env),
+			Env:        r.ptyContextEnv(req.SessionID, newPtyID, mergedAgentBridgeEnv(req.InitialPTY.Env, bridgeLaunch)),
 			Command:    directPTYCommand(req.InitialPTY),
 			Args:       directPTYArgs(req.InitialPTY),
 		})
@@ -554,6 +645,15 @@ func (r *Runtime) SplitPane(ctx context.Context, req SplitPaneRequest) (SplitPan
 			Status:         PTYStatusRunning,
 		})
 		r.watchPTYOutput(record.ID)
+		if bridgeLaunch != nil {
+			bridge := bridgeLaunch.Bridge
+			bridge.SessionID = req.SessionID
+			bridge.PTYID = record.ID
+			if err := r.registerAgentBridge(bridge); err != nil {
+				_, _ = r.ptys.Kill(ctx, record.ID)
+				return SplitPaneResult{}, err
+			}
+		}
 		if !req.InitialPTY.Exec {
 			if err := r.writeInitialCommand(ctx, record.ID, req.InitialPTY.Command); err != nil {
 				_, _ = r.ptys.Kill(ctx, record.ID)
@@ -663,12 +763,16 @@ func (r *Runtime) StartPanePTY(ctx context.Context, req StartPanePTYRequest) (St
 		return StartedPanePTY{}, fmt.Errorf("pane %s already has current pty", req.PaneID)
 	}
 	ptyID := r.ids()
+	bridgeLaunch, err := r.preparePTYAgentBridge(&req.Options, ptyID, pane.WorkingDir)
+	if err != nil {
+		return StartedPanePTY{}, err
+	}
 	record, err := r.ptys.Spawn(ctx, SpawnPTYRequest{
 		ID:         ptyID,
 		WorkingDir: pane.WorkingDir,
 		Cols:       req.Options.Cols,
 		Rows:       req.Options.Rows,
-		Env:        r.ptyContextEnv(req.SessionID, ptyID, req.Options.Env),
+		Env:        r.ptyContextEnv(req.SessionID, ptyID, mergedAgentBridgeEnv(req.Options.Env, bridgeLaunch)),
 		Command:    directPTYCommand(&req.Options),
 		Args:       directPTYArgs(&req.Options),
 	})
@@ -688,6 +792,15 @@ func (r *Runtime) StartPanePTY(ctx context.Context, req StartPanePTYRequest) (St
 		Status:         PTYStatusRunning,
 	})
 	r.watchPTYOutput(record.ID)
+	if bridgeLaunch != nil {
+		bridge := bridgeLaunch.Bridge
+		bridge.SessionID = req.SessionID
+		bridge.PTYID = record.ID
+		if err := r.registerAgentBridge(bridge); err != nil {
+			_, _ = r.ptys.Kill(ctx, record.ID)
+			return StartedPanePTY{}, err
+		}
+	}
 	if !req.Options.Exec {
 		if err := r.writeInitialCommand(ctx, record.ID, req.Options.Command); err != nil {
 			_, _ = r.ptys.Kill(ctx, record.ID)
@@ -758,12 +871,16 @@ func (r *Runtime) RestartPanePTY(ctx context.Context, req RestartPanePTYRequest)
 		return RestartedPanePTY{}, fmt.Errorf("cannot restart pane while current pty is running")
 	}
 	newPTYID := r.ids()
+	bridgeLaunch, err := r.preparePTYAgentBridge(&req.Options, newPTYID, pane.WorkingDir)
+	if err != nil {
+		return RestartedPanePTY{}, err
+	}
 	record, err := r.ptys.Spawn(ctx, SpawnPTYRequest{
 		ID:         newPTYID,
 		WorkingDir: pane.WorkingDir,
 		Cols:       req.Options.Cols,
 		Rows:       req.Options.Rows,
-		Env:        r.ptyContextEnv(req.SessionID, newPTYID, req.Options.Env),
+		Env:        r.ptyContextEnv(req.SessionID, newPTYID, mergedAgentBridgeEnv(req.Options.Env, bridgeLaunch)),
 		Command:    directPTYCommand(&req.Options),
 		Args:       directPTYArgs(&req.Options),
 	})
@@ -783,6 +900,15 @@ func (r *Runtime) RestartPanePTY(ctx context.Context, req RestartPanePTYRequest)
 		Status:         PTYStatusRunning,
 	})
 	r.watchPTYOutput(record.ID)
+	if bridgeLaunch != nil {
+		bridge := bridgeLaunch.Bridge
+		bridge.SessionID = req.SessionID
+		bridge.PTYID = record.ID
+		if err := r.registerAgentBridge(bridge); err != nil {
+			_, _ = r.ptys.Kill(ctx, record.ID)
+			return RestartedPanePTY{}, err
+		}
+	}
 	if !req.Options.Exec {
 		if err := r.writeInitialCommand(ctx, record.ID, req.Options.Command); err != nil {
 			_, _ = r.ptys.Kill(ctx, record.ID)
@@ -1059,6 +1185,12 @@ func (r *Runtime) Shutdown(ctx context.Context) error {
 	if r.watchCancel != nil {
 		r.watchCancel()
 	}
+	r.mu.Lock()
+	clearHookLog := r.clearHookLogAfterSession
+	r.mu.Unlock()
+	if clearHookLog {
+		_, _ = r.ClearAgentHookLog(ctx)
+	}
 	if r.ptys == nil {
 		return nil
 	}
@@ -1248,6 +1380,35 @@ func clearRestoredCurrentPTYs(sessions []session.Session) []session.Session {
 		out[i] = restored
 	}
 	return out
+}
+
+func maxWhiskIDFromSessions(sessions []session.Session) int {
+	maxID := 0
+	for _, current := range sessions {
+		maxID = max(maxID, whiskIDNumber(current.ID))
+		for _, window := range current.Windows {
+			maxID = max(maxID, whiskIDNumber(window.ID))
+		}
+		for _, pane := range current.Panes {
+			maxID = max(maxID, whiskIDNumber(pane.ID))
+			if pane.CurrentPTYID != nil {
+				maxID = max(maxID, whiskIDNumber(*pane.CurrentPTYID))
+			}
+		}
+	}
+	return maxID
+}
+
+func whiskIDNumber(id string) int {
+	suffix, ok := strings.CutPrefix(id, "whisk_")
+	if !ok {
+		return 0
+	}
+	number, err := strconv.Atoi(suffix)
+	if err != nil {
+		return 0
+	}
+	return number
 }
 
 func clonePanesWithoutCurrentPTY(panes map[string]session.Pane) map[string]session.Pane {

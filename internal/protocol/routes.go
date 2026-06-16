@@ -27,26 +27,42 @@ type APIQueryParam struct {
 }
 
 var (
-	apiSessionList          = []session.Session(nil)
-	apiPTYList              = []PTYInfo(nil)
-	apiBookmarkList         = []ptybookmark.Bookmark(nil)
-	apiWorktreeList         = []Worktree(nil)
-	apiForwardList          = []HTTPForward(nil)
-	apiProjectList          = []Project(nil)
-	apiWorkflowTemplateList = []WorkflowTemplate(nil)
-	apiPromptList           = []PromptTemplate(nil)
-	apiWorkItemList         = []WorkItem(nil)
-	apiRunList              = []WorkItemRun(nil)
-	apiArtifactList         = []Artifact(nil)
-	apiQuestionList         = []Question(nil)
-	apiGateList             = []GateReport(nil)
-	apiWorkflowEventList    = []WorkflowEvent(nil)
-	apiStatusList           = []StatusEvent(nil)
+	apiSessionList              = []session.Session(nil)
+	apiPTYList                  = []PTYInfo(nil)
+	apiBookmarkList             = []ptybookmark.Bookmark(nil)
+	apiWorktreeList             = []Worktree(nil)
+	apiForwardList              = []HTTPForward(nil)
+	apiProjectList              = []Project(nil)
+	apiWorkflowTemplateList     = []WorkflowTemplate(nil)
+	apiPromptList               = []PromptTemplate(nil)
+	apiWorkItemList             = []WorkItem(nil)
+	apiRunList                  = []WorkItemRun(nil)
+	apiArtifactList             = []Artifact(nil)
+	apiQuestionList             = []Question(nil)
+	apiGateList                 = []GateReport(nil)
+	apiWorkflowEventList        = []WorkflowEvent(nil)
+	apiStatusList               = []StatusEvent(nil)
+	apiAgentBridgeApprovalList  = []AgentBridgeApproval(nil)
+	apiAgentBridgeEventList     = []AgentBridgeEvent(nil)
+	apiAgentHookIntegrationList = []AgentHookIntegration(nil)
 )
 
 var APIRoutes = []APIRoute{
 	{Method: "GET", Path: "/v1/compat", OperationID: "getCompatibility", Tag: "system", Summary: "Daemon API version and git SHA", Response: CompatibilityResponse{}},
 	{Method: "POST", Path: "/v1/daemon/clear", OperationID: "clearDaemon", Tag: "system", Summary: "Clear daemon-owned runtime state", Request: ClearDaemonRequest{}, Response: ClearDaemonResponse{}},
+	{Method: "POST", Path: "/v1/agent-bridges/{bridgeID}/hooks", OperationID: "agentBridgeHook", Tag: "agent-bridges", Summary: "Handle provider hook callback for a daemon-owned agent bridge", Request: AgentBridgeHookRequest{}, Response: AgentBridgeHookResponse{}},
+	{Method: "POST", Path: "/v1/agent-hook-events", OperationID: "recordAgentHookEvent", Tag: "agent-bridges", Summary: "Record a passive provider hook event", Request: AgentBridgeHookRequest{}, Response: AgentBridgeEvent{}, Status: 201},
+	{Method: "GET", Path: "/v1/agent-bridge-approvals", OperationID: "listAgentBridgeApprovals", Tag: "agent-bridges", Summary: "List pending or resolved daemon-owned agent bridge approvals", Response: apiAgentBridgeApprovalList, Query: []APIQueryParam{{Name: "status", Type: "string"}}},
+	{Method: "POST", Path: "/v1/agent-bridge-approvals/{approvalID}/resolve", OperationID: "resolveAgentBridgeApproval", Tag: "agent-bridges", Summary: "Resolve a pending daemon-owned agent bridge approval", Request: ResolveAgentBridgeApprovalRequest{}, Response: AgentBridgeApproval{}},
+	{Method: "GET", Path: "/v1/agent-bridge-events", OperationID: "listAgentBridgeEvents", Tag: "agent-bridges", Summary: "List passive provider hook events", Response: apiAgentBridgeEventList, Query: []APIQueryParam{{Name: "status", Type: "string"}}},
+	{Method: "GET", Path: "/v1/agent-hook-integrations", OperationID: "listAgentHookIntegrations", Tag: "agent-bridges", Summary: "List globally installed provider hook integrations", Response: apiAgentHookIntegrationList},
+	{Method: "POST", Path: "/v1/agent-hook-integrations/check", OperationID: "checkAgentHookIntegration", Tag: "agent-bridges", Summary: "Check one global provider hook integration", Request: AgentHookIntegrationRequest{}, Response: AgentHookIntegration{}},
+	{Method: "POST", Path: "/v1/agent-hook-integrations/install", OperationID: "installAgentHookIntegration", Tag: "agent-bridges", Summary: "Install or update one global provider hook integration", Request: AgentHookIntegrationRequest{}, Response: AgentHookIntegration{}},
+	{Method: "POST", Path: "/v1/agent-hook-integrations/remove", OperationID: "removeAgentHookIntegration", Tag: "agent-bridges", Summary: "Remove one global provider hook integration", Request: AgentHookIntegrationRequest{}, Response: AgentHookIntegration{}},
+	{Method: "GET", Path: "/v1/agent-hook-log", OperationID: "getAgentHookLogStatus", Tag: "agent-bridges", Summary: "Get hook log status and path", Response: AgentHookLogStatus{}},
+	{Method: "POST", Path: "/v1/agent-hook-log/settings", OperationID: "setAgentHookLogSettings", Tag: "agent-bridges", Summary: "Update hook log settings", Request: SetAgentHookLogSettingsRequest{}, Response: AgentHookLogStatus{}},
+	{Method: "POST", Path: "/v1/agent-hook-log/clear", OperationID: "clearAgentHookLog", Tag: "agent-bridges", Summary: "Clear hook log files", Response: AgentHookLogStatus{}},
+	{Method: "POST", Path: "/v1/agent-hook-log/open", OperationID: "openAgentHookLog", Tag: "agent-bridges", Summary: "Open hook log in the platform editor", Response: AgentHookLogStatus{}},
 
 	{Method: "GET", Path: "/v1/sessions", OperationID: "listSessions", Tag: "sessions", Response: apiSessionList},
 	{Method: "POST", Path: "/v1/sessions", OperationID: "createSession", Tag: "sessions", Request: CreateSessionRequest{}, Response: CreatedSession{}, Status: 201},

@@ -45,6 +45,21 @@ func TestDevDaemonTaskRunsWhiskDaemonMode(t *testing.T) {
 	requireTaskLineAbsent(t, block, "whiskd")
 }
 
+func TestSDKIntegrationTasksUseWhiskDaemonMode(t *testing.T) {
+	taskfile, err := os.ReadFile("Taskfile.yml")
+	if err != nil {
+		t.Fatalf("read Taskfile.yml: %v", err)
+	}
+	for _, taskName := range []string{"sdk:test:python", "sdk:test:ts"} {
+		block := taskBlock(string(taskfile), taskName)
+
+		requireTaskLine(t, block, "go build -o {{.BIN_DIR}}/whisk ./cmd/whisk")
+		requireTaskLine(t, block, "WHISKD_BIN=\"$PWD/{{.BIN_DIR}}/whisk\"")
+		requireTaskLineAbsent(t, block, "./cmd/whiskd")
+		requireTaskLineAbsent(t, block, "{{.BIN_DIR}}/whiskd")
+	}
+}
+
 func taskBlock(taskfile string, name string) string {
 	lines := strings.Split(taskfile, "\n")
 	var block []string

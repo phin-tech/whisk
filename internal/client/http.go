@@ -58,6 +58,94 @@ func (c *HTTPClient) ClearDaemon(ctx context.Context, req protocol.ClearDaemonRe
 	return response, err
 }
 
+func (c *HTTPClient) AgentBridgeHook(ctx context.Context, bridgeID string, req protocol.AgentBridgeHookRequest) (protocol.AgentBridgeHookResponse, error) {
+	var response protocol.AgentBridgeHookResponse
+	path := "/v1/agent-bridges/" + url.PathEscape(bridgeID) + "/hooks"
+	err := c.post(ctx, path, req, &response)
+	return response, err
+}
+
+func (c *HTTPClient) RecordAgentHookEvent(ctx context.Context, req protocol.AgentBridgeHookRequest) (protocol.AgentBridgeEvent, error) {
+	var event protocol.AgentBridgeEvent
+	err := c.post(ctx, "/v1/agent-hook-events", req, &event)
+	return event, err
+}
+
+func (c *HTTPClient) ListAgentBridgeApprovals(ctx context.Context, req protocol.ListAgentBridgeApprovalsRequest) ([]protocol.AgentBridgeApproval, error) {
+	query := url.Values{}
+	if req.Status != "" {
+		query.Set("status", req.Status)
+	}
+	var approvals []protocol.AgentBridgeApproval
+	err := c.get(ctx, "/v1/agent-bridge-approvals", query, &approvals)
+	return approvals, err
+}
+
+func (c *HTTPClient) ResolveAgentBridgeApproval(ctx context.Context, id string, req protocol.ResolveAgentBridgeApprovalRequest) (protocol.AgentBridgeApproval, error) {
+	var approval protocol.AgentBridgeApproval
+	path := "/v1/agent-bridge-approvals/" + url.PathEscape(id) + "/resolve"
+	err := c.post(ctx, path, req, &approval)
+	return approval, err
+}
+
+func (c *HTTPClient) ListAgentBridgeEvents(ctx context.Context, req protocol.ListAgentBridgeEventsRequest) ([]protocol.AgentBridgeEvent, error) {
+	query := url.Values{}
+	if req.Status != "" {
+		query.Set("status", req.Status)
+	}
+	var events []protocol.AgentBridgeEvent
+	err := c.get(ctx, "/v1/agent-bridge-events", query, &events)
+	return events, err
+}
+
+func (c *HTTPClient) ListAgentHookIntegrations(ctx context.Context) ([]protocol.AgentHookIntegration, error) {
+	var integrations []protocol.AgentHookIntegration
+	err := c.get(ctx, "/v1/agent-hook-integrations", nil, &integrations)
+	return integrations, err
+}
+
+func (c *HTTPClient) CheckAgentHookIntegration(ctx context.Context, req protocol.AgentHookIntegrationRequest) (protocol.AgentHookIntegration, error) {
+	var integration protocol.AgentHookIntegration
+	err := c.post(ctx, "/v1/agent-hook-integrations/check", req, &integration)
+	return integration, err
+}
+
+func (c *HTTPClient) InstallAgentHookIntegration(ctx context.Context, req protocol.AgentHookIntegrationRequest) (protocol.AgentHookIntegration, error) {
+	var integration protocol.AgentHookIntegration
+	err := c.post(ctx, "/v1/agent-hook-integrations/install", req, &integration)
+	return integration, err
+}
+
+func (c *HTTPClient) RemoveAgentHookIntegration(ctx context.Context, req protocol.AgentHookIntegrationRequest) (protocol.AgentHookIntegration, error) {
+	var integration protocol.AgentHookIntegration
+	err := c.post(ctx, "/v1/agent-hook-integrations/remove", req, &integration)
+	return integration, err
+}
+
+func (c *HTTPClient) AgentHookLogStatus(ctx context.Context) (protocol.AgentHookLogStatus, error) {
+	var status protocol.AgentHookLogStatus
+	err := c.get(ctx, "/v1/agent-hook-log", nil, &status)
+	return status, err
+}
+
+func (c *HTTPClient) SetAgentHookLogSettings(ctx context.Context, req protocol.SetAgentHookLogSettingsRequest) (protocol.AgentHookLogStatus, error) {
+	var status protocol.AgentHookLogStatus
+	err := c.post(ctx, "/v1/agent-hook-log/settings", req, &status)
+	return status, err
+}
+
+func (c *HTTPClient) ClearAgentHookLog(ctx context.Context) (protocol.AgentHookLogStatus, error) {
+	var status protocol.AgentHookLogStatus
+	err := c.post(ctx, "/v1/agent-hook-log/clear", struct{}{}, &status)
+	return status, err
+}
+
+func (c *HTTPClient) OpenAgentHookLog(ctx context.Context) (protocol.AgentHookLogStatus, error) {
+	var status protocol.AgentHookLogStatus
+	err := c.post(ctx, "/v1/agent-hook-log/open", struct{}{}, &status)
+	return status, err
+}
+
 func (c *HTTPClient) ListSessions(ctx context.Context) ([]session.Session, error) {
 	var sessions []session.Session
 	err := c.get(ctx, "/v1/sessions", nil, &sessions)

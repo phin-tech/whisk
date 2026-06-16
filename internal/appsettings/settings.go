@@ -18,7 +18,9 @@ type Settings struct {
 	// KeepDaemonAlive controls whether a daemon the app started is left running after the app
 	// quits. It defaults to true so sessions persist across app restarts; setting it false makes
 	// the app stop the daemon it started on quit.
-	KeepDaemonAlive bool `json:"keepDaemonAlive"`
+	KeepDaemonAlive          bool  `json:"keepDaemonAlive"`
+	HookLogEnabled           *bool `json:"hookLogEnabled,omitempty"`
+	ClearHookLogAfterSession bool  `json:"clearHookLogAfterSession,omitempty"`
 }
 
 type Store struct {
@@ -26,12 +28,21 @@ type Store struct {
 }
 
 func Default() Settings {
-	return Settings{StartupView: StartupViewSessions, KeepDaemonAlive: true}
+	enabled := true
+	return Settings{
+		StartupView:     StartupViewSessions,
+		KeepDaemonAlive: true,
+		HookLogEnabled:  &enabled,
+	}
 }
 
 func Normalize(settings Settings) (Settings, error) {
 	if settings.StartupView == "" {
 		settings.StartupView = StartupViewSessions
+	}
+	if settings.HookLogEnabled == nil {
+		enabled := true
+		settings.HookLogEnabled = &enabled
 	}
 	switch settings.StartupView {
 	case StartupViewSessions, StartupViewKanban:

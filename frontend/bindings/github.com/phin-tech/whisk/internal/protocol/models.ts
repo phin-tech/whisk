@@ -14,6 +14,9 @@ import * as session$0 from "../domain/session/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as workitem$0 from "../domain/workitem/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as time$0 from "../../../../../time/models.js";
 
 export class AddPTYBookmarkRequest {
     "ptyId": string;
@@ -75,6 +78,232 @@ export class AddWorkItemAttachmentRequest {
     static createFrom($$source: any = {}): AddWorkItemAttachmentRequest {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new AddWorkItemAttachmentRequest($$parsedSource as Partial<AddWorkItemAttachmentRequest>);
+    }
+}
+
+export class AgentBridgeApproval {
+    "id": string;
+    "bridgeId": string;
+    "sessionId"?: string;
+    "ptyId"?: string;
+    "runId"?: string;
+    "provider": string;
+    "eventName": string;
+    "toolName": string;
+    "toolInput"?: { [_ in string]?: any };
+    "status": string;
+    "decision"?: AgentBridgeHookDecision;
+    "createdAt": time$0.Time;
+    "resolvedAt"?: time$0.Time | null;
+
+    /** Creates a new AgentBridgeApproval instance. */
+    constructor($$source: Partial<AgentBridgeApproval> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("bridgeId" in $$source)) {
+            this["bridgeId"] = "";
+        }
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+        if (!("eventName" in $$source)) {
+            this["eventName"] = "";
+        }
+        if (!("toolName" in $$source)) {
+            this["toolName"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AgentBridgeApproval instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AgentBridgeApproval {
+        const $$createField8_0 = $$createType0;
+        const $$createField10_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("toolInput" in $$parsedSource) {
+            $$parsedSource["toolInput"] = $$createField8_0($$parsedSource["toolInput"]);
+        }
+        if ("decision" in $$parsedSource) {
+            $$parsedSource["decision"] = $$createField10_0($$parsedSource["decision"]);
+        }
+        return new AgentBridgeApproval($$parsedSource as Partial<AgentBridgeApproval>);
+    }
+}
+
+export class AgentBridgeEvent {
+    "id": string;
+    "bridgeId"?: string;
+    "sessionId"?: string;
+    "ptyId"?: string;
+    "provider": string;
+    "eventName": string;
+    "toolName"?: string;
+    "message"?: string;
+    "notificationType"?: string;
+    "elicitationId"?: string;
+    "action"?: string;
+    "result"?: string;
+    "status": string;
+    "createdAt": time$0.Time;
+    "raw"?: { [_ in string]?: any };
+
+    /** Creates a new AgentBridgeEvent instance. */
+    constructor($$source: Partial<AgentBridgeEvent> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+        if (!("eventName" in $$source)) {
+            this["eventName"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AgentBridgeEvent instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AgentBridgeEvent {
+        const $$createField14_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("raw" in $$parsedSource) {
+            $$parsedSource["raw"] = $$createField14_0($$parsedSource["raw"]);
+        }
+        return new AgentBridgeEvent($$parsedSource as Partial<AgentBridgeEvent>);
+    }
+}
+
+export class AgentBridgeHookDecision {
+    "action"?: string;
+    "reason"?: string;
+
+    /** Creates a new AgentBridgeHookDecision instance. */
+    constructor($$source: Partial<AgentBridgeHookDecision> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AgentBridgeHookDecision instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AgentBridgeHookDecision {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AgentBridgeHookDecision($$parsedSource as Partial<AgentBridgeHookDecision>);
+    }
+}
+
+export class AgentHookIntegration {
+    "provider": string;
+    "status": string;
+    "installedVersion"?: string;
+    "latestVersion": string;
+    "helperPath": string;
+    "configPath": string;
+    "manifestPath": string;
+    "detail"?: string;
+
+    /** Creates a new AgentHookIntegration instance. */
+    constructor($$source: Partial<AgentHookIntegration> = {}) {
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("latestVersion" in $$source)) {
+            this["latestVersion"] = "";
+        }
+        if (!("helperPath" in $$source)) {
+            this["helperPath"] = "";
+        }
+        if (!("configPath" in $$source)) {
+            this["configPath"] = "";
+        }
+        if (!("manifestPath" in $$source)) {
+            this["manifestPath"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AgentHookIntegration instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AgentHookIntegration {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AgentHookIntegration($$parsedSource as Partial<AgentHookIntegration>);
+    }
+}
+
+export class AgentHookIntegrationRequest {
+    "provider": string;
+
+    /** Creates a new AgentHookIntegrationRequest instance. */
+    constructor($$source: Partial<AgentHookIntegrationRequest> = {}) {
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AgentHookIntegrationRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AgentHookIntegrationRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AgentHookIntegrationRequest($$parsedSource as Partial<AgentHookIntegrationRequest>);
+    }
+}
+
+export class AgentHookLogStatus {
+    "enabled": boolean;
+    "clearAfterSession": boolean;
+    "path": string;
+    "sizeBytes": number;
+
+    /** Creates a new AgentHookLogStatus instance. */
+    constructor($$source: Partial<AgentHookLogStatus> = {}) {
+        if (!("enabled" in $$source)) {
+            this["enabled"] = false;
+        }
+        if (!("clearAfterSession" in $$source)) {
+            this["clearAfterSession"] = false;
+        }
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("sizeBytes" in $$source)) {
+            this["sizeBytes"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AgentHookLogStatus instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AgentHookLogStatus {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AgentHookLogStatus($$parsedSource as Partial<AgentHookLogStatus>);
     }
 }
 
@@ -417,7 +646,7 @@ export class CreateProjectRequest {
      * Creates a new CreateProjectRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): CreateProjectRequest {
-        const $$createField4_0 = $$createType0;
+        const $$createField4_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("preferences" in $$parsedSource) {
             $$parsedSource["preferences"] = $$createField4_0($$parsedSource["preferences"]);
@@ -447,7 +676,7 @@ export class CreateSessionRequest {
      * Creates a new CreateSessionRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): CreateSessionRequest {
-        const $$createField2_0 = $$createType2;
+        const $$createField2_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("initialPty" in $$parsedSource) {
             $$parsedSource["initialPty"] = $$createField2_0($$parsedSource["initialPty"]);
@@ -540,7 +769,7 @@ export class CreatedSession {
      * Creates a new CreatedSession instance from a string or object.
      */
     static createFrom($$source: any = {}): CreatedSession {
-        const $$createField0_0 = $$createType3;
+        const $$createField0_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -637,7 +866,7 @@ export class DetachedPanePTY {
      * Creates a new DetachedPanePTY instance from a string or object.
      */
     static createFrom($$source: any = {}): DetachedPanePTY {
-        const $$createField0_0 = $$createType3;
+        const $$createField0_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -773,6 +1002,42 @@ export class LaunchWorkItemRunRequest {
     static createFrom($$source: any = {}): LaunchWorkItemRunRequest {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new LaunchWorkItemRunRequest($$parsedSource as Partial<LaunchWorkItemRunRequest>);
+    }
+}
+
+export class ListAgentBridgeApprovalsRequest {
+    "status"?: string;
+
+    /** Creates a new ListAgentBridgeApprovalsRequest instance. */
+    constructor($$source: Partial<ListAgentBridgeApprovalsRequest> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ListAgentBridgeApprovalsRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ListAgentBridgeApprovalsRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ListAgentBridgeApprovalsRequest($$parsedSource as Partial<ListAgentBridgeApprovalsRequest>);
+    }
+}
+
+export class ListAgentBridgeEventsRequest {
+    "status"?: string;
+
+    /** Creates a new ListAgentBridgeEventsRequest instance. */
+    constructor($$source: Partial<ListAgentBridgeEventsRequest> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ListAgentBridgeEventsRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ListAgentBridgeEventsRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ListAgentBridgeEventsRequest($$parsedSource as Partial<ListAgentBridgeEventsRequest>);
     }
 }
 
@@ -1148,9 +1413,9 @@ export class ReportStatusResponse {
      * Creates a new ReportStatusResponse instance from a string or object.
      */
     static createFrom($$source: any = {}): ReportStatusResponse {
-        const $$createField0_0 = $$createType4;
-        const $$createField1_0 = $$createType6;
-        const $$createField2_0 = $$createType8;
+        const $$createField0_0 = $$createType6;
+        const $$createField1_0 = $$createType8;
+        const $$createField2_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("event" in $$parsedSource) {
             $$parsedSource["event"] = $$createField0_0($$parsedSource["event"]);
@@ -1194,6 +1459,28 @@ export class ResizePTYRequest {
     }
 }
 
+export class ResolveAgentBridgeApprovalRequest {
+    "action": string;
+    "reason"?: string;
+
+    /** Creates a new ResolveAgentBridgeApprovalRequest instance. */
+    constructor($$source: Partial<ResolveAgentBridgeApprovalRequest> = {}) {
+        if (!("action" in $$source)) {
+            this["action"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ResolveAgentBridgeApprovalRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ResolveAgentBridgeApprovalRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ResolveAgentBridgeApprovalRequest($$parsedSource as Partial<ResolveAgentBridgeApprovalRequest>);
+    }
+}
+
 export class RestartPanePTYRequest {
     "sessionId": string;
     "paneId": string;
@@ -1218,7 +1505,7 @@ export class RestartPanePTYRequest {
      * Creates a new RestartPanePTYRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): RestartPanePTYRequest {
-        const $$createField2_0 = $$createType1;
+        const $$createField2_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField2_0($$parsedSource["options"]);
@@ -1251,7 +1538,7 @@ export class RestartedPanePTY {
      * Creates a new RestartedPanePTY instance from a string or object.
      */
     static createFrom($$source: any = {}): RestartedPanePTY {
-        const $$createField0_0 = $$createType3;
+        const $$createField0_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -1280,6 +1567,25 @@ export class RuntimeEvent {
     static createFrom($$source: any = {}): RuntimeEvent {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new RuntimeEvent($$parsedSource as Partial<RuntimeEvent>);
+    }
+}
+
+export class SetAgentHookLogSettingsRequest {
+    "enabled"?: boolean | null;
+    "clearAfterSession"?: boolean | null;
+
+    /** Creates a new SetAgentHookLogSettingsRequest instance. */
+    constructor($$source: Partial<SetAgentHookLogSettingsRequest> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SetAgentHookLogSettingsRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SetAgentHookLogSettingsRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SetAgentHookLogSettingsRequest($$parsedSource as Partial<SetAgentHookLogSettingsRequest>);
     }
 }
 
@@ -1366,7 +1672,7 @@ export class SplitPaneRequest {
      * Creates a new SplitPaneRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): SplitPaneRequest {
-        const $$createField4_0 = $$createType2;
+        const $$createField4_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("initialPty" in $$parsedSource) {
             $$parsedSource["initialPty"] = $$createField4_0($$parsedSource["initialPty"]);
@@ -1397,7 +1703,7 @@ export class SplitPaneResult {
      * Creates a new SplitPaneResult instance from a string or object.
      */
     static createFrom($$source: any = {}): SplitPaneResult {
-        const $$createField0_0 = $$createType3;
+        const $$createField0_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -1462,6 +1768,28 @@ export class StartHTTPForwardRequest {
     }
 }
 
+export class StartPTYAgentBridgeOptions {
+    "enabled": boolean;
+    "provider"?: string;
+
+    /** Creates a new StartPTYAgentBridgeOptions instance. */
+    constructor($$source: Partial<StartPTYAgentBridgeOptions> = {}) {
+        if (!("enabled" in $$source)) {
+            this["enabled"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StartPTYAgentBridgeOptions instance from a string or object.
+     */
+    static createFrom($$source: any = {}): StartPTYAgentBridgeOptions {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new StartPTYAgentBridgeOptions($$parsedSource as Partial<StartPTYAgentBridgeOptions>);
+    }
+}
+
 export class StartPTYOptions {
     "cols": number;
     "rows": number;
@@ -1469,6 +1797,7 @@ export class StartPTYOptions {
     "env"?: { [_ in string]?: string };
     "args"?: string[];
     "exec"?: boolean;
+    "agentBridge"?: StartPTYAgentBridgeOptions | null;
 
     /** Creates a new StartPTYOptions instance. */
     constructor($$source: Partial<StartPTYOptions> = {}) {
@@ -1486,14 +1815,18 @@ export class StartPTYOptions {
      * Creates a new StartPTYOptions instance from a string or object.
      */
     static createFrom($$source: any = {}): StartPTYOptions {
-        const $$createField3_0 = $$createType9;
-        const $$createField4_0 = $$createType10;
+        const $$createField3_0 = $$createType11;
+        const $$createField4_0 = $$createType12;
+        const $$createField6_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("env" in $$parsedSource) {
             $$parsedSource["env"] = $$createField3_0($$parsedSource["env"]);
         }
         if ("args" in $$parsedSource) {
             $$parsedSource["args"] = $$createField4_0($$parsedSource["args"]);
+        }
+        if ("agentBridge" in $$parsedSource) {
+            $$parsedSource["agentBridge"] = $$createField6_0($$parsedSource["agentBridge"]);
         }
         return new StartPTYOptions($$parsedSource as Partial<StartPTYOptions>);
     }
@@ -1523,7 +1856,7 @@ export class StartPanePTYRequest {
      * Creates a new StartPanePTYRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): StartPanePTYRequest {
-        const $$createField2_0 = $$createType1;
+        const $$createField2_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField2_0($$parsedSource["options"]);
@@ -1612,7 +1945,7 @@ export class StartedHTTPForward {
      * Creates a new StartedHTTPForward instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedHTTPForward {
-        const $$createField2_0 = $$createType11;
+        const $$createField2_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("forward" in $$parsedSource) {
             $$parsedSource["forward"] = $$createField2_0($$parsedSource["forward"]);
@@ -1641,7 +1974,7 @@ export class StartedPanePTY {
      * Creates a new StartedPanePTY instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedPanePTY {
-        const $$createField0_0 = $$createType3;
+        const $$createField0_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -1814,7 +2147,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType12;
+        const $$createField2_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -1849,16 +2182,20 @@ export class WritePTYRequest {
 }
 
 // Private type creation functions
-const $$createType0 = workitem$0.ProjectPreferences.createFrom;
-const $$createType1 = StartPTYOptions.createFrom;
-const $$createType2 = $Create.Nullable($$createType1);
-const $$createType3 = session$0.Session.createFrom;
-const $$createType4 = workitem$0.StatusEvent.createFrom;
-const $$createType5 = workitem$0.WorkItemRun.createFrom;
-const $$createType6 = $Create.Nullable($$createType5);
-const $$createType7 = workitem$0.WorkItem.createFrom;
+const $$createType0 = $Create.Map($Create.Any, $Create.Any);
+const $$createType1 = AgentBridgeHookDecision.createFrom;
+const $$createType2 = workitem$0.ProjectPreferences.createFrom;
+const $$createType3 = StartPTYOptions.createFrom;
+const $$createType4 = $Create.Nullable($$createType3);
+const $$createType5 = session$0.Session.createFrom;
+const $$createType6 = workitem$0.StatusEvent.createFrom;
+const $$createType7 = workitem$0.WorkItemRun.createFrom;
 const $$createType8 = $Create.Nullable($$createType7);
-const $$createType9 = $Create.Map($Create.Any, $Create.Any);
-const $$createType10 = $Create.Array($Create.Any);
-const $$createType11 = HTTPForward.createFrom;
-const $$createType12 = WorktrunkBinary.createFrom;
+const $$createType9 = workitem$0.WorkItem.createFrom;
+const $$createType10 = $Create.Nullable($$createType9);
+const $$createType11 = $Create.Map($Create.Any, $Create.Any);
+const $$createType12 = $Create.Array($Create.Any);
+const $$createType13 = StartPTYAgentBridgeOptions.createFrom;
+const $$createType14 = $Create.Nullable($$createType13);
+const $$createType15 = HTTPForward.createFrom;
+const $$createType16 = WorktrunkBinary.createFrom;

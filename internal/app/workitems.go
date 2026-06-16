@@ -3,10 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
+	bridgeinstaller "github.com/phin-tech/whisk/internal/adapters/agentbridge"
 	"github.com/phin-tech/whisk/internal/adapters/agents"
+	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
@@ -849,6 +852,21 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	if err != nil {
 		return "", "", err
 	}
+	bridgeLaunch, err := prepareAgentBridgeLaunch(r, launch.Provider, run.ID, launch.WorkingDir)
+	if err != nil {
+		return "", "", err
+	}
+	agentEnv := map[string]string{
+		"WHISK_PROJECT_ID":   project.ID,
+		"WHISK_WORK_ITEM_ID": item.ID,
+		"WHISK_RUN_ID":       run.ID,
+		"WHISK_ACTOR":        "agent",
+	}
+	if bridgeLaunch != nil {
+		for key, value := range bridgeLaunch.Env {
+			agentEnv[key] = value
+		}
+	}
 	name := workItemRunSessionName(item, run)
 	created, err := r.CreateSession(ctx, CreateSessionRequest{
 		Name:    name,
@@ -857,12 +875,7 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 			Command: launch.Command,
 			Args:    launch.Args,
 			Exec:    true,
-			Env: map[string]string{
-				"WHISK_PROJECT_ID":   project.ID,
-				"WHISK_WORK_ITEM_ID": item.ID,
-				"WHISK_RUN_ID":       run.ID,
-				"WHISK_ACTOR":        "agent",
-			},
+			Env:     agentEnv,
 		},
 	})
 	if err != nil {
@@ -871,12 +884,103 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	if created.MainPtyID == "" {
 		return "", "", fmt.Errorf("launched session without pty")
 	}
+	if bridgeLaunch != nil {
+		bridge := bridgeLaunch.Bridge
+		bridge.SessionID = created.Session.ID
+		bridge.PTYID = created.MainPtyID
+		if err := r.registerAgentBridge(bridge); err != nil {
+			return "", "", err
+		}
+	}
 	if strings.TrimSpace(launch.Stdin) != "" {
 		if err := r.WritePTY(ctx, created.MainPtyID, []byte(launch.Stdin+"\n")); err != nil {
 			return "", "", err
 		}
 	}
 	return created.Session.ID, created.MainPtyID, nil
+}
+
+type agentBridgeLaunch struct {
+	Env    map[string]string
+	Bridge agentbridge.Bridge
+}
+
+func prepareAgentBridgeLaunch(r *Runtime, provider agents.Provider, runID string, workingDir string) (*agentBridgeLaunch, error) {
+	bridgeProvider, ok := agentBridgeProvider(provider)
+	if !ok {
+		return nil, nil
+	}
+	return prepareAgentBridgeLaunchForProvider(r, bridgeProvider, runID, workingDir)
+}
+
+func prepareAgentBridgeLaunchForProvider(r *Runtime, bridgeProvider agentbridge.Provider, runID string, workingDir string) (*agentBridgeLaunch, error) {
+	if strings.TrimSpace(r.daemonURL) == "" {
+		return nil, nil
+	}
+	bridgeID := r.ids()
+	token := r.ids()
+	hookURL := agentBridgeHookURL(r.daemonURL, bridgeID)
+	installed, err := bridgeinstaller.Install(bridgeinstaller.InstallRequest{
+		RootDir:   workingDir,
+		BridgeID:  bridgeID,
+		RunID:     runID,
+		Provider:  string(bridgeProvider),
+		HookURL:   hookURL,
+		Token:     token,
+		WhiskCLI:  r.cliPath,
+		WhiskdURL: r.daemonURL,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &agentBridgeLaunch{
+		Env: map[string]string{
+			"WHISK_AGENT_BRIDGE_ID":          bridgeID,
+			"WHISK_AGENT_BRIDGE_TOKEN":       token,
+			"WHISK_AGENT_BRIDGE_PROVIDER":    string(bridgeProvider),
+			"WHISK_AGENT_BRIDGE_HOOK_URL":    hookURL,
+			"WHISK_AGENT_BRIDGE_CONFIG_DIR":  installed.Dir,
+			"WHISK_AGENT_BRIDGE_HOOK_SCRIPT": installed.HookScript,
+		},
+		Bridge: agentbridge.Bridge{
+			ID:        bridgeID,
+			Provider:  bridgeProvider,
+			TokenHash: agentbridge.HashHookToken(token),
+		},
+	}, nil
+}
+
+func agentBridgeProviderFromString(provider string) (agentbridge.Provider, bool) {
+	switch strings.TrimSpace(provider) {
+	case string(agentbridge.ProviderClaude):
+		return agentbridge.ProviderClaude, true
+	case string(agentbridge.ProviderCodex):
+		return agentbridge.ProviderCodex, true
+	default:
+		return "", false
+	}
+}
+
+func agentBridgeProvider(provider agents.Provider) (agentbridge.Provider, bool) {
+	switch provider {
+	case agents.ProviderClaude:
+		return agentbridge.ProviderClaude, true
+	case agents.ProviderCodex:
+		return agentbridge.ProviderCodex, true
+	default:
+		return "", false
+	}
+}
+
+func agentBridgeHookURL(baseURL string, bridgeID string) string {
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return strings.TrimRight(baseURL, "/") + "/v1/agent-bridges/" + bridgeID + "/hooks"
+	}
+	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/v1/agent-bridges/" + bridgeID + "/hooks"
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String()
 }
 
 func workItemRunSessionName(item workitem.WorkItem, run workitem.WorkItemRun) string {

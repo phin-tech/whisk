@@ -3,11 +3,14 @@ package app_test
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/phin-tech/whisk/internal/app"
+	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
@@ -149,6 +152,225 @@ func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 	}
 	if sessions[0].Name != "#1 Execution - Wire agent" {
 		t.Fatalf("session name = %q", sessions[0].Name)
+	}
+}
+
+func TestRuntimeStartWorkItemRunInjectsAgentBridgeEnvForProviderHooks(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	root := t.TempDir()
+	store := &memoryWorkItemStore{}
+	ptyBackend := newMemoryPTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: store,
+		PTYBackend:    ptyBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: root})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Bridge hooks"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+
+	run, err := runtime.StartWorkItemRun(ctx, app.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		Launch:           true,
+		AgentProfileID:   "claude",
+		Actor:            "agent",
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	if run.Status != workitem.RunStateRunning || run.SessionID == "" || run.PTYID == "" {
+		t.Fatalf("run = %#v", run)
+	}
+	if len(ptyBackend.spawns) != 1 {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	env := ptyBackend.spawns[0].Env
+	if env["WHISK_AGENT_BRIDGE_ID"] == "" ||
+		env["WHISK_AGENT_BRIDGE_TOKEN"] == "" ||
+		env["WHISK_AGENT_BRIDGE_PROVIDER"] != "claude" ||
+		env["WHISK_AGENT_BRIDGE_HOOK_URL"] != "http://127.0.0.1:8787/v1/agent-bridges/"+env["WHISK_AGENT_BRIDGE_ID"]+"/hooks" ||
+		env["WHISK_AGENT_BRIDGE_CONFIG_DIR"] == "" {
+		t.Fatalf("bridge env = %#v", env)
+	}
+	if strings.Contains(env["WHISK_AGENT_BRIDGE_CONFIG_DIR"], env["WHISK_AGENT_BRIDGE_TOKEN"]) {
+		t.Fatalf("bridge config dir must not contain hook token: %#v", env)
+	}
+	if _, err := os.Stat(filepath.Join(env["WHISK_AGENT_BRIDGE_CONFIG_DIR"], "bridge.json")); err != nil {
+		t.Fatalf("bridge config not installed: %v", err)
+	}
+	if info, err := os.Stat(env["WHISK_AGENT_BRIDGE_HOOK_SCRIPT"]); err != nil || info.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("bridge hook script not executable: info=%v err=%v", info, err)
+	}
+}
+
+func TestRuntimeCreateSessionCanEnableAgentBridgeHooksForRegularTerminal(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	root := t.TempDir()
+	ptyBackend := newMemoryPTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		PTYBackend: ptyBackend,
+		DaemonURL:  "http://127.0.0.1:8787",
+		CLIPath:    "/usr/local/bin/whisk",
+	})
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:    "Agent terminal",
+		RootDir: root,
+		InitialPTY: &app.StartPTYOptions{
+			Command: "claude",
+			Exec:    true,
+			AgentBridge: &app.StartPTYAgentBridgeOptions{
+				Enabled:  true,
+				Provider: "claude",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if created.MainPtyID == "" || len(ptyBackend.spawns) != 1 {
+		t.Fatalf("created = %#v spawns = %#v", created, ptyBackend.spawns)
+	}
+	env := ptyBackend.spawns[0].Env
+	if env["WHISK_AGENT_BRIDGE_ID"] == "" ||
+		env["WHISK_AGENT_BRIDGE_TOKEN"] == "" ||
+		env["WHISK_AGENT_BRIDGE_PROVIDER"] != "claude" ||
+		env["WHISK_AGENT_BRIDGE_HOOK_SCRIPT"] == "" {
+		t.Fatalf("agent bridge env = %#v", env)
+	}
+	if _, err := os.Stat(filepath.Join(env["WHISK_AGENT_BRIDGE_CONFIG_DIR"], "bridge.json")); err != nil {
+		t.Fatalf("bridge config not written: %v", err)
+	}
+}
+
+func TestRuntimeAgentBridgeHookWaitsForApprovalResolution(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	root := t.TempDir()
+	ptyBackend := newMemoryPTYBackend()
+	sink := &memoryEventSink{}
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		PTYBackend:                 ptyBackend,
+		EventSink:                  sink,
+		DaemonURL:                  "http://127.0.0.1:8787",
+		CLIPath:                    "/usr/local/bin/whisk",
+		AgentBridgeApprovalTimeout: time.Second,
+	})
+
+	if _, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:    "Agent terminal",
+		RootDir: root,
+		InitialPTY: &app.StartPTYOptions{
+			Command: "claude",
+			Exec:    true,
+			AgentBridge: &app.StartPTYAgentBridgeOptions{
+				Enabled:  true,
+				Provider: "claude",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	env := ptyBackend.spawns[0].Env
+	resultCh := make(chan app.AgentBridgeHookResponse, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+			BridgeID:  env["WHISK_AGENT_BRIDGE_ID"],
+			Token:     env["WHISK_AGENT_BRIDGE_TOKEN"],
+			Provider:  "claude",
+			EventName: "PreToolUse",
+			ToolName:  "Bash",
+			ToolInput: map[string]any{"command": "pwd"},
+		})
+		if err != nil {
+			errCh <- err
+			return
+		}
+		resultCh <- resp
+	}()
+
+	approval := waitForPendingAgentBridgeApproval(t, runtime)
+	if approval.ToolName != "Bash" || approval.ToolInput["command"] != "pwd" {
+		t.Fatalf("approval = %#v", approval)
+	}
+	if _, err := runtime.ResolveAgentBridgeApproval(ctx, app.ResolveAgentBridgeApprovalRequest{
+		ID:     approval.ID,
+		Action: "deny",
+		Reason: "blocked by human",
+	}); err != nil {
+		t.Fatalf("resolve approval: %v", err)
+	}
+
+	select {
+	case err := <-errCh:
+		t.Fatalf("hook error: %v", err)
+	case resp := <-resultCh:
+		hookSpecific, ok := resp.Output["hookSpecificOutput"].(map[string]any)
+		if !ok || hookSpecific["permissionDecision"] != "deny" || hookSpecific["permissionDecisionReason"] != "blocked by human" {
+			t.Fatalf("hook response = %#v", resp)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for hook response")
+	}
+	if !hasRuntimeEvent(sink.events, app.EventAgentBridgeApprovalsChanged) || !hasRuntimeEvent(sink.events, app.EventAgentHookEventsChanged) {
+		t.Fatalf("events = %#v", sink.events)
+	}
+}
+
+func hasRuntimeEvent(events []app.RuntimeEvent, eventType app.RuntimeEventType) bool {
+	for _, event := range events {
+		if event.Type == eventType {
+			return true
+		}
+	}
+	return false
+}
+
+func waitForPendingAgentBridgeApproval(t *testing.T, runtime *app.Runtime) agentbridge.Approval {
+	t.Helper()
+	deadline := time.After(time.Second)
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for pending approval")
+		case <-tick.C:
+			approvals, err := runtime.ListAgentBridgeApprovals(context.Background(), app.ListAgentBridgeApprovalsRequest{Status: "pending"})
+			if err != nil {
+				t.Fatalf("list approvals: %v", err)
+			}
+			if len(approvals) > 0 {
+				return approvals[0]
+			}
+		}
 	}
 }
 

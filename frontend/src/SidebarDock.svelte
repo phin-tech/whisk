@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import type { Project, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { AgentBridgeApproval, AgentBridgeEvent, Project, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import type { PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import NotificationsPanel from "./NotificationsPanel.svelte";
   import PtysPanel from "./PtysPanel.svelte";
@@ -14,6 +14,8 @@
   export let projects: Project[] = [];
   export let workItems: WorkItem[] = [];
   export let statusEvents: StatusEvent[] = [];
+  export let agentBridgeApprovals: AgentBridgeApproval[] = [];
+  export let agentBridgeEvents: AgentBridgeEvent[] = [];
   export let activeSessionId = "";
   export let activeProjectId = "";
   export let loadingSession = false;
@@ -28,6 +30,7 @@
   export let onRefreshPtys: () => void;
   export let onRefreshStatusEvents: () => void;
   export let onSelectStatusEvent: (event: StatusEvent) => void;
+  export let onResolveAgentBridgeApproval: (id: string, action: "allow" | "deny") => void;
   export let onRefreshWork: () => void;
   export let onNewProject: () => void;
   export let onSelectProject: (projectId: string) => void;
@@ -122,10 +125,13 @@
         {#if activePanel === "notifications"}
           <NotificationsPanel
             {statusEvents}
+            {agentBridgeApprovals}
+            {agentBridgeEvents}
             loading={loadingStatusEvents}
             onclose={onClose}
             onRefresh={onRefreshStatusEvents}
             {onSelectStatusEvent}
+            {onResolveAgentBridgeApproval}
           />
         {:else if activePanel === "work"}
           <WorkItemsPanel

@@ -4,10 +4,13 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/client"
@@ -287,6 +290,40 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	}
 }
 
+func TestHTTPClientAgentHookIntegrations(t *testing.T) {
+	paths := clientTestAgentHookPaths(t)
+	runtime := app.NewRuntime(app.RuntimeConfig{AgentHookPaths: &paths})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	t.Cleanup(httpServer.Close)
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx := context.Background()
+
+	listed, err := daemon.ListAgentHookIntegrations(ctx)
+	if err != nil {
+		t.Fatalf("list integrations: %v", err)
+	}
+	if len(listed) != 2 {
+		t.Fatalf("listed = %#v", listed)
+	}
+
+	installed, err := daemon.InstallAgentHookIntegration(ctx, protocol.AgentHookIntegrationRequest{Provider: "claude"})
+	if err != nil {
+		t.Fatalf("install integration: %v", err)
+	}
+	if installed.Provider != "claude" || installed.Status != "current" {
+		t.Fatalf("installed = %#v", installed)
+	}
+	checked, err := daemon.CheckAgentHookIntegration(ctx, protocol.AgentHookIntegrationRequest{Provider: "claude"})
+	if err != nil || checked.Provider != "claude" || checked.Status != "current" {
+		t.Fatalf("checked = %#v err=%v", checked, err)
+	}
+	removed, err := daemon.RemoveAgentHookIntegration(ctx, protocol.AgentHookIntegrationRequest{Provider: "claude"})
+	if err != nil || removed.Provider != "claude" || removed.Status != "missing" {
+		t.Fatalf("removed = %#v err=%v", removed, err)
+	}
+}
+
 func TestHTTPClientNextEventTimeoutReturnsNoop(t *testing.T) {
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend(), EventSink: newFakeEventBus()})
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
@@ -358,5 +395,20 @@ func TestHTTPClientReportsDaemonErrors(t *testing.T) {
 	}
 	if _, err := daemon.Output(ctx, protocol.OutputRequest{PtyID: "missing"}); err == nil || !strings.Contains(err.Error(), "plain failure") {
 		t.Fatalf("output error = %v", err)
+	}
+}
+
+func clientTestAgentHookPaths(t *testing.T) agenthooks.Paths {
+	t.Helper()
+	root := t.TempDir()
+	helperSource := filepath.Join(root, "whisk")
+	if err := os.WriteFile(helperSource, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write helper source: %v", err)
+	}
+	return agenthooks.Paths{
+		ConfigRoot:         filepath.Join(root, ".config", "whisk"),
+		HelperSourcePath:   helperSource,
+		ClaudeSettingsPath: filepath.Join(root, ".claude", "settings.json"),
+		CodexHooksPath:     filepath.Join(root, ".codex", "hooks.json"),
 	}
 }

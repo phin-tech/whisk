@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { TestProject } from "vitest/node";
 
 // Provide the live daemon base URL to the suite. Empty string => no binary, the
-// tests skip themselves. Boots whiskd on an ephemeral port with isolated XDG
+// tests skip themselves. Boots whisk on an ephemeral port with isolated XDG
 // state so it never touches real developer session state.
 declare module "vitest" {
   interface ProvidedContext {
@@ -36,7 +36,7 @@ export default async function setup(project: TestProject) {
   const port = await freePort();
   const addr = `127.0.0.1:${port}`;
   const state = mkdtempSync(join(tmpdir(), "whiskd-ts-"));
-  const proc = spawn(binary, ["-addr", addr], {
+  const proc = spawn(binary, ["daemon", "run", "-addr", addr], {
     stdio: "pipe",
     env: {
       ...process.env,

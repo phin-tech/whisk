@@ -2,6 +2,19 @@
 
 from .add_pty_bookmark_request import AddPTYBookmarkRequest
 from .add_work_item_attachment_request import AddWorkItemAttachmentRequest
+from .agent_bridge_approval import AgentBridgeApproval
+from .agent_bridge_approval_tool_input import AgentBridgeApprovalToolInput
+from .agent_bridge_event import AgentBridgeEvent
+from .agent_bridge_event_raw import AgentBridgeEventRaw
+from .agent_bridge_hook_decision import AgentBridgeHookDecision
+from .agent_bridge_hook_request import AgentBridgeHookRequest
+from .agent_bridge_hook_request_raw_payload import AgentBridgeHookRequestRawPayload
+from .agent_bridge_hook_request_tool_input import AgentBridgeHookRequestToolInput
+from .agent_bridge_hook_response import AgentBridgeHookResponse
+from .agent_bridge_hook_response_output import AgentBridgeHookResponseOutput
+from .agent_hook_integration import AgentHookIntegration
+from .agent_hook_integration_request import AgentHookIntegrationRequest
+from .agent_hook_log_status import AgentHookLogStatus
 from .answer_question_request import AnswerQuestionRequest
 from .approve_done_request import ApproveDoneRequest
 from .approve_plan_request import ApprovePlanRequest
@@ -35,6 +48,8 @@ from .gate_report import GateReport
 from .history_event import HistoryEvent
 from .http_forward import HTTPForward
 from .kill_pty_request import KillPTYRequest
+from .launch_execution_request import LaunchExecutionRequest
+from .launch_work_item_run_request import LaunchWorkItemRunRequest
 from .layout_node import LayoutNode
 from .list_worktrees_request import ListWorktreesRequest
 from .mark_status_event_read_request import MarkStatusEventReadRequest
@@ -52,10 +67,12 @@ from .project_workflow import ProjectWorkflow
 from .prompt_template import PromptTemplate
 from .pty_info import PTYInfo
 from .question import Question
+from .queue_execution_request import QueueExecutionRequest
 from .remove_worktree_request import RemoveWorktreeRequest
 from .report_status_request import ReportStatusRequest
 from .report_status_response import ReportStatusResponse
 from .resize_pty_request import ResizePTYRequest
+from .resolve_agent_bridge_approval_request import ResolveAgentBridgeApprovalRequest
 from .restart_pane_pty_request import RestartPanePTYRequest
 from .restarted_pane_pty import RestartedPanePTY
 from .run_event import RunEvent
@@ -64,6 +81,7 @@ from .session import Session
 from .session_panes_type_0 import SessionPanesType0
 from .session_window import SessionWindow
 from .session_windows_type_0 import SessionWindowsType0
+from .set_agent_hook_log_settings_request import SetAgentHookLogSettingsRequest
 from .set_pane_working_dir_request import SetPaneWorkingDirRequest
 from .set_session_root_dir_request import SetSessionRootDirRequest
 from .split_pane_request import SplitPaneRequest
@@ -71,6 +89,7 @@ from .split_pane_result import SplitPaneResult
 from .start_execution_request import StartExecutionRequest
 from .start_pane_pty_request import StartPanePTYRequest
 from .start_planning_request import StartPlanningRequest
+from .start_pty_agent_bridge_options import StartPTYAgentBridgeOptions
 from .start_pty_options import StartPTYOptions
 from .start_pty_options_env import StartPTYOptionsEnv
 from .start_work_item_run_request import StartWorkItemRunRequest
@@ -95,6 +114,19 @@ from .write_pty_request import WritePTYRequest
 __all__ = (
     "AddPTYBookmarkRequest",
     "AddWorkItemAttachmentRequest",
+    "AgentBridgeApproval",
+    "AgentBridgeApprovalToolInput",
+    "AgentBridgeEvent",
+    "AgentBridgeEventRaw",
+    "AgentBridgeHookDecision",
+    "AgentBridgeHookRequest",
+    "AgentBridgeHookRequestRawPayload",
+    "AgentBridgeHookRequestToolInput",
+    "AgentBridgeHookResponse",
+    "AgentBridgeHookResponseOutput",
+    "AgentHookIntegration",
+    "AgentHookIntegrationRequest",
+    "AgentHookLogStatus",
     "AnswerQuestionRequest",
     "ApproveDoneRequest",
     "ApprovePlanRequest",
@@ -128,6 +160,8 @@ __all__ = (
     "HistoryEvent",
     "HTTPForward",
     "KillPTYRequest",
+    "LaunchExecutionRequest",
+    "LaunchWorkItemRunRequest",
     "LayoutNode",
     "ListWorktreesRequest",
     "MarkStatusEventReadRequest",
@@ -143,10 +177,12 @@ __all__ = (
     "PromptTemplate",
     "PTYInfo",
     "Question",
+    "QueueExecutionRequest",
     "RemoveWorktreeRequest",
     "ReportStatusRequest",
     "ReportStatusResponse",
     "ResizePTYRequest",
+    "ResolveAgentBridgeApprovalRequest",
     "RestartedPanePTY",
     "RestartPanePTYRequest",
     "RunEvent",
@@ -155,6 +191,7 @@ __all__ = (
     "SessionPanesType0",
     "SessionWindow",
     "SessionWindowsType0",
+    "SetAgentHookLogSettingsRequest",
     "SetPaneWorkingDirRequest",
     "SetSessionRootDirRequest",
     "SplitPaneRequest",
@@ -163,6 +200,7 @@ __all__ = (
     "StartExecutionRequest",
     "StartPanePTYRequest",
     "StartPlanningRequest",
+    "StartPTYAgentBridgeOptions",
     "StartPTYOptions",
     "StartPTYOptionsEnv",
     "StartWorkItemRunRequest",

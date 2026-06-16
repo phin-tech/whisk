@@ -437,6 +437,49 @@ func TestRuntimeClearDaemonResetsOwnedStateAndKillsPTYs(t *testing.T) {
 	}
 }
 
+func TestRuntimeSeedsDefaultIDsFromPersistedSessions(t *testing.T) {
+	ctx := context.Background()
+	rootDir := t.TempDir()
+	currentPTYID := "whisk_000008"
+	store := &memorySessionStore{
+		loaded: []session.Session{
+			{
+				ID:      "whisk_000005",
+				Name:    "Restored",
+				RootDir: rootDir,
+				Windows: map[string]session.SessionWindow{
+					"whisk_000006": {
+						ID:        "whisk_000006",
+						SessionID: "whisk_000005",
+						Name:      "Main",
+						Layout:    session.LayoutNode{Kind: session.LayoutLeaf, PaneID: "whisk_000007"},
+					},
+				},
+				Panes: map[string]session.Pane{
+					"whisk_000007": {
+						ID:           "whisk_000007",
+						WindowID:     "whisk_000006",
+						WorkingDir:   rootDir,
+						CurrentPTYID: &currentPTYID,
+					},
+				},
+			},
+		},
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{SessionStore: store})
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:    "After restart",
+		RootDir: rootDir,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if created.Session.ID != "whisk_000009" || created.WindowID != "whisk_000010" || created.PaneID != "whisk_000011" {
+		t.Fatalf("created ids = session %s window %s pane %s", created.Session.ID, created.WindowID, created.PaneID)
+	}
+}
+
 func TestRuntimeDetachPanePTYKeepsPTYSessionOwnership(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	ctx := context.Background()

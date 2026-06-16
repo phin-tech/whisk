@@ -7,9 +7,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/protocol"
@@ -116,6 +120,38 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 		t.Fatalf("ptys after clear = %#v", ptys)
 	}
 
+}
+
+func TestHTTPServerAgentHookIntegrationRoutes(t *testing.T) {
+	paths := testAgentHookPaths(t)
+	runtime := app.NewRuntime(app.RuntimeConfig{AgentHookPaths: &paths})
+	handler := server.NewHTTP(runtime)
+
+	listed := getJSON[[]protocol.AgentHookIntegration](t, handler, "/v1/agent-hook-integrations", http.StatusOK)
+	if len(listed) != 2 {
+		t.Fatalf("listed = %#v", listed)
+	}
+
+	installed := postJSON[protocol.AgentHookIntegration](t, handler, "/v1/agent-hook-integrations/install", protocol.AgentHookIntegrationRequest{
+		Provider: "claude",
+	}, http.StatusOK)
+	if installed.Provider != "claude" || installed.Status != "current" || installed.HelperPath == "" || installed.ManifestPath == "" {
+		t.Fatalf("installed = %#v", installed)
+	}
+
+	checked := postJSON[protocol.AgentHookIntegration](t, handler, "/v1/agent-hook-integrations/check", protocol.AgentHookIntegrationRequest{
+		Provider: "claude",
+	}, http.StatusOK)
+	if checked.Provider != "claude" || checked.Status != "current" {
+		t.Fatalf("checked = %#v", checked)
+	}
+
+	removed := postJSON[protocol.AgentHookIntegration](t, handler, "/v1/agent-hook-integrations/remove", protocol.AgentHookIntegrationRequest{
+		Provider: "claude",
+	}, http.StatusOK)
+	if removed.Provider != "claude" || removed.Status != "missing" {
+		t.Fatalf("removed = %#v", removed)
+	}
 }
 
 func TestHTTPServerSessionLifecycleActions(t *testing.T) {
@@ -255,6 +291,72 @@ func TestHTTPServerNextEventTimeoutReturnsNoop(t *testing.T) {
 	event := getJSON[protocol.RuntimeEvent](t, handler, "/v1/events/next?timeoutMs=1", http.StatusOK)
 	if event.Type != protocol.RuntimeEventNone {
 		t.Fatalf("event = %#v", event)
+	}
+}
+
+func TestHTTPServerAgentBridgeHooksValidateTokenAndReturnProviderOutput(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	backend := newFakePTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend: backend,
+		IDGenerator: func() string {
+			nextID++
+			return "id_" + strconv.Itoa(nextID)
+		},
+		DaemonURL: "http://127.0.0.1:8787",
+	})
+	handler := server.NewHTTP(runtime)
+
+	project := postJSON[protocol.Project](t, handler, "/v1/projects", protocol.CreateProjectRequest{
+		Name:    "App",
+		RootDir: t.TempDir(),
+	}, http.StatusCreated)
+	item := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
+		ProjectID: project.ID,
+		Title:     "Bridge endpoint",
+		Actor:     "human",
+	}, http.StatusCreated)
+	run := postJSON[protocol.WorkItemRun](t, handler, "/v1/work-item-runs", protocol.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		Launch:           true,
+		AgentProfileID:   "claude",
+		Actor:            "agent",
+	}, http.StatusCreated)
+	spawn := backend.spawns[run.PTYID]
+	bridgeID := spawn.Env["WHISK_AGENT_BRIDGE_ID"]
+	token := spawn.Env["WHISK_AGENT_BRIDGE_TOKEN"]
+	if bridgeID == "" || token == "" {
+		t.Fatalf("spawn bridge env = %#v", spawn.Env)
+	}
+
+	assertStatus(t, handler, http.MethodPost, "/v1/agent-bridges/"+bridgeID+"/hooks", `{"token":"wrong"}`, http.StatusUnauthorized)
+
+	allow := postJSON[protocol.AgentBridgeHookResponse](t, handler, "/v1/agent-bridges/"+bridgeID+"/hooks", protocol.AgentBridgeHookRequest{
+		Token:     token,
+		Provider:  "claude",
+		EventName: "PreToolUse",
+		ToolName:  "Bash",
+		ToolInput: map[string]any{"command": "pwd"},
+		Decision:  protocol.AgentBridgeHookDecision{Action: "allow"},
+	}, http.StatusOK)
+	if allow.Output != nil {
+		t.Fatalf("allow output = %#v", allow.Output)
+	}
+
+	deny := postJSON[protocol.AgentBridgeHookResponse](t, handler, "/v1/agent-bridges/"+bridgeID+"/hooks", protocol.AgentBridgeHookRequest{
+		Token:     token,
+		Provider:  "claude",
+		EventName: "PreToolUse",
+		ToolName:  "Bash",
+		ToolInput: map[string]any{"command": "rm -rf /tmp/x"},
+		Decision:  protocol.AgentBridgeHookDecision{Action: "deny", Reason: "blocked by policy"},
+	}, http.StatusOK)
+	hookSpecific, ok := deny.Output["hookSpecificOutput"].(map[string]any)
+	if !ok || hookSpecific["permissionDecision"] != "deny" || hookSpecific["permissionDecisionReason"] != "blocked by policy" {
+		t.Fatalf("deny output = %#v", deny.Output)
 	}
 }
 
@@ -895,5 +997,20 @@ func assertStatus(t *testing.T, handler http.Handler, method string, path string
 	handler.ServeHTTP(recorder, httptest.NewRequest(method, path, strings.NewReader(body)))
 	if recorder.Code != wantStatus {
 		t.Fatalf("%s %s status = %d body = %s", method, path, recorder.Code, recorder.Body.String())
+	}
+}
+
+func testAgentHookPaths(t *testing.T) agenthooks.Paths {
+	t.Helper()
+	root := t.TempDir()
+	helperSource := filepath.Join(root, "whisk")
+	if err := os.WriteFile(helperSource, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write helper source: %v", err)
+	}
+	return agenthooks.Paths{
+		ConfigRoot:         filepath.Join(root, ".config", "whisk"),
+		HelperSourcePath:   helperSource,
+		ClaudeSettingsPath: filepath.Join(root, ".claude", "settings.json"),
+		CodexHooksPath:     filepath.Join(root, ".codex", "hooks.json"),
 	}
 }

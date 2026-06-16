@@ -1,9 +1,18 @@
 <script lang="ts">
+  import Check from "@lucide/svelte/icons/check";
+  import Copy from "@lucide/svelte/icons/copy";
+  import Download from "@lucide/svelte/icons/download";
+  import ExternalLink from "@lucide/svelte/icons/external-link";
   import FolderTree from "@lucide/svelte/icons/folder-tree";
+  import Plug from "@lucide/svelte/icons/plug";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import Server from "@lucide/svelte/icons/server";
   import Settings from "@lucide/svelte/icons/settings";
   import TerminalIcon from "@lucide/svelte/icons/terminal";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
   import X from "@lucide/svelte/icons/x";
+  import type { AgentHookIntegration, AgentHookLogStatus } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import { agentHookIntegrationFor } from "./agentHooksView";
   import DaemonSettings from "./DaemonSettings.svelte";
 
   export let visible = false;
@@ -12,14 +21,27 @@
   export let terminalFontSize = 13;
   export let terminalCursorBlink = true;
   export let keepDaemonAlive = true;
+  export let agentHookIntegrations: AgentHookIntegration[] = [];
+  export let agentHookLogStatus: AgentHookLogStatus | null = null;
+  export let agentHookAction = "";
+  export let agentHookNotice = "";
   export let onclose: () => void;
   export let onRailSide: (side: "left" | "right") => void;
   export let onStartupView: (view: "sessions" | "kanban") => void;
   export let onTerminalFontSize: (size: number) => void;
   export let onTerminalCursorBlink: (blink: boolean) => void;
   export let onKeepDaemonAlive: (keep: boolean) => void;
+  export let onRefreshAgentHookIntegrations: () => void;
+  export let onCheckAgentHookIntegration: (provider: string) => void;
+  export let onInstallAgentHookIntegration: (provider: string) => void;
+  export let onRemoveAgentHookIntegration: (provider: string) => void;
+  export let onHookLogEnabled: (enabled: boolean) => void;
+  export let onClearHookLogAfterSession: (enabled: boolean) => void;
+  export let onClearAgentHookLog: () => void;
+  export let onOpenAgentHookLog: () => void;
+  export let onCopyAgentHookLogPath: (path: string) => void;
 
-  type Category = "general" | "sessions" | "terminal" | "daemon";
+  type Category = "general" | "sessions" | "terminal" | "daemon" | "integrations";
 
   let selected: Category = "general";
 
@@ -28,6 +50,12 @@
     { id: "sessions" as const, label: "Sessions", icon: FolderTree },
     { id: "terminal" as const, label: "Terminal", icon: TerminalIcon },
     { id: "daemon" as const, label: "Daemon", icon: Server },
+    { id: "integrations" as const, label: "Integrations", icon: Plug },
+  ];
+
+  const providers = [
+    { id: "claude", label: "Claude Code" },
+    { id: "codex", label: "Codex" },
   ];
 
   function handleKey(event: KeyboardEvent) {
@@ -36,6 +64,43 @@
       onclose();
     }
   }
+
+  function integrationFor(provider: string): AgentHookIntegration {
+    return agentHookIntegrationFor(agentHookIntegrations, provider);
+  }
+
+  function isInstalled(integration: AgentHookIntegration) {
+    return ["current", "modified", "outdated", "untrusted"].includes(integration.status);
+  }
+
+  function statusClass(status: string) {
+    if (status === "current") return "border-green/35 bg-green/10 text-green";
+    if (status === "untrusted" || status === "outdated") {
+      return "border-amber/35 bg-amber/10 text-amber";
+    }
+    if (status === "modified" || status === "unavailable") {
+      return "border-red/30 bg-red/10 text-red";
+    }
+    return "border-border bg-bg-deep text-text-muted";
+  }
+
+  function installLabel(status: string) {
+    if (status === "modified") return "Repair";
+    if (status === "outdated" || status === "untrusted") return "Update";
+    return "Install";
+  }
+
+  function actionBusy(provider: string) {
+    return agentHookAction.endsWith(`:${provider}`);
+  }
+
+  function bytesLabel(bytes: number | undefined) {
+    if (!bytes) return "0 B";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
 </script>
 
 <svelte:window on:keydown={visible ? handleKey : undefined} />
@@ -210,6 +275,192 @@
           </div>
         {:else if selected === "daemon"}
           <DaemonSettings {keepDaemonAlive} onKeepDaemonAlive={onKeepDaemonAlive} />
+        {:else if selected === "integrations"}
+          <div class="flex items-center justify-between gap-3 pb-3">
+            <div>
+              <div class="text-[13px]">Agent hooks</div>
+              <div class="mt-0.5 text-[11px] text-text-muted">
+                Global provider hooks managed under <span class="font-mono">~/.config/whisk</span>.
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label="Refresh agent hook integrations"
+              class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+              disabled={agentHookAction !== ""}
+              on:click={onRefreshAgentHookIntegrations}
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+
+          {#if agentHookNotice}
+            <div
+              class="mb-3 rounded border border-accent-dim/40 bg-accent-dim/10 px-2.5 py-2 text-[12px] text-text-secondary"
+            >
+              {agentHookNotice}
+            </div>
+          {/if}
+
+          <div class="divide-y divide-hairline border-y border-hairline">
+            {#each providers as provider}
+              {@const integration = integrationFor(provider.id)}
+              {@const installed = isInstalled(integration)}
+              <div class="grid gap-3 py-3 md:grid-cols-[minmax(160px,220px)_1fr_auto] md:items-start">
+                <div class="flex min-w-0 items-start gap-2">
+                  <Plug size={14} class="mt-0.5 shrink-0 text-text-muted" />
+                  <div class="min-w-0">
+                    <span class="block text-[13px] font-medium text-text-primary">{provider.label}</span>
+                    <span
+                      class="mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider {statusClass(
+                        integration.status,
+                      )}"
+                    >
+                      {integration.status || "missing"}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="min-w-0 space-y-1 text-[11px] text-text-muted">
+                  {#if integration.detail}
+                    <div class="text-text-secondary">{integration.detail}</div>
+                  {/if}
+                  <div class="truncate">
+                    Config <span class="font-mono text-text-secondary">{integration.configPath || "not checked"}</span>
+                  </div>
+                  <div class="truncate">
+                    Helper <span class="font-mono text-text-secondary">{integration.helperPath || "not installed"}</span>
+                  </div>
+                  <div>
+                    Version
+                    <span class="font-mono text-text-secondary">
+                      {integration.installedVersion || "none"} / {integration.latestVersion || "unknown"}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-1 md:justify-end">
+                  <button
+                    type="button"
+                    aria-label={`Check ${provider.label} hooks`}
+                    class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+                    disabled={actionBusy(provider.id)}
+                    on:click={() => onCheckAgentHookIntegration(provider.id)}
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`${installLabel(integration.status)} ${provider.label} hooks`}
+                    class="inline-flex h-7 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-wait disabled:opacity-60"
+                    disabled={actionBusy(provider.id)}
+                    on:click={() => onInstallAgentHookIntegration(provider.id)}
+                  >
+                    <Download size={13} />
+                    <span>{installLabel(integration.status)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${provider.label} hooks`}
+                    class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:border-red/40 hover:text-red disabled:cursor-wait disabled:opacity-50"
+                    disabled={!installed || actionBusy(provider.id)}
+                    on:click={() => onRemoveAgentHookIntegration(provider.id)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            {/each}
+          </div>
+
+          <div class="mt-5 border-y border-hairline py-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[13px] font-medium text-text-primary">Hook log</div>
+                <div class="mt-0.5 text-[11px] text-text-muted">
+                  Redacted JSONL hook payloads for debugging.
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Toggle hook logging"
+                class="relative h-5 w-9 rounded-full border transition-all {agentHookLogStatus?.enabled
+                  ? 'border-accent bg-accent-dim'
+                  : 'border-border bg-bg-deep'}"
+                disabled={agentHookAction !== ""}
+                on:click={() => onHookLogEnabled(!(agentHookLogStatus?.enabled ?? true))}
+              >
+                <div
+                  class="absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all {agentHookLogStatus?.enabled
+                    ? 'left-[18px] bg-accent'
+                    : 'left-0.5 bg-text-secondary'}"
+                ></div>
+              </button>
+            </div>
+
+            <div class="mt-3 rounded border border-border-subtle bg-bg-surface/25 p-2">
+              <div class="select-text break-all font-mono text-[11px] leading-4 text-text-secondary">
+                {agentHookLogStatus?.path || "~/.config/whisk/agent-hooks/hooks.jsonl"}
+              </div>
+              <div class="mt-1 text-[10px] text-text-muted">
+                {bytesLabel(agentHookLogStatus?.sizeBytes)}
+              </div>
+            </div>
+
+            <div class="mt-2 flex flex-wrap gap-1">
+              <button
+                type="button"
+                class="inline-flex h-7 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-wait disabled:opacity-60"
+                disabled={!agentHookLogStatus?.path || agentHookAction !== ""}
+                on:click={() => agentHookLogStatus?.path && onCopyAgentHookLogPath(agentHookLogStatus.path)}
+              >
+                <Copy size={13} />
+                <span>Copy Location</span>
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-7 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-wait disabled:opacity-60"
+                disabled={agentHookAction !== ""}
+                on:click={onOpenAgentHookLog}
+              >
+                <ExternalLink size={13} />
+                <span>Open in Editor</span>
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-7 items-center justify-center gap-1 rounded border border-red/30 bg-red/10 px-2 text-[11px] text-red transition-colors hover:border-red disabled:cursor-wait disabled:opacity-60"
+                disabled={agentHookAction !== ""}
+                on:click={onClearAgentHookLog}
+              >
+                <Trash2 size={13} />
+                <span>Clear Log</span>
+              </button>
+            </div>
+
+            <div class="mt-3 flex items-center justify-between gap-3 py-1">
+              <div>
+                <div class="text-[12px] text-text-primary">Clear after session</div>
+                <div class="mt-0.5 text-[11px] text-text-muted">
+                  Remove hook logs when the daemon shuts down.
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Toggle clear hook log after session"
+                class="relative h-5 w-9 rounded-full border transition-all {agentHookLogStatus?.clearAfterSession
+                  ? 'border-accent bg-accent-dim'
+                  : 'border-border bg-bg-deep'}"
+                disabled={agentHookAction !== ""}
+                on:click={() => onClearHookLogAfterSession(!(agentHookLogStatus?.clearAfterSession ?? false))}
+              >
+                <div
+                  class="absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all {agentHookLogStatus?.clearAfterSession
+                    ? 'left-[18px] bg-accent'
+                    : 'left-0.5 bg-text-secondary'}"
+                ></div>
+              </button>
+            </div>
+          </div>
         {/if}
       </div>
     </div>

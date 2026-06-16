@@ -46,7 +46,7 @@ internal/protocol    command, response, and event DTOs
 internal/server      exposes runtime through the protocol
 internal/client      typed client for local or remote daemon
 internal/wailsapp    Wails adapter over the client only
-cmd/whiskd           daemon entrypoint
+cmd/whisk daemon run daemon entrypoint
 ```
 
 Forbidden dependency:
@@ -201,6 +201,6 @@ The next architectural move should be:
 2. Add `internal/client`.
 3. Make `internal/wailsapp` depend on the client interface only.
 4. Add `internal/server`.
-5. Add `cmd/whiskd`.
-6. Switch Wails to spawn/connect to `whiskd`.
+5. Add `cmd/whisk daemon run`.
+6. Switch Wails to spawn/connect to the daemon through `whisk daemon run`.
 7. Delete direct Wails-to-runtime ownership.

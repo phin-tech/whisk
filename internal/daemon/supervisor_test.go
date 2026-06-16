@@ -31,7 +31,7 @@ func TestEnsureStartsDaemonWhenDown(t *testing.T) {
 		t.Fatalf("close listener: %v", err)
 	}
 
-	t.Setenv("WHISKD_PATH", writeWhiskdHelper(t))
+	t.Setenv("WHISKD_PATH", writeWhiskHelper(t))
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -75,7 +75,7 @@ func TestEnsureRestartsIncompatibleDaemon(t *testing.T) {
 	}()
 	t.Cleanup(func() { _ = oldServer.Shutdown(context.Background()) })
 
-	t.Setenv("WHISKD_PATH", writeWhiskdHelper(t))
+	t.Setenv("WHISKD_PATH", writeWhiskHelper(t))
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -93,8 +93,8 @@ func TestEnsureRestartsIncompatibleDaemon(t *testing.T) {
 	}
 }
 
-func TestWhiskdHelperProcess(t *testing.T) {
-	if os.Getenv("WHISKD_HELPER_PROCESS") != "1" {
+func TestWhiskHelperProcess(t *testing.T) {
+	if os.Getenv("WHISK_HELPER_PROCESS") != "1" {
 		return
 	}
 	args := os.Args
@@ -145,10 +145,10 @@ func TestWhiskdHelperProcess(t *testing.T) {
 	os.Exit(0)
 }
 
-func writeWhiskdHelper(t *testing.T) string {
+func writeWhiskHelper(t *testing.T) string {
 	t.Helper()
-	helper := filepath.Join(t.TempDir(), "whiskd-helper")
-	script := fmt.Sprintf("#!/bin/sh\nWHISKD_HELPER_PROCESS=1 exec %q -test.run TestWhiskdHelperProcess -- \"$@\"\n", os.Args[0])
+	helper := filepath.Join(t.TempDir(), "whisk-helper")
+	script := fmt.Sprintf("#!/bin/sh\nWHISK_HELPER_PROCESS=1 exec %q -test.run TestWhiskHelperProcess -- \"$@\"\n", os.Args[0])
 	if err := os.WriteFile(helper, []byte(script), 0o755); err != nil {
 		t.Fatalf("write helper: %v", err)
 	}

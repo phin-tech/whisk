@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "8",
+    "version": "11",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -11,6 +11,528 @@
     }
   ],
   "paths": {
+    "/v1/agent-bridge-approvals": {
+      "get": {
+        "operationId": "listAgentBridgeApprovals",
+        "summary": "List pending or resolved daemon-owned agent bridge approvals",
+        "tags": [
+          "agent-bridges"
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentBridgeApproval"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-bridge-approvals/{approvalID}/resolve": {
+      "post": {
+        "operationId": "resolveAgentBridgeApproval",
+        "summary": "Resolve a pending daemon-owned agent bridge approval",
+        "tags": [
+          "agent-bridges"
+        ],
+        "parameters": [
+          {
+            "name": "approvalID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveAgentBridgeApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentBridgeApproval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-bridge-events": {
+      "get": {
+        "operationId": "listAgentBridgeEvents",
+        "summary": "List passive provider hook events",
+        "tags": [
+          "agent-bridges"
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentBridgeEvent"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-bridges/{bridgeID}/hooks": {
+      "post": {
+        "operationId": "agentBridgeHook",
+        "summary": "Handle provider hook callback for a daemon-owned agent bridge",
+        "tags": [
+          "agent-bridges"
+        ],
+        "parameters": [
+          {
+            "name": "bridgeID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentBridgeHookRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentBridgeHookResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-hook-events": {
+      "post": {
+        "operationId": "recordAgentHookEvent",
+        "summary": "Record a passive provider hook event",
+        "tags": [
+          "agent-bridges"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentBridgeHookRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentBridgeEvent"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-hook-integrations": {
+      "get": {
+        "operationId": "listAgentHookIntegrations",
+        "summary": "List globally installed provider hook integrations",
+        "tags": [
+          "agent-bridges"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentHookIntegration"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-hook-integrations/check": {
+      "post": {
+        "operationId": "checkAgentHookIntegration",
+        "summary": "Check one global provider hook integration",
+        "tags": [
+          "agent-bridges"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentHookIntegrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentHookIntegration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-hook-integrations/install": {
+      "post": {
+        "operationId": "installAgentHookIntegration",
+        "summary": "Install or update one global provider hook integration",
+        "tags": [
+          "agent-bridges"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentHookIntegrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentHookIntegration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-hook-integrations/remove": {
+      "post": {
+        "operationId": "removeAgentHookIntegration",
+        "summary": "Remove one global provider hook integration",
+        "tags": [
+          "agent-bridges"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentHookIntegrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentHookIntegration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-hook-log": {
+      "get": {
+        "operationId": "getAgentHookLogStatus",
+        "summary": "Get hook log status and path",
+        "tags": [
+          "agent-bridges"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentHookLogStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-hook-log/clear": {
+      "post": {
+        "operationId": "clearAgentHookLog",
+        "summary": "Clear hook log files",
+        "tags": [
+          "agent-bridges"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentHookLogStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-hook-log/open": {
+      "post": {
+        "operationId": "openAgentHookLog",
+        "summary": "Open hook log in the platform editor",
+        "tags": [
+          "agent-bridges"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentHookLogStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-hook-log/settings": {
+      "post": {
+        "operationId": "setAgentHookLogSettings",
+        "summary": "Update hook log settings",
+        "tags": [
+          "agent-bridges"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAgentHookLogSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentHookLogStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/artifacts": {
       "get": {
         "operationId": "listArtifacts",
@@ -2875,6 +3397,268 @@
         ],
         "type": "object"
       },
+      "AgentBridgeApproval": {
+        "properties": {
+          "bridgeId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/AgentBridgeHookDecision"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "toolInput": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "toolName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bridgeId",
+          "provider",
+          "eventName",
+          "toolName",
+          "status",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "AgentBridgeEvent": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "bridgeId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "elicitationId": {
+            "type": "string"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "notificationType": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "raw": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "result": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "toolName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "eventName",
+          "status",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "AgentBridgeHookDecision": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AgentBridgeHookRequest": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/AgentBridgeHookDecision"
+          },
+          "elicitationId": {
+            "type": "string"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "notificationType": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "rawPayload": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "toolInput": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "toolOutput": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "provider",
+          "eventName"
+        ],
+        "type": "object"
+      },
+      "AgentBridgeHookResponse": {
+        "properties": {
+          "output": {
+            "additionalProperties": {},
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "AgentHookIntegration": {
+        "properties": {
+          "configPath": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "helperPath": {
+            "type": "string"
+          },
+          "installedVersion": {
+            "type": "string"
+          },
+          "latestVersion": {
+            "type": "string"
+          },
+          "manifestPath": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "status",
+          "latestVersion",
+          "helperPath",
+          "configPath",
+          "manifestPath"
+        ],
+        "type": "object"
+      },
+      "AgentHookIntegrationRequest": {
+        "properties": {
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "type": "object"
+      },
+      "AgentHookLogStatus": {
+        "properties": {
+          "clearAfterSession": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "clearAfterSession",
+          "path",
+          "sizeBytes"
+        ],
+        "type": "object"
+      },
       "AnswerQuestionRequest": {
         "properties": {
           "actor": {
@@ -4173,6 +4957,20 @@
         ],
         "type": "object"
       },
+      "ResolveAgentBridgeApprovalRequest": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
       "RestartPanePTYRequest": {
         "properties": {
           "options": {
@@ -4313,6 +5111,19 @@
         ],
         "type": "object"
       },
+      "SetAgentHookLogSettingsRequest": {
+        "properties": {
+          "clearAfterSession": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "enabled": {
+            "nullable": true,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "SetPaneWorkingDirRequest": {
         "properties": {
           "paneId": {
@@ -4429,8 +5240,30 @@
         ],
         "type": "object"
       },
+      "StartPTYAgentBridgeOptions": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
       "StartPTYOptions": {
         "properties": {
+          "agentBridge": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StartPTYAgentBridgeOptions"
+              }
+            ],
+            "nullable": true
+          },
           "args": {
             "items": {
               "type": "string"

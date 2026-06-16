@@ -107,6 +107,8 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: null,
       work: false,
       statusEvents: false,
+      agentBridgeApprovals: false,
+      agentHookEvents: false,
     });
     expect(runtimeRefreshTargets({ type: "pty.changed", ptyId: "pty_01" })).toEqual({
       sessions: false,
@@ -114,6 +116,8 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: null,
       work: false,
       statusEvents: false,
+      agentBridgeApprovals: false,
+      agentHookEvents: false,
     });
     expect(runtimeRefreshTargets({ type: "pty.output", ptyId: "pty_01", offset: 12 })).toEqual({
       sessions: false,
@@ -121,6 +125,8 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: "pty_01",
       work: false,
       statusEvents: false,
+      agentBridgeApprovals: false,
+      agentHookEvents: false,
     });
     expect(runtimeRefreshTargets({ type: "workitems.changed" })).toEqual({
       sessions: false,
@@ -128,6 +134,8 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: null,
       work: true,
       statusEvents: false,
+      agentBridgeApprovals: false,
+      agentHookEvents: false,
     });
     expect(runtimeRefreshTargets({ type: "status.changed" })).toEqual({
       sessions: false,
@@ -135,6 +143,26 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: null,
       work: true,
       statusEvents: true,
+      agentBridgeApprovals: false,
+      agentHookEvents: false,
+    });
+    expect(runtimeRefreshTargets({ type: "agent_bridge_approvals.changed" })).toEqual({
+      sessions: false,
+      ptys: false,
+      outputPtyId: null,
+      work: false,
+      statusEvents: false,
+      agentBridgeApprovals: true,
+      agentHookEvents: false,
+    });
+    expect(runtimeRefreshTargets({ type: "agent_hook_events.changed" })).toEqual({
+      sessions: false,
+      ptys: false,
+      outputPtyId: null,
+      work: false,
+      statusEvents: false,
+      agentBridgeApprovals: false,
+      agentHookEvents: true,
     });
   });
 });

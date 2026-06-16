@@ -37,6 +37,7 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		workItems:         []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
 		runs:              []protocol.WorkItemRun{{ID: "run_01", WorkItemID: "wi_01", Status: "queued", Preset: "writer"}},
 		httpForwards:      []protocol.HTTPForward{{ID: "fwd_01", TargetURL: "http://127.0.0.1:4966"}},
+		agentIntegrations: []protocol.AgentHookIntegration{{Provider: "claude", Status: "current"}},
 		clearResponse:     protocol.ClearDaemonResponse{SessionsCleared: 1},
 	}
 	service := wailsapp.NewService(fake)
@@ -277,6 +278,30 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || statusEvent.ID != "status_01" || fake.markStatusReadReq.ID != "status_01" {
 		t.Fatalf("mark status read = %#v, req = %#v, err = %v", statusEvent, fake.markStatusReadReq, err)
 	}
+	approvals, err := service.ListAgentBridgeApprovals(ctx, protocol.ListAgentBridgeApprovalsRequest{Status: "pending"})
+	if err != nil || len(approvals) != 0 || fake.listAgentApprovalsReq.Status != "pending" {
+		t.Fatalf("agent approvals = %#v, req = %#v, err = %v", approvals, fake.listAgentApprovalsReq, err)
+	}
+	approval, err := service.ResolveAgentBridgeApproval(ctx, "approval_01", protocol.ResolveAgentBridgeApprovalRequest{Action: "allow"})
+	if err != nil || approval.ID != "approval_01" || fake.resolveAgentApprovalID != "approval_01" || fake.resolveAgentApprovalReq.Action != "allow" {
+		t.Fatalf("resolve agent approval = %#v, id = %q, req = %#v, err = %v", approval, fake.resolveAgentApprovalID, fake.resolveAgentApprovalReq, err)
+	}
+	integrations, err := service.ListAgentHookIntegrations(ctx)
+	if err != nil || len(integrations) != 1 || integrations[0].Provider != "claude" {
+		t.Fatalf("agent hook integrations = %#v, err = %v", integrations, err)
+	}
+	checkedIntegration, err := service.CheckAgentHookIntegration(ctx, protocol.AgentHookIntegrationRequest{Provider: "claude"})
+	if err != nil || checkedIntegration.Provider != "claude" || fake.checkAgentHookReq.Provider != "claude" {
+		t.Fatalf("check agent hook integration = %#v, req = %#v, err = %v", checkedIntegration, fake.checkAgentHookReq, err)
+	}
+	installedIntegration, err := service.InstallAgentHookIntegration(ctx, protocol.AgentHookIntegrationRequest{Provider: "codex"})
+	if err != nil || installedIntegration.Provider != "codex" || fake.installAgentHookReq.Provider != "codex" {
+		t.Fatalf("install agent hook integration = %#v, req = %#v, err = %v", installedIntegration, fake.installAgentHookReq, err)
+	}
+	removedIntegration, err := service.RemoveAgentHookIntegration(ctx, protocol.AgentHookIntegrationRequest{Provider: "codex"})
+	if err != nil || removedIntegration.Provider != "codex" || fake.removeAgentHookReq.Provider != "codex" {
+		t.Fatalf("remove agent hook integration = %#v, req = %#v, err = %v", removedIntegration, fake.removeAgentHookReq, err)
+	}
 	httpForwards, err := service.ListHTTPForwards(ctx)
 	if err != nil || len(httpForwards) != 1 || httpForwards[0].ID != "fwd_01" {
 		t.Fatalf("list http forwards = %#v, err = %v", httpForwards, err)
@@ -344,6 +369,10 @@ type runtimeClientFake struct {
 	workItems         []protocol.WorkItem
 	runs              []protocol.WorkItemRun
 	httpForwards      []protocol.HTTPForward
+	agentApprovals    []protocol.AgentBridgeApproval
+	agentEvents       []protocol.AgentBridgeEvent
+	agentIntegrations []protocol.AgentHookIntegration
+	agentHookLog      protocol.AgentHookLogStatus
 	clearResponse     protocol.ClearDaemonResponse
 
 	clearCalled        bool
@@ -382,6 +411,19 @@ type runtimeClientFake struct {
 	reportStatusReq          protocol.ReportStatusRequest
 	listStatusEventsReq      protocol.ListStatusEventsRequest
 	markStatusReadReq        protocol.MarkStatusEventReadRequest
+	agentBridgeHookID        string
+	agentBridgeHookReq       protocol.AgentBridgeHookRequest
+	recordAgentHookReq       protocol.AgentBridgeHookRequest
+	listAgentApprovalsReq    protocol.ListAgentBridgeApprovalsRequest
+	listAgentEventsReq       protocol.ListAgentBridgeEventsRequest
+	resolveAgentApprovalID   string
+	resolveAgentApprovalReq  protocol.ResolveAgentBridgeApprovalRequest
+	checkAgentHookReq        protocol.AgentHookIntegrationRequest
+	installAgentHookReq      protocol.AgentHookIntegrationRequest
+	removeAgentHookReq       protocol.AgentHookIntegrationRequest
+	setAgentHookLogReq       protocol.SetAgentHookLogSettingsRequest
+	clearAgentHookLogCalled  bool
+	openAgentHookLogCalled   bool
 	createForwardReq         protocol.CreateHTTPForwardRequest
 	deleteForwardID          string
 }
@@ -647,6 +689,78 @@ func (f *runtimeClientFake) ListStatusEvents(_ context.Context, req protocol.Lis
 func (f *runtimeClientFake) MarkStatusEventRead(_ context.Context, req protocol.MarkStatusEventReadRequest) (protocol.StatusEvent, error) {
 	f.markStatusReadReq = req
 	return protocol.StatusEvent{ID: req.ID}, nil
+}
+
+func (f *runtimeClientFake) AgentBridgeHook(_ context.Context, bridgeID string, req protocol.AgentBridgeHookRequest) (protocol.AgentBridgeHookResponse, error) {
+	f.agentBridgeHookID = bridgeID
+	f.agentBridgeHookReq = req
+	return protocol.AgentBridgeHookResponse{}, nil
+}
+
+func (f *runtimeClientFake) RecordAgentHookEvent(_ context.Context, req protocol.AgentBridgeHookRequest) (protocol.AgentBridgeEvent, error) {
+	f.recordAgentHookReq = req
+	return protocol.AgentBridgeEvent{ID: "event_01", Provider: req.Provider, EventName: req.EventName, Status: "pending"}, nil
+}
+
+func (f *runtimeClientFake) ListAgentBridgeApprovals(_ context.Context, req protocol.ListAgentBridgeApprovalsRequest) ([]protocol.AgentBridgeApproval, error) {
+	f.listAgentApprovalsReq = req
+	return f.agentApprovals, nil
+}
+
+func (f *runtimeClientFake) ResolveAgentBridgeApproval(_ context.Context, id string, req protocol.ResolveAgentBridgeApprovalRequest) (protocol.AgentBridgeApproval, error) {
+	f.resolveAgentApprovalID = id
+	f.resolveAgentApprovalReq = req
+	return protocol.AgentBridgeApproval{ID: id, Status: "resolved", Decision: protocol.AgentBridgeHookDecision{Action: req.Action, Reason: req.Reason}}, nil
+}
+
+func (f *runtimeClientFake) ListAgentBridgeEvents(_ context.Context, req protocol.ListAgentBridgeEventsRequest) ([]protocol.AgentBridgeEvent, error) {
+	f.listAgentEventsReq = req
+	return f.agentEvents, nil
+}
+
+func (f *runtimeClientFake) ListAgentHookIntegrations(context.Context) ([]protocol.AgentHookIntegration, error) {
+	return f.agentIntegrations, nil
+}
+
+func (f *runtimeClientFake) CheckAgentHookIntegration(_ context.Context, req protocol.AgentHookIntegrationRequest) (protocol.AgentHookIntegration, error) {
+	f.checkAgentHookReq = req
+	return protocol.AgentHookIntegration{Provider: req.Provider, Status: "current"}, nil
+}
+
+func (f *runtimeClientFake) InstallAgentHookIntegration(_ context.Context, req protocol.AgentHookIntegrationRequest) (protocol.AgentHookIntegration, error) {
+	f.installAgentHookReq = req
+	return protocol.AgentHookIntegration{Provider: req.Provider, Status: "current"}, nil
+}
+
+func (f *runtimeClientFake) RemoveAgentHookIntegration(_ context.Context, req protocol.AgentHookIntegrationRequest) (protocol.AgentHookIntegration, error) {
+	f.removeAgentHookReq = req
+	return protocol.AgentHookIntegration{Provider: req.Provider, Status: "missing"}, nil
+}
+
+func (f *runtimeClientFake) AgentHookLogStatus(context.Context) (protocol.AgentHookLogStatus, error) {
+	return f.agentHookLog, nil
+}
+
+func (f *runtimeClientFake) SetAgentHookLogSettings(_ context.Context, req protocol.SetAgentHookLogSettingsRequest) (protocol.AgentHookLogStatus, error) {
+	f.setAgentHookLogReq = req
+	if req.Enabled != nil {
+		f.agentHookLog.Enabled = *req.Enabled
+	}
+	if req.ClearAfterSession != nil {
+		f.agentHookLog.ClearAfterSession = *req.ClearAfterSession
+	}
+	return f.agentHookLog, nil
+}
+
+func (f *runtimeClientFake) ClearAgentHookLog(context.Context) (protocol.AgentHookLogStatus, error) {
+	f.clearAgentHookLogCalled = true
+	f.agentHookLog.SizeBytes = 0
+	return f.agentHookLog, nil
+}
+
+func (f *runtimeClientFake) OpenAgentHookLog(context.Context) (protocol.AgentHookLogStatus, error) {
+	f.openAgentHookLogCalled = true
+	return f.agentHookLog, nil
 }
 
 func (f *runtimeClientFake) CreateHTTPForward(_ context.Context, req protocol.CreateHTTPForwardRequest) (protocol.HTTPForward, error) {

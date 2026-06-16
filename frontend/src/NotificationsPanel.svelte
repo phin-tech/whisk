@@ -1,20 +1,26 @@
 <script lang="ts">
   import AlertTriangle from "@lucide/svelte/icons/alert-triangle";
+  import Ban from "@lucide/svelte/icons/ban";
   import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
   import CircleHelp from "@lucide/svelte/icons/circle-help";
+  import ShieldQuestion from "@lucide/svelte/icons/shield-question";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import X from "@lucide/svelte/icons/x";
-  import type { StatusEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { AgentBridgeApproval, AgentBridgeEvent, StatusEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { notificationRows } from "./notificationsView";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
 
   export let statusEvents: StatusEvent[] = [];
+  export let agentBridgeApprovals: AgentBridgeApproval[] = [];
+  export let agentBridgeEvents: AgentBridgeEvent[] = [];
   export let loading = false;
   export let onclose: () => void;
   export let onRefresh: () => void;
   export let onSelectStatusEvent: (event: StatusEvent) => void;
+  export let onResolveAgentBridgeApproval: (id: string, action: "allow" | "deny") => void;
 
   $: rows = notificationRows(statusEvents);
+  $: hasRows = rows.length > 0 || agentBridgeApprovals.length > 0 || agentBridgeEvents.length > 0;
 
   function iconForTone(tone: string) {
     if (tone === "done") return CheckCircle2;
@@ -44,12 +50,78 @@
   </SidebarPanelHeader>
 
   <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
-    {#if rows.length === 0}
+    {#if !hasRows}
       <div class="flex h-full items-center justify-center px-4 text-center text-sm text-text-muted">
         No unread notifications.
       </div>
     {:else}
       <div class="space-y-1">
+        {#each agentBridgeApprovals as approval (approval.id)}
+          <div
+            class="rounded border border-accent-dim/50 bg-accent-dim/10 px-2.5 py-2 text-text-primary"
+          >
+            <div class="flex min-w-0 items-start gap-2">
+              <ShieldQuestion size={14} class="mt-0.5 shrink-0 text-accent" />
+              <div class="min-w-0 flex-1">
+                <div class="flex min-w-0 items-center justify-between gap-2">
+                  <div class="truncate text-[12px] font-semibold">Agent approval</div>
+                  <div class="shrink-0 rounded border border-border-subtle px-1.5 py-0.5 text-[10px] uppercase text-text-muted">
+                    {approval.provider}
+                  </div>
+                </div>
+                <div class="mt-1 line-clamp-3 font-mono text-[12px] leading-4 text-text-secondary">
+                  {approval.toolName}{approval.toolInput?.command ? `: ${approval.toolInput.command}` : ""}
+                </div>
+                <div class="mt-1 truncate font-mono text-[10px] text-text-muted">
+                  {approval.sessionId || "unowned"} / {approval.ptyId || "no pty"}
+                </div>
+                <div class="mt-2 grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    class="inline-flex h-7 items-center justify-center gap-1 rounded border border-green/30 bg-green/10 text-[12px] font-semibold text-text-primary transition-colors hover:border-green/60 hover:bg-green/15 disabled:cursor-wait disabled:opacity-60"
+                    disabled={loading}
+                    on:click={() => onResolveAgentBridgeApproval(approval.id, "allow")}
+                  >
+                    <CheckCircle2 size={13} />
+                    Allow
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex h-7 items-center justify-center gap-1 rounded border border-red/30 bg-red/10 text-[12px] font-semibold text-text-primary transition-colors hover:border-red/60 hover:bg-red/15 disabled:cursor-wait disabled:opacity-60"
+                    disabled={loading}
+                    on:click={() => onResolveAgentBridgeApproval(approval.id, "deny")}
+                  >
+                    <Ban size={13} />
+                    Deny
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        {/each}
+        {#each agentBridgeEvents as event (event.id)}
+          <div
+            class="rounded border border-amber/30 bg-amber/5 px-2.5 py-2 text-text-primary"
+          >
+            <div class="flex min-w-0 items-start gap-2">
+              <CircleHelp size={14} class="mt-0.5 shrink-0 text-amber" />
+              <div class="min-w-0 flex-1">
+                <div class="flex min-w-0 items-center justify-between gap-2">
+                  <div class="truncate text-[12px] font-semibold">Agent hook</div>
+                  <div class="shrink-0 rounded border border-border-subtle px-1.5 py-0.5 text-[10px] uppercase text-text-muted">
+                    {event.provider}
+                  </div>
+                </div>
+                <div class="mt-1 line-clamp-3 text-[12px] leading-4 text-text-secondary">
+                  {event.message || event.notificationType || event.toolName || event.eventName}
+                </div>
+                <div class="mt-1 truncate font-mono text-[10px] text-text-muted">
+                  {event.eventName} / {event.sessionId || "unowned"} / {event.ptyId || "no pty"}
+                </div>
+              </div>
+            </div>
+          </div>
+        {/each}
         {#each rows as row (row.id)}
           {@const Icon = iconForTone(row.tone)}
           <button
