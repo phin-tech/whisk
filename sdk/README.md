@@ -2,12 +2,13 @@
 
 Generated clients for the whiskd daemon's HTTP/JSON API. **One OpenAPI spec is
 the single source of truth**, derived from the Go protocol/domain structs and
-codegen'd into a Python client and headless TypeScript types.
+codegen'd into Python, headless TypeScript, and Go clients.
 
 ```
 internal/protocol/*.go ─┐
 internal/domain/**/*.go ├─► cmd/gen-openapi ─► sdk/openapi.json ─┬─► sdk/python (pydantic + httpx)
-route table (routes.go) ┘                                       └─► sdk/ts/whiskd.d.ts (+ openapi-fetch)
+route table (routes.go) ┘                                       ├─► sdk/ts/whiskd.d.ts (+ openapi-fetch)
+                         └─► cmd/gen-go-sdk ────────────────────└─► sdk/go/whiskd
 ```
 
 The Wails desktop frontend is **not** a consumer here — it keeps its own
@@ -18,15 +19,17 @@ over HTTP directly.
 ## Regenerating
 
 ```sh
-task sdk          # spec + Python + TypeScript
+task sdk          # spec + Python + TypeScript + Go
 task sdk:spec     # just sdk/openapi.json
 task sdk:python   # spec + Python client
 task sdk:ts       # spec + TypeScript types
+task sdk:go       # Go client wrapper
 task sdk:check    # CI guard: fails if openapi.json is stale vs the Go structs
 ```
 
-Everything under `sdk/` is generated. **Do not hand-edit** — change the Go
-structs (or `cmd/gen-openapi/routes.go` for new endpoints) and regenerate.
+Generated client outputs under `sdk/python`, `sdk/ts`, and `sdk/go` should not
+be hand-edited — change the Go structs (or `cmd/gen-openapi/routes.go` for new
+endpoints) and regenerate.
 
 ### Adding an endpoint
 
@@ -56,6 +59,28 @@ const d = createClient<paths>({ baseUrl: "http://127.0.0.1:8787" });
 const { data } = await d.GET("/v1/work-items", { params: { query: { projectId } } });
 ```
 
+**Go** (`sdk/go/whiskd`, typed client + DTO aliases):
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+
+	whiskd "github.com/phin-tech/whisk/sdk/go/whiskd"
+)
+
+func main() {
+	client := whiskd.New("http://127.0.0.1:8787")
+	items, err := client.ListWorkItems(context.Background(), "")
+	if err != nil {
+		log.Fatal(err)
+	}
+	_ = items
+}
+```
+
 ## Tests
 
 Two layers, both run in CI:
@@ -65,6 +90,7 @@ task sdk:check        # fast, no daemon: route-parity guard + spec drift diff
 task sdk:test         # live: boots a real whiskd, drives both clients end-to-end
 task sdk:test:python  # just the Python suite (pytest, via uv)
 task sdk:test:ts      # just the TypeScript suite (vitest + openapi-fetch)
+task sdk:test:go      # just the Go suite
 ```
 
 - **`sdk:check`** — Go-level guard. `cmd/gen-openapi/parity_test.go` asserts the
@@ -72,8 +98,8 @@ task sdk:test:ts      # just the TypeScript suite (vitest + openapi-fetch)
   regenerated spec is diffed against the committed one. Catches drift without
   booting anything.
 - **`sdk:test`** — boots `whiskd` on an ephemeral loopback port with an isolated
-  XDG state dir (never touches real session state) and runs the generated Python
-  and TS clients through a compat handshake + work-item round-trip. This is what
+  XDG state dir (never touches real session state) and runs the generated Python,
+  TS, and Go clients through a compat handshake + work-item round-trip. This is what
   verifies the spec matches real wire behavior — status codes, camelCase mapping,
   RFC3339 time parsing, query params, and Go's `nil slice -> null` encoding. The
   suites skip themselves if `WHISKD_BIN` is unset (the tasks build it first).
