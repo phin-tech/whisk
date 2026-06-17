@@ -4,11 +4,12 @@
   import type { AgentBridgeApproval, AgentBridgeEvent, Project, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import type { PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import NotificationsPanel from "./NotificationsPanel.svelte";
+  import ProjectsPanel from "./ProjectsPanel.svelte";
   import PtysPanel from "./PtysPanel.svelte";
   import SessionsPanel from "./SessionsPanel.svelte";
   import WorkItemsPanel from "./WorkItemsPanel.svelte";
 
-  export let activePanel: "sessions" | "ptys" | "work" | "notifications" | null = "sessions";
+  export let activePanel: "sessions" | "ptys" | "work" | "projects" | "notifications" | null = "sessions";
   export let sessions: Session[] = [];
   export let ptys: PTYInfo[] = [];
   export let projects: Project[] = [];
@@ -143,7 +144,6 @@
             loading={loadingWork}
             onclose={onClose}
             onRefresh={onRefreshWork}
-            {onNewProject}
             {onSelectProject}
             {onCreateWorkItem}
             {onMoveWorkItem}
@@ -151,7 +151,17 @@
             {onAttachFile}
             {onDeleteWorkItem}
           />
-        {:else}
+        {:else if activePanel === "projects"}
+          <ProjectsPanel
+            {projects}
+            {activeProjectId}
+            loading={loadingWork}
+            onclose={onClose}
+            onRefresh={onRefreshWork}
+            {onNewProject}
+            {onSelectProject}
+          />
+        {:else if activePanel === "ptys"}
           <PtysPanel ptys={ptys} loading={loadingPtys} onclose={onClose} onRefresh={onRefreshPtys} />
         {/if}
       {/if}

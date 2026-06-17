@@ -359,6 +359,12 @@ export function Output(req: protocol$0.OutputRequest): $CancellablePromise<proto
     });
 }
 
+export function ProjectDetail(projectID: string): $CancellablePromise<protocol$0.ProjectDetail> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ProjectDetail", projectID).then(($result: any) => {
+        return $$createType47($result);
+    });
+}
+
 export function QueueExecution(req: protocol$0.QueueExecutionRequest): $CancellablePromise<protocol$0.WorkItemRun> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.QueueExecution", req).then(($result: any) => {
         return $$createType4($result);
@@ -381,7 +387,7 @@ export function RemoveWorktree(req: protocol$0.RemoveWorktreeRequest): $Cancella
 
 export function ReportStatus(req: protocol$0.ReportStatusRequest): $CancellablePromise<protocol$0.ReportStatusResponse> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ReportStatus", req).then(($result: any) => {
-        return $$createType47($result);
+        return $$createType48($result);
     });
 }
 
@@ -406,7 +412,7 @@ export function RestartDaemon(): $CancellablePromise<$models.DaemonStatus> {
 
 export function RestartPanePTY(req: protocol$0.RestartPanePTYRequest): $CancellablePromise<protocol$0.RestartedPanePTY> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.RestartPanePTY", req).then(($result: any) => {
-        return $$createType48($result);
+        return $$createType49($result);
     });
 }
 
@@ -439,6 +445,12 @@ export function SetPaneWorkingDir(req: protocol$0.SetPaneWorkingDirRequest): $Ca
     });
 }
 
+export function SetSessionProject(req: protocol$0.SetSessionProjectRequest): $CancellablePromise<session$0.Session> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SetSessionProject", req).then(($result: any) => {
+        return $$createType7($result);
+    });
+}
+
 export function SetSessionRootDir(req: protocol$0.SetSessionRootDirRequest): $CancellablePromise<session$0.Session> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SetSessionRootDir", req).then(($result: any) => {
         return $$createType7($result);
@@ -447,7 +459,7 @@ export function SetSessionRootDir(req: protocol$0.SetSessionRootDirRequest): $Ca
 
 export function SplitPane(req: protocol$0.SplitPaneRequest): $CancellablePromise<protocol$0.SplitPaneResult> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SplitPane", req).then(($result: any) => {
-        return $$createType49($result);
+        return $$createType50($result);
     });
 }
 
@@ -468,13 +480,13 @@ export function StartExecution(req: protocol$0.StartExecutionRequest): $Cancella
 
 export function StartHTTPForward(req: protocol$0.StartHTTPForwardRequest): $CancellablePromise<protocol$0.StartedHTTPForward> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartHTTPForward", req).then(($result: any) => {
-        return $$createType50($result);
+        return $$createType51($result);
     });
 }
 
 export function StartPanePTY(req: protocol$0.StartPanePTYRequest): $CancellablePromise<protocol$0.StartedPanePTY> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartPanePTY", req).then(($result: any) => {
-        return $$createType51($result);
+        return $$createType52($result);
     });
 }
 
@@ -521,6 +533,12 @@ export function SubmitReviewFeedback(req: protocol$0.SubmitReviewFeedbackRequest
  */
 export function SyncSessionMenu(sessions: appmenu$0.SessionRef[]): $CancellablePromise<void> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SyncSessionMenu", sessions);
+}
+
+export function UpdateProject(projectID: string, req: protocol$0.UpdateProjectRequest): $CancellablePromise<protocol$0.Project> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.UpdateProject", projectID, req).then(($result: any) => {
+        return $$createType10($result);
+    });
 }
 
 export function WritePTY(req: protocol$0.WritePTYRequest): $CancellablePromise<void> {
@@ -575,8 +593,9 @@ const $$createType43 = appsettings$0.Settings.createFrom;
 const $$createType44 = appmenu$0.KeybindingsView.createFrom;
 const $$createType45 = protocol$0.RuntimeEvent.createFrom;
 const $$createType46 = protocol$0.OutputSnapshot.createFrom;
-const $$createType47 = protocol$0.ReportStatusResponse.createFrom;
-const $$createType48 = protocol$0.RestartedPanePTY.createFrom;
-const $$createType49 = protocol$0.SplitPaneResult.createFrom;
-const $$createType50 = protocol$0.StartedHTTPForward.createFrom;
-const $$createType51 = protocol$0.StartedPanePTY.createFrom;
+const $$createType47 = protocol$0.ProjectDetail.createFrom;
+const $$createType48 = protocol$0.ReportStatusResponse.createFrom;
+const $$createType49 = protocol$0.RestartedPanePTY.createFrom;
+const $$createType50 = protocol$0.SplitPaneResult.createFrom;
+const $$createType51 = protocol$0.StartedHTTPForward.createFrom;
+const $$createType52 = protocol$0.StartedPanePTY.createFrom;

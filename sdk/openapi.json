@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "12",
+    "version": "15",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -1007,6 +1007,96 @@
         }
       }
     },
+    "/v1/projects/{projectID}/detail": {
+      "get": {
+        "operationId": "getProjectDetail",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "projectID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetail"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectID}/update": {
+      "post": {
+        "operationId": "updateProject",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "projectID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/prompt-templates": {
       "get": {
         "operationId": "listPromptTemplates",
@@ -1840,6 +1930,56 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StartedPanePTY"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sessionID}/set-project": {
+      "post": {
+        "operationId": "setSessionProject",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
                 }
               }
             },
@@ -4096,6 +4236,9 @@
       },
       "CreateProjectRequest": {
         "properties": {
+          "description": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -4129,6 +4272,9 @@
             "nullable": true
           },
           "name": {
+            "type": "string"
+          },
+          "projectId": {
             "type": "string"
           },
           "rootDir": {
@@ -4700,6 +4846,9 @@
             "format": "date-time",
             "type": "string"
           },
+          "description": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -4743,6 +4892,41 @@
           "nextWorkItemNumber",
           "createdAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ProjectDetail": {
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/WorkItemRun"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/Session"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "workItems": {
+            "items": {
+              "$ref": "#/components/schemas/WorkItem"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "workItems",
+          "sessions",
+          "runs"
         ],
         "type": "object"
       },
@@ -5130,6 +5314,9 @@
             "nullable": true,
             "type": "object"
           },
+          "projectId": {
+            "type": "string"
+          },
           "rootDir": {
             "type": "string"
           },
@@ -5202,6 +5389,20 @@
           "sessionId",
           "paneId",
           "workingDir"
+        ],
+        "type": "object"
+      },
+      "SetSessionProjectRequest": {
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId"
         ],
         "type": "object"
       },
@@ -5579,6 +5780,23 @@
           "fromStageId",
           "toStageId"
         ],
+        "type": "object"
+      },
+      "UpdateProjectRequest": {
+        "properties": {
+          "description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "slug": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "WorkItem": {

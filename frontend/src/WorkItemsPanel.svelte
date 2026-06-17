@@ -16,7 +16,6 @@
   export let loading = false;
   export let onclose: () => void;
   export let onRefresh: () => void;
-  export let onNewProject: () => void;
   export let onSelectProject: (projectId: string) => void;
   export let onCreateWorkItem: (request: {
     projectId: string;
@@ -126,16 +125,6 @@
     <div slot="actions" class="flex items-center gap-1">
       <button
         type="button"
-        class="inline-flex h-6 w-6 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={loading}
-        aria-label="New project"
-        title="New project"
-        on:click={onNewProject}
-      >
-        <Plus size={13} />
-      </button>
-      <button
-        type="button"
         class="inline-flex h-6 w-6 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-wait disabled:opacity-60"
         disabled={loading}
         aria-label="Refresh work items"
@@ -168,29 +157,7 @@
           {/each}
         </div>
       {:else}
-        <div class="grid gap-2">
-          <div class="text-[12px] text-text-muted">No projects.</div>
-          <button
-            type="button"
-            class="inline-flex h-8 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[12px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
-            disabled={loading}
-            on:click={onNewProject}
-          >
-            <Plus size={13} />
-            <span>New project</span>
-          </button>
-        </div>
-      {/if}
-      {#if projects.length > 0}
-        <button
-          type="button"
-          class="inline-flex h-8 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[12px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
-          disabled={loading}
-          on:click={onNewProject}
-        >
-          <Plus size={13} />
-          <span>New project</span>
-        </button>
+        <div class="text-[12px] text-text-muted">No projects.</div>
       {/if}
     </section>
 

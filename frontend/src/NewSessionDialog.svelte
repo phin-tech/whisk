@@ -6,6 +6,7 @@
 
   export let visible = false;
   export let loading = false;
+  export let initialRootDir = "";
   export let onclose: () => void;
   export let oncreate: (request: {
     name: string;
@@ -26,7 +27,7 @@
 
   function reset() {
     name = "";
-    rootDir = "";
+    rootDir = initialRootDir;
     command = "";
     initialPty = true;
     localError = "";

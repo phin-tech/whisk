@@ -27,6 +27,7 @@ type RuntimeClient interface {
 	CreateSession(ctx context.Context, req protocol.CreateSessionRequest) (protocol.CreatedSession, error)
 	SplitPane(ctx context.Context, req protocol.SplitPaneRequest) (protocol.SplitPaneResult, error)
 	SetSessionRootDir(ctx context.Context, req protocol.SetSessionRootDirRequest) (session.Session, error)
+	SetSessionProject(ctx context.Context, req protocol.SetSessionProjectRequest) (session.Session, error)
 	SetPaneWorkingDir(ctx context.Context, req protocol.SetPaneWorkingDirRequest) (session.Session, error)
 	StartPanePTY(ctx context.Context, req protocol.StartPanePTYRequest) (protocol.StartedPanePTY, error)
 	RestartPanePTY(ctx context.Context, req protocol.RestartPanePTYRequest) (protocol.RestartedPanePTY, error)
@@ -48,6 +49,8 @@ type RuntimeClient interface {
 	RemoveWorktree(ctx context.Context, req protocol.RemoveWorktreeRequest) error
 	ListProjects(ctx context.Context) ([]protocol.Project, error)
 	CreateProject(ctx context.Context, req protocol.CreateProjectRequest) (protocol.Project, error)
+	UpdateProject(ctx context.Context, projectID string, req protocol.UpdateProjectRequest) (protocol.Project, error)
+	GetProjectDetail(ctx context.Context, projectID string) (protocol.ProjectDetail, error)
 	ListWorkflowTemplates(ctx context.Context) ([]protocol.WorkflowTemplate, error)
 	ListPromptTemplates(ctx context.Context) ([]protocol.PromptTemplate, error)
 	ListWorkItems(ctx context.Context, projectID string) ([]protocol.WorkItem, error)

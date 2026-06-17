@@ -23,16 +23,16 @@ func TestRunProjectCreatePrintsJSONContract(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		if req.Name != "App" || req.RootDir != root {
+		if req.Name != "App" || req.Description != "Daemon project" || req.RootDir != root {
 			t.Fatalf("request = %#v", req)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(protocol.Project{ID: "proj_01", Name: req.Name, Slug: "app", RootDir: req.RootDir})
+		_ = json.NewEncoder(w).Encode(protocol.Project{ID: "proj_01", Name: req.Name, Description: req.Description, Slug: "app", RootDir: req.RootDir})
 	}))
 	defer server.Close()
 
 	output, err := captureStdout(func() error {
-		return run([]string{"project", "create", "-url", server.URL, "-name", "App", "-root", root, "-json"})
+		return run([]string{"project", "create", "-url", server.URL, "-name", "App", "-description", "Daemon project", "-root", root, "-json"})
 	})
 	if err != nil {
 		t.Fatalf("run: %v", err)
@@ -41,7 +41,7 @@ func TestRunProjectCreatePrintsJSONContract(t *testing.T) {
 	if err := json.Unmarshal([]byte(output), &project); err != nil {
 		t.Fatalf("json output %q: %v", output, err)
 	}
-	if project.ID != "proj_01" || project.RootDir != root {
+	if project.ID != "proj_01" || project.Description != "Daemon project" || project.RootDir != root {
 		t.Fatalf("project = %#v", project)
 	}
 }
@@ -68,6 +68,67 @@ func TestRunProjectListPrintsJSONContract(t *testing.T) {
 	}
 	if len(projects) != 1 || projects[0].ID != "proj_01" {
 		t.Fatalf("projects = %#v", projects)
+	}
+}
+
+func TestRunProjectShowPrintsJSONContract(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/projects/proj_01/detail" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.ProjectDetail{
+			Project:   protocol.Project{ID: "proj_01", Name: "App"},
+			WorkItems: []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01"}},
+			Runs:      []protocol.WorkItemRun{{ID: "run_01", ProjectID: "proj_01", WorkItemID: "wi_01"}},
+		})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"project", "show", "-url", server.URL, "-json", "proj_01"})
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var detail protocol.ProjectDetail
+	if err := json.Unmarshal([]byte(output), &detail); err != nil {
+		t.Fatalf("json output %q: %v", output, err)
+	}
+	if detail.Project.ID != "proj_01" || len(detail.WorkItems) != 1 || len(detail.Runs) != 1 {
+		t.Fatalf("detail = %#v", detail)
+	}
+}
+
+func TestRunProjectUpdatePrintsJSONContract(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/projects/proj_01/update" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req protocol.UpdateProjectRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.Name == nil || *req.Name != "App 2" || req.Description == nil || *req.Description != "Daemon owned" {
+			t.Fatalf("request = %#v", req)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.Project{ID: "proj_01", Name: *req.Name, Description: *req.Description})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"project", "update", "-url", server.URL, "-name", "App 2", "-description", "Daemon owned", "-json", "proj_01"})
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var project protocol.Project
+	if err := json.Unmarshal([]byte(output), &project); err != nil {
+		t.Fatalf("json output %q: %v", output, err)
+	}
+	if project.ID != "proj_01" || project.Description != "Daemon owned" {
+		t.Fatalf("project = %#v", project)
 	}
 }
 

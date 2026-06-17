@@ -242,6 +242,10 @@ func (s *Service) SetSessionRootDir(ctx context.Context, req protocol.SetSession
 	return s.client.SetSessionRootDir(ctx, req)
 }
 
+func (s *Service) SetSessionProject(ctx context.Context, req protocol.SetSessionProjectRequest) (session.Session, error) {
+	return s.client.SetSessionProject(ctx, req)
+}
+
 func (s *Service) SetPaneWorkingDir(ctx context.Context, req protocol.SetPaneWorkingDirRequest) (session.Session, error) {
 	return s.client.SetPaneWorkingDir(ctx, req)
 }
@@ -324,6 +328,14 @@ func (s *Service) ListProjects(ctx context.Context) ([]protocol.Project, error) 
 
 func (s *Service) CreateProject(ctx context.Context, req protocol.CreateProjectRequest) (protocol.Project, error) {
 	return s.client.CreateProject(ctx, req)
+}
+
+func (s *Service) UpdateProject(ctx context.Context, projectID string, req protocol.UpdateProjectRequest) (protocol.Project, error) {
+	return s.client.UpdateProject(ctx, projectID, req)
+}
+
+func (s *Service) ProjectDetail(ctx context.Context, projectID string) (protocol.ProjectDetail, error) {
+	return s.client.GetProjectDetail(ctx, projectID)
 }
 
 func (s *Service) ListWorkflowTemplates(ctx context.Context) ([]protocol.WorkflowTemplate, error) {

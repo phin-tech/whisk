@@ -7,9 +7,10 @@
   export let visible = false;
   export let loading = false;
   export let onclose: () => void;
-  export let oncreate: (request: { name: string; rootDir: string }) => void;
+  export let oncreate: (request: { name: string; description: string; rootDir: string }) => void;
 
   let name = "";
+  let description = "";
   let rootDir = "";
   let localError = "";
   let previousVisible = false;
@@ -20,6 +21,7 @@
 
   function reset() {
     name = "";
+    description = "";
     rootDir = "";
     localError = "";
   }
@@ -27,7 +29,7 @@
   function submit() {
     if (!canCreate) return;
     localError = "";
-    oncreate({ name: name.trim(), rootDir: rootDir.trim() });
+    oncreate({ name: name.trim(), description: description.trim(), rootDir: rootDir.trim() });
   }
 
   async function chooseRootDir() {
@@ -99,6 +101,18 @@
             placeholder="Project name"
             disabled={loading}
           />
+        </label>
+
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-semibold uppercase tracking-widest text-text-muted">
+            Description
+          </span>
+          <textarea
+            class="min-h-20 w-full resize-y rounded border border-border bg-bg-deep px-2.5 py-2 text-[13px] text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent-dim"
+            bind:value={description}
+            placeholder="What this project owns"
+            disabled={loading}
+          ></textarea>
         </label>
 
         <label class="block">

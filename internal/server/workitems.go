@@ -23,6 +23,7 @@ func (s *HTTPServer) createProject(w http.ResponseWriter, r *http.Request) {
 	}
 	project, err := s.runtime.CreateProject(r.Context(), app.CreateProjectRequest{
 		Name:        req.Name,
+		Description: req.Description,
 		Slug:        req.Slug,
 		RootDir:     req.RootDir,
 		WorkflowID:  req.WorkflowID,
@@ -33,6 +34,38 @@ func (s *HTTPServer) createProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, project)
+}
+
+func (s *HTTPServer) updateProject(w http.ResponseWriter, r *http.Request) {
+	var req protocol.UpdateProjectRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	project, err := s.runtime.UpdateProject(r.Context(), app.UpdateProjectRequest{
+		ID:          pathValue(r, "projectID", ""),
+		Name:        req.Name,
+		Description: req.Description,
+		Slug:        req.Slug,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, project)
+}
+
+func (s *HTTPServer) getProjectDetail(w http.ResponseWriter, r *http.Request) {
+	detail, err := s.runtime.GetProjectDetail(r.Context(), pathValue(r, "projectID", ""))
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, protocol.ProjectDetail{
+		Project:   detail.Project,
+		WorkItems: detail.WorkItems,
+		Sessions:  detail.Sessions,
+		Runs:      detail.Runs,
+	})
 }
 
 func (s *HTTPServer) startPlanning(w http.ResponseWriter, r *http.Request) {

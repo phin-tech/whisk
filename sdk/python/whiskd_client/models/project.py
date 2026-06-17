@@ -31,6 +31,7 @@ class Project:
         slug (str):
         updated_at (datetime.datetime):
         workflow (ProjectWorkflow):
+        description (str | Unset):
         metadata (ProjectMetadata | Unset):
     """
 
@@ -43,6 +44,7 @@ class Project:
     slug: str
     updated_at: datetime.datetime
     workflow: ProjectWorkflow
+    description: str | Unset = UNSET
     metadata: ProjectMetadata | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -65,6 +67,8 @@ class Project:
 
         workflow = self.workflow.to_dict()
 
+        description = self.description
+
         metadata: dict[str, Any] | Unset = UNSET
         if not isinstance(self.metadata, Unset):
             metadata = self.metadata.to_dict()
@@ -84,6 +88,8 @@ class Project:
                 "workflow": workflow,
             }
         )
+        if description is not UNSET:
+            field_dict["description"] = description
         if metadata is not UNSET:
             field_dict["metadata"] = metadata
 
@@ -114,6 +120,8 @@ class Project:
 
         workflow = ProjectWorkflow.from_dict(d.pop("workflow"))
 
+        description = d.pop("description", UNSET)
+
         _metadata = d.pop("metadata", UNSET)
         metadata: ProjectMetadata | Unset
         if isinstance(_metadata, Unset):
@@ -131,6 +139,7 @@ class Project:
             slug=slug,
             updated_at=updated_at,
             workflow=workflow,
+            description=description,
             metadata=metadata,
         )
 

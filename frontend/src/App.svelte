@@ -8,6 +8,7 @@
     AgentHookIntegration,
     AgentHookLogStatus,
     Project,
+    ProjectDetail,
     PTYInfo,
     RuntimeEvent,
     StatusEvent,
@@ -44,6 +45,7 @@
     ListArtifacts,
     ListGateReports,
     ListPTYs,
+    ProjectDetail as LoadProjectDetail,
     ListProjects,
     ListQuestions,
     ListSessions,
@@ -65,17 +67,20 @@
     ResolveAgentBridgeApproval,
     SaveAppSettings,
     SetAgentHookLogSettings,
+    SetSessionProject,
     SplitPane,
     StartPlanning,
     SubmitDraftPlan,
     SubmitReviewFeedback,
     SyncSessionMenu,
+    UpdateProject,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
   import CommandPalette from "./CommandPalette.svelte";
   import LayoutView from "./LayoutView.svelte";
   import NewProjectDialog from "./NewProjectDialog.svelte";
   import NewSessionDialog from "./NewSessionDialog.svelte";
+  import ProjectsView from "./ProjectsView.svelte";
   import SettingsView from "./SettingsView.svelte";
   import SidebarDock from "./SidebarDock.svelte";
   import WorkBoard from "./WorkBoard.svelte";
@@ -90,8 +95,8 @@
     type StartupView,
   } from "./startupView";
 
-  type SidebarId = "sessions" | "ptys" | "work" | "notifications";
-  type MainView = "session" | "work";
+  type SidebarId = "sessions" | "ptys" | "work" | "projects" | "notifications";
+  type MainView = "session" | "work" | "projects";
   type RailSide = "left" | "right";
 
   const SETTINGS_KEY = "whisk.ui.settings";
@@ -99,6 +104,7 @@
   let sessions: Session[] = [];
   let ptys: PTYInfo[] = [];
   let projects: Project[] = [];
+  let projectDetail: ProjectDetail | null = null;
   let workItems: WorkItem[] = [];
   let workItemRuns: WorkItemRun[] = [];
   let artifacts: Artifact[] = [];
@@ -121,6 +127,8 @@
   let commandPaletteOpen = false;
   let newProjectOpen = false;
   let newSessionOpen = false;
+  let pendingSessionProjectId = "";
+  let pendingSessionRootDir = "";
   let settingsOpen = false;
   let railSide: RailSide = "right";
   let startupView: StartupView = "sessions";
@@ -323,10 +331,19 @@
       if (activeProjectId && !projects.some((project) => project.id === activeProjectId)) {
         activeProjectId = projects[0]?.id ?? "";
       }
+      await refreshProjectDetail();
       await refreshWorkState();
     } finally {
       loadingWork = false;
     }
+  }
+
+  async function refreshProjectDetail() {
+    if (!activeProjectId) {
+      projectDetail = null;
+      return;
+    }
+    projectDetail = await LoadProjectDetail(activeProjectId);
   }
 
   async function refreshWorkItems() {
@@ -368,11 +385,12 @@
   }
 
   async function refreshVisibleWorkState() {
-    if (activeMain !== "work" && activeSidebar !== "work") return;
+    if (activeMain !== "work" && activeMain !== "projects" && activeSidebar !== "work") return;
     await Promise.all([
       refreshSessions(),
       refreshPTYs(),
       activeProjectId ? refreshWorkState() : Promise.resolve(),
+      activeProjectId ? refreshProjectDetail() : Promise.resolve(),
     ]);
   }
 
@@ -450,7 +468,19 @@
   function openNewSession() {
     error = "";
     settingsOpen = false;
+    pendingSessionProjectId = "";
+    pendingSessionRootDir = "";
     activeMain = "session";
+    newSessionOpen = true;
+  }
+
+  function openNewProjectSession(projectId: string) {
+    const project = projects.find((candidate) => candidate.id === projectId);
+    if (!project) return;
+    error = "";
+    settingsOpen = false;
+    pendingSessionProjectId = project.id;
+    pendingSessionRootDir = project.rootDir;
     newSessionOpen = true;
   }
 
@@ -465,13 +495,23 @@
       const created = await CreateSession({
         name: request.name,
         rootDir: request.rootDir,
+        projectId: pendingSessionProjectId,
         initialPty: request.initialPty,
       });
       sessions = [created.session, ...sessions.filter((session) => session.id !== created.session.id)];
-      activeSessionId = created.session.id;
-      activePaneId = created.paneId;
-      activeMain = "session";
-      activeSidebar = "sessions";
+      if (pendingSessionProjectId) {
+        activeProjectId = pendingSessionProjectId;
+        activeMain = "projects";
+        activeSidebar = null;
+        await refreshProjects();
+      } else {
+        activeSessionId = created.session.id;
+        activePaneId = created.paneId;
+        activeMain = "session";
+        activeSidebar = "sessions";
+      }
+      pendingSessionProjectId = "";
+      pendingSessionRootDir = "";
       newSessionOpen = false;
       await refreshPTYs();
       if (created.ptyId) await refreshOutput(created.ptyId);
@@ -629,7 +669,10 @@
     if (targets.statusEvents) await refreshStatusEvents();
     if (targets.agentBridgeApprovals) await refreshStatusEvents();
     if (targets.agentHookEvents) await refreshStatusEvents();
-    if (targets.work) await refreshWorkState();
+    if (targets.work) {
+      await refreshWorkState();
+      if (activeMain === "projects") await refreshProjectDetail();
+    }
   }
 
   async function runEventLoop() {
@@ -679,6 +722,15 @@
     activeMain = "work";
     activeProjectId = projectId;
     void refreshWorkState().catch((err) => {
+      error = backendError(err);
+    });
+  }
+
+  function selectProjectDetail(projectId: string) {
+    activeMain = "projects";
+    activeSidebar = "projects";
+    activeProjectId = projectId;
+    void Promise.all([refreshProjectDetail(), refreshWorkState()]).catch((err) => {
       error = backendError(err);
     });
   }
@@ -740,26 +792,46 @@
   }
 
   function openNewProject() {
-    activeMain = "work";
-    activeSidebar = "work";
+    if (activeMain !== "projects") {
+      activeMain = "work";
+      activeSidebar = "work";
+    }
     newProjectOpen = true;
   }
 
-  async function createProject(request: { name: string; rootDir: string }) {
+  async function createProject(request: { name: string; description: string; rootDir: string }) {
     error = "";
     loadingWork = true;
+    const nextMain = activeMain === "projects" ? "projects" : "work";
     try {
       const project = await CreateProject({
         name: request.name,
+        description: request.description,
         rootDir: request.rootDir,
       });
       activeProjectId = project.id;
       await refreshProjects();
-      activeMain = "work";
-      activeSidebar = "work";
+      activeMain = nextMain;
+      activeSidebar = nextMain === "work" ? "work" : null;
       newProjectOpen = false;
     } catch (err) {
       error = `Create project failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function updateProject(projectId: string, request: { name: string; description: string }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await UpdateProject(projectId, {
+        name: request.name,
+        description: request.description,
+      });
+      await refreshProjects();
+    } catch (err) {
+      error = `Update project failed: ${backendError(err)}`;
     } finally {
       loadingWork = false;
     }
@@ -779,6 +851,7 @@
         bodyMarkdown: request.bodyMarkdown,
       });
       await refreshWorkState();
+      if (activeMain === "projects") await refreshProjectDetail();
     } catch (err) {
       error = `Create work item failed: ${backendError(err)}`;
     } finally {
@@ -854,6 +927,7 @@
     try {
       await DeleteWorkItem({ id: workItemId });
       await refreshWorkState();
+      if (activeMain === "projects") await refreshProjectDetail();
     } catch (err) {
       error = `Delete work item failed: ${backendError(err)}`;
     } finally {
@@ -1054,7 +1128,40 @@
     }
   }
 
+  async function unassignProjectSession(sessionId: string) {
+    error = "";
+    loadingSession = true;
+    try {
+      await SetSessionProject({ sessionId, projectId: "" });
+      await refreshSessions();
+      await refreshProjectDetail();
+    } catch (err) {
+      error = `Remove session from project failed: ${backendError(err)}`;
+    } finally {
+      loadingSession = false;
+    }
+  }
+
+  async function openSessionById(sessionId: string) {
+    await refreshSessions();
+    const session = sessions.find((candidate) => candidate.id === sessionId);
+    activeSessionId = sessionId;
+    activePaneId = firstPaneId(session);
+    activeMain = "session";
+    activeSidebar = "sessions";
+    await refreshVisibleOutput().catch((err) => (error = backendError(err)));
+  }
+
   function toggleSidebar(id: SidebarId) {
+    if (id === "projects") {
+      activeMain = "projects";
+      activeSidebar = activeSidebar === "projects" ? null : "projects";
+      settingsOpen = false;
+      void Promise.all([refreshProjects(), refreshProjectDetail()]).catch((err) => {
+        error = backendError(err);
+      });
+      return;
+    }
     if (id === "work") {
       activeMain = "work";
       void refreshVisibleWorkState().catch((err) => {
@@ -1147,7 +1254,8 @@
     {#if railSide === "left"}
       <div class="flex h-full w-[36px] shrink-0 flex-col border-r border-hairline bg-bg-base/96">
         <ActivityRail
-          activeSidebar={activeSidebar ?? (activeMain === "work" ? "work" : null)}
+          activeSidebar={activeSidebar ??
+            (activeMain === "work" ? "work" : activeMain === "projects" ? "projects" : null)}
           {settingsOpen}
           {notificationCount}
           onSidebar={toggleSidebar}
@@ -1181,7 +1289,7 @@
         onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
-        onSelectProject={selectProject}
+        onSelectProject={activeSidebar === "projects" ? selectProjectDetail : selectProject}
         onCreateWorkItem={createWorkItem}
         onMoveWorkItem={moveWorkItem}
         onGenerateWorktree={generateWorktree}
@@ -1194,17 +1302,17 @@
       <header class="flex h-10 shrink-0 items-center justify-between border-b border-hairline bg-bg-base/80 px-3">
         <div class="min-w-0">
           <div class="truncate text-[13px] font-semibold text-text-primary">
-            {activeMain === "work" ? "Work" : (activeSession?.name ?? "No active session")}
+            {activeMain === "projects" ? "Projects" : activeMain === "work" ? "Work" : (activeSession?.name ?? "No active session")}
           </div>
           <div class="truncate font-mono text-[10px] text-text-muted">
-            {activeMain === "work" ? (activeProjectId || "No project selected") : (activePaneId || "No pane selected")}
+            {activeMain === "work" || activeMain === "projects" ? (activeProjectId || "No project selected") : (activePaneId || "No pane selected")}
           </div>
         </div>
         <div class="flex items-center gap-1">
           <button
             type="button"
             class="rounded border border-border-subtle bg-bg-surface/60 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-            disabled={!activeSession || activeMain === "work"}
+            disabled={!activeSession || activeMain !== "session"}
             on:click={() => split("horizontal")}
           >
             Split right
@@ -1212,7 +1320,7 @@
           <button
             type="button"
             class="rounded border border-border-subtle bg-bg-surface/60 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-            disabled={!activeSession || activeMain === "work"}
+            disabled={!activeSession || activeMain !== "session"}
             on:click={() => split("vertical")}
           >
             Split down
@@ -1229,7 +1337,21 @@
       {/if}
 
       <div class="relative flex min-h-0 flex-1 flex-col">
-        {#if activeMain === "work"}
+        {#if activeMain === "projects"}
+          <ProjectsView
+            {projects}
+            detail={projectDetail}
+            {activeProjectId}
+            loading={loadingWork || loadingSession}
+            onUpdateProject={(projectId, request) => void updateProject(projectId, request)}
+            onNewSession={(projectId) => openNewProjectSession(projectId)}
+            onOpenSession={(sessionId) => void openSessionById(sessionId)}
+            onRemoveSession={(sessionId) => void unassignProjectSession(sessionId)}
+            onCreateWorkItem={createWorkItem}
+            onDeleteWorkItem={deleteWorkItem}
+            onOpenRunTerminal={(run) => void openWorkItemRun(run)}
+          />
+        {:else if activeMain === "work"}
           <WorkBoard
             {projects}
             {workItems}
@@ -1241,8 +1363,6 @@
             {activeProjectId}
             loading={loadingWork}
             onRefresh={() => void refreshProjects()}
-            onNewProject={openNewProject}
-            onSelectProject={selectProject}
             onCreateWorkItem={createWorkItem}
             onMoveWorkItem={moveWorkItem}
             onGenerateWorktree={generateWorktree}
@@ -1305,6 +1425,7 @@
         <NewSessionDialog
           visible={newSessionOpen}
           loading={loadingSession}
+          initialRootDir={pendingSessionRootDir}
           onclose={() => (newSessionOpen = false)}
           oncreate={createSession}
         />
@@ -1374,7 +1495,7 @@
         onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
-        onSelectProject={selectProject}
+        onSelectProject={activeSidebar === "projects" ? selectProjectDetail : selectProject}
         onCreateWorkItem={createWorkItem}
         onMoveWorkItem={moveWorkItem}
         onGenerateWorktree={generateWorktree}
@@ -1383,7 +1504,8 @@
       />
       <div class="flex h-full w-[36px] shrink-0 flex-col border-l border-hairline bg-bg-base/96">
         <ActivityRail
-          activeSidebar={activeSidebar ?? (activeMain === "work" ? "work" : null)}
+          activeSidebar={activeSidebar ??
+            (activeMain === "work" ? "work" : activeMain === "projects" ? "projects" : null)}
           {settingsOpen}
           {notificationCount}
           onSidebar={toggleSidebar}

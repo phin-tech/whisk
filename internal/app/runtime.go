@@ -254,6 +254,7 @@ type PTYTranscriptExit struct {
 type CreateSessionRequest struct {
 	Name       string
 	RootDir    string
+	ProjectID  string
 	InitialPTY *StartPTYOptions
 }
 
@@ -298,6 +299,11 @@ type SplitPaneResult struct {
 type SetSessionRootDirRequest struct {
 	SessionID string
 	RootDir   string
+}
+
+type SetSessionProjectRequest struct {
+	SessionID string
+	ProjectID string
 }
 
 type SetPaneWorkingDirRequest struct {
@@ -466,6 +472,11 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 	if err != nil {
 		return CreatedSession{}, err
 	}
+	if req.ProjectID != "" {
+		if _, ok := r.workItems.GetProject(req.ProjectID); !ok {
+			return CreatedSession{}, fmt.Errorf("project %s not found", req.ProjectID)
+		}
+	}
 	sessionID := r.ids()
 	windowID := r.ids()
 	paneID := r.ids()
@@ -528,6 +539,7 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 		WindowID:     windowID,
 		PaneID:       paneID,
 		InitialPTYID: ptyID,
+		ProjectID:    req.ProjectID,
 		Name:         req.Name,
 		RootDir:      rootDir,
 	})
@@ -701,6 +713,26 @@ func (r *Runtime) SetSessionRootDir(ctx context.Context, req SetSessionRootDirRe
 	updated, err := r.state.SetSessionRootDir(session.SetSessionRootDir{
 		SessionID: req.SessionID,
 		RootDir:   rootDir,
+	})
+	if err != nil {
+		return session.Session{}, err
+	}
+	if err := r.persistSessions(ctx); err != nil {
+		return session.Session{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
+	return updated, nil
+}
+
+func (r *Runtime) SetSessionProject(ctx context.Context, req SetSessionProjectRequest) (session.Session, error) {
+	if req.ProjectID != "" {
+		if _, ok := r.workItems.GetProject(req.ProjectID); !ok {
+			return session.Session{}, fmt.Errorf("project %s not found", req.ProjectID)
+		}
+	}
+	updated, err := r.state.SetSessionProject(session.SetSessionProject{
+		SessionID: req.SessionID,
+		ProjectID: req.ProjectID,
 	})
 	if err != nil {
 		return session.Session{}, err

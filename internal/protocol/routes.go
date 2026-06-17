@@ -70,6 +70,7 @@ var APIRoutes = []APIRoute{
 	{Method: "DELETE", Path: "/v1/sessions/{sessionID}", OperationID: "closeSession", Tag: "sessions", Response: apiSessionList},
 	{Method: "POST", Path: "/v1/sessions/{sessionID}/split", OperationID: "splitPane", Tag: "sessions", Request: SplitPaneRequest{}, Response: SplitPaneResult{}},
 	{Method: "POST", Path: "/v1/sessions/{sessionID}/set-root-dir", OperationID: "setSessionRootDir", Tag: "sessions", Request: SetSessionRootDirRequest{}, Response: session.Session{}},
+	{Method: "POST", Path: "/v1/sessions/{sessionID}/set-project", OperationID: "setSessionProject", Tag: "sessions", Request: SetSessionProjectRequest{}, Response: session.Session{}},
 	{Method: "POST", Path: "/v1/sessions/{sessionID}/panes/{paneID}/set-working-dir", OperationID: "setPaneWorkingDir", Tag: "sessions", Request: SetPaneWorkingDirRequest{}, Response: session.Session{}},
 	{Method: "POST", Path: "/v1/sessions/{sessionID}/panes/{paneID}/start-pty", OperationID: "startPanePTY", Tag: "sessions", Request: StartPanePTYRequest{}, Response: StartedPanePTY{}, Status: 201},
 	{Method: "POST", Path: "/v1/sessions/{sessionID}/panes/{paneID}/restart-pty", OperationID: "restartPanePTY", Tag: "sessions", Request: RestartPanePTYRequest{}, Response: RestartedPanePTY{}, Status: 201},
@@ -98,6 +99,8 @@ var APIRoutes = []APIRoute{
 
 	{Method: "GET", Path: "/v1/projects", OperationID: "listProjects", Tag: "workitems", Response: apiProjectList},
 	{Method: "POST", Path: "/v1/projects", OperationID: "createProject", Tag: "workitems", Request: CreateProjectRequest{}, Response: Project{}, Status: 201},
+	{Method: "POST", Path: "/v1/projects/{projectID}/update", OperationID: "updateProject", Tag: "workitems", Request: UpdateProjectRequest{}, Response: Project{}},
+	{Method: "GET", Path: "/v1/projects/{projectID}/detail", OperationID: "getProjectDetail", Tag: "workitems", Response: ProjectDetail{}},
 	{Method: "GET", Path: "/v1/workflow-templates", OperationID: "listWorkflowTemplates", Tag: "workitems", Response: apiWorkflowTemplateList},
 	{Method: "GET", Path: "/v1/prompt-templates", OperationID: "listPromptTemplates", Tag: "workitems", Response: apiPromptList},
 	{Method: "GET", Path: "/v1/work-items", OperationID: "listWorkItems", Tag: "workitems", Response: apiWorkItemList, Query: []APIQueryParam{{Name: "projectId", Type: "string"}}},

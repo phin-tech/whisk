@@ -43,6 +43,7 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("DELETE /v1/sessions/{sessionID}", server.closeSession)
 	mux.HandleFunc("POST /v1/sessions/{sessionID}/split", server.splitPane)
 	mux.HandleFunc("POST /v1/sessions/{sessionID}/set-root-dir", server.setSessionRootDir)
+	mux.HandleFunc("POST /v1/sessions/{sessionID}/set-project", server.setSessionProject)
 	mux.HandleFunc("POST /v1/sessions/{sessionID}/panes/{paneID}/set-working-dir", server.setPaneWorkingDir)
 	mux.HandleFunc("POST /v1/sessions/{sessionID}/panes/{paneID}/start-pty", server.startPanePTY)
 	mux.HandleFunc("POST /v1/sessions/{sessionID}/panes/{paneID}/restart-pty", server.restartPanePTY)
@@ -68,6 +69,8 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("GET /v1/events/next", server.nextEvent)
 	mux.HandleFunc("GET /v1/projects", server.listProjects)
 	mux.HandleFunc("POST /v1/projects", server.createProject)
+	mux.HandleFunc("POST /v1/projects/{projectID}/update", server.updateProject)
+	mux.HandleFunc("GET /v1/projects/{projectID}/detail", server.getProjectDetail)
 	mux.HandleFunc("GET /v1/workflow-templates", server.listWorkflowTemplates)
 	mux.HandleFunc("GET /v1/prompt-templates", server.listPromptTemplates)
 	mux.HandleFunc("GET /v1/work-items", server.listWorkItems)
@@ -523,6 +526,23 @@ func (s *HTTPServer) setSessionRootDir(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+func (s *HTTPServer) setSessionProject(w http.ResponseWriter, r *http.Request) {
+	var req protocol.SetSessionProjectRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.SessionID = pathValue(r, "sessionID", req.SessionID)
+	updated, err := s.runtime.SetSessionProject(r.Context(), app.SetSessionProjectRequest{
+		SessionID: req.SessionID,
+		ProjectID: req.ProjectID,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
 func (s *HTTPServer) setPaneWorkingDir(w http.ResponseWriter, r *http.Request) {
 	var req protocol.SetPaneWorkingDirRequest
 	if !decodeJSON(w, r, &req) {
@@ -637,6 +657,7 @@ func (s *HTTPServer) createSession(w http.ResponseWriter, r *http.Request) {
 	created, err := s.runtime.CreateSession(r.Context(), app.CreateSessionRequest{
 		Name:       req.Name,
 		RootDir:    req.RootDir,
+		ProjectID:  req.ProjectID,
 		InitialPTY: toAppStartPTYOptions(req.InitialPTY),
 	})
 	if err != nil {

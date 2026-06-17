@@ -388,6 +388,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{projectID}/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getProjectDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{projectID}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["updateProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/prompt-templates": {
         parameters: {
             query?: never;
@@ -638,6 +670,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["startPanePTY"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{sessionID}/set-project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["setSessionProject"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1349,6 +1397,7 @@ export interface components {
             targetUrl: string;
         };
         CreateProjectRequest: {
+            description?: string;
             name: string;
             preferences?: components["schemas"]["ProjectPreferences"];
             rootDir: string;
@@ -1358,6 +1407,7 @@ export interface components {
         CreateSessionRequest: {
             initialPty?: components["schemas"]["StartPTYOptions"] | null;
             name: string;
+            projectId?: string;
             rootDir: string;
         };
         CreateWorkItemRequest: {
@@ -1520,6 +1570,7 @@ export interface components {
         Project: {
             /** Format: date-time */
             createdAt: string;
+            description?: string;
             id: string;
             metadata?: {
                 [key: string]: components["schemas"]["MetadataValue"];
@@ -1533,6 +1584,12 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             workflow: components["schemas"]["ProjectWorkflow"];
+        };
+        ProjectDetail: {
+            project: components["schemas"]["Project"];
+            runs: components["schemas"]["WorkItemRun"][] | null;
+            sessions: components["schemas"]["Session"][] | null;
+            workItems: components["schemas"]["WorkItem"][] | null;
         };
         ProjectPreferences: {
             autoRun: string;
@@ -1644,6 +1701,7 @@ export interface components {
             panes: {
                 [key: string]: components["schemas"]["Pane"];
             } | null;
+            projectId?: string;
             rootDir: string;
             windows: {
                 [key: string]: components["schemas"]["SessionWindow"];
@@ -1663,6 +1721,10 @@ export interface components {
             paneId: string;
             sessionId: string;
             workingDir: string;
+        };
+        SetSessionProjectRequest: {
+            projectId?: string;
+            sessionId: string;
         };
         SetSessionRootDirRequest: {
             rootDir: string;
@@ -1772,6 +1834,11 @@ export interface components {
             requiresChecks?: boolean;
             requiresNoRunningRuns?: boolean;
             toStageId: string;
+        };
+        UpdateProjectRequest: {
+            description?: string | null;
+            name?: string | null;
+            slug?: string | null;
         };
         WorkItem: {
             attachments: components["schemas"]["Attachment"][] | null;
@@ -2679,6 +2746,72 @@ export interface operations {
             };
         };
     };
+    getProjectDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDetail"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listPromptTemplates: {
         parameters: {
             query?: never;
@@ -3289,6 +3422,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StartedPanePTY"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    setSessionProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSessionProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
                 };
             };
             /** @description error */

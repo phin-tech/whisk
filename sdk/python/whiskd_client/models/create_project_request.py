@@ -21,6 +21,7 @@ class CreateProjectRequest:
     Attributes:
         name (str):
         root_dir (str):
+        description (str | Unset):
         preferences (ProjectPreferences | Unset):
         slug (str | Unset):
         workflow_id (str | Unset):
@@ -28,6 +29,7 @@ class CreateProjectRequest:
 
     name: str
     root_dir: str
+    description: str | Unset = UNSET
     preferences: ProjectPreferences | Unset = UNSET
     slug: str | Unset = UNSET
     workflow_id: str | Unset = UNSET
@@ -37,6 +39,8 @@ class CreateProjectRequest:
         name = self.name
 
         root_dir = self.root_dir
+
+        description = self.description
 
         preferences: dict[str, Any] | Unset = UNSET
         if not isinstance(self.preferences, Unset):
@@ -54,6 +58,8 @@ class CreateProjectRequest:
                 "rootDir": root_dir,
             }
         )
+        if description is not UNSET:
+            field_dict["description"] = description
         if preferences is not UNSET:
             field_dict["preferences"] = preferences
         if slug is not UNSET:
@@ -72,6 +78,8 @@ class CreateProjectRequest:
 
         root_dir = d.pop("rootDir")
 
+        description = d.pop("description", UNSET)
+
         _preferences = d.pop("preferences", UNSET)
         preferences: ProjectPreferences | Unset
         if isinstance(_preferences, Unset):
@@ -86,6 +94,7 @@ class CreateProjectRequest:
         create_project_request = cls(
             name=name,
             root_dir=root_dir,
+            description=description,
             preferences=preferences,
             slug=slug,
             workflow_id=workflow_id,

@@ -35,6 +35,34 @@ func TestRunSessionListUsesSessionsEndpoint(t *testing.T) {
 	}
 }
 
+func TestRunSessionListFiltersProjectJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/sessions" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]session.Session{
+			{ID: "ses_01", ProjectID: "proj_01", Name: "one", RootDir: "/repo", Panes: map[string]session.Pane{"pane_01": {ID: "pane_01"}}},
+			{ID: "ses_02", ProjectID: "proj_02", Name: "two", RootDir: "/repo", Panes: map[string]session.Pane{"pane_02": {ID: "pane_02"}}},
+		})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"session", "list", "-url", server.URL, "-project", "proj_01", "-json"})
+	})
+	if err != nil {
+		t.Fatalf("session list: %v", err)
+	}
+	var sessions []session.Session
+	if err := json.Unmarshal([]byte(output), &sessions); err != nil {
+		t.Fatalf("json output %q: %v", output, err)
+	}
+	if len(sessions) != 1 || sessions[0].ID != "ses_01" {
+		t.Fatalf("sessions = %#v", sessions)
+	}
+}
+
 func TestRunSessionCreatePostsSessionRequest(t *testing.T) {
 	root := t.TempDir()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -60,6 +88,32 @@ func TestRunSessionCreatePostsSessionRequest(t *testing.T) {
 	defer server.Close()
 
 	if err := run([]string{"session", "create", "-url", server.URL, "-root", root, "-name", "app", "-command", "codex"}); err != nil {
+		t.Fatalf("session create: %v", err)
+	}
+}
+
+func TestRunSessionCreatePostsProjectID(t *testing.T) {
+	root := t.TempDir()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/sessions" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req protocol.CreateSessionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.ProjectID != "proj_01" {
+			t.Fatalf("project id = %q", req.ProjectID)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.CreatedSession{
+			Session: session.Session{ID: "ses_01", ProjectID: req.ProjectID, RootDir: root, Panes: map[string]session.Pane{}},
+			PaneID:  "pane_01",
+		})
+	}))
+	defer server.Close()
+
+	if err := run([]string{"session", "create", "-url", server.URL, "-root", root, "-project", "proj_01", "-pty=false"}); err != nil {
 		t.Fatalf("session create: %v", err)
 	}
 }
@@ -96,6 +150,57 @@ func TestRunSessionCreateResolvesRelativeRoot(t *testing.T) {
 func TestRunSessionCreateRejectsCommandWithoutInitialPTY(t *testing.T) {
 	if err := run([]string{"session", "create", "-root", ".", "-pty=false", "-command", "codex"}); err == nil {
 		t.Fatalf("expected command without initial pty error")
+	}
+}
+
+func TestRunSessionUpdateSetsProject(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/sessions/ses_01/set-project" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req protocol.SetSessionProjectRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.SessionID != "ses_01" || req.ProjectID != "proj_01" {
+			t.Fatalf("request = %#v", req)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(session.Session{ID: "ses_01", ProjectID: req.ProjectID, RootDir: "/repo", Panes: map[string]session.Pane{}})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"session", "update", "-url", server.URL, "-project", "proj_01", "-json", "ses_01"})
+	})
+	if err != nil {
+		t.Fatalf("session update: %v", err)
+	}
+	var updated session.Session
+	if err := json.Unmarshal([]byte(output), &updated); err != nil {
+		t.Fatalf("json output %q: %v", output, err)
+	}
+	if updated.ProjectID != "proj_01" {
+		t.Fatalf("updated = %#v", updated)
+	}
+}
+
+func TestRunSessionUpdateClearsProject(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req protocol.SetSessionProjectRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.ProjectID != "" {
+			t.Fatalf("project id = %q", req.ProjectID)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(session.Session{ID: "ses_01", RootDir: "/repo", Panes: map[string]session.Pane{}})
+	}))
+	defer server.Close()
+
+	if err := run([]string{"session", "update", "-url", server.URL, "-clear-project", "ses_01"}); err != nil {
+		t.Fatalf("session update: %v", err)
 	}
 }
 

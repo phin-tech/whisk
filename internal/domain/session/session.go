@@ -48,11 +48,12 @@ type PTYOwner struct {
 }
 
 type Session struct {
-	ID      string                   `json:"id"`
-	Name    string                   `json:"name"`
-	RootDir string                   `json:"rootDir"`
-	Windows map[string]SessionWindow `json:"windows"`
-	Panes   map[string]Pane          `json:"panes"`
+	ID        string                   `json:"id"`
+	ProjectID string                   `json:"projectId,omitempty"`
+	Name      string                   `json:"name"`
+	RootDir   string                   `json:"rootDir"`
+	Windows   map[string]SessionWindow `json:"windows"`
+	Panes     map[string]Pane          `json:"panes"`
 }
 
 type State struct {
@@ -64,6 +65,7 @@ type CreateSession struct {
 	WindowID     string
 	PaneID       string
 	InitialPTYID *string
+	ProjectID    string
 	Name         string
 	RootDir      string
 }
@@ -80,6 +82,11 @@ type SplitPane struct {
 type SetSessionRootDir struct {
 	SessionID string
 	RootDir   string
+}
+
+type SetSessionProject struct {
+	SessionID string
+	ProjectID string
 }
 
 type SetPaneWorkingDir struct {
@@ -168,9 +175,10 @@ func (s *State) CreateSession(req CreateSession) (Session, error) {
 		name = "New Session"
 	}
 	session := Session{
-		ID:      req.SessionID,
-		Name:    name,
-		RootDir: rootDir,
+		ID:        req.SessionID,
+		ProjectID: req.ProjectID,
+		Name:      name,
+		RootDir:   rootDir,
 		Windows: map[string]SessionWindow{
 			req.WindowID: {
 				ID:        req.WindowID,
@@ -250,6 +258,16 @@ func (s *State) SetSessionRootDir(req SetSessionRootDir) (Session, error) {
 			current.Panes[id] = pane
 		}
 	}
+	s.sessions[req.SessionID] = current
+	return cloneSession(current), nil
+}
+
+func (s *State) SetSessionProject(req SetSessionProject) (Session, error) {
+	current, ok := s.sessions[req.SessionID]
+	if !ok {
+		return Session{}, fmt.Errorf("session %s not found", req.SessionID)
+	}
+	current.ProjectID = req.ProjectID
 	s.sessions[req.SessionID] = current
 	return cloneSession(current), nil
 }

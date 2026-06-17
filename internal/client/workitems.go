@@ -19,6 +19,20 @@ func (c *HTTPClient) CreateProject(ctx context.Context, req protocol.CreateProje
 	return project, err
 }
 
+func (c *HTTPClient) UpdateProject(ctx context.Context, projectID string, req protocol.UpdateProjectRequest) (protocol.Project, error) {
+	var project protocol.Project
+	path := "/v1/projects/" + url.PathEscape(projectID) + "/update"
+	err := c.post(ctx, path, req, &project)
+	return project, err
+}
+
+func (c *HTTPClient) GetProjectDetail(ctx context.Context, projectID string) (protocol.ProjectDetail, error) {
+	var detail protocol.ProjectDetail
+	path := "/v1/projects/" + url.PathEscape(projectID) + "/detail"
+	err := c.get(ctx, path, nil, &detail)
+	return detail, err
+}
+
 func (c *HTTPClient) ListWorkflowTemplates(ctx context.Context) ([]protocol.WorkflowTemplate, error) {
 	var templates []protocol.WorkflowTemplate
 	err := c.get(ctx, "/v1/workflow-templates", nil, &templates)

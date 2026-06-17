@@ -19,13 +19,15 @@ import (
 
 func runSession(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk session <list|create|set-root|close|pty>")
+		return fmt.Errorf("usage: whisk session <list|create|update|set-root|close|pty>")
 	}
 	switch args[0] {
 	case "list":
 		return runSessionList(args[1:])
 	case "create":
 		return runSessionCreate(args[1:])
+	case "update":
+		return runSessionUpdate(args[1:])
 	case "set-root":
 		return runSessionSetRoot(args[1:])
 	case "close":
@@ -33,7 +35,7 @@ func runSession(args []string) error {
 	case "pty":
 		return runSessionPTY(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk session <list|create|set-root|close|pty>")
+		return fmt.Errorf("usage: whisk session <list|create|update|set-root|close|pty>")
 	}
 }
 
@@ -41,11 +43,13 @@ func runSessionList(args []string) error {
 	flags := flag.NewFlagSet("session list", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
 	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	projectID := flags.String("project", "", "filter by project id")
+	outputJSON := flags.Bool("json", false, "write JSON output")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("usage: whisk session list [-url http://127.0.0.1:8787]")
+		return fmt.Errorf("usage: whisk session list [-project project-id] [-json] [-url http://127.0.0.1:8787]")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -53,6 +57,18 @@ func runSessionList(args []string) error {
 	sessions, err := client.NewHTTP(*baseURL, nil).ListSessions(ctx)
 	if err != nil {
 		return err
+	}
+	if *projectID != "" {
+		filtered := sessions[:0]
+		for _, candidate := range sessions {
+			if candidate.ProjectID == *projectID {
+				filtered = append(filtered, candidate)
+			}
+		}
+		sessions = filtered
+	}
+	if *outputJSON {
+		return printJSON(sessions)
 	}
 	printSessions(sessions)
 	return nil
@@ -64,13 +80,14 @@ func runSessionCreate(args []string) error {
 	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
 	name := flags.String("name", "", "session name")
 	rootDir := flags.String("root", "", "session root directory")
+	projectID := flags.String("project", envOrDefault("WHISK_PROJECT_ID", envOrDefault("WHISK_PROJECT", "")), "project id")
 	command := flags.String("command", "", "initial command to run in the PTY shell")
 	startPTY := flags.Bool("pty", true, "start an initial PTY")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 || *rootDir == "" {
-		return fmt.Errorf("usage: whisk session create -root <path> [-name name] [-command command] [-pty=false] [-url http://127.0.0.1:8787]")
+		return fmt.Errorf("usage: whisk session create -root <path> [-project project-id] [-name name] [-command command] [-pty=false] [-url http://127.0.0.1:8787]")
 	}
 	resolvedRoot, err := filepath.Abs(*rootDir)
 	if err != nil {
@@ -78,8 +95,9 @@ func runSessionCreate(args []string) error {
 	}
 
 	req := protocol.CreateSessionRequest{
-		Name:    *name,
-		RootDir: resolvedRoot,
+		Name:      *name,
+		RootDir:   resolvedRoot,
+		ProjectID: *projectID,
 	}
 	if *startPTY {
 		req.InitialPTY = &protocol.StartPTYOptions{Command: *command}
@@ -94,6 +112,35 @@ func runSessionCreate(args []string) error {
 		return err
 	}
 	fmt.Println(created.Session.ID)
+	return nil
+}
+
+func runSessionUpdate(args []string) error {
+	flags := flag.NewFlagSet("session update", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	projectID := flags.String("project", "", "project id")
+	clearProject := flags.Bool("clear-project", false, "clear project assignment")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 || (*projectID == "" && !*clearProject) || (*projectID != "" && *clearProject) {
+		return fmt.Errorf("usage: whisk session update <session-id> (-project project-id | -clear-project) [-json] [-url http://127.0.0.1:8787]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	updated, err := client.NewHTTP(*baseURL, nil).SetSessionProject(ctx, protocol.SetSessionProjectRequest{
+		SessionID: flags.Arg(0),
+		ProjectID: *projectID,
+	})
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(updated)
+	}
+	fmt.Println(updated.ID)
 	return nil
 }
 
@@ -388,9 +435,9 @@ func runSessionPTYKill(args []string) error {
 
 func printSessions(sessions []session.Session) {
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(writer, "ID\tNAME\tROOT\tPANES")
+	fmt.Fprintln(writer, "ID\tPROJECT\tNAME\tROOT\tPANES")
 	for _, session := range sessions {
-		fmt.Fprintf(writer, "%s\t%s\t%s\t%d\n", session.ID, session.Name, session.RootDir, len(session.Panes))
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%d\n", session.ID, session.ProjectID, session.Name, session.RootDir, len(session.Panes))
 	}
 	writer.Flush()
 }

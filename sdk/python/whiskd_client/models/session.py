@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..types import UNSET, Unset
+
 if TYPE_CHECKING:
     from ..models.session_panes_type_0 import SessionPanesType0
     from ..models.session_windows_type_0 import SessionWindowsType0
@@ -23,6 +25,7 @@ class Session:
         panes (None | SessionPanesType0):
         root_dir (str):
         windows (None | SessionWindowsType0):
+        project_id (str | Unset):
     """
 
     id: str
@@ -30,6 +33,7 @@ class Session:
     panes: None | SessionPanesType0
     root_dir: str
     windows: None | SessionWindowsType0
+    project_id: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -54,6 +58,8 @@ class Session:
         else:
             windows = self.windows
 
+        project_id = self.project_id
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -65,6 +71,8 @@ class Session:
                 "windows": windows,
             }
         )
+        if project_id is not UNSET:
+            field_dict["projectId"] = project_id
 
         return field_dict
 
@@ -110,12 +118,15 @@ class Session:
 
         windows = _parse_windows(d.pop("windows"))
 
+        project_id = d.pop("projectId", UNSET)
+
         session = cls(
             id=id,
             name=name,
             panes=panes,
             root_dir=root_dir,
             windows=windows,
+            project_id=project_id,
         )
 
         session.additional_properties = d

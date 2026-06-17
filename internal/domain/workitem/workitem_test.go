@@ -64,6 +64,34 @@ func TestStateCreatesProjectWithCopiedPreferences(t *testing.T) {
 	}
 }
 
+func TestStateUpdatesProjectDescription(t *testing.T) {
+	state := NewState()
+	project := mustProject(t, state, "proj_01", "One")
+	name := "Updated"
+	description := "Owns daemon project editing"
+
+	updated, err := state.UpdateProject(UpdateProject{
+		ID:          project.ID,
+		Name:        &name,
+		Description: &description,
+	})
+	if err != nil {
+		t.Fatalf("update project: %v", err)
+	}
+	if updated.Name != "Updated" || updated.Description != description || updated.RootDir != project.RootDir {
+		t.Fatalf("updated project = %#v", updated)
+	}
+
+	clear := ""
+	updated, err = state.UpdateProject(UpdateProject{ID: project.ID, Description: &clear})
+	if err != nil {
+		t.Fatalf("clear description: %v", err)
+	}
+	if updated.Description != "" {
+		t.Fatalf("description = %q", updated.Description)
+	}
+}
+
 func TestStateCreatesWorkItemsWithPerProjectNumbersAndHistory(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)

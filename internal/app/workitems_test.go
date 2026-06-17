@@ -425,6 +425,13 @@ func TestRuntimeLaunchQueuedWorkItemRunLaunchesExistingRun(t *testing.T) {
 	if launched.ID != run.ID || launched.Status != workitem.RunStateRunning || launched.SessionID == "" || launched.PTYID == "" {
 		t.Fatalf("launched run = %#v", launched)
 	}
+	sessions, err := runtime.ListSessions(ctx)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].ProjectID != project.ID {
+		t.Fatalf("sessions = %#v", sessions)
+	}
 	runs, err := runtime.ListWorkItemRuns(ctx, item.ID)
 	if err != nil {
 		t.Fatalf("list runs: %v", err)

@@ -113,6 +113,7 @@ const (
 type Project struct {
 	ID                 string                   `json:"id"`
 	Name               string                   `json:"name"`
+	Description        string                   `json:"description,omitempty"`
 	Slug               string                   `json:"slug"`
 	RootDir            string                   `json:"rootDir"`
 	Workflow           ProjectWorkflow          `json:"workflow"`
@@ -368,11 +369,20 @@ type CreateProject struct {
 	WorkflowID         string
 	ProjectWorkflowID  string
 	Name               string
+	Description        string
 	Slug               string
 	RootDir            string
 	Preferences        ProjectPreferences
 	NextWorkItemNumber int
 	Now                time.Time
+}
+
+type UpdateProject struct {
+	ID          string
+	Name        *string
+	Description *string
+	Slug        *string
+	Now         time.Time
 }
 
 type CreateWorkItem struct {
@@ -1074,10 +1084,11 @@ func (s *State) CreateProject(req CreateProject) (Project, error) {
 		nextNumber = 1
 	}
 	project := Project{
-		ID:      req.ID,
-		Name:    name,
-		Slug:    slug,
-		RootDir: rootDir,
+		ID:          req.ID,
+		Name:        name,
+		Description: strings.TrimSpace(req.Description),
+		Slug:        slug,
+		RootDir:     rootDir,
 		Workflow: ProjectWorkflow{
 			ID:              projectWorkflowID,
 			TemplateID:      template.ID,
@@ -1091,6 +1102,28 @@ func (s *State) CreateProject(req CreateProject) (Project, error) {
 		CreatedAt:          req.Now,
 		UpdatedAt:          req.Now,
 	}
+	if err := validateProject(project); err != nil {
+		return Project{}, err
+	}
+	s.projects[project.ID] = project
+	return cloneProject(project), nil
+}
+
+func (s *State) UpdateProject(req UpdateProject) (Project, error) {
+	project, ok := s.projects[req.ID]
+	if !ok {
+		return Project{}, fmt.Errorf("project %s not found", req.ID)
+	}
+	if req.Name != nil {
+		project.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.Description != nil {
+		project.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.Slug != nil {
+		project.Slug = cleanSlug(*req.Slug)
+	}
+	project.UpdatedAt = req.Now
 	if err := validateProject(project); err != nil {
 		return Project{}, err
 	}

@@ -17,15 +17,19 @@ import (
 
 func runProject(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk project <list|create>")
+		return fmt.Errorf("usage: whisk project <list|create|show|update>")
 	}
 	switch args[0] {
 	case "list":
 		return runProjectList(args[1:])
 	case "create":
 		return runProjectCreate(args[1:])
+	case "show":
+		return runProjectShow(args[1:])
+	case "update":
+		return runProjectUpdate(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk project <list|create>")
+		return fmt.Errorf("usage: whisk project <list|create|show|update>")
 	}
 }
 
@@ -59,6 +63,7 @@ func runProjectCreate(args []string) error {
 	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
 	outputJSON := flags.Bool("json", false, "write JSON output")
 	name := flags.String("name", "", "project name")
+	description := flags.String("description", "", "project description")
 	slug := flags.String("slug", "", "project slug")
 	rootDir := flags.String("root", "", "project root directory")
 	workflowID := flags.String("workflow", "", "workflow template id")
@@ -66,7 +71,7 @@ func runProjectCreate(args []string) error {
 		return err
 	}
 	if flags.NArg() != 0 || *name == "" || *rootDir == "" {
-		return fmt.Errorf("usage: whisk project create -name <name> -root <path> [-slug slug] [-workflow id] [-json] [-url http://127.0.0.1:8787]")
+		return fmt.Errorf("usage: whisk project create -name <name> -root <path> [-description text] [-slug slug] [-workflow id] [-json] [-url http://127.0.0.1:8787]")
 	}
 	resolvedRoot, err := filepath.Abs(*rootDir)
 	if err != nil {
@@ -75,11 +80,73 @@ func runProjectCreate(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	project, err := client.NewHTTP(*baseURL, nil).CreateProject(ctx, protocol.CreateProjectRequest{
-		Name:       *name,
-		Slug:       *slug,
-		RootDir:    resolvedRoot,
-		WorkflowID: *workflowID,
+		Name:        *name,
+		Description: *description,
+		Slug:        *slug,
+		RootDir:     resolvedRoot,
+		WorkflowID:  *workflowID,
 	})
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(project)
+	}
+	fmt.Println(project.ID)
+	return nil
+}
+
+func runProjectShow(args []string) error {
+	flags := flag.NewFlagSet("project show", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return fmt.Errorf("usage: whisk project show <project-id> [-json] [-url http://127.0.0.1:8787]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	detail, err := client.NewHTTP(*baseURL, nil).GetProjectDetail(ctx, flags.Arg(0))
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(detail)
+	}
+	fmt.Println(detail.Project.ID)
+	return nil
+}
+
+func runProjectUpdate(args []string) error {
+	flags := flag.NewFlagSet("project update", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	var req protocol.UpdateProjectRequest
+	flags.Func("name", "project name", func(value string) error {
+		req.Name = &value
+		return nil
+	})
+	flags.Func("description", "project description", func(value string) error {
+		req.Description = &value
+		return nil
+	})
+	flags.Func("slug", "project slug", func(value string) error {
+		req.Slug = &value
+		return nil
+	})
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 || (req.Name == nil && req.Description == nil && req.Slug == nil) {
+		return fmt.Errorf("usage: whisk project update <project-id> [-name name] [-description text] [-slug slug] [-json] [-url http://127.0.0.1:8787]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	project, err := client.NewHTTP(*baseURL, nil).UpdateProject(ctx, flags.Arg(0), req)
 	if err != nil {
 		return err
 	}

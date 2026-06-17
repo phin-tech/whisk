@@ -2,19 +2,21 @@
   import Bell from "@lucide/svelte/icons/bell";
   import FolderTree from "@lucide/svelte/icons/folder-tree";
   import ListTodo from "@lucide/svelte/icons/list-todo";
+  import PanelsTopLeft from "@lucide/svelte/icons/panels-top-left";
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import TerminalSquare from "@lucide/svelte/icons/square-terminal";
 
-  export let activeSidebar: "sessions" | "ptys" | "work" | "notifications" | null;
+  export let activeSidebar: "sessions" | "ptys" | "work" | "projects" | "notifications" | null;
   export let settingsOpen = false;
   export let notificationCount = 0;
-  export let onSidebar: (id: "sessions" | "ptys" | "work" | "notifications") => void;
+  export let onSidebar: (id: "sessions" | "ptys" | "work" | "projects" | "notifications") => void;
   export let onSettings: () => void;
 
   const items = [
     { id: "sessions" as const, label: "Sessions", icon: FolderTree },
     { id: "notifications" as const, label: "Notifications", icon: Bell },
     { id: "work" as const, label: "Work", icon: ListTodo },
+    { id: "projects" as const, label: "Projects", icon: PanelsTopLeft },
     { id: "ptys" as const, label: "PTYs", icon: TerminalSquare },
   ];
 </script>

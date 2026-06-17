@@ -80,6 +80,7 @@ export class Pane {
 
 export class Session {
     "id": string;
+    "projectId"?: string;
     "name": string;
     "rootDir": string;
     "windows": { [_ in string]?: SessionWindow };
@@ -110,14 +111,14 @@ export class Session {
      * Creates a new Session instance from a string or object.
      */
     static createFrom($$source: any = {}): Session {
-        const $$createField3_0 = $$createType4;
-        const $$createField4_0 = $$createType6;
+        const $$createField4_0 = $$createType4;
+        const $$createField5_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("windows" in $$parsedSource) {
-            $$parsedSource["windows"] = $$createField3_0($$parsedSource["windows"]);
+            $$parsedSource["windows"] = $$createField4_0($$parsedSource["windows"]);
         }
         if ("panes" in $$parsedSource) {
-            $$parsedSource["panes"] = $$createField4_0($$parsedSource["panes"]);
+            $$parsedSource["panes"] = $$createField5_0($$parsedSource["panes"]);
         }
         return new Session($$parsedSource as Partial<Session>);
     }

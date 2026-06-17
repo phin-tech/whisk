@@ -8,7 +8,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 12
+const DaemonAPIVersion = 15
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -29,6 +29,7 @@ type ClearDaemonResponse struct {
 type CreateSessionRequest struct {
 	Name       string           `json:"name"`
 	RootDir    string           `json:"rootDir"`
+	ProjectID  string           `json:"projectId,omitempty"`
 	InitialPTY *StartPTYOptions `json:"initialPty,omitempty"`
 }
 
@@ -73,6 +74,11 @@ type SplitPaneResult struct {
 type SetSessionRootDirRequest struct {
 	SessionID string `json:"sessionId"`
 	RootDir   string `json:"rootDir"`
+}
+
+type SetSessionProjectRequest struct {
+	SessionID string `json:"sessionId"`
+	ProjectID string `json:"projectId,omitempty"`
 }
 
 type SetPaneWorkingDirRequest struct {
@@ -310,12 +316,26 @@ type Question = workitem.Question
 type GateReport = workitem.GateReport
 type WorkflowEvent = workitem.WorkflowEvent
 
+type ProjectDetail struct {
+	Project   Project           `json:"project"`
+	WorkItems []WorkItem        `json:"workItems"`
+	Sessions  []session.Session `json:"sessions"`
+	Runs      []WorkItemRun     `json:"runs"`
+}
+
 type CreateProjectRequest struct {
 	Name        string             `json:"name"`
+	Description string             `json:"description,omitempty"`
 	Slug        string             `json:"slug,omitempty"`
 	RootDir     string             `json:"rootDir"`
 	WorkflowID  string             `json:"workflowId,omitempty"`
 	Preferences ProjectPreferences `json:"preferences,omitempty"`
+}
+
+type UpdateProjectRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Slug        *string `json:"slug,omitempty"`
 }
 
 type CreateWorkItemRequest struct {

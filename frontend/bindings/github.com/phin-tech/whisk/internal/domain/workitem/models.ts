@@ -251,6 +251,7 @@ export class MetadataValue {
 export class Project {
     "id": string;
     "name": string;
+    "description"?: string;
     "slug": string;
     "rootDir": string;
     "workflow": ProjectWorkflow;
@@ -297,18 +298,18 @@ export class Project {
      * Creates a new Project instance from a string or object.
      */
     static createFrom($$source: any = {}): Project {
-        const $$createField4_0 = $$createType2;
-        const $$createField5_0 = $$createType3;
-        const $$createField6_0 = $$createType1;
+        const $$createField5_0 = $$createType2;
+        const $$createField6_0 = $$createType3;
+        const $$createField7_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workflow" in $$parsedSource) {
-            $$parsedSource["workflow"] = $$createField4_0($$parsedSource["workflow"]);
+            $$parsedSource["workflow"] = $$createField5_0($$parsedSource["workflow"]);
         }
         if ("preferences" in $$parsedSource) {
-            $$parsedSource["preferences"] = $$createField5_0($$parsedSource["preferences"]);
+            $$parsedSource["preferences"] = $$createField6_0($$parsedSource["preferences"]);
         }
         if ("metadata" in $$parsedSource) {
-            $$parsedSource["metadata"] = $$createField6_0($$parsedSource["metadata"]);
+            $$parsedSource["metadata"] = $$createField7_0($$parsedSource["metadata"]);
         }
         return new Project($$parsedSource as Partial<Project>);
     }

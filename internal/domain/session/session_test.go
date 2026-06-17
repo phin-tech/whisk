@@ -47,6 +47,52 @@ func TestCreateSessionCreatesDefaultWindowAndPane(t *testing.T) {
 	}
 }
 
+func TestCreateSessionAssignsProject(t *testing.T) {
+	state := session.NewState()
+
+	created, err := state.CreateSession(session.CreateSession{
+		SessionID: "sess_01",
+		WindowID:  "win_01",
+		PaneID:    "pane_01",
+		ProjectID: "proj_01",
+		RootDir:   "/repo",
+	})
+
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if created.ProjectID != "proj_01" {
+		t.Fatalf("project id = %q", created.ProjectID)
+	}
+}
+
+func TestSetSessionProjectAssignsAndClearsProject(t *testing.T) {
+	state := session.NewState()
+	created, err := state.CreateSession(session.CreateSession{
+		SessionID: "session",
+		WindowID:  "window",
+		PaneID:    "pane",
+		RootDir:   "/repo",
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	updated, err := state.SetSessionProject(session.SetSessionProject{SessionID: created.ID, ProjectID: "proj_01"})
+	if err != nil {
+		t.Fatalf("set project: %v", err)
+	}
+	if updated.ProjectID != "proj_01" {
+		t.Fatalf("project id = %q", updated.ProjectID)
+	}
+	updated, err = state.SetSessionProject(session.SetSessionProject{SessionID: created.ID})
+	if err != nil {
+		t.Fatalf("clear project: %v", err)
+	}
+	if updated.ProjectID != "" {
+		t.Fatalf("project id = %q", updated.ProjectID)
+	}
+}
+
 func TestCreateSessionCanCreateEmptyDefaultPane(t *testing.T) {
 	state := session.NewState()
 

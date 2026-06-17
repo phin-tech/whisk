@@ -179,6 +179,13 @@ func (c *HTTPClient) SetSessionRootDir(ctx context.Context, req protocol.SetSess
 	return result, err
 }
 
+func (c *HTTPClient) SetSessionProject(ctx context.Context, req protocol.SetSessionProjectRequest) (session.Session, error) {
+	var result session.Session
+	path := "/v1/sessions/" + url.PathEscape(req.SessionID) + "/set-project"
+	err := c.post(ctx, path, req, &result)
+	return result, err
+}
+
 func (c *HTTPClient) SetPaneWorkingDir(ctx context.Context, req protocol.SetPaneWorkingDirRequest) (session.Session, error) {
 	var result session.Session
 	path := "/v1/sessions/" + url.PathEscape(req.SessionID) + "/panes/" + url.PathEscape(req.PaneID) + "/set-working-dir"

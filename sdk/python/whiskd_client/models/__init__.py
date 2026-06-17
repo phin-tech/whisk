@@ -59,6 +59,7 @@ from .move_work_item_request import MoveWorkItemRequest
 from .output_snapshot import OutputSnapshot
 from .pane import Pane
 from .project import Project
+from .project_detail import ProjectDetail
 from .project_metadata import ProjectMetadata
 from .project_preferences import ProjectPreferences
 from .project_preferences_default_phase_agents import (
@@ -84,6 +85,7 @@ from .session_window import SessionWindow
 from .session_windows_type_0 import SessionWindowsType0
 from .set_agent_hook_log_settings_request import SetAgentHookLogSettingsRequest
 from .set_pane_working_dir_request import SetPaneWorkingDirRequest
+from .set_session_project_request import SetSessionProjectRequest
 from .set_session_root_dir_request import SetSessionRootDirRequest
 from .split_pane_request import SplitPaneRequest
 from .split_pane_result import SplitPaneResult
@@ -99,6 +101,7 @@ from .status_event import StatusEvent
 from .submit_draft_plan_request import SubmitDraftPlanRequest
 from .submit_review_feedback_request import SubmitReviewFeedbackRequest
 from .transition_rule import TransitionRule
+from .update_project_request import UpdateProjectRequest
 from .work_item import WorkItem
 from .work_item_metadata import WorkItemMetadata
 from .work_item_run import WorkItemRun
@@ -172,6 +175,7 @@ __all__ = (
     "OutputSnapshot",
     "Pane",
     "Project",
+    "ProjectDetail",
     "ProjectMetadata",
     "ProjectPreferences",
     "ProjectPreferencesDefaultPhaseAgents",
@@ -195,6 +199,7 @@ __all__ = (
     "SessionWindowsType0",
     "SetAgentHookLogSettingsRequest",
     "SetPaneWorkingDirRequest",
+    "SetSessionProjectRequest",
     "SetSessionRootDirRequest",
     "SplitPaneRequest",
     "SplitPaneResult",
@@ -210,6 +215,7 @@ __all__ = (
     "SubmitDraftPlanRequest",
     "SubmitReviewFeedbackRequest",
     "TransitionRule",
+    "UpdateProjectRequest",
     "WorkflowEvent",
     "WorkflowStage",
     "WorkflowTemplate",

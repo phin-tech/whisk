@@ -33,6 +33,7 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 			Path: "/repo/.worktrees/created",
 		},
 		projects:          []protocol.Project{{ID: "proj_01", Name: "App", RootDir: "/repo"}},
+		projectDetail:     protocol.ProjectDetail{Project: protocol.Project{ID: "proj_01", Name: "App"}},
 		workflowTemplates: []protocol.WorkflowTemplate{{ID: "default", Name: "Default"}},
 		promptTemplates:   []protocol.PromptTemplate{{ID: "implement", Name: "Implement"}},
 		workItems:         []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
@@ -62,6 +63,9 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	}
 	if _, err := service.SetSessionRootDir(ctx, protocol.SetSessionRootDirRequest{SessionID: "sess_02", RootDir: "/repo"}); err != nil || fake.setRootReq.RootDir != "/repo" {
 		t.Fatalf("set root req = %#v, err = %v", fake.setRootReq, err)
+	}
+	if _, err := service.SetSessionProject(ctx, protocol.SetSessionProjectRequest{SessionID: "sess_02", ProjectID: "proj_01"}); err != nil || fake.setProjectReq.ProjectID != "proj_01" {
+		t.Fatalf("set project req = %#v, err = %v", fake.setProjectReq, err)
 	}
 	if _, err := service.SetPaneWorkingDir(ctx, protocol.SetPaneWorkingDirRequest{SessionID: "sess_02", PaneID: "pane_02", WorkingDir: "/repo/frontend"}); err != nil || fake.setPaneDirReq.WorkingDir != "/repo/frontend" {
 		t.Fatalf("set pane working dir req = %#v, err = %v", fake.setPaneDirReq, err)
@@ -154,6 +158,15 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	project, err := service.CreateProject(ctx, protocol.CreateProjectRequest{Name: "App", RootDir: "/repo"})
 	if err != nil || project.ID != "proj_02" || fake.createProjectReq.Name != "App" {
 		t.Fatalf("create project = %#v, req = %#v, err = %v", project, fake.createProjectReq, err)
+	}
+	description := "Daemon owned"
+	project, err = service.UpdateProject(ctx, "proj_01", protocol.UpdateProjectRequest{Description: &description})
+	if err != nil || project.Description != "Daemon owned" || fake.updateProjectID != "proj_01" {
+		t.Fatalf("update project = %#v, id = %q, err = %v", project, fake.updateProjectID, err)
+	}
+	detail, err := service.ProjectDetail(ctx, "proj_01")
+	if err != nil || detail.Project.ID != "proj_01" || fake.projectDetailID != "proj_01" {
+		t.Fatalf("project detail = %#v, id = %q, err = %v", detail, fake.projectDetailID, err)
 	}
 	templates, err := service.ListWorkflowTemplates(ctx)
 	if err != nil || len(templates) != 1 || templates[0].ID != "default" {
@@ -487,6 +500,7 @@ type runtimeClientFake struct {
 	worktrees         []protocol.Worktree
 	createdWorktree   protocol.CreatedWorktree
 	projects          []protocol.Project
+	projectDetail     protocol.ProjectDetail
 	workflowTemplates []protocol.WorkflowTemplate
 	promptTemplates   []protocol.PromptTemplate
 	workItems         []protocol.WorkItem
@@ -502,6 +516,7 @@ type runtimeClientFake struct {
 	createReq          protocol.CreateSessionRequest
 	splitReq           protocol.SplitPaneRequest
 	setRootReq         protocol.SetSessionRootDirRequest
+	setProjectReq      protocol.SetSessionProjectRequest
 	setPaneDirReq      protocol.SetPaneWorkingDirRequest
 	startPanePTYReq    protocol.StartPanePTYRequest
 	restartPanePTYReq  protocol.RestartPanePTYRequest
@@ -522,6 +537,9 @@ type runtimeClientFake struct {
 	createWorktreeReq        protocol.CreateWorktreeRequest
 	removeWorktreeReq        protocol.RemoveWorktreeRequest
 	createProjectReq         protocol.CreateProjectRequest
+	updateProjectID          string
+	updateProjectReq         protocol.UpdateProjectRequest
+	projectDetailID          string
 	listWorkItemsProjectID   string
 	createWorkItemReq        protocol.CreateWorkItemRequest
 	moveWorkItemReq          protocol.MoveWorkItemRequest
@@ -574,6 +592,11 @@ func (f *runtimeClientFake) SplitPane(_ context.Context, req protocol.SplitPaneR
 func (f *runtimeClientFake) SetSessionRootDir(_ context.Context, req protocol.SetSessionRootDirRequest) (session.Session, error) {
 	f.setRootReq = req
 	return session.Session{ID: req.SessionID, RootDir: req.RootDir}, nil
+}
+
+func (f *runtimeClientFake) SetSessionProject(_ context.Context, req protocol.SetSessionProjectRequest) (session.Session, error) {
+	f.setProjectReq = req
+	return session.Session{ID: req.SessionID, ProjectID: req.ProjectID, RootDir: "/repo"}, nil
 }
 
 func (f *runtimeClientFake) SetPaneWorkingDir(_ context.Context, req protocol.SetPaneWorkingDirRequest) (session.Session, error) {
@@ -677,6 +700,24 @@ func (f *runtimeClientFake) ListProjects(context.Context) ([]protocol.Project, e
 func (f *runtimeClientFake) CreateProject(_ context.Context, req protocol.CreateProjectRequest) (protocol.Project, error) {
 	f.createProjectReq = req
 	return protocol.Project{ID: "proj_02", Name: req.Name, RootDir: req.RootDir}, nil
+}
+
+func (f *runtimeClientFake) UpdateProject(_ context.Context, projectID string, req protocol.UpdateProjectRequest) (protocol.Project, error) {
+	f.updateProjectID = projectID
+	f.updateProjectReq = req
+	project := f.projectDetail.Project
+	if req.Name != nil {
+		project.Name = *req.Name
+	}
+	if req.Description != nil {
+		project.Description = *req.Description
+	}
+	return project, nil
+}
+
+func (f *runtimeClientFake) GetProjectDetail(_ context.Context, projectID string) (protocol.ProjectDetail, error) {
+	f.projectDetailID = projectID
+	return f.projectDetail, nil
 }
 
 func (f *runtimeClientFake) ListWorkflowTemplates(context.Context) ([]protocol.WorkflowTemplate, error) {

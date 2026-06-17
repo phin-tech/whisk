@@ -10,15 +10,31 @@ import (
 	bridgeinstaller "github.com/phin-tech/whisk/internal/adapters/agentbridge"
 	"github.com/phin-tech/whisk/internal/adapters/agents"
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
+	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
 type CreateProjectRequest struct {
 	Name        string
+	Description string
 	Slug        string
 	RootDir     string
 	WorkflowID  string
 	Preferences workitem.ProjectPreferences
+}
+
+type UpdateProjectRequest struct {
+	ID          string
+	Name        *string
+	Description *string
+	Slug        *string
+}
+
+type ProjectDetail struct {
+	Project   workitem.Project
+	WorkItems []workitem.WorkItem
+	Sessions  []session.Session
+	Runs      []workitem.WorkItemRun
 }
 
 type CreateWorkItemRequest struct {
@@ -213,6 +229,31 @@ func (r *Runtime) ListProjects(context.Context) ([]workitem.Project, error) {
 	return r.workItems.ListProjects(), nil
 }
 
+func (r *Runtime) GetProjectDetail(_ context.Context, projectID string) (ProjectDetail, error) {
+	project, ok := r.workItems.GetProject(projectID)
+	if !ok {
+		return ProjectDetail{}, fmt.Errorf("project %s not found", projectID)
+	}
+	sessions := []session.Session{}
+	for _, candidate := range r.state.List() {
+		if candidate.ProjectID == projectID {
+			sessions = append(sessions, candidate)
+		}
+	}
+	runs := []workitem.WorkItemRun{}
+	for _, run := range r.workItems.ListRuns("") {
+		if run.ProjectID == projectID {
+			runs = append(runs, run)
+		}
+	}
+	return ProjectDetail{
+		Project:   project,
+		WorkItems: r.workItems.ListWorkItems(projectID),
+		Sessions:  sessions,
+		Runs:      runs,
+	}, nil
+}
+
 func (r *Runtime) ListWorkflowTemplates(context.Context) ([]workitem.WorkflowTemplate, error) {
 	return r.workItems.ListWorkflowTemplates(), nil
 }
@@ -232,10 +273,29 @@ func (r *Runtime) CreateProject(ctx context.Context, req CreateProjectRequest) (
 		ProjectWorkflowID: r.ids(),
 		WorkflowID:        req.WorkflowID,
 		Name:              req.Name,
+		Description:       req.Description,
 		Slug:              req.Slug,
 		RootDir:           rootDir,
 		Preferences:       req.Preferences,
 		Now:               now,
+	})
+	if err != nil {
+		return workitem.Project{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.Project{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return project, nil
+}
+
+func (r *Runtime) UpdateProject(ctx context.Context, req UpdateProjectRequest) (workitem.Project, error) {
+	project, err := r.workItems.UpdateProject(workitem.UpdateProject{
+		ID:          req.ID,
+		Name:        req.Name,
+		Description: req.Description,
+		Slug:        req.Slug,
+		Now:         time.Now().UTC(),
 	})
 	if err != nil {
 		return workitem.Project{}, err
@@ -869,8 +929,9 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	}
 	name := workItemRunSessionName(item, run)
 	created, err := r.CreateSession(ctx, CreateSessionRequest{
-		Name:    name,
-		RootDir: launch.WorkingDir,
+		Name:      name,
+		RootDir:   launch.WorkingDir,
+		ProjectID: project.ID,
 		InitialPTY: &StartPTYOptions{
 			Command: launch.Command,
 			Args:    launch.Args,

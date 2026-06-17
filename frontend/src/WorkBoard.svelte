@@ -10,7 +10,6 @@
   import MoreHorizontal from "@lucide/svelte/icons/ellipsis";
   import Paperclip from "@lucide/svelte/icons/paperclip";
   import Play from "@lucide/svelte/icons/play";
-  import Plus from "@lucide/svelte/icons/plus";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import Search from "@lucide/svelte/icons/search";
   import Square from "@lucide/svelte/icons/square";
@@ -48,8 +47,6 @@
   export let activeProjectId = "";
   export let loading = false;
   export let onRefresh: () => void;
-  export let onNewProject: () => void;
-  export let onSelectProject: (projectId: string) => void;
   export let onCreateWorkItem: (request: {
     projectId: string;
     title: string;
@@ -403,23 +400,13 @@
 <div class="flex min-h-0 flex-1 flex-col bg-[#050506]">
   <div class="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/12 bg-[#0a0a0c] px-3 py-2">
     <div class="flex min-w-0 flex-1 items-center gap-2">
-      <select
-        class="h-9 max-w-[300px] rounded-md border border-white/16 bg-[#111114] px-2.5 text-[13px] font-medium text-text-primary outline-none focus:border-accent-dim"
-        value={activeProjectId}
-        disabled={loading || projects.length === 0}
-        on:change={(event) => onSelectProject(event.currentTarget.value)}
-      >
-        {#if projects.length === 0}
-          <option value="">No projects</option>
-        {/if}
-        {#each projects as project (project.id)}
-          <option value={project.id}>{project.name}</option>
-        {/each}
-      </select>
       {#if activeProject}
-        <div class="hidden min-w-0 lg:block">
+        <div class="min-w-0">
+          <div class="truncate text-[13px] font-semibold text-text-primary">{activeProject.name}</div>
           <div class="truncate text-[12px] text-text-secondary">{activeProject.rootDir}</div>
         </div>
+      {:else}
+        <div class="truncate text-[13px] text-text-muted">No project selected</div>
       {/if}
     </div>
 
@@ -477,15 +464,6 @@
         on:click={() => setAllColumnsCollapsed(true)}
       >
         Collapse
-      </button>
-      <button
-        type="button"
-        class="inline-flex h-9 items-center justify-center gap-1 rounded-md border border-white/14 bg-white/6 px-2.5 text-[12px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
-        disabled={loading}
-        on:click={onNewProject}
-      >
-        <Plus size={14} />
-        <span>Project</span>
       </button>
     </div>
   </div>
@@ -692,14 +670,7 @@
     <div class="flex min-h-0 flex-1 items-center justify-center p-6">
       <div class="grid max-w-sm gap-3 text-center">
         <div class="text-base font-semibold text-text-primary">No project selected</div>
-        <button
-          type="button"
-          class="inline-flex h-9 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-3 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent"
-          on:click={onNewProject}
-        >
-          <Plus size={14} />
-          <span>New project</span>
-        </button>
+        <div class="text-[13px] text-text-muted">Select or create a project from the sidebar.</div>
       </div>
     </div>
   {/if}
