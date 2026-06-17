@@ -4,6 +4,7 @@
   import Download from "@lucide/svelte/icons/download";
   import ExternalLink from "@lucide/svelte/icons/external-link";
   import FolderTree from "@lucide/svelte/icons/folder-tree";
+  import Keyboard from "@lucide/svelte/icons/keyboard";
   import Plug from "@lucide/svelte/icons/plug";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import Server from "@lucide/svelte/icons/server";
@@ -14,6 +15,7 @@
   import type { AgentHookIntegration, AgentHookLogStatus } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { agentHookIntegrationFor } from "./agentHooksView";
   import DaemonSettings from "./DaemonSettings.svelte";
+  import KeybindingsPanel from "./KeybindingsPanel.svelte";
 
   export let visible = false;
   export let railSide: "left" | "right" = "right";
@@ -41,7 +43,7 @@
   export let onOpenAgentHookLog: () => void;
   export let onCopyAgentHookLogPath: (path: string) => void;
 
-  type Category = "general" | "sessions" | "terminal" | "daemon" | "integrations";
+  type Category = "general" | "sessions" | "terminal" | "shortcuts" | "daemon" | "integrations";
 
   let selected: Category = "general";
 
@@ -49,6 +51,7 @@
     { id: "general" as const, label: "General", icon: Settings },
     { id: "sessions" as const, label: "Sessions", icon: FolderTree },
     { id: "terminal" as const, label: "Terminal", icon: TerminalIcon },
+    { id: "shortcuts" as const, label: "Shortcuts", icon: Keyboard },
     { id: "daemon" as const, label: "Daemon", icon: Server },
     { id: "integrations" as const, label: "Integrations", icon: Plug },
   ];
@@ -273,6 +276,8 @@
               ></div>
             </button>
           </div>
+        {:else if selected === "shortcuts"}
+          <KeybindingsPanel visible={visible && selected === "shortcuts"} />
         {:else if selected === "daemon"}
           <DaemonSettings {keepDaemonAlive} onKeepDaemonAlive={onKeepDaemonAlive} />
         {:else if selected === "integrations"}

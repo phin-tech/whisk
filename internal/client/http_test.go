@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/app"
@@ -343,6 +344,88 @@ func TestHTTPClientAgentHookIntegrations(t *testing.T) {
 	removed, err := daemon.RemoveAgentHookIntegration(ctx, protocol.AgentHookIntegrationRequest{Provider: "claude"})
 	if err != nil || removed.Provider != "claude" || removed.Status != "missing" {
 		t.Fatalf("removed = %#v err=%v", removed, err)
+	}
+}
+
+func TestHTTPClientAgentBridgeAndHookLog(t *testing.T) {
+	tmp := t.TempDir()
+	logPaths := agenthooklog.Paths{
+		ConfigRoot: tmp,
+		LogPath:    filepath.Join(tmp, "agent-hooks", "hooks.jsonl"),
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{AgentHookLogPaths: &logPaths})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	t.Cleanup(httpServer.Close)
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx := context.Background()
+
+	if daemon.BaseURL() != httpServer.URL {
+		t.Fatalf("base url = %q, want %q", daemon.BaseURL(), httpServer.URL)
+	}
+
+	// Enable hook logging, then record an event so it is appended to the log on disk.
+	enabled := true
+	status, err := daemon.SetAgentHookLogSettings(ctx, protocol.SetAgentHookLogSettingsRequest{Enabled: &enabled})
+	if err != nil || !status.Enabled {
+		t.Fatalf("set hook log = %#v, err = %v", status, err)
+	}
+
+	event, err := daemon.RecordAgentHookEvent(ctx, protocol.AgentBridgeHookRequest{
+		Provider:  "claude",
+		EventName: "Notification",
+		Message:   "build finished",
+	})
+	if err != nil || event.ID == "" {
+		t.Fatalf("record event = %#v, err = %v", event, err)
+	}
+
+	events, err := daemon.ListAgentBridgeEvents(ctx, protocol.ListAgentBridgeEventsRequest{})
+	if err != nil || len(events) != 1 || events[0].ID != event.ID {
+		t.Fatalf("events = %#v, err = %v", events, err)
+	}
+
+	approvals, err := daemon.ListAgentBridgeApprovals(ctx, protocol.ListAgentBridgeApprovalsRequest{Status: "pending"})
+	if err != nil {
+		t.Fatalf("list approvals: %v", err)
+	}
+	if len(approvals) != 0 {
+		t.Fatalf("approvals = %#v, want none", approvals)
+	}
+
+	// Resolving an unknown approval and hooking an unknown bridge both surface daemon errors,
+	// exercising the client error paths.
+	if _, err := daemon.ResolveAgentBridgeApproval(ctx, "missing", protocol.ResolveAgentBridgeApprovalRequest{Action: "allow"}); err == nil {
+		t.Fatalf("expected error resolving unknown approval")
+	}
+	if _, err := daemon.AgentBridgeHook(ctx, "bridge_missing", protocol.AgentBridgeHookRequest{Token: "nope"}); err == nil {
+		t.Fatalf("expected unauthorized bridge hook error")
+	}
+
+	logStatus, err := daemon.AgentHookLogStatus(ctx)
+	if err != nil || !logStatus.Enabled || logStatus.SizeBytes == 0 {
+		t.Fatalf("log status = %#v, err = %v", logStatus, err)
+	}
+
+	cleared, err := daemon.ClearAgentHookLog(ctx)
+	if err != nil || cleared.SizeBytes != 0 {
+		t.Fatalf("cleared = %#v, err = %v", cleared, err)
+	}
+}
+
+func TestHTTPClientOpenAgentHookLog(t *testing.T) {
+	// Use a stub server so the client method is exercised without the daemon actually shelling out
+	// to open the log file.
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"enabled":true,"path":"/tmp/hooks.jsonl","sizeBytes":0}`))
+	}))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	status, err := daemon.OpenAgentHookLog(context.Background())
+	if err != nil || !status.Enabled || status.Path != "/tmp/hooks.jsonl" {
+		t.Fatalf("open hook log = %#v, err = %v", status, err)
 	}
 }
 

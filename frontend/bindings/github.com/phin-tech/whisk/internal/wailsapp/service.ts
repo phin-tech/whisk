@@ -7,6 +7,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as appmenu$0 from "../appmenu/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as appsettings$0 from "../appsettings/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -310,6 +313,16 @@ export function LoadAppSettings(): $CancellablePromise<appsettings$0.Settings> {
     });
 }
 
+/**
+ * LoadKeybindings returns the command registry with each command's effective accelerator for the
+ * Keyboard Shortcuts panel.
+ */
+export function LoadKeybindings(): $CancellablePromise<appmenu$0.KeybindingsView> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.LoadKeybindings").then(($result: any) => {
+        return $$createType44($result);
+    });
+}
+
 export function MarkAgentBridgeEventRead(req: protocol$0.MarkAgentBridgeEventReadRequest): $CancellablePromise<protocol$0.AgentBridgeEvent> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.MarkAgentBridgeEventRead", req).then(($result: any) => {
         return $$createType19($result);
@@ -330,7 +343,7 @@ export function MoveWorkItem(req: protocol$0.MoveWorkItemRequest): $CancellableP
 
 export function NextEvent(req: protocol$0.NextEventRequest): $CancellablePromise<protocol$0.RuntimeEvent> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.NextEvent", req).then(($result: any) => {
-        return $$createType44($result);
+        return $$createType45($result);
     });
 }
 
@@ -342,7 +355,7 @@ export function OpenAgentHookLog(): $CancellablePromise<protocol$0.AgentHookLogS
 
 export function Output(req: protocol$0.OutputRequest): $CancellablePromise<protocol$0.OutputSnapshot> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.Output", req).then(($result: any) => {
-        return $$createType45($result);
+        return $$createType46($result);
     });
 }
 
@@ -368,7 +381,7 @@ export function RemoveWorktree(req: protocol$0.RemoveWorktreeRequest): $Cancella
 
 export function ReportStatus(req: protocol$0.ReportStatusRequest): $CancellablePromise<protocol$0.ReportStatusResponse> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ReportStatus", req).then(($result: any) => {
-        return $$createType46($result);
+        return $$createType47($result);
     });
 }
 
@@ -393,13 +406,24 @@ export function RestartDaemon(): $CancellablePromise<$models.DaemonStatus> {
 
 export function RestartPanePTY(req: protocol$0.RestartPanePTYRequest): $CancellablePromise<protocol$0.RestartedPanePTY> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.RestartPanePTY", req).then(($result: any) => {
-        return $$createType47($result);
+        return $$createType48($result);
     });
 }
 
 export function SaveAppSettings(settings: appsettings$0.Settings): $CancellablePromise<appsettings$0.Settings> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SaveAppSettings", settings).then(($result: any) => {
         return $$createType43($result);
+    });
+}
+
+/**
+ * SaveKeybindings validates the proposed overrides, persists them, re-applies them to the live
+ * menu, and returns the resulting effective bindings. The panel sends the full set of editable
+ * bindings; only entries that differ from their default are persisted.
+ */
+export function SaveKeybindings(overrides: { [_ in string]?: string }): $CancellablePromise<appmenu$0.KeybindingsView> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SaveKeybindings", overrides).then(($result: any) => {
+        return $$createType44($result);
     });
 }
 
@@ -423,7 +447,7 @@ export function SetSessionRootDir(req: protocol$0.SetSessionRootDirRequest): $Ca
 
 export function SplitPane(req: protocol$0.SplitPaneRequest): $CancellablePromise<protocol$0.SplitPaneResult> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SplitPane", req).then(($result: any) => {
-        return $$createType48($result);
+        return $$createType49($result);
     });
 }
 
@@ -444,13 +468,13 @@ export function StartExecution(req: protocol$0.StartExecutionRequest): $Cancella
 
 export function StartHTTPForward(req: protocol$0.StartHTTPForwardRequest): $CancellablePromise<protocol$0.StartedHTTPForward> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartHTTPForward", req).then(($result: any) => {
-        return $$createType49($result);
+        return $$createType50($result);
     });
 }
 
 export function StartPanePTY(req: protocol$0.StartPanePTYRequest): $CancellablePromise<protocol$0.StartedPanePTY> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartPanePTY", req).then(($result: any) => {
-        return $$createType50($result);
+        return $$createType51($result);
     });
 }
 
@@ -489,6 +513,14 @@ export function SubmitReviewFeedback(req: protocol$0.SubmitReviewFeedbackRequest
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SubmitReviewFeedback", req).then(($result: any) => {
         return $$createType22($result);
     });
+}
+
+/**
+ * SyncSessionMenu replaces the Sessions menu contents with the supplied list (in session-bar
+ * order), keeping the native menu's names and Cmd+1..Cmd+0 shortcuts in step with the UI.
+ */
+export function SyncSessionMenu(sessions: appmenu$0.SessionRef[]): $CancellablePromise<void> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SyncSessionMenu", sessions);
 }
 
 export function WritePTY(req: protocol$0.WritePTYRequest): $CancellablePromise<void> {
@@ -540,10 +572,11 @@ const $$createType40 = $Create.Array($$createType39);
 const $$createType41 = protocol$0.Worktree.createFrom;
 const $$createType42 = $Create.Array($$createType41);
 const $$createType43 = appsettings$0.Settings.createFrom;
-const $$createType44 = protocol$0.RuntimeEvent.createFrom;
-const $$createType45 = protocol$0.OutputSnapshot.createFrom;
-const $$createType46 = protocol$0.ReportStatusResponse.createFrom;
-const $$createType47 = protocol$0.RestartedPanePTY.createFrom;
-const $$createType48 = protocol$0.SplitPaneResult.createFrom;
-const $$createType49 = protocol$0.StartedHTTPForward.createFrom;
-const $$createType50 = protocol$0.StartedPanePTY.createFrom;
+const $$createType44 = appmenu$0.KeybindingsView.createFrom;
+const $$createType45 = protocol$0.RuntimeEvent.createFrom;
+const $$createType46 = protocol$0.OutputSnapshot.createFrom;
+const $$createType47 = protocol$0.ReportStatusResponse.createFrom;
+const $$createType48 = protocol$0.RestartedPanePTY.createFrom;
+const $$createType49 = protocol$0.SplitPaneResult.createFrom;
+const $$createType50 = protocol$0.StartedHTTPForward.createFrom;
+const $$createType51 = protocol$0.StartedPanePTY.createFrom;

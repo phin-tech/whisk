@@ -69,6 +69,7 @@
     StartPlanning,
     SubmitDraftPlan,
     SubmitReviewFeedback,
+    SyncSessionMenu,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
   import CommandPalette from "./CommandPalette.svelte";
@@ -178,6 +179,21 @@
       title: "Refresh Work",
       run: refreshProjects,
     },
+    {
+      id: "preferences.open",
+      title: "Open Preferences",
+      shortcut: "Cmd ,",
+      run: openPreferences,
+    },
+    // Session-switch commands mirror the native Sessions menu (Cmd 1..0). They are gated on the
+    // session count so only reachable slots appear in the palette.
+    ...Array.from({ length: 10 }, (_, i) => ({
+      id: `session.select.${i + 1}`,
+      title: `Switch to Session ${i + 1}`,
+      shortcut: `Cmd ${(i + 1) % 10}`,
+      enabled: () => sessions.length > i,
+      run: () => selectSessionByIndex(i),
+    })),
   ] satisfies Command[];
   $: if (activeSession && (!activePaneId || !activeSession.panes[activePaneId])) {
     activePaneId = firstPaneId(activeSession);
@@ -640,6 +656,25 @@
     });
   }
 
+  // selectSessionByIndex activates the Nth session in the session bar (0-based), driven by the
+  // Cmd+1..Cmd+0 native shortcuts. Out-of-range indices (fewer sessions than the pressed number)
+  // are ignored.
+  function selectSessionByIndex(index: number) {
+    if (index >= 0 && index < sessions.length) {
+      selectSession(sessions[index]);
+    }
+  }
+
+  // syncSessionMenu pushes the given session list (in bar order) to the native menu so the Sessions
+  // menu shows live names and the Cmd+1..Cmd+0 shortcuts map to the right sessions.
+  function syncSessionMenu(list: Session[]) {
+    void SyncSessionMenu(list.map((session) => ({ id: session.id, name: session.name }))).catch(
+      (err) => {
+        error = backendError(err);
+      },
+    );
+  }
+
   function selectProject(projectId: string) {
     activeMain = "work";
     activeProjectId = projectId;
@@ -1055,6 +1090,14 @@
     }
   }
 
+  // openPreferences opens the settings panel for the Cmd+, shortcut, without toggling it shut when
+  // it is already open.
+  function openPreferences() {
+    if (!settingsOpen) {
+      toggleSettings();
+    }
+  }
+
   onMount(() => {
     stopCommandEvents = Events.On("command:run", (event) => {
       void executeCommand(String(event.data));
@@ -1085,6 +1128,9 @@
   });
 
   $: if (settingsLoaded) saveSettings();
+
+  // Keep the native Sessions menu in step with the session bar whenever the list changes.
+  $: if (settingsLoaded) syncSessionMenu(sessions);
 
   onDestroy(() => {
     stopped = true;

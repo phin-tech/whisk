@@ -5,8 +5,10 @@ import (
 	"embed"
 	"log"
 	"os"
+	"runtime"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/appmenu"
 	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/daemon"
@@ -78,6 +80,19 @@ func main() {
 		BackgroundColour: application.NewRGB(14, 18, 24),
 		URL:              "/",
 	})
+
+	// Install the native menu bar (macOS-first) and let the service re-apply accelerators and the
+	// session list to it at runtime. Done after the window exists so the app menu has somewhere to
+	// attach.
+	if runtime.GOOS == "darwin" {
+		settings, loadErr := settingsStore.Load(context.Background())
+		if loadErr != nil {
+			settings = appsettings.Default()
+		}
+		menuController := appmenu.NewController(desktop, settings)
+		wailsapp.AttachMenuController(whisk, menuController)
+		menuController.Rebuild()
+	}
 
 	if err := desktop.Run(); err != nil {
 		log.Fatal(err)
