@@ -1,6 +1,7 @@
 <script lang="ts">
   import Plus from "@lucide/svelte/icons/plus";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Search from "@lucide/svelte/icons/search";
   import type { Project } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
 
@@ -11,6 +12,13 @@
   export let onRefresh: () => void;
   export let onNewProject: () => void;
   export let onSelectProject: (projectId: string) => void;
+
+  let query = "";
+  $: filteredProjects = projects.filter((project) => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+    return `${project.name} ${project.slug} ${project.rootDir}`.toLowerCase().includes(needle);
+  });
 
   function projectInitial(project: Project) {
     return (project.name || project.slug || project.id || "?").slice(0, 1).toUpperCase();
@@ -55,8 +63,17 @@
         <span>New project</span>
       </button>
     {:else}
+      <label class="mb-2 grid h-8 grid-cols-[14px_minmax(0,1fr)] items-center gap-2 rounded border border-border-subtle bg-bg-surface/35 px-2 text-text-muted focus-within:border-accent-dim">
+        <Search size={14} />
+        <input
+          class="min-w-0 bg-transparent text-[12px] text-text-primary outline-none placeholder:text-text-muted"
+          bind:value={query}
+          placeholder="Search projects"
+          aria-label="Search projects"
+        />
+      </label>
       <div class="grid gap-1">
-        {#each projects as project (project.id)}
+        {#each filteredProjects as project (project.id)}
           <button
             type="button"
             class="flex min-h-12 w-full min-w-0 items-center gap-2 rounded border px-2 py-1.5 text-left transition-colors {project.id ===
@@ -79,6 +96,9 @@
             </span>
           </button>
         {/each}
+        {#if filteredProjects.length === 0}
+          <div class="px-2 py-3 text-[12px] text-text-muted">No matching projects.</div>
+        {/if}
       </div>
     {/if}
   </div>
