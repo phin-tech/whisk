@@ -20,9 +20,10 @@ import (
 var serverRoutePattern = regexp.MustCompile(`mux\.HandleFunc\("(?:([A-Z]+) )?(/v1/[^"]*)"`)
 
 // routesNotInSDK are server endpoints intentionally excluded from the generated
-// clients: liveness and the raw reverse-proxy passthroughs.
+// clients: liveness, WebSocket streams, and raw reverse-proxy passthroughs.
 var routesNotInSDK = map[string]bool{
 	"GET /v1/health":                        true,
+	"GET /v1/ptys/{ptyID}/attach":           true,
 	" /v1/http-forwards/{forwardID}/proxy":  true,
 	" /v1/http-forwards/{forwardID}/proxy/": true,
 }

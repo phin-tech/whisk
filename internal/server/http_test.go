@@ -11,9 +11,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/app"
@@ -300,6 +302,56 @@ func TestHTTPServerSessionLifecycleActions(t *testing.T) {
 			t.Fatalf("closed session pty not killed: %#v", pty)
 		}
 	}
+}
+
+func TestHTTPServerAttachesPTYWebSocketOutputStream(t *testing.T) {
+	backend := newFakePTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
+	handler := server.NewHTTP(runtime)
+	httpServer := httptest.NewServer(handler)
+	defer httpServer.Close()
+
+	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    t.TempDir(),
+		InitialPTY: &protocol.StartPTYOptions{Cols: 80, Rows: 24},
+	}, http.StatusCreated)
+	postNoContent(t, handler, "/v1/ptys/"+created.MainPtyID+"/write", protocol.WritePTYRequest{Data: "hello"})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, strings.Replace(httpServer.URL, "http", "ws", 1)+"/v1/ptys/"+created.MainPtyID+"/attach?from=1", nil)
+	if err != nil {
+		t.Fatalf("dial attach: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	replay := readPTYStreamFrame(t, ctx, conn)
+	if replay.Type != "output" || replay.PtyID != created.MainPtyID || replay.Offset != 1 || replay.OutputBase64 != "ZWxsbw==" {
+		t.Fatalf("replay frame = %#v", replay)
+	}
+
+	postNoContent(t, handler, "/v1/ptys/"+created.MainPtyID+"/write", protocol.WritePTYRequest{Data: "!"})
+	live := readPTYStreamFrame(t, ctx, conn)
+	if live.Type != "output" || live.PtyID != created.MainPtyID || live.Offset != 5 || live.OutputBase64 != "IQ==" {
+		t.Fatalf("live frame = %#v", live)
+	}
+}
+
+func readPTYStreamFrame(t *testing.T, ctx context.Context, conn *websocket.Conn) protocol.PTYStreamFrame {
+	t.Helper()
+	typ, data, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatalf("read websocket frame: %v", err)
+	}
+	if typ != websocket.MessageText {
+		t.Fatalf("websocket message type = %v", typ)
+	}
+	var frame protocol.PTYStreamFrame
+	if err := json.Unmarshal(data, &frame); err != nil {
+		t.Fatalf("decode websocket frame: %v", err)
+	}
+	return frame
 }
 
 func TestHTTPServerNextEventTimeoutReturnsNoop(t *testing.T) {
@@ -904,9 +956,11 @@ func TestHTTPServerReportsBadRequests(t *testing.T) {
 }
 
 type fakePTYBackend struct {
+	mu      sync.Mutex
 	records map[string]app.PTYRecord
 	outputs map[string][]byte
 	spawns  map[string]app.SpawnPTYRequest
+	events  chan app.PTYEvent
 }
 
 func newFakePTYBackend() *fakePTYBackend {
@@ -918,6 +972,8 @@ func newFakePTYBackend() *fakePTYBackend {
 }
 
 func (b *fakePTYBackend) Spawn(_ context.Context, req app.SpawnPTYRequest) (app.PTYRecord, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	record := app.PTYRecord{
 		ID:         req.ID,
 		WorkingDir: req.WorkingDir,
@@ -931,14 +987,24 @@ func (b *fakePTYBackend) Spawn(_ context.Context, req app.SpawnPTYRequest) (app.
 }
 
 func (b *fakePTYBackend) Write(_ context.Context, ptyID string, data []byte) error {
+	b.mu.Lock()
 	if _, ok := b.records[ptyID]; !ok {
+		b.mu.Unlock()
 		return errNotFound(ptyID)
 	}
+	offset := uint64(len(b.outputs[ptyID]))
 	b.outputs[ptyID] = append(b.outputs[ptyID], data...)
+	event := app.PTYEvent{Kind: app.PTYOutput, Offset: offset, Bytes: append([]byte(nil), data...)}
+	if b.events != nil {
+		b.events <- event
+	}
+	b.mu.Unlock()
 	return nil
 }
 
 func (b *fakePTYBackend) Resize(_ context.Context, ptyID string, size app.PTYSize) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	record, ok := b.records[ptyID]
 	if !ok {
 		return errNotFound(ptyID)
@@ -950,6 +1016,8 @@ func (b *fakePTYBackend) Resize(_ context.Context, ptyID string, size app.PTYSiz
 }
 
 func (b *fakePTYBackend) Kill(_ context.Context, ptyID string) (app.PTYRecord, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	record, ok := b.records[ptyID]
 	if !ok {
 		return app.PTYRecord{}, errNotFound(ptyID)
@@ -959,13 +1027,46 @@ func (b *fakePTYBackend) Kill(_ context.Context, ptyID string) (app.PTYRecord, e
 	return record, nil
 }
 
-func (b *fakePTYBackend) Attach(context.Context, app.AttachPTYRequest) (*app.PTYAttach, error) {
-	ch := make(chan app.PTYEvent)
-	close(ch)
-	return &app.PTYAttach{Events: ch}, nil
+func (b *fakePTYBackend) Attach(ctx context.Context, req app.AttachPTYRequest) (*app.PTYAttach, error) {
+	b.mu.Lock()
+	record, ok := b.records[req.PtyID]
+	if !ok {
+		b.mu.Unlock()
+		return nil, errNotFound(req.PtyID)
+	}
+	output := b.outputs[req.PtyID]
+	replayOffset := req.ReplayFromOffset
+	if replayOffset > uint64(len(output)) {
+		replayOffset = uint64(len(output))
+	}
+	replay := append([]byte(nil), output[replayOffset:]...)
+	ch := make(chan app.PTYEvent, 16)
+	b.events = ch
+	b.mu.Unlock()
+
+	var once sync.Once
+	closeAttach := func() {
+		once.Do(func() {
+			b.mu.Lock()
+			if b.events == ch {
+				b.events = nil
+			}
+			b.mu.Unlock()
+			close(ch)
+		})
+	}
+	return &app.PTYAttach{
+		Record:       record,
+		ReplayBytes:  replay,
+		ReplayOffset: replayOffset,
+		Events:       ch,
+		CloseFunc:    closeAttach,
+	}, nil
 }
 
 func (b *fakePTYBackend) Output(_ context.Context, ptyID string, fromOffset uint64) (app.PTYOutputSnapshot, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	record, ok := b.records[ptyID]
 	if !ok {
 		return app.PTYOutputSnapshot{}, errNotFound(ptyID)
@@ -982,6 +1083,8 @@ func (b *fakePTYBackend) Output(_ context.Context, ptyID string, fromOffset uint
 }
 
 func (b *fakePTYBackend) List(context.Context) ([]app.PTYRecord, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	out := make([]app.PTYRecord, 0, len(b.records))
 	for _, record := range b.records {
 		out = append(out, record)
@@ -990,8 +1093,11 @@ func (b *fakePTYBackend) List(context.Context) ([]app.PTYRecord, error) {
 }
 
 func (b *fakePTYBackend) Shutdown(context.Context) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.records = map[string]app.PTYRecord{}
 	b.outputs = map[string][]byte{}
+	b.events = nil
 	return nil
 }
 

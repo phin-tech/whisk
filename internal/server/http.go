@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/buildinfo"
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
@@ -56,6 +57,7 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/bookmarks", server.addPTYBookmark)
 	mux.HandleFunc("GET /v1/ptys/{ptyID}/bookmarks", server.listPTYBookmarks)
 	mux.HandleFunc("DELETE /v1/pty-bookmarks/{bookmarkID}", server.removePTYBookmark)
+	mux.HandleFunc("GET /v1/ptys/{ptyID}/attach", server.attachPTY)
 	mux.HandleFunc("GET /v1/ptys/{ptyID}/output", server.output)
 	mux.HandleFunc("POST /v1/worktrunk/detect", server.detectWorktrunk)
 	mux.HandleFunc("POST /v1/worktrees/list", server.listWorktrees)
@@ -785,6 +787,81 @@ func (s *HTTPServer) output(w http.ResponseWriter, r *http.Request) {
 		Output:       string(snapshot.OutputBytes),
 		OutputBase64: base64.StdEncoding.EncodeToString(snapshot.OutputBytes),
 	})
+}
+
+func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
+	ptyID := r.PathValue("ptyID")
+	fromOffset, err := strconv.ParseUint(r.URL.Query().Get("from"), 10, 64)
+	if err != nil && r.URL.Query().Get("from") != "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid from offset"))
+		return
+	}
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{
+			"wails://*",
+			"http://localhost:*",
+			"http://127.0.0.1:*",
+			"http://[::1]:*",
+		},
+	})
+	if err != nil {
+		return
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	ctx := conn.CloseRead(r.Context())
+	attach, err := s.runtime.AttachPTY(ctx, app.AttachPTYRequest{
+		PtyID:            ptyID,
+		ReplayFromOffset: fromOffset,
+	})
+	if err != nil {
+		_ = writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{Type: "error", PtyID: ptyID, Message: err.Error()})
+		return
+	}
+	defer attach.Close()
+
+	if len(attach.ReplayBytes) > 0 {
+		if err := writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
+			Type:         "output",
+			PtyID:        ptyID,
+			Offset:       attach.ReplayOffset,
+			OutputBase64: base64.StdEncoding.EncodeToString(attach.ReplayBytes),
+		}); err != nil {
+			return
+		}
+	}
+	for {
+		select {
+		case event, ok := <-attach.Events:
+			if !ok {
+				return
+			}
+			switch event.Kind {
+			case app.PTYOutput:
+				if err := writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
+					Type:         "output",
+					PtyID:        ptyID,
+					Offset:       event.Offset,
+					OutputBase64: base64.StdEncoding.EncodeToString(event.Bytes),
+				}); err != nil {
+					return
+				}
+			case app.PTYExit:
+				_ = writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{Type: "exit", PtyID: ptyID, Code: event.Code})
+				return
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func writePTYStreamFrame(ctx context.Context, conn *websocket.Conn, frame protocol.PTYStreamFrame) error {
+	data, err := json.Marshal(frame)
+	if err != nil {
+		return err
+	}
+	return conn.Write(ctx, websocket.MessageText, data)
 }
 
 func (s *HTTPServer) nextEvent(w http.ResponseWriter, r *http.Request) {

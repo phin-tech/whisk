@@ -34,6 +34,7 @@
     CreateSession,
     CreateWorkItem,
     CreateWorktree,
+    DaemonStatus as LoadDaemonStatus,
     DeleteWorkItem,
     CheckAgentHookIntegration,
     AgentHookLogStatus as LoadAgentHookLogStatus,
@@ -88,6 +89,11 @@
   import type { Command } from "./commands";
   import { runCommand } from "./commands";
   import { notificationBadgeCount, targetForStatusEvent } from "./notificationsView";
+  import {
+    nextPTYStreamOffset,
+    ptyAttachWebSocketURL,
+    type PTYStreamFrame,
+  } from "./ptyStream";
   import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
     normalizeStartupView,
@@ -147,6 +153,8 @@
   let loadingStatusEvents = false;
   let outputChunks: Record<string, string[]> = {};
   let offsets: Record<string, number> = {};
+  let daemonAddress = "";
+  let ptyStreams: Record<string, WebSocket> = {};
   let outputReconcileTimer: number | undefined;
   let workReconcileTimer: number | undefined;
   let stopCommandEvents: (() => void) | undefined;
@@ -159,6 +167,7 @@
 
   $: activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   $: activeSessionWindow = activeWindow(activeSession, activePaneId);
+  $: visiblePTYIds = visiblePtyIds(sessions, activeSessionId, activePaneId);
   $: notificationCount = notificationBadgeCount(statusEvents) + agentBridgeApprovals.length + agentBridgeEvents.length;
   $: commands = [
     {
@@ -438,8 +447,7 @@
   }
 
   async function refreshVisibleOutput() {
-    const ids = visiblePtyIds(sessions, activeSessionId, activePaneId);
-    await Promise.all(ids.map((ptyId) => refreshOutput(ptyId)));
+    await Promise.all(visiblePTYIds.map((ptyId) => refreshOutput(ptyId)));
   }
 
   async function refreshOutput(ptyId: string) {
@@ -473,6 +481,71 @@
       } while (outputFetchAgain.has(ptyId));
     } finally {
       outputFetchInFlight.delete(ptyId);
+    }
+  }
+
+  async function loadDaemonAddress() {
+    if (daemonAddress) return daemonAddress;
+    const status = await LoadDaemonStatus();
+    daemonAddress = status.address;
+    return daemonAddress;
+  }
+
+  function appendPTYStreamOutput(frame: PTYStreamFrame) {
+    if (frame.type !== "output") return;
+    const currentOffset = offsets[frame.ptyId] ?? 0;
+    const nextOffset = nextPTYStreamOffset(currentOffset, frame);
+    if (nextOffset === currentOffset) return;
+    outputChunks = {
+      ...outputChunks,
+      [frame.ptyId]: [...(outputChunks[frame.ptyId] ?? []), frame.outputBase64],
+    };
+    offsets = { ...offsets, [frame.ptyId]: nextOffset };
+  }
+
+  async function openPTYStream(ptyId: string) {
+    if (!visiblePTYIds.includes(ptyId)) return;
+    const existing = ptyStreams[ptyId];
+    if (existing && existing.readyState !== WebSocket.CLOSED && existing.readyState !== WebSocket.CLOSING) return;
+    const address = await loadDaemonAddress();
+    const socket = new WebSocket(ptyAttachWebSocketURL(address, ptyId, offsets[ptyId] ?? 0));
+    ptyStreams = { ...ptyStreams, [ptyId]: socket };
+    socket.onmessage = (event) => {
+      const frame = JSON.parse(String(event.data)) as PTYStreamFrame;
+      if (frame.type === "output") {
+        appendPTYStreamOutput(frame);
+      } else if (frame.type === "error") {
+        error = frame.message;
+      }
+    };
+    socket.onclose = () => {
+      if (ptyStreams[ptyId] === socket) {
+        const { [ptyId]: _, ...remaining } = ptyStreams;
+        ptyStreams = remaining;
+      }
+      if (!stopped && visiblePTYIds.includes(ptyId)) {
+        refreshOutput(ptyId).catch((err) => (error = backendError(err)));
+        window.setTimeout(() => {
+          openPTYStream(ptyId).catch((err) => (error = backendError(err)));
+        }, 500);
+      }
+    };
+    socket.onerror = () => {
+      socket.close();
+    };
+  }
+
+  function syncPTYStreams(ptyIds: string[]) {
+    const visible = new Set(ptyIds);
+    for (const [ptyId, socket] of Object.entries(ptyStreams)) {
+      if (!visible.has(ptyId)) {
+        socket.close();
+      }
+    }
+    for (const ptyId of ptyIds) {
+      void openPTYStream(ptyId).catch((err) => {
+        error = backendError(err);
+      });
     }
   }
 
@@ -676,7 +749,10 @@
     const targets = runtimeRefreshTargets(event);
     if (targets.sessions) await refreshSessions();
     if (targets.ptys) await refreshPTYs();
-    if (targets.outputPtyId) await refreshOutput(targets.outputPtyId);
+    if (
+      targets.outputPtyId &&
+      !ptyStreams[targets.outputPtyId]
+    ) await refreshOutput(targets.outputPtyId);
     if (targets.statusEvents) await refreshStatusEvents();
     if (targets.agentBridgeApprovals) await refreshStatusEvents();
     if (targets.agentHookEvents) await refreshStatusEvents();
@@ -1255,6 +1331,8 @@
     }, 2000);
   });
 
+  $: if (settingsLoaded) syncPTYStreams(visiblePTYIds);
+
   $: if (settingsLoaded) saveSettings();
 
   // Keep the native Sessions menu in step with the session bar whenever the list changes.
@@ -1265,6 +1343,7 @@
     stopCommandEvents?.();
     if (outputReconcileTimer) window.clearInterval(outputReconcileTimer);
     if (workReconcileTimer) window.clearInterval(workReconcileTimer);
+    for (const socket of Object.values(ptyStreams)) socket.close();
   });
 </script>
 

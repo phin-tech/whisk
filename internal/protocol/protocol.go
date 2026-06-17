@@ -8,7 +8,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 15
+const DaemonAPIVersion = 16
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -168,6 +168,15 @@ type OutputSnapshot struct {
 	Offset       uint64 `json:"offset"`
 	Output       string `json:"output"`
 	OutputBase64 string `json:"outputBase64"`
+}
+
+type PTYStreamFrame struct {
+	Type         string `json:"type"`
+	PtyID        string `json:"ptyId"`
+	Offset       uint64 `json:"offset,omitempty"`
+	OutputBase64 string `json:"outputBase64,omitempty"`
+	Code         *int   `json:"code,omitempty"`
+	Message      string `json:"message,omitempty"`
 }
 
 type PTYInfo struct {
