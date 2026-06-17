@@ -51,6 +51,24 @@ describe.skipIf(!baseUrl)("whiskd headless TS client", () => {
     const projectId = project.data!.id;
     expect(projectId).toBeTruthy();
 
+    const attached = await client.POST("/v1/projects/{projectID}/attachments", {
+      params: { path: { projectID: projectId } },
+      body: {
+        projectId,
+        kind: "note",
+        title: "Context note",
+        note: "remember this",
+        includeInContext: true,
+      },
+    });
+    expect(attached.error).toBeUndefined();
+    expect(attached.data!.attachments).toHaveLength(1);
+    const context = await client.GET("/v1/projects/{projectID}/context", {
+      params: { path: { projectID: projectId } },
+    });
+    expect(context.error).toBeUndefined();
+    expect(context.data!.items![0].content).toEqual("remember this");
+
     const item = await client.POST("/v1/work-items", {
       body: { projectId, title: "hello from ts" },
     });

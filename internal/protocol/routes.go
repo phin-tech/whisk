@@ -45,6 +45,7 @@ var (
 	apiAgentBridgeApprovalList  = []AgentBridgeApproval(nil)
 	apiAgentBridgeEventList     = []AgentBridgeEvent(nil)
 	apiAgentHookIntegrationList = []AgentHookIntegration(nil)
+	apiPluginList               = []PluginStatus(nil)
 )
 
 var APIRoutes = []APIRoute{
@@ -64,6 +65,11 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/agent-hook-log/settings", OperationID: "setAgentHookLogSettings", Tag: "agent-bridges", Summary: "Update hook log settings", Request: SetAgentHookLogSettingsRequest{}, Response: AgentHookLogStatus{}},
 	{Method: "POST", Path: "/v1/agent-hook-log/clear", OperationID: "clearAgentHookLog", Tag: "agent-bridges", Summary: "Clear hook log files", Response: AgentHookLogStatus{}},
 	{Method: "POST", Path: "/v1/agent-hook-log/open", OperationID: "openAgentHookLog", Tag: "agent-bridges", Summary: "Open hook log in the platform editor", Response: AgentHookLogStatus{}},
+	{Method: "GET", Path: "/v1/plugins", OperationID: "listPlugins", Tag: "plugins", Summary: "List discovered plugins", Response: apiPluginList},
+	{Method: "POST", Path: "/v1/plugins/rescan", OperationID: "rescanPlugins", Tag: "plugins", Summary: "Rescan plugin directories", Response: apiPluginList},
+	{Method: "POST", Path: "/v1/plugins/{pluginID}/trust", OperationID: "trustPlugin", Tag: "plugins", Summary: "Trust a discovered plugin", Response: PluginStatus{}},
+	{Method: "POST", Path: "/v1/plugins/{pluginID}/untrust", OperationID: "untrustPlugin", Tag: "plugins", Summary: "Untrust a discovered plugin", Response: PluginStatus{}},
+	{Method: "POST", Path: "/v1/plugins/{pluginID}/project-attachment-templates/{templateID}", OperationID: "runPluginProjectAttachmentTemplate", Tag: "plugins", Summary: "Run a trusted plugin project attachment template", Request: RunPluginProjectAttachmentTemplateRequest{}, Response: Project{}, Status: 201},
 
 	{Method: "GET", Path: "/v1/sessions", OperationID: "listSessions", Tag: "sessions", Response: apiSessionList},
 	{Method: "POST", Path: "/v1/sessions", OperationID: "createSession", Tag: "sessions", Request: CreateSessionRequest{}, Response: CreatedSession{}, Status: 201},
@@ -101,6 +107,10 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/projects", OperationID: "createProject", Tag: "workitems", Request: CreateProjectRequest{}, Response: Project{}, Status: 201},
 	{Method: "POST", Path: "/v1/projects/{projectID}/update", OperationID: "updateProject", Tag: "workitems", Request: UpdateProjectRequest{}, Response: Project{}},
 	{Method: "GET", Path: "/v1/projects/{projectID}/detail", OperationID: "getProjectDetail", Tag: "workitems", Response: ProjectDetail{}},
+	{Method: "POST", Path: "/v1/projects/{projectID}/attachments", OperationID: "addProjectAttachment", Tag: "workitems", Request: AddProjectAttachmentRequest{}, Response: Project{}, Status: 201},
+	{Method: "POST", Path: "/v1/project-attachments/{attachmentID}/update", OperationID: "updateProjectAttachment", Tag: "workitems", Request: UpdateProjectAttachmentRequest{}, Response: Project{}},
+	{Method: "POST", Path: "/v1/project-attachments/{attachmentID}/delete", OperationID: "deleteProjectAttachment", Tag: "workitems", Request: DeleteProjectAttachmentRequest{}, Response: Project{}},
+	{Method: "GET", Path: "/v1/projects/{projectID}/context", OperationID: "getProjectContext", Tag: "workitems", Response: ProjectContext{}},
 	{Method: "GET", Path: "/v1/workflow-templates", OperationID: "listWorkflowTemplates", Tag: "workitems", Response: apiWorkflowTemplateList},
 	{Method: "GET", Path: "/v1/prompt-templates", OperationID: "listPromptTemplates", Tag: "workitems", Response: apiPromptList},
 	{Method: "GET", Path: "/v1/work-items", OperationID: "listWorkItems", Tag: "workitems", Response: apiWorkItemList, Query: []APIQueryParam{{Name: "projectId", Type: "string"}}},

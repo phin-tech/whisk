@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -10,6 +10,7 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
+    from ..models.attachment import Attachment
     from ..models.project_metadata import ProjectMetadata
     from ..models.project_preferences import ProjectPreferences
     from ..models.project_workflow import ProjectWorkflow
@@ -22,6 +23,7 @@ T = TypeVar("T", bound="Project")
 class Project:
     """
     Attributes:
+        attachments (list[Attachment] | None):
         created_at (datetime.datetime):
         id (str):
         name (str):
@@ -35,6 +37,7 @@ class Project:
         metadata (ProjectMetadata | Unset):
     """
 
+    attachments: list[Attachment] | None
     created_at: datetime.datetime
     id: str
     name: str
@@ -49,6 +52,16 @@ class Project:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        attachments: list[dict[str, Any]] | None
+        if isinstance(self.attachments, list):
+            attachments = []
+            for attachments_type_0_item_data in self.attachments:
+                attachments_type_0_item = attachments_type_0_item_data.to_dict()
+                attachments.append(attachments_type_0_item)
+
+        else:
+            attachments = self.attachments
+
         created_at = self.created_at.isoformat()
 
         id = self.id
@@ -77,6 +90,7 @@ class Project:
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
+                "attachments": attachments,
                 "createdAt": created_at,
                 "id": id,
                 "name": name,
@@ -97,11 +111,35 @@ class Project:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.attachment import Attachment
         from ..models.project_metadata import ProjectMetadata
         from ..models.project_preferences import ProjectPreferences
         from ..models.project_workflow import ProjectWorkflow
 
         d = dict(src_dict)
+
+        def _parse_attachments(data: object) -> list[Attachment] | None:
+            if data is None:
+                return data
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                attachments_type_0 = []
+                _attachments_type_0 = data
+                for attachments_type_0_item_data in _attachments_type_0:
+                    attachments_type_0_item = Attachment.from_dict(
+                        attachments_type_0_item_data
+                    )
+
+                    attachments_type_0.append(attachments_type_0_item)
+
+                return attachments_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(list[Attachment] | None, data)
+
+        attachments = _parse_attachments(d.pop("attachments"))
+
         created_at = datetime.datetime.fromisoformat(d.pop("createdAt"))
 
         id = d.pop("id")
@@ -130,6 +168,7 @@ class Project:
             metadata = ProjectMetadata.from_dict(_metadata)
 
         project = cls(
+            attachments=attachments,
             created_at=created_at,
             id=id,
             name=name,

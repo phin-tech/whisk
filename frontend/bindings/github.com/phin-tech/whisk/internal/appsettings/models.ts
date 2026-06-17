@@ -23,6 +23,7 @@ export class Settings {
      * from the map use their built-in default; an empty map means all defaults.
      */
     "keybindings"?: { [_ in string]?: string };
+    "trustedPlugins"?: string[];
 
     /** Creates a new Settings instance. */
     constructor($$source: Partial<Settings> = {}) {
@@ -41,9 +42,13 @@ export class Settings {
      */
     static createFrom($$source: any = {}): Settings {
         const $$createField4_0 = $$createType0;
+        const $$createField5_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("keybindings" in $$parsedSource) {
             $$parsedSource["keybindings"] = $$createField4_0($$parsedSource["keybindings"]);
+        }
+        if ("trustedPlugins" in $$parsedSource) {
+            $$parsedSource["trustedPlugins"] = $$createField5_0($$parsedSource["trustedPlugins"]);
         }
         return new Settings($$parsedSource as Partial<Settings>);
     }
@@ -51,3 +56,4 @@ export class Settings {
 
 // Private type creation functions
 const $$createType0 = $Create.Map($Create.Any, $Create.Any);
+const $$createType1 = $Create.Array($Create.Any);

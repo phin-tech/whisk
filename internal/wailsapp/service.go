@@ -338,6 +338,22 @@ func (s *Service) ProjectDetail(ctx context.Context, projectID string) (protocol
 	return s.client.GetProjectDetail(ctx, projectID)
 }
 
+func (s *Service) AddProjectAttachment(ctx context.Context, req protocol.AddProjectAttachmentRequest) (protocol.Project, error) {
+	return s.client.AddProjectAttachment(ctx, req)
+}
+
+func (s *Service) UpdateProjectAttachment(ctx context.Context, attachmentID string, req protocol.UpdateProjectAttachmentRequest) (protocol.Project, error) {
+	return s.client.UpdateProjectAttachment(ctx, attachmentID, req)
+}
+
+func (s *Service) DeleteProjectAttachment(ctx context.Context, attachmentID string, req protocol.DeleteProjectAttachmentRequest) (protocol.Project, error) {
+	return s.client.DeleteProjectAttachment(ctx, attachmentID, req)
+}
+
+func (s *Service) ProjectContext(ctx context.Context, projectID string) (protocol.ProjectContext, error) {
+	return s.client.GetProjectContext(ctx, projectID)
+}
+
 func (s *Service) ListWorkflowTemplates(ctx context.Context) ([]protocol.WorkflowTemplate, error) {
 	return s.client.ListWorkflowTemplates(ctx)
 }
@@ -508,6 +524,26 @@ func (s *Service) ClearAgentHookLog(ctx context.Context) (protocol.AgentHookLogS
 
 func (s *Service) OpenAgentHookLog(ctx context.Context) (protocol.AgentHookLogStatus, error) {
 	return s.client.OpenAgentHookLog(ctx)
+}
+
+func (s *Service) ListPlugins(ctx context.Context) ([]protocol.PluginStatus, error) {
+	return s.client.ListPlugins(ctx)
+}
+
+func (s *Service) RescanPlugins(ctx context.Context) ([]protocol.PluginStatus, error) {
+	return s.client.RescanPlugins(ctx)
+}
+
+func (s *Service) TrustPlugin(ctx context.Context, id string) (protocol.PluginStatus, error) {
+	return s.client.TrustPlugin(ctx, id)
+}
+
+func (s *Service) UntrustPlugin(ctx context.Context, id string) (protocol.PluginStatus, error) {
+	return s.client.UntrustPlugin(ctx, id)
+}
+
+func (s *Service) RunPluginProjectAttachmentTemplate(ctx context.Context, pluginID string, templateID string, req protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error) {
+	return s.client.RunPluginProjectAttachmentTemplate(ctx, pluginID, templateID, req)
 }
 
 func (s *Service) ListHTTPForwards(ctx context.Context) ([]protocol.HTTPForward, error) {

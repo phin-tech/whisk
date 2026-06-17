@@ -17,6 +17,8 @@ from whiskd_client.api.workitems import (
     complete_execution_for_work_item,
     create_project,
     create_work_item,
+    add_project_attachment,
+    get_project_context,
     list_artifacts,
     list_gate_reports,
     list_questions,
@@ -40,8 +42,10 @@ from whiskd_client.models import (
     CompleteExecutionRequest,
     CreateProjectRequest,
     CreateWorkItemRequest,
+    AddProjectAttachmentRequest,
     GateReport,
     Project,
+    ProjectContext,
     Question,
     StartExecutionRequest,
     StartPlanningRequest,
@@ -100,6 +104,23 @@ def test_work_item_round_trip(base_url, tmp_path):
     assert isinstance(project, Project), f"unexpected: {project!r}"
     assert project.id
     assert project.slug
+
+    project = add_project_attachment.sync(
+        project.id,
+        client=client,
+        body=AddProjectAttachmentRequest(
+            project_id=project.id,
+            kind="note",
+            title="Context note",
+            note="remember this",
+            include_in_context=True,
+        ),
+    )
+    assert isinstance(project, Project), f"unexpected: {project!r}"
+    assert project.attachments is not None and len(project.attachments) == 1
+    context = get_project_context.sync(project.id, client=client)
+    assert isinstance(context, ProjectContext), f"unexpected: {context!r}"
+    assert context.items is not None and context.items[0].content == "remember this"
 
     item = create_work_item.sync(
         client=client,

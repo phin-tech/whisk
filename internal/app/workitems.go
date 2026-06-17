@@ -30,11 +30,61 @@ type UpdateProjectRequest struct {
 	Slug        *string
 }
 
+type AddProjectAttachmentRequest struct {
+	ProjectID        string
+	Kind             string
+	Scope            string
+	Title            string
+	Path             string
+	URL              string
+	Note             string
+	Provider         string
+	Target           string
+	IncludeInContext bool
+	Meta             map[string]workitem.MetadataValue
+}
+
+type UpdateProjectAttachmentRequest struct {
+	ID               string
+	ProjectID        string
+	Title            *string
+	Path             *string
+	URL              *string
+	Note             *string
+	Provider         *string
+	Target           *string
+	IncludeInContext *bool
+	Meta             map[string]workitem.MetadataValue
+}
+
+type DeleteProjectAttachmentRequest struct {
+	ID        string
+	ProjectID string
+}
+
 type ProjectDetail struct {
 	Project   workitem.Project
 	WorkItems []workitem.WorkItem
 	Sessions  []session.Session
 	Runs      []workitem.WorkItemRun
+}
+
+type ProjectContext struct {
+	ProjectID string
+	Items     []ProjectContextItem
+}
+
+type ProjectContextItem struct {
+	AttachmentID string
+	Kind         string
+	Provider     string
+	Target       string
+	Title        string
+	Delivery     string
+	ContentType  string
+	Content      string
+	SourceURL    string
+	Error        string
 }
 
 type CreateWorkItemRequest struct {
@@ -305,6 +355,133 @@ func (r *Runtime) UpdateProject(ctx context.Context, req UpdateProjectRequest) (
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	return project, nil
+}
+
+func (r *Runtime) AddProjectAttachment(ctx context.Context, req AddProjectAttachmentRequest) (workitem.Project, error) {
+	project, err := r.workItems.AddProjectAttachment(workitem.AddProjectAttachment{
+		ID:               r.ids(),
+		ProjectID:        req.ProjectID,
+		Kind:             req.Kind,
+		Scope:            req.Scope,
+		Title:            req.Title,
+		Path:             req.Path,
+		URL:              req.URL,
+		Note:             req.Note,
+		Provider:         req.Provider,
+		Target:           req.Target,
+		IncludeInContext: req.IncludeInContext,
+		Meta:             req.Meta,
+		Now:              time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.Project{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.Project{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return project, nil
+}
+
+func (r *Runtime) UpdateProjectAttachment(ctx context.Context, req UpdateProjectAttachmentRequest) (workitem.Project, error) {
+	project, err := r.workItems.UpdateProjectAttachment(workitem.UpdateProjectAttachment{
+		ID:               req.ID,
+		ProjectID:        req.ProjectID,
+		Title:            req.Title,
+		Path:             req.Path,
+		URL:              req.URL,
+		Note:             req.Note,
+		Provider:         req.Provider,
+		Target:           req.Target,
+		IncludeInContext: req.IncludeInContext,
+		Meta:             req.Meta,
+		Now:              time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.Project{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.Project{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return project, nil
+}
+
+func (r *Runtime) DeleteProjectAttachment(ctx context.Context, req DeleteProjectAttachmentRequest) (workitem.Project, error) {
+	project, err := r.workItems.DeleteProjectAttachment(workitem.DeleteProjectAttachment{
+		ID:        req.ID,
+		ProjectID: req.ProjectID,
+		Now:       time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.Project{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.Project{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return project, nil
+}
+
+func (r *Runtime) ProjectContext(ctx context.Context, projectID string) (ProjectContext, error) {
+	project, ok := r.workItems.GetProject(projectID)
+	if !ok {
+		return ProjectContext{}, fmt.Errorf("project %s not found", projectID)
+	}
+	out := ProjectContext{ProjectID: project.ID}
+	for _, attachment := range project.Attachments {
+		if !attachment.IncludeInContext {
+			continue
+		}
+		item := ProjectContextItem{
+			AttachmentID: attachment.ID,
+			Kind:         attachment.Kind,
+			Provider:     attachment.Provider,
+			Target:       attachment.Target,
+			Title:        attachment.Title,
+			Delivery:     "reference",
+		}
+		switch attachment.Kind {
+		case workitem.AttachmentKindFile:
+			item.Target = attachment.Path
+		case workitem.AttachmentKindURL:
+			item.Target = attachment.URL
+			item.SourceURL = attachment.URL
+		case workitem.AttachmentKindNote:
+			item.Delivery = "inline"
+			item.ContentType = "text/markdown"
+			item.Content = attachment.Note
+		case workitem.AttachmentKindExternal:
+			resolver := r.projectContextResolver(attachment.Provider)
+			if resolver == nil {
+				item.Delivery = "skipped"
+				item.Error = "no trusted resolver configured"
+				break
+			}
+			resolved, err := resolver.ResolveProjectAttachment(ctx, ResolveProjectAttachmentRequest{
+				ProjectID:    project.ID,
+				AttachmentID: attachment.ID,
+				Provider:     attachment.Provider,
+				Target:       attachment.Target,
+				BudgetBytes:  64 * 1024,
+			})
+			if err != nil {
+				item.Delivery = "skipped"
+				item.Error = err.Error()
+				break
+			}
+			if resolved.Title != "" {
+				item.Title = resolved.Title
+			}
+			item.Delivery = resolved.Delivery
+			item.ContentType = resolved.ContentType
+			item.Content = resolved.Content
+			item.SourceURL = resolved.SourceURL
+			item.Error = resolved.Error
+		}
+		out.Items = append(out.Items, item)
+	}
+	return out, nil
 }
 
 func (r *Runtime) ListWorkItems(_ context.Context, projectID string) ([]workitem.WorkItem, error) {

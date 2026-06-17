@@ -372,6 +372,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List discovered plugins */
+        get: operations["listPlugins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plugins/rescan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rescan plugin directories */
+        post: operations["rescanPlugins"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plugins/{pluginID}/project-attachment-templates/{templateID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a trusted plugin project attachment template */
+        post: operations["runPluginProjectAttachmentTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plugins/{pluginID}/trust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Trust a discovered plugin */
+        post: operations["trustPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plugins/{pluginID}/untrust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Untrust a discovered plugin */
+        post: operations["untrustPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/project-attachments/{attachmentID}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["deleteProjectAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/project-attachments/{attachmentID}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["updateProjectAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects": {
         parameters: {
             query?: never;
@@ -382,6 +499,38 @@ export interface paths {
         get: operations["listProjects"];
         put?: never;
         post: operations["createProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{projectID}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addProjectAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{projectID}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getProjectContext"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1183,6 +1332,21 @@ export interface components {
             offset: number;
             ptyId: string;
         };
+        AddProjectAttachmentRequest: {
+            includeInContext?: boolean;
+            kind: string;
+            meta?: {
+                [key: string]: components["schemas"]["MetadataValue"];
+            };
+            note?: string;
+            path?: string;
+            projectId: string;
+            provider?: string;
+            scope?: string;
+            target?: string;
+            title?: string;
+            url?: string;
+        };
         AddWorkItemAttachmentRequest: {
             actor?: string;
             kind: string;
@@ -1324,10 +1488,17 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             id: string;
+            includeInContext?: boolean;
             kind: string;
+            meta?: {
+                [key: string]: components["schemas"]["MetadataValue"];
+            };
             note?: string;
             path?: string;
+            provider?: string;
             scope: string;
+            target?: string;
+            title?: string;
             url?: string;
         };
         BindWorkItemWorktreeRequest: {
@@ -1432,6 +1603,9 @@ export interface components {
         };
         CreatedWorktree: {
             path: string;
+        };
+        DeleteProjectAttachmentRequest: {
+            projectId: string;
         };
         DeleteWorkItemRequest: {
             actor?: string;
@@ -1567,7 +1741,32 @@ export interface components {
             windowId: string;
             workingDir: string;
         };
+        PluginResolver: {
+            kinds?: string[];
+            provider: string;
+        };
+        PluginStatus: {
+            dir: string;
+            error?: string;
+            id: string;
+            manifestPath: string;
+            name: string;
+            projectAttachmentTemplates?: components["schemas"]["ProjectAttachmentTemplate"][];
+            resolvers?: components["schemas"]["PluginResolver"][];
+            trusted: boolean;
+            valid: boolean;
+            version: string;
+        };
+        PluginTemplateField: {
+            id: string;
+            label: string;
+            options?: string[];
+            placeholder?: string;
+            required?: boolean;
+            type: string;
+        };
         Project: {
+            attachments: components["schemas"]["Attachment"][] | null;
             /** Format: date-time */
             createdAt: string;
             description?: string;
@@ -1584,6 +1783,29 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             workflow: components["schemas"]["ProjectWorkflow"];
+        };
+        ProjectAttachmentTemplate: {
+            fields?: components["schemas"]["PluginTemplateField"][];
+            id: string;
+            kind: string;
+            label: string;
+            provider: string;
+        };
+        ProjectContext: {
+            items: components["schemas"]["ProjectContextItem"][] | null;
+            projectId: string;
+        };
+        ProjectContextItem: {
+            attachmentId: string;
+            content?: string;
+            contentType?: string;
+            delivery: string;
+            error?: string;
+            kind: string;
+            provider?: string;
+            sourceUrl?: string;
+            target?: string;
+            title?: string;
         };
         ProjectDetail: {
             project: components["schemas"]["Project"];
@@ -1688,6 +1910,12 @@ export interface components {
             id: string;
             message?: string;
             type: string;
+        };
+        RunPluginProjectAttachmentTemplateRequest: {
+            projectId: string;
+            values?: {
+                [key: string]: string;
+            };
         };
         RuntimeEvent: {
             /** Format: int64 */
@@ -1834,6 +2062,19 @@ export interface components {
             requiresChecks?: boolean;
             requiresNoRunningRuns?: boolean;
             toStageId: string;
+        };
+        UpdateProjectAttachmentRequest: {
+            includeInContext?: boolean | null;
+            meta?: {
+                [key: string]: components["schemas"]["MetadataValue"];
+            };
+            note?: string | null;
+            path?: string | null;
+            projectId: string;
+            provider?: string | null;
+            target?: string | null;
+            title?: string | null;
+            url?: string | null;
         };
         UpdateProjectRequest: {
             description?: string | null;
@@ -2684,6 +2925,232 @@ export interface operations {
             };
         };
     };
+    listPlugins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStatus"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rescanPlugins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStatus"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    runPluginProjectAttachmentTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginID: string;
+                templateID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunPluginProjectAttachmentTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    trustPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    untrustPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteProjectAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteProjectAttachmentRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateProjectAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectAttachmentRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listProjects: {
         parameters: {
             query?: never;
@@ -2733,6 +3200,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    addProjectAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddProjectAttachmentRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getProjectContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectContext"];
                 };
             };
             /** @description error */

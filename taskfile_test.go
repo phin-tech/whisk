@@ -18,8 +18,21 @@ func TestDevAppTaskPreservesRunningDaemonAndCLI(t *testing.T) {
 	requireTaskLine(t, block, "WHISKD_PATH: \"{{.BIN_DIR}}/whisk\"")
 	requireTaskLine(t, block, "WHISK_CLI: \"{{.BIN_DIR}}/whisk\"")
 	requireTaskLine(t, block, "WHISKD_URL: \"http://{{.DEV_DAEMON_ADDR}}\"")
+	requireTaskLine(t, block, "WHISK_PLUGIN_DIRS: \"{{.ROOT_DIR}}/plugins/github-issues\"")
 	requireTaskLineAbsent(t, block, "whisk daemon stop")
 	requireTaskLineAbsent(t, block, "{{.BIN_DIR}}/whiskd")
+}
+
+func TestDevAppRestartTaskStopsDevDaemonThenRunsApp(t *testing.T) {
+	taskfile, err := os.ReadFile("Taskfile.yml")
+	if err != nil {
+		t.Fatalf("read Taskfile.yml: %v", err)
+	}
+	block := taskBlock(string(taskfile), "dev:app:restart")
+
+	requireTaskLine(t, block, "- task: build:daemon")
+	requireTaskLine(t, block, "{{.BIN_DIR}}/whisk daemon stop -url http://{{.DEV_DAEMON_ADDR}}")
+	requireTaskLine(t, block, "- task: dev:app")
 }
 
 func TestBuildDaemonTaskBuildsWhiskDaemonMode(t *testing.T) {

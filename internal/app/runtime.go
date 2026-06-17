@@ -130,6 +130,8 @@ type AttachPTYRequest struct {
 type RuntimeConfig struct {
 	PTYBackend                 PTYBackend
 	Worktrees                  WorktreeBackend
+	ContextResolvers           map[string]ProjectContextResolver
+	Plugins                    PluginRegistry
 	IDGenerator                func() string
 	EventSink                  EventSink
 	SessionStore               SessionStore
@@ -148,6 +150,8 @@ type Runtime struct {
 	ids                        func() string
 	ptys                       PTYBackend
 	worktrees                  WorktreeBackend
+	contextResolvers           map[string]ProjectContextResolver
+	plugins                    PluginRegistry
 	state                      *session.State
 	bookmarks                  *ptybookmark.State
 	sessionStore               SessionStore
@@ -171,6 +175,27 @@ type Runtime struct {
 	eventSink                  EventSink
 	watchCtx                   context.Context
 	watchCancel                context.CancelFunc
+}
+
+type ProjectContextResolver interface {
+	ResolveProjectAttachment(ctx context.Context, req ResolveProjectAttachmentRequest) (ResolvedProjectAttachment, error)
+}
+
+type ResolveProjectAttachmentRequest struct {
+	ProjectID    string
+	AttachmentID string
+	Provider     string
+	Target       string
+	BudgetBytes  int
+}
+
+type ResolvedProjectAttachment struct {
+	Title       string
+	Delivery    string
+	ContentType string
+	Content     string
+	SourceURL   string
+	Error       string
 }
 
 type ptyMetadata struct {
@@ -435,6 +460,8 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		ids:                        ids,
 		ptys:                       config.PTYBackend,
 		worktrees:                  config.Worktrees,
+		contextResolvers:           config.ContextResolvers,
+		plugins:                    config.Plugins,
 		state:                      state,
 		bookmarks:                  bookmarks,
 		sessionStore:               config.SessionStore,

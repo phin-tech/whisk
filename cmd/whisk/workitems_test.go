@@ -132,6 +132,63 @@ func TestRunProjectUpdatePrintsJSONContract(t *testing.T) {
 	}
 }
 
+func TestRunProjectAttachPrintsJSONContract(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/projects/proj_01/attachments" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req protocol.AddProjectAttachmentRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.Kind != workitem.AttachmentKindExternal || req.Provider != "github" || req.Target != "phin-tech/roux-next-gen#123" || !req.IncludeInContext {
+			t.Fatalf("request = %#v", req)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.Project{ID: "proj_01", Attachments: []protocol.Attachment{{ID: "att_01", Kind: req.Kind, Provider: req.Provider, Target: req.Target, IncludeInContext: req.IncludeInContext}}})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"project", "attach", "-url", server.URL, "-kind", "external", "-provider", "github", "-target", "phin-tech/roux-next-gen#123", "-context", "-json", "proj_01"})
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var project protocol.Project
+	if err := json.Unmarshal([]byte(output), &project); err != nil {
+		t.Fatalf("json output %q: %v", output, err)
+	}
+	if len(project.Attachments) != 1 || project.Attachments[0].ID != "att_01" {
+		t.Fatalf("project = %#v", project)
+	}
+}
+
+func TestRunProjectContextPrintsJSONContract(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/projects/proj_01/context" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.ProjectContext{ProjectID: "proj_01", Items: []protocol.ProjectContextItem{{AttachmentID: "att_01", Kind: "external", Delivery: "inline", Content: "issue"}}})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"project", "context", "-url", server.URL, "-json", "proj_01"})
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var projectContext protocol.ProjectContext
+	if err := json.Unmarshal([]byte(output), &projectContext); err != nil {
+		t.Fatalf("json output %q: %v", output, err)
+	}
+	if len(projectContext.Items) != 1 || projectContext.Items[0].Content != "issue" {
+		t.Fatalf("context = %#v", projectContext)
+	}
+}
+
 func TestRunWorkItemCreateListAndActionsUseDaemonAPI(t *testing.T) {
 	requests := map[string]int{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

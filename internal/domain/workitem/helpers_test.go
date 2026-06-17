@@ -87,6 +87,33 @@ func TestValidateAttachmentNormalizesAndRejectsInvalidInputs(t *testing.T) {
 	if _, err := validateAttachment(Attachment{ID: "att_05", Kind: "other"}); err == nil {
 		t.Fatalf("expected unsupported kind error")
 	}
+
+	external, err := validateAttachment(Attachment{
+		ID:       "att_06",
+		Kind:     AttachmentKindExternal,
+		Provider: " github ",
+		Target:   " owner/repo#1 ",
+		URL:      " https://github.com/owner/repo/issues/1 ",
+		Meta: map[string]MetadataValue{
+			"github/type":   {Type: MetadataTypeString, String: "issue"},
+			"github/number": {Type: MetadataTypeNumber, Number: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("external attachment: %v", err)
+	}
+	if external.Provider != "github" || external.Target != "owner/repo#1" || external.URL != "https://github.com/owner/repo/issues/1" {
+		t.Fatalf("external attachment = %#v", external)
+	}
+	if _, err := validateAttachment(Attachment{
+		ID:       "att_07",
+		Kind:     AttachmentKindExternal,
+		Provider: "github",
+		Target:   "owner/repo#1",
+		Meta:     map[string]MetadataValue{"bad": {Type: MetadataTypeString, String: "issue"}},
+	}); err == nil {
+		t.Fatalf("expected invalid attachment meta error")
+	}
 }
 
 func TestAppendHistoryHelpersValidateRequiredFields(t *testing.T) {

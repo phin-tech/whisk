@@ -92,6 +92,53 @@ func TestStateUpdatesProjectDescription(t *testing.T) {
 	}
 }
 
+func TestStateManagesProjectAttachments(t *testing.T) {
+	state := NewState()
+	project := mustProject(t, state, "proj_01", "One")
+	now := time.Date(2026, 6, 17, 12, 0, 0, 0, time.UTC)
+
+	updated, err := state.AddProjectAttachment(AddProjectAttachment{
+		ID:               "att_01",
+		ProjectID:        project.ID,
+		Kind:             AttachmentKindExternal,
+		Provider:         "github",
+		Target:           "phin-tech/roux-next-gen#123",
+		Title:            "Issue 123",
+		IncludeInContext: true,
+		Now:              now,
+	})
+	if err != nil {
+		t.Fatalf("add attachment: %v", err)
+	}
+	if len(updated.Attachments) != 1 || updated.Attachments[0].Provider != "github" || !updated.Attachments[0].IncludeInContext {
+		t.Fatalf("attachments = %#v", updated.Attachments)
+	}
+
+	title := "Updated issue"
+	include := false
+	updated, err = state.UpdateProjectAttachment(UpdateProjectAttachment{
+		ID:               "att_01",
+		ProjectID:        project.ID,
+		Title:            &title,
+		IncludeInContext: &include,
+		Now:              now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("update attachment: %v", err)
+	}
+	if updated.Attachments[0].Title != title || updated.Attachments[0].IncludeInContext {
+		t.Fatalf("updated attachment = %#v", updated.Attachments[0])
+	}
+
+	updated, err = state.DeleteProjectAttachment(DeleteProjectAttachment{ID: "att_01", ProjectID: project.ID, Now: now.Add(2 * time.Minute)})
+	if err != nil {
+		t.Fatalf("delete attachment: %v", err)
+	}
+	if len(updated.Attachments) != 0 {
+		t.Fatalf("attachments = %#v", updated.Attachments)
+	}
+}
+
 func TestStateCreatesWorkItemsWithPerProjectNumbersAndHistory(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "16",
+    "version": "17",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -936,6 +936,315 @@
         }
       }
     },
+    "/v1/plugins": {
+      "get": {
+        "operationId": "listPlugins",
+        "summary": "List discovered plugins",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PluginStatus"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/plugins/rescan": {
+      "post": {
+        "operationId": "rescanPlugins",
+        "summary": "Rescan plugin directories",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PluginStatus"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/plugins/{pluginID}/project-attachment-templates/{templateID}": {
+      "post": {
+        "operationId": "runPluginProjectAttachmentTemplate",
+        "summary": "Run a trusted plugin project attachment template",
+        "tags": [
+          "plugins"
+        ],
+        "parameters": [
+          {
+            "name": "pluginID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "templateID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunPluginProjectAttachmentTemplateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/plugins/{pluginID}/trust": {
+      "post": {
+        "operationId": "trustPlugin",
+        "summary": "Trust a discovered plugin",
+        "tags": [
+          "plugins"
+        ],
+        "parameters": [
+          {
+            "name": "pluginID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/plugins/{pluginID}/untrust": {
+      "post": {
+        "operationId": "untrustPlugin",
+        "summary": "Untrust a discovered plugin",
+        "tags": [
+          "plugins"
+        ],
+        "parameters": [
+          {
+            "name": "pluginID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/project-attachments/{attachmentID}/delete": {
+      "post": {
+        "operationId": "deleteProjectAttachment",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "attachmentID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteProjectAttachmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/project-attachments/{attachmentID}/update": {
+      "post": {
+        "operationId": "updateProjectAttachment",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "attachmentID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectAttachmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/projects": {
       "get": {
         "operationId": "listProjects",
@@ -989,6 +1298,96 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectID}/attachments": {
+      "post": {
+        "operationId": "addProjectAttachment",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "projectID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddProjectAttachmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectID}/context": {
+      "get": {
+        "operationId": "getProjectContext",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "projectID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectContext"
                 }
               }
             },
@@ -3558,6 +3957,51 @@
         ],
         "type": "object"
       },
+      "AddProjectAttachmentRequest": {
+        "properties": {
+          "includeInContext": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "meta": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetadataValue"
+            },
+            "type": "object"
+          },
+          "note": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId",
+          "kind"
+        ],
+        "type": "object"
+      },
       "AddWorkItemAttachmentRequest": {
         "properties": {
           "actor": {
@@ -3990,8 +4434,17 @@
           "id": {
             "type": "string"
           },
+          "includeInContext": {
+            "type": "boolean"
+          },
           "kind": {
             "type": "string"
+          },
+          "meta": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetadataValue"
+            },
+            "type": "object"
           },
           "note": {
             "type": "string"
@@ -3999,7 +4452,16 @@
           "path": {
             "type": "string"
           },
+          "provider": {
+            "type": "string"
+          },
           "scope": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "title": {
             "type": "string"
           },
           "url": {
@@ -4367,6 +4829,17 @@
         },
         "required": [
           "path"
+        ],
+        "type": "object"
+      },
+      "DeleteProjectAttachmentRequest": {
+        "properties": {
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId"
         ],
         "type": "object"
       },
@@ -4840,8 +5313,113 @@
         ],
         "type": "object"
       },
+      "PluginResolver": {
+        "properties": {
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "type": "object"
+      },
+      "PluginStatus": {
+        "properties": {
+          "dir": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "manifestPath": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectAttachmentTemplates": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectAttachmentTemplate"
+            },
+            "type": "array"
+          },
+          "resolvers": {
+            "items": {
+              "$ref": "#/components/schemas/PluginResolver"
+            },
+            "type": "array"
+          },
+          "trusted": {
+            "type": "boolean"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "dir",
+          "manifestPath",
+          "trusted",
+          "valid"
+        ],
+        "type": "object"
+      },
+      "PluginTemplateField": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "placeholder": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "type"
+        ],
+        "type": "object"
+      },
       "Project": {
         "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            },
+            "nullable": true,
+            "type": "array"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -4889,9 +5467,98 @@
           "rootDir",
           "workflow",
           "preferences",
+          "attachments",
           "nextWorkItemNumber",
           "createdAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ProjectAttachmentTemplate": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/PluginTemplateField"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "provider",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "ProjectContext": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectContextItem"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId",
+          "items"
+        ],
+        "type": "object"
+      },
+      "ProjectContextItem": {
+        "properties": {
+          "attachmentId": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "delivery": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "sourceUrl": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attachmentId",
+          "kind",
+          "delivery"
         ],
         "type": "object"
       },
@@ -5278,6 +5945,23 @@
           "id",
           "type",
           "at"
+        ],
+        "type": "object"
+      },
+      "RunPluginProjectAttachmentTemplateRequest": {
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "projectId"
         ],
         "type": "object"
       },
@@ -5779,6 +6463,51 @@
         "required": [
           "fromStageId",
           "toStageId"
+        ],
+        "type": "object"
+      },
+      "UpdateProjectAttachmentRequest": {
+        "properties": {
+          "includeInContext": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "meta": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetadataValue"
+            },
+            "type": "object"
+          },
+          "note": {
+            "nullable": true,
+            "type": "string"
+          },
+          "path": {
+            "nullable": true,
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "provider": {
+            "nullable": true,
+            "type": "string"
+          },
+          "target": {
+            "nullable": true,
+            "type": "string"
+          },
+          "title": {
+            "nullable": true,
+            "type": "string"
+          },
+          "url": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId"
         ],
         "type": "object"
       },

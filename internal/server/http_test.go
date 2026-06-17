@@ -145,6 +145,32 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 
 }
 
+func TestHTTPServerPluginRoutes(t *testing.T) {
+	plugins := &pluginRegistryFake{statuses: []app.PluginStatus{{ID: "github", Name: "GitHub", Valid: true}}}
+	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: plugins})
+	handler := server.NewHTTP(runtime)
+
+	listed := getJSON[[]protocol.PluginStatus](t, handler, "/v1/plugins", http.StatusOK)
+	if len(listed) != 1 || listed[0].ID != "github" {
+		t.Fatalf("plugins = %#v", listed)
+	}
+	trusted := postJSON[protocol.PluginStatus](t, handler, "/v1/plugins/github/trust", struct{}{}, http.StatusOK)
+	if !trusted.Trusted {
+		t.Fatalf("trusted = %#v", trusted)
+	}
+	project := postJSON[protocol.Project](t, handler, "/v1/projects", protocol.CreateProjectRequest{
+		Name:    "App",
+		RootDir: t.TempDir(),
+	}, http.StatusCreated)
+	attached := postJSON[protocol.Project](t, handler, "/v1/plugins/github/project-attachment-templates/github.issue", protocol.RunPluginProjectAttachmentTemplateRequest{
+		ProjectID: project.ID,
+		Values:    map[string]string{"repo": "owner/repo", "issue": "1"},
+	}, http.StatusCreated)
+	if len(attached.Attachments) != 1 || attached.Attachments[0].Provider != "github" || attached.Attachments[0].URL == "" {
+		t.Fatalf("attached = %#v", attached.Attachments)
+	}
+}
+
 func TestHTTPServerAgentHookIntegrationRoutes(t *testing.T) {
 	paths := testAgentHookPaths(t)
 	runtime := app.NewRuntime(app.RuntimeConfig{AgentHookPaths: &paths})
@@ -1103,6 +1129,46 @@ func (b *fakePTYBackend) Shutdown(context.Context) error {
 
 type fakeEventBus struct {
 	ch chan app.RuntimeEvent
+}
+
+type pluginRegistryFake struct {
+	statuses []app.PluginStatus
+}
+
+func (f *pluginRegistryFake) ListPlugins(context.Context) ([]app.PluginStatus, error) {
+	return f.statuses, nil
+}
+
+func (f *pluginRegistryFake) RescanPlugins(context.Context) ([]app.PluginStatus, error) {
+	return f.statuses, nil
+}
+
+func (f *pluginRegistryFake) TrustPlugin(_ context.Context, id string) (app.PluginStatus, error) {
+	status := app.PluginStatus{ID: id, Name: "GitHub", Valid: true, Trusted: true}
+	f.statuses = []app.PluginStatus{status}
+	return status, nil
+}
+
+func (f *pluginRegistryFake) UntrustPlugin(_ context.Context, id string) (app.PluginStatus, error) {
+	status := app.PluginStatus{ID: id, Name: "GitHub", Valid: true}
+	f.statuses = []app.PluginStatus{status}
+	return status, nil
+}
+
+func (f *pluginRegistryFake) RunProjectAttachmentTemplate(_ context.Context, req app.RunPluginProjectAttachmentTemplateRequest) (app.AddProjectAttachmentRequest, error) {
+	return app.AddProjectAttachmentRequest{
+		ProjectID:        req.ProjectID,
+		Kind:             workitem.AttachmentKindExternal,
+		Provider:         "github",
+		Target:           "owner/repo#1",
+		URL:              "https://github.com/owner/repo/issues/1",
+		Title:            "Issue",
+		IncludeInContext: true,
+	}, nil
+}
+
+func (f *pluginRegistryFake) ResolveProjectAttachmentProvider(string) app.ProjectContextResolver {
+	return nil
 }
 
 func newFakeEventBus() *fakeEventBus {

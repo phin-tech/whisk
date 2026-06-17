@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -25,7 +26,8 @@ type Settings struct {
 	// Keybindings holds user overrides for editable keyboard shortcuts, keyed by command id
 	// (e.g. "open-preferences") with an accelerator value (e.g. "Cmd+Shift+P"). Commands absent
 	// from the map use their built-in default; an empty map means all defaults.
-	Keybindings map[string]string `json:"keybindings,omitempty"`
+	Keybindings    map[string]string `json:"keybindings,omitempty"`
+	TrustedPlugins []string          `json:"trustedPlugins,omitempty"`
 }
 
 type Store struct {
@@ -50,6 +52,7 @@ func Normalize(settings Settings) (Settings, error) {
 		settings.HookLogEnabled = &enabled
 	}
 	settings.Keybindings = normalizeKeybindings(settings.Keybindings)
+	settings.TrustedPlugins = normalizeTrustedPlugins(settings.TrustedPlugins)
 	switch settings.StartupView {
 	case StartupViewSessions, StartupViewKanban:
 		return settings, nil
@@ -78,6 +81,21 @@ func normalizeKeybindings(bindings map[string]string) map[string]string {
 		return nil
 	}
 	return cleaned
+}
+
+func normalizeTrustedPlugins(ids []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func DefaultPath() (string, error) {

@@ -12,7 +12,7 @@
   import TerminalIcon from "@lucide/svelte/icons/terminal";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import X from "@lucide/svelte/icons/x";
-  import type { AgentHookIntegration, AgentHookLogStatus } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { AgentHookIntegration, AgentHookLogStatus, PluginStatus } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { agentHookIntegrationFor } from "./agentHooksView";
   import DaemonSettings from "./DaemonSettings.svelte";
   import KeybindingsPanel from "./KeybindingsPanel.svelte";
@@ -24,6 +24,7 @@
   export let terminalCursorBlink = true;
   export let keepDaemonAlive = true;
   export let agentHookIntegrations: AgentHookIntegration[] = [];
+  export let plugins: PluginStatus[] = [];
   export let agentHookLogStatus: AgentHookLogStatus | null = null;
   export let agentHookAction = "";
   export let agentHookNotice = "";
@@ -34,6 +35,8 @@
   export let onTerminalCursorBlink: (blink: boolean) => void;
   export let onKeepDaemonAlive: (keep: boolean) => void;
   export let onRefreshAgentHookIntegrations: () => void;
+  export let onRefreshPlugins: () => void;
+  export let onSetPluginTrusted: (pluginId: string, trusted: boolean) => void;
   export let onCheckAgentHookIntegration: (provider: string) => void;
   export let onInstallAgentHookIntegration: (provider: string) => void;
   export let onRemoveAgentHookIntegration: (provider: string) => void;
@@ -43,7 +46,7 @@
   export let onOpenAgentHookLog: () => void;
   export let onCopyAgentHookLogPath: (path: string) => void;
 
-  type Category = "general" | "sessions" | "terminal" | "shortcuts" | "daemon" | "integrations";
+  type Category = "general" | "sessions" | "terminal" | "shortcuts" | "daemon" | "plugins" | "integrations";
 
   let selected: Category = "general";
 
@@ -53,6 +56,7 @@
     { id: "terminal" as const, label: "Terminal", icon: TerminalIcon },
     { id: "shortcuts" as const, label: "Shortcuts", icon: Keyboard },
     { id: "daemon" as const, label: "Daemon", icon: Server },
+    { id: "plugins" as const, label: "Plugins", icon: Plug },
     { id: "integrations" as const, label: "Integrations", icon: Plug },
   ];
 
@@ -102,6 +106,16 @@
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  function pluginStatusClass(plugin: PluginStatus) {
+    if (!plugin.valid) return "border-red/30 bg-red/10 text-red";
+    if (plugin.trusted) return "border-green/35 bg-green/10 text-green";
+    return "border-border bg-bg-deep text-text-muted";
+  }
+
+  function pluginResolverLabels(plugin: PluginStatus) {
+    return (plugin.resolvers ?? []).map((resolver) => resolver.provider).join(", ");
   }
 
 </script>
@@ -280,6 +294,87 @@
           <KeybindingsPanel visible={visible && selected === "shortcuts"} />
         {:else if selected === "daemon"}
           <DaemonSettings {keepDaemonAlive} onKeepDaemonAlive={onKeepDaemonAlive} />
+        {:else if selected === "plugins"}
+          <div class="flex items-center justify-between gap-3 pb-3">
+            <div>
+              <div class="text-[13px]">Plugins</div>
+              <div class="mt-0.5 text-[11px] text-text-muted">
+                Daemon-loaded plugins from configured plugin directories.
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label="Rescan plugins"
+              class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+              on:click={onRefreshPlugins}
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+
+          <div class="divide-y divide-hairline border-y border-hairline">
+            {#if plugins.length === 0}
+              <div class="py-3 text-[12px] text-text-muted">No plugins found.</div>
+            {:else}
+              {#each plugins as plugin (plugin.id)}
+                <div class="grid gap-3 py-3 md:grid-cols-[minmax(180px,240px)_1fr_auto] md:items-start">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <Plug size={14} class="shrink-0 text-text-muted" />
+                      <span class="truncate text-[13px] font-medium text-text-primary">
+                        {plugin.name || plugin.id}
+                      </span>
+                    </div>
+                    <span class="mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider {pluginStatusClass(plugin)}">
+                      {plugin.valid ? (plugin.trusted ? "trusted" : "untrusted") : "invalid"}
+                    </span>
+                  </div>
+
+                  <div class="min-w-0 space-y-1 text-[11px] text-text-muted">
+                    <div class="truncate">
+                      ID <span class="font-mono text-text-secondary">{plugin.id}</span>
+                      {plugin.version ? ` · v${plugin.version}` : ""}
+                    </div>
+                    <div class="truncate">
+                      Path <span class="font-mono text-text-secondary">{plugin.dir}</span>
+                    </div>
+                    {#if pluginResolverLabels(plugin)}
+                      <div class="truncate">
+                        Resolvers <span class="font-mono text-text-secondary">{pluginResolverLabels(plugin)}</span>
+                      </div>
+                    {/if}
+                    {#if plugin.projectAttachmentTemplates?.length}
+                      <div class="truncate">
+                        Attachments
+                        <span class="text-text-secondary">
+                          {plugin.projectAttachmentTemplates.map((template) => template.label || template.id).join(", ")}
+                        </span>
+                      </div>
+                    {/if}
+                    {#if plugin.error}
+                      <div class="text-red">{plugin.error}</div>
+                    {/if}
+                  </div>
+
+                  <button
+                    type="button"
+                    aria-label={`${plugin.trusted ? "Untrust" : "Trust"} ${plugin.name || plugin.id}`}
+                    class="relative h-5 w-9 rounded-full border transition-all {plugin.trusted
+                      ? 'border-accent bg-accent-dim'
+                      : 'border-border bg-bg-deep'}"
+                    disabled={!plugin.valid}
+                    on:click={() => onSetPluginTrusted(plugin.id, !plugin.trusted)}
+                  >
+                    <div
+                      class="absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all {plugin.trusted
+                        ? 'left-[18px] bg-accent'
+                        : 'left-0.5 bg-text-secondary'}"
+                    ></div>
+                  </button>
+                </div>
+              {/each}
+            {/if}
+          </div>
         {:else if selected === "integrations"}
           <div class="flex items-center justify-between gap-3 pb-3">
             <div>

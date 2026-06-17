@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
+
+if TYPE_CHECKING:
+    from ..models.attachment_meta import AttachmentMeta
+
 
 T = TypeVar("T", bound="Attachment")
 
@@ -20,8 +24,13 @@ class Attachment:
         id (str):
         kind (str):
         scope (str):
+        include_in_context (bool | Unset):
+        meta (AttachmentMeta | Unset):
         note (str | Unset):
         path (str | Unset):
+        provider (str | Unset):
+        target (str | Unset):
+        title (str | Unset):
         url (str | Unset):
     """
 
@@ -29,8 +38,13 @@ class Attachment:
     id: str
     kind: str
     scope: str
+    include_in_context: bool | Unset = UNSET
+    meta: AttachmentMeta | Unset = UNSET
     note: str | Unset = UNSET
     path: str | Unset = UNSET
+    provider: str | Unset = UNSET
+    target: str | Unset = UNSET
+    title: str | Unset = UNSET
     url: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -43,9 +57,21 @@ class Attachment:
 
         scope = self.scope
 
+        include_in_context = self.include_in_context
+
+        meta: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.meta, Unset):
+            meta = self.meta.to_dict()
+
         note = self.note
 
         path = self.path
+
+        provider = self.provider
+
+        target = self.target
+
+        title = self.title
 
         url = self.url
 
@@ -59,10 +85,20 @@ class Attachment:
                 "scope": scope,
             }
         )
+        if include_in_context is not UNSET:
+            field_dict["includeInContext"] = include_in_context
+        if meta is not UNSET:
+            field_dict["meta"] = meta
         if note is not UNSET:
             field_dict["note"] = note
         if path is not UNSET:
             field_dict["path"] = path
+        if provider is not UNSET:
+            field_dict["provider"] = provider
+        if target is not UNSET:
+            field_dict["target"] = target
+        if title is not UNSET:
+            field_dict["title"] = title
         if url is not UNSET:
             field_dict["url"] = url
 
@@ -70,6 +106,8 @@ class Attachment:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.attachment_meta import AttachmentMeta
+
         d = dict(src_dict)
         created_at = datetime.datetime.fromisoformat(d.pop("createdAt"))
 
@@ -79,9 +117,24 @@ class Attachment:
 
         scope = d.pop("scope")
 
+        include_in_context = d.pop("includeInContext", UNSET)
+
+        _meta = d.pop("meta", UNSET)
+        meta: AttachmentMeta | Unset
+        if isinstance(_meta, Unset):
+            meta = UNSET
+        else:
+            meta = AttachmentMeta.from_dict(_meta)
+
         note = d.pop("note", UNSET)
 
         path = d.pop("path", UNSET)
+
+        provider = d.pop("provider", UNSET)
+
+        target = d.pop("target", UNSET)
+
+        title = d.pop("title", UNSET)
 
         url = d.pop("url", UNSET)
 
@@ -90,8 +143,13 @@ class Attachment:
             id=id,
             kind=kind,
             scope=scope,
+            include_in_context=include_in_context,
+            meta=meta,
             note=note,
             path=path,
+            provider=provider,
+            target=target,
+            title=title,
             url=url,
         )
 

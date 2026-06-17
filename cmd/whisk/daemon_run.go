@@ -12,16 +12,19 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/phin-tech/whisk/internal/adapters/bookmarkstore"
+	"github.com/phin-tech/whisk/internal/adapters/plugins"
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/adapters/sessionstore"
 	"github.com/phin-tech/whisk/internal/adapters/transcriptstore"
 	"github.com/phin-tech/whisk/internal/adapters/workitemstore"
 	"github.com/phin-tech/whisk/internal/adapters/worktrunk"
 	"github.com/phin-tech/whisk/internal/app"
+	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/events"
 	"github.com/phin-tech/whisk/internal/server"
 )
@@ -86,9 +89,18 @@ func serveDaemon(addr string) error {
 	if err != nil {
 		return err
 	}
+	settingsStore, err := appsettings.NewDefaultStore()
+	if err != nil {
+		return err
+	}
+	pluginManager, err := plugins.NewManager(pluginDirsFromEnv(), settingsStore)
+	if err != nil {
+		return err
+	}
 	runtime, err := app.NewRuntimeWithError(app.RuntimeConfig{
 		PTYBackend:      native.NewBackend(),
 		Worktrees:       worktrunk.NewBackend(nil),
+		Plugins:         pluginManager,
 		EventSink:       eventBus,
 		SessionStore:    store,
 		TranscriptStore: transcripts,
@@ -145,6 +157,32 @@ func serveDaemon(addr string) error {
 		return err
 	}
 	return <-serveErr
+}
+
+func pluginDirsFromEnv() []string {
+	raw := os.Getenv("WHISK_PLUGIN_DIRS")
+	if raw == "" {
+		return nil
+	}
+	parts := filepath.SplitList(raw)
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func trustedPluginsFromEnv() map[string]bool {
+	out := map[string]bool{}
+	for _, id := range strings.Split(os.Getenv("WHISK_TRUSTED_PLUGINS"), ",") {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			out[id] = true
+		}
+	}
+	return out
 }
 
 func validateListenAddr(addr string) error {

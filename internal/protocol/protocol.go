@@ -8,7 +8,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 16
+const DaemonAPIVersion = 17
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -298,6 +298,46 @@ type AgentHookIntegrationRequest struct {
 	Provider string `json:"provider"`
 }
 
+type PluginStatus struct {
+	ID                         string                      `json:"id"`
+	Name                       string                      `json:"name"`
+	Version                    string                      `json:"version"`
+	Dir                        string                      `json:"dir"`
+	ManifestPath               string                      `json:"manifestPath"`
+	Trusted                    bool                        `json:"trusted"`
+	Valid                      bool                        `json:"valid"`
+	Error                      string                      `json:"error,omitempty"`
+	Resolvers                  []PluginResolver            `json:"resolvers,omitempty"`
+	ProjectAttachmentTemplates []ProjectAttachmentTemplate `json:"projectAttachmentTemplates,omitempty"`
+}
+
+type PluginResolver struct {
+	Provider string   `json:"provider"`
+	Kinds    []string `json:"kinds,omitempty"`
+}
+
+type ProjectAttachmentTemplate struct {
+	ID       string                `json:"id"`
+	Label    string                `json:"label"`
+	Provider string                `json:"provider"`
+	Kind     string                `json:"kind"`
+	Fields   []PluginTemplateField `json:"fields,omitempty"`
+}
+
+type PluginTemplateField struct {
+	ID          string   `json:"id"`
+	Label       string   `json:"label"`
+	Type        string   `json:"type"`
+	Placeholder string   `json:"placeholder,omitempty"`
+	Required    bool     `json:"required,omitempty"`
+	Options     []string `json:"options,omitempty"`
+}
+
+type RunPluginProjectAttachmentTemplateRequest struct {
+	ProjectID string            `json:"projectId"`
+	Values    map[string]string `json:"values,omitempty"`
+}
+
 type AgentHookLogStatus struct {
 	Enabled           bool   `json:"enabled"`
 	ClearAfterSession bool   `json:"clearAfterSession"`
@@ -332,6 +372,24 @@ type ProjectDetail struct {
 	Runs      []WorkItemRun     `json:"runs"`
 }
 
+type ProjectContext struct {
+	ProjectID string               `json:"projectId"`
+	Items     []ProjectContextItem `json:"items"`
+}
+
+type ProjectContextItem struct {
+	AttachmentID string `json:"attachmentId"`
+	Kind         string `json:"kind"`
+	Provider     string `json:"provider,omitempty"`
+	Target       string `json:"target,omitempty"`
+	Title        string `json:"title,omitempty"`
+	Delivery     string `json:"delivery"`
+	ContentType  string `json:"contentType,omitempty"`
+	Content      string `json:"content,omitempty"`
+	SourceURL    string `json:"sourceUrl,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
 type CreateProjectRequest struct {
 	Name        string             `json:"name"`
 	Description string             `json:"description,omitempty"`
@@ -345,6 +403,36 @@ type UpdateProjectRequest struct {
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Slug        *string `json:"slug,omitempty"`
+}
+
+type AddProjectAttachmentRequest struct {
+	ProjectID        string                   `json:"projectId"`
+	Kind             string                   `json:"kind"`
+	Scope            string                   `json:"scope,omitempty"`
+	Title            string                   `json:"title,omitempty"`
+	Path             string                   `json:"path,omitempty"`
+	URL              string                   `json:"url,omitempty"`
+	Note             string                   `json:"note,omitempty"`
+	Provider         string                   `json:"provider,omitempty"`
+	Target           string                   `json:"target,omitempty"`
+	IncludeInContext bool                     `json:"includeInContext,omitempty"`
+	Meta             map[string]MetadataValue `json:"meta,omitempty"`
+}
+
+type UpdateProjectAttachmentRequest struct {
+	ProjectID        string                   `json:"projectId"`
+	Title            *string                  `json:"title,omitempty"`
+	Path             *string                  `json:"path,omitempty"`
+	URL              *string                  `json:"url,omitempty"`
+	Note             *string                  `json:"note,omitempty"`
+	Provider         *string                  `json:"provider,omitempty"`
+	Target           *string                  `json:"target,omitempty"`
+	IncludeInContext *bool                    `json:"includeInContext,omitempty"`
+	Meta             map[string]MetadataValue `json:"meta,omitempty"`
+}
+
+type DeleteProjectAttachmentRequest struct {
+	ProjectID string `json:"projectId"`
 }
 
 type CreateWorkItemRequest struct {

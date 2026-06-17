@@ -720,6 +720,33 @@ func (f *runtimeClientFake) GetProjectDetail(_ context.Context, projectID string
 	return f.projectDetail, nil
 }
 
+func (f *runtimeClientFake) AddProjectAttachment(_ context.Context, req protocol.AddProjectAttachmentRequest) (protocol.Project, error) {
+	project := f.projectDetail.Project
+	project.Attachments = append(project.Attachments, protocol.Attachment{ID: "att_01", Kind: req.Kind, Title: req.Title, Path: req.Path, URL: req.URL, Note: req.Note, Provider: req.Provider, Target: req.Target, IncludeInContext: req.IncludeInContext})
+	return project, nil
+}
+
+func (f *runtimeClientFake) UpdateProjectAttachment(_ context.Context, _ string, req protocol.UpdateProjectAttachmentRequest) (protocol.Project, error) {
+	project := f.projectDetail.Project
+	if len(project.Attachments) == 0 {
+		return project, nil
+	}
+	if req.Title != nil {
+		project.Attachments[0].Title = *req.Title
+	}
+	return project, nil
+}
+
+func (f *runtimeClientFake) DeleteProjectAttachment(context.Context, string, protocol.DeleteProjectAttachmentRequest) (protocol.Project, error) {
+	project := f.projectDetail.Project
+	project.Attachments = nil
+	return project, nil
+}
+
+func (f *runtimeClientFake) GetProjectContext(context.Context, string) (protocol.ProjectContext, error) {
+	return protocol.ProjectContext{ProjectID: f.projectDetail.Project.ID}, nil
+}
+
 func (f *runtimeClientFake) ListWorkflowTemplates(context.Context) ([]protocol.WorkflowTemplate, error) {
 	return f.workflowTemplates, nil
 }
@@ -931,6 +958,26 @@ func (f *runtimeClientFake) ClearAgentHookLog(context.Context) (protocol.AgentHo
 func (f *runtimeClientFake) OpenAgentHookLog(context.Context) (protocol.AgentHookLogStatus, error) {
 	f.openAgentHookLogCalled = true
 	return f.agentHookLog, nil
+}
+
+func (f *runtimeClientFake) ListPlugins(context.Context) ([]protocol.PluginStatus, error) {
+	return []protocol.PluginStatus{{ID: "github", Name: "GitHub", Trusted: true, Valid: true}}, nil
+}
+
+func (f *runtimeClientFake) RescanPlugins(context.Context) ([]protocol.PluginStatus, error) {
+	return []protocol.PluginStatus{{ID: "github", Name: "GitHub", Trusted: true, Valid: true}}, nil
+}
+
+func (f *runtimeClientFake) TrustPlugin(context.Context, string) (protocol.PluginStatus, error) {
+	return protocol.PluginStatus{ID: "github", Trusted: true, Valid: true}, nil
+}
+
+func (f *runtimeClientFake) UntrustPlugin(context.Context, string) (protocol.PluginStatus, error) {
+	return protocol.PluginStatus{ID: "github", Trusted: false, Valid: true}, nil
+}
+
+func (f *runtimeClientFake) RunPluginProjectAttachmentTemplate(context.Context, string, string, protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error) {
+	return protocol.Project{ID: "proj_01", Attachments: []protocol.Attachment{{ID: "att_01", Kind: "external", Provider: "github"}}}, nil
 }
 
 func (f *runtimeClientFake) CreateHTTPForward(_ context.Context, req protocol.CreateHTTPForwardRequest) (protocol.HTTPForward, error) {

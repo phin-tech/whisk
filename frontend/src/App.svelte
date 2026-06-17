@@ -14,12 +14,16 @@
     StatusEvent,
     Artifact,
     GateReport,
+    PluginStatus,
+    ProjectAttachmentTemplate,
+    MetadataValue,
     Question,
     WorkItem,
     WorkItemRun,
     WorkflowEvent,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
+    AddProjectAttachment,
     AddWorkItemAttachment,
     AnswerQuestion,
     ApproveDone,
@@ -35,6 +39,7 @@
     CreateWorkItem,
     CreateWorktree,
     DaemonStatus as LoadDaemonStatus,
+    DeleteProjectAttachment,
     DeleteWorkItem,
     CheckAgentHookIntegration,
     AgentHookLogStatus as LoadAgentHookLogStatus,
@@ -65,7 +70,9 @@
     OpenAgentHookLog,
     QueueExecution,
     RemoveAgentHookIntegration,
+    RescanPlugins,
     ResolveAgentBridgeApproval,
+    RunPluginProjectAttachmentTemplate,
     SaveAppSettings,
     SetAgentHookLogSettings,
     SetSessionProject,
@@ -74,7 +81,11 @@
     SubmitDraftPlan,
     SubmitReviewFeedback,
     SyncSessionMenu,
+    TrustPlugin,
+    UntrustPlugin,
     UpdateProject,
+    UpdateProjectAttachment,
+    ListPlugins,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
   import CommandPalette from "./CommandPalette.svelte";
@@ -120,6 +131,7 @@
   let statusEvents: StatusEvent[] = [];
   let agentBridgeApprovals: AgentBridgeApproval[] = [];
   let agentBridgeEvents: AgentBridgeEvent[] = [];
+  let plugins: PluginStatus[] = [];
   let agentHookIntegrations: AgentHookIntegration[] = [];
   let agentHookLogStatus: AgentHookLogStatus | null = null;
   let agentHookAction = "";
@@ -169,6 +181,11 @@
   $: activeSessionWindow = activeWindow(activeSession, activePaneId);
   $: visiblePTYIds = visiblePtyIds(sessions, activeSessionId, activePaneId);
   $: notificationCount = notificationBadgeCount(statusEvents) + agentBridgeApprovals.length + agentBridgeEvents.length;
+  $: projectAttachmentTemplates = plugins.flatMap((plugin) =>
+    plugin.trusted && plugin.valid
+      ? (plugin.projectAttachmentTemplates ?? []).map((template) => ({ ...template, pluginId: plugin.id }))
+      : [],
+  );
   $: commands = [
     {
       id: "palette.open",
@@ -617,6 +634,29 @@
     clearHookLogAfterSession = logStatus.clearAfterSession;
   }
 
+  async function refreshPlugins() {
+    plugins = await ListPlugins();
+  }
+
+  async function rescanPlugins() {
+    error = "";
+    try {
+      plugins = await RescanPlugins();
+    } catch (err) {
+      error = `Rescan plugins failed: ${backendError(err)}`;
+    }
+  }
+
+  async function setPluginTrusted(pluginId: string, trusted: boolean) {
+    error = "";
+    try {
+      const status = trusted ? await TrustPlugin(pluginId) : await UntrustPlugin(pluginId);
+      plugins = plugins.map((plugin) => (plugin.id === pluginId ? status : plugin));
+    } catch (err) {
+      error = `Update plugin trust failed: ${backendError(err)}`;
+    }
+  }
+
   async function setHookLogEnabled(enabled: boolean) {
     hookLogEnabled = enabled;
     await runAgentHookAction("hook-log:settings", async () => {
@@ -1011,6 +1051,92 @@
     }
   }
 
+  async function addProjectAttachment(request: {
+    projectId: string;
+    kind: string;
+    title: string;
+    path: string;
+    url: string;
+    note: string;
+    provider: string;
+    target: string;
+    includeInContext: boolean;
+  }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await AddProjectAttachment({
+        ...request,
+        scope: request.kind === "file" ? "external" : "",
+      });
+      await Promise.all([refreshProjects(), refreshProjectDetail()]);
+    } catch (err) {
+      error = `Add attachment failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function deleteProjectAttachment(projectId: string, attachmentId: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await DeleteProjectAttachment(attachmentId, { projectId });
+      await Promise.all([refreshProjects(), refreshProjectDetail()]);
+    } catch (err) {
+      error = `Delete attachment failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function updateProjectAttachment(
+    projectId: string,
+    attachmentId: string,
+    request: {
+      title: string;
+      path: string;
+      url: string;
+      note: string;
+      provider: string;
+      target: string;
+      includeInContext: boolean;
+      meta?: Record<string, MetadataValue>;
+    },
+  ) {
+    error = "";
+    loadingWork = true;
+    try {
+      await UpdateProjectAttachment(attachmentId, { ...request, projectId });
+      await Promise.all([refreshProjects(), refreshProjectDetail()]);
+    } catch (err) {
+      error = `Update attachment failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function runPluginProjectAttachmentTemplate(request: {
+    pluginId: string;
+    templateId: string;
+    projectId: string;
+    values: Record<string, string>;
+  }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await RunPluginProjectAttachmentTemplate(request.pluginId, request.templateId, {
+        projectId: request.projectId,
+        values: request.values,
+      });
+      await Promise.all([refreshProjects(), refreshProjectDetail()]);
+    } catch (err) {
+      error = `Add plugin attachment failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
   async function deleteWorkItem(workItemId: string) {
     error = "";
     loadingWork = true;
@@ -1273,7 +1399,7 @@
   function toggleSettings() {
     settingsOpen = !settingsOpen;
     if (!settingsOpen) return;
-    void refreshAgentHookIntegrations().catch((err) => {
+    void Promise.all([refreshAgentHookIntegrations(), refreshPlugins()]).catch((err) => {
       error = backendError(err);
     });
   }
@@ -1312,6 +1438,7 @@
       })
       .then(refreshSessions)
       .then(refreshPTYs)
+      .then(refreshPlugins)
       .then(refreshProjects)
       .then(refreshStatusEvents)
       .then(refreshVisibleOutput)
@@ -1450,6 +1577,11 @@
             onCreateWorkItem={createWorkItem}
             onDeleteWorkItem={deleteWorkItem}
             onOpenRunTerminal={(run) => void openWorkItemRun(run)}
+            pluginAttachmentTemplates={projectAttachmentTemplates}
+            onAddProjectAttachment={addProjectAttachment}
+            onRunPluginProjectAttachmentTemplate={runPluginProjectAttachmentTemplate}
+            onUpdateProjectAttachment={updateProjectAttachment}
+            onDeleteProjectAttachment={deleteProjectAttachment}
           />
         {:else if activeMain === "work"}
           <WorkBoard
@@ -1548,6 +1680,7 @@
           {terminalCursorBlink}
           {keepDaemonAlive}
           {agentHookIntegrations}
+          {plugins}
           {agentHookLogStatus}
           {agentHookAction}
           {agentHookNotice}
@@ -1558,6 +1691,8 @@
           onTerminalCursorBlink={(blink) => (terminalCursorBlink = blink)}
           onKeepDaemonAlive={(keep) => void setKeepDaemonAlive(keep)}
           onRefreshAgentHookIntegrations={() => void refreshAgentHookIntegrations()}
+          onRefreshPlugins={() => void rescanPlugins()}
+          onSetPluginTrusted={(pluginId, trusted) => void setPluginTrusted(pluginId, trusted)}
           onCheckAgentHookIntegration={(provider) => void checkAgentHookIntegration(provider)}
           onInstallAgentHookIntegration={(provider) => void installAgentHookIntegration(provider)}
           onRemoveAgentHookIntegration={(provider) => void removeAgentHookIntegration(provider)}

@@ -17,7 +17,7 @@ import (
 
 func runProject(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk project <list|create|show|update>")
+		return fmt.Errorf("usage: whisk project <list|create|show|update|attach|context>")
 	}
 	switch args[0] {
 	case "list":
@@ -28,8 +28,12 @@ func runProject(args []string) error {
 		return runProjectShow(args[1:])
 	case "update":
 		return runProjectUpdate(args[1:])
+	case "attach":
+		return runProjectAttach(args[1:])
+	case "context":
+		return runProjectContext(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk project <list|create|show|update>")
+		return fmt.Errorf("usage: whisk project <list|create|show|update|attach|context>")
 	}
 }
 
@@ -154,6 +158,83 @@ func runProjectUpdate(args []string) error {
 		return printJSON(project)
 	}
 	fmt.Println(project.ID)
+	return nil
+}
+
+func runProjectAttach(args []string) error {
+	flags := flag.NewFlagSet("project attach", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	kind := flags.String("kind", workitem.AttachmentKindFile, "attachment kind: file, url, note, external")
+	scope := flags.String("scope", "", "attachment scope")
+	title := flags.String("title", "", "attachment title")
+	path := flags.String("path", "", "file path")
+	attachmentURL := flags.String("attachment-url", "", "attachment URL")
+	note := flags.String("note", "", "note content")
+	provider := flags.String("provider", "", "external provider")
+	target := flags.String("target", "", "external target")
+	includeContext := flags.Bool("context", false, "include in project context")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return fmt.Errorf("usage: whisk project attach <project-id> -kind file|url|note|external [-scope project|worktree|external] [-title title] [-path path] [-attachment-url url] [-note text] [-provider name] [-target id] [-context] [-json] [-url daemon-url]")
+	}
+	if *scope == "" && *kind == workitem.AttachmentKindFile {
+		*scope = workitem.AttachmentScopeExternal
+	}
+	req := protocol.AddProjectAttachmentRequest{
+		ProjectID:        flags.Arg(0),
+		Kind:             *kind,
+		Scope:            *scope,
+		Title:            *title,
+		Path:             *path,
+		URL:              *attachmentURL,
+		Note:             *note,
+		Provider:         *provider,
+		Target:           *target,
+		IncludeInContext: *includeContext,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	project, err := client.NewHTTP(*baseURL, nil).AddProjectAttachment(ctx, req)
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(project)
+	}
+	if len(project.Attachments) == 0 {
+		return nil
+	}
+	fmt.Println(project.Attachments[len(project.Attachments)-1].ID)
+	return nil
+}
+
+func runProjectContext(args []string) error {
+	flags := flag.NewFlagSet("project context", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return fmt.Errorf("usage: whisk project context <project-id> [-json] [-url http://127.0.0.1:8787]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	projectContext, err := client.NewHTTP(*baseURL, nil).GetProjectContext(ctx, flags.Arg(0))
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(projectContext)
+	}
+	for _, item := range projectContext.Items {
+		fmt.Printf("%s\t%s\t%s\t%s\n", item.AttachmentID, item.Kind, item.Delivery, item.Title)
+	}
 	return nil
 }
 

@@ -69,9 +69,14 @@ export class Attachment {
     "id": string;
     "kind": string;
     "scope": string;
+    "title"?: string;
     "path"?: string;
     "url"?: string;
     "note"?: string;
+    "provider"?: string;
+    "target"?: string;
+    "includeInContext"?: boolean;
+    "meta"?: { [_ in string]?: MetadataValue };
     "createdAt": time$0.Time;
 
     /** Creates a new Attachment instance. */
@@ -96,7 +101,11 @@ export class Attachment {
      * Creates a new Attachment instance from a string or object.
      */
     static createFrom($$source: any = {}): Attachment {
+        const $$createField10_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("meta" in $$parsedSource) {
+            $$parsedSource["meta"] = $$createField10_0($$parsedSource["meta"]);
+        }
         return new Attachment($$parsedSource as Partial<Attachment>);
     }
 }
@@ -256,6 +265,7 @@ export class Project {
     "rootDir": string;
     "workflow": ProjectWorkflow;
     "preferences": ProjectPreferences;
+    "attachments": Attachment[];
     "metadata"?: { [_ in string]?: MetadataValue };
     "nextWorkItemNumber": number;
     "createdAt": time$0.Time;
@@ -281,6 +291,9 @@ export class Project {
         if (!("preferences" in $$source)) {
             this["preferences"] = (new ProjectPreferences());
         }
+        if (!("attachments" in $$source)) {
+            this["attachments"] = [];
+        }
         if (!("nextWorkItemNumber" in $$source)) {
             this["nextWorkItemNumber"] = 0;
         }
@@ -300,7 +313,8 @@ export class Project {
     static createFrom($$source: any = {}): Project {
         const $$createField5_0 = $$createType2;
         const $$createField6_0 = $$createType3;
-        const $$createField7_0 = $$createType1;
+        const $$createField7_0 = $$createType5;
+        const $$createField8_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workflow" in $$parsedSource) {
             $$parsedSource["workflow"] = $$createField5_0($$parsedSource["workflow"]);
@@ -308,8 +322,11 @@ export class Project {
         if ("preferences" in $$parsedSource) {
             $$parsedSource["preferences"] = $$createField6_0($$parsedSource["preferences"]);
         }
+        if ("attachments" in $$parsedSource) {
+            $$parsedSource["attachments"] = $$createField7_0($$parsedSource["attachments"]);
+        }
         if ("metadata" in $$parsedSource) {
-            $$parsedSource["metadata"] = $$createField7_0($$parsedSource["metadata"]);
+            $$parsedSource["metadata"] = $$createField8_0($$parsedSource["metadata"]);
         }
         return new Project($$parsedSource as Partial<Project>);
     }
@@ -337,8 +354,8 @@ export class ProjectPreferences {
      * Creates a new ProjectPreferences instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectPreferences {
-        const $$createField2_0 = $$createType4;
-        const $$createField3_0 = $$createType6;
+        const $$createField2_0 = $$createType6;
+        const $$createField3_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("defaultPhaseAgents" in $$parsedSource) {
             $$parsedSource["defaultPhaseAgents"] = $$createField2_0($$parsedSource["defaultPhaseAgents"]);
@@ -382,8 +399,8 @@ export class ProjectWorkflow {
      * Creates a new ProjectWorkflow instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectWorkflow {
-        const $$createField3_0 = $$createType8;
-        const $$createField4_0 = $$createType10;
+        const $$createField3_0 = $$createType10;
+        const $$createField4_0 = $$createType12;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("stages" in $$parsedSource) {
             $$parsedSource["stages"] = $$createField3_0($$parsedSource["stages"]);
@@ -662,8 +679,8 @@ export class WorkItem {
      * Creates a new WorkItem instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkItem {
-        const $$createField10_0 = $$createType12;
-        const $$createField11_0 = $$createType14;
+        const $$createField10_0 = $$createType14;
+        const $$createField11_0 = $$createType5;
         const $$createField12_0 = $$createType1;
         const $$createField13_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
@@ -862,8 +879,8 @@ export class WorkflowTemplate {
      * Creates a new WorkflowTemplate instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkflowTemplate {
-        const $$createField3_0 = $$createType8;
-        const $$createField4_0 = $$createType10;
+        const $$createField3_0 = $$createType10;
+        const $$createField4_0 = $$createType12;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("stages" in $$parsedSource) {
             $$parsedSource["stages"] = $$createField3_0($$parsedSource["stages"]);
@@ -913,17 +930,17 @@ const $$createType0 = MetadataValue.createFrom;
 const $$createType1 = $Create.Map($Create.Any, $$createType0);
 const $$createType2 = ProjectWorkflow.createFrom;
 const $$createType3 = ProjectPreferences.createFrom;
-const $$createType4 = $Create.Map($Create.Any, $Create.Any);
-const $$createType5 = GateConfig.createFrom;
-const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = WorkflowStage.createFrom;
+const $$createType4 = Attachment.createFrom;
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = $Create.Map($Create.Any, $Create.Any);
+const $$createType7 = GateConfig.createFrom;
 const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = TransitionRule.createFrom;
+const $$createType9 = WorkflowStage.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = WorktreeBinding.createFrom;
-const $$createType12 = $Create.Nullable($$createType11);
-const $$createType13 = Attachment.createFrom;
-const $$createType14 = $Create.Array($$createType13);
+const $$createType11 = TransitionRule.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = WorktreeBinding.createFrom;
+const $$createType14 = $Create.Nullable($$createType13);
 const $$createType15 = HistoryEvent.createFrom;
 const $$createType16 = $Create.Array($$createType15);
 const $$createType17 = RunEvent.createFrom;

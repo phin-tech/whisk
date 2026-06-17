@@ -363,13 +363,22 @@ tasks:
     cmds:
       - task: build:daemon
       - task: build:cli
-      - 'echo "task dev:app using WHISKD_URL=http://{{.DEV_DAEMON_ADDR}} WHISKD_PATH={{.BIN_DIR}}/whisk WHISK_CLI={{.BIN_DIR}}/whisk"'
+      - 'echo "task dev:app using WHISKD_URL=http://{{.DEV_DAEMON_ADDR}} WHISKD_PATH={{.BIN_DIR}}/whisk WHISK_CLI={{.BIN_DIR}}/whisk WHISK_PLUGIN_DIRS={{.ROOT_DIR}}/plugins/github-issues"'
       - 'echo "The app will reuse a compatible running sidecar or start one if needed."'
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
     env:
       WHISKD_PATH: "{{.BIN_DIR}}/whisk"
       WHISK_CLI: "{{.BIN_DIR}}/whisk"
       WHISKD_URL: "http://{{.DEV_DAEMON_ADDR}}"
+      WHISK_PLUGIN_DIRS: "{{.ROOT_DIR}}/plugins/github-issues"
+
+  dev:app:restart:
+    desc: Restarts the development daemon, then runs the macOS app
+    summary: Stops the dev daemon at DEV_DAEMON_ADDR before delegating to dev:app
+    cmds:
+      - task: build:daemon
+      - '{{.BIN_DIR}}/whisk daemon stop -url http://{{.DEV_DAEMON_ADDR}}'
+      - task: dev:app
 
   setup:docker:
     summary: Builds Docker image for cross-compilation

@@ -1603,3 +1603,51 @@ func (b *attachableMemoryPTYBackend) exit(ptyID string, code int) {
 	b.records[ptyID] = record
 	b.events[ptyID] <- app.PTYEvent{Kind: app.PTYExit, Code: &code}
 }
+
+func TestRuntimeProjectContextResolvesIncludedAttachments(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		ContextResolvers: map[string]app.ProjectContextResolver{
+			"github": staticProjectContextResolver{},
+		},
+	})
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: root})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	if _, err := runtime.AddProjectAttachment(ctx, app.AddProjectAttachmentRequest{ProjectID: project.ID, Kind: workitem.AttachmentKindNote, Title: "Note", Note: "Remember this.", IncludeInContext: true}); err != nil {
+		t.Fatalf("add note: %v", err)
+	}
+	if _, err := runtime.AddProjectAttachment(ctx, app.AddProjectAttachmentRequest{ProjectID: project.ID, Kind: workitem.AttachmentKindExternal, Provider: "github", Target: "owner/repo#1", IncludeInContext: true}); err != nil {
+		t.Fatalf("add external: %v", err)
+	}
+	if _, err := runtime.AddProjectAttachment(ctx, app.AddProjectAttachmentRequest{ProjectID: project.ID, Kind: workitem.AttachmentKindURL, URL: "https://example.test"}); err != nil {
+		t.Fatalf("add skipped url: %v", err)
+	}
+
+	contextBundle, err := runtime.ProjectContext(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("project context: %v", err)
+	}
+	if len(contextBundle.Items) != 2 {
+		t.Fatalf("context = %#v", contextBundle)
+	}
+	if contextBundle.Items[0].Delivery != "inline" || contextBundle.Items[0].Content != "Remember this." {
+		t.Fatalf("note context = %#v", contextBundle.Items[0])
+	}
+	if contextBundle.Items[1].Delivery != "inline" || contextBundle.Items[1].Content != "resolved issue" {
+		t.Fatalf("external context = %#v", contextBundle.Items[1])
+	}
+}
+
+type staticProjectContextResolver struct{}
+
+func (staticProjectContextResolver) ResolveProjectAttachment(context.Context, app.ResolveProjectAttachmentRequest) (app.ResolvedProjectAttachment, error) {
+	return app.ResolvedProjectAttachment{Title: "GitHub issue", Delivery: "inline", ContentType: "text/markdown", Content: "resolved issue", SourceURL: "https://github.com/owner/repo/issues/1"}, nil
+}

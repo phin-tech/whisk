@@ -15,6 +15,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/client"
+	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/server"
 )
@@ -313,6 +314,36 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	}
 }
 
+func TestHTTPClientDrivesPluginAPI(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: &pluginRegistryFake{statuses: []app.PluginStatus{{ID: "github", Name: "GitHub", Valid: true}}}})
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	plugins, err := daemon.ListPlugins(ctx)
+	if err != nil || len(plugins) != 1 || plugins[0].ID != "github" {
+		t.Fatalf("plugins = %#v, err = %v", plugins, err)
+	}
+	trusted, err := daemon.TrustPlugin(ctx, "github")
+	if err != nil || !trusted.Trusted {
+		t.Fatalf("trust = %#v, err = %v", trusted, err)
+	}
+	project, err := daemon.CreateProject(ctx, protocol.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	attached, err := daemon.RunPluginProjectAttachmentTemplate(ctx, "github", "github.issue", protocol.RunPluginProjectAttachmentTemplateRequest{
+		ProjectID: project.ID,
+		Values:    map[string]string{"repo": "owner/repo", "issue": "1"},
+	})
+	if err != nil || len(attached.Attachments) != 1 || attached.Attachments[0].Provider != "github" {
+		t.Fatalf("attached = %#v, err = %v", attached.Attachments, err)
+	}
+}
+
 func TestHTTPClientAgentHookIntegrations(t *testing.T) {
 	paths := clientTestAgentHookPaths(t)
 	runtime := app.NewRuntime(app.RuntimeConfig{AgentHookPaths: &paths})
@@ -469,6 +500,46 @@ func (b *fakeEventBus) Next(ctx context.Context) (app.RuntimeEvent, error) {
 	case <-ctx.Done():
 		return app.RuntimeEvent{}, ctx.Err()
 	}
+}
+
+type pluginRegistryFake struct {
+	statuses []app.PluginStatus
+}
+
+func (f *pluginRegistryFake) ListPlugins(context.Context) ([]app.PluginStatus, error) {
+	return f.statuses, nil
+}
+
+func (f *pluginRegistryFake) RescanPlugins(context.Context) ([]app.PluginStatus, error) {
+	return f.statuses, nil
+}
+
+func (f *pluginRegistryFake) TrustPlugin(_ context.Context, id string) (app.PluginStatus, error) {
+	status := app.PluginStatus{ID: id, Name: "GitHub", Valid: true, Trusted: true}
+	f.statuses = []app.PluginStatus{status}
+	return status, nil
+}
+
+func (f *pluginRegistryFake) UntrustPlugin(_ context.Context, id string) (app.PluginStatus, error) {
+	status := app.PluginStatus{ID: id, Name: "GitHub", Valid: true}
+	f.statuses = []app.PluginStatus{status}
+	return status, nil
+}
+
+func (f *pluginRegistryFake) RunProjectAttachmentTemplate(_ context.Context, req app.RunPluginProjectAttachmentTemplateRequest) (app.AddProjectAttachmentRequest, error) {
+	return app.AddProjectAttachmentRequest{
+		ProjectID:        req.ProjectID,
+		Kind:             workitem.AttachmentKindExternal,
+		Provider:         "github",
+		Target:           "owner/repo#1",
+		URL:              "https://github.com/owner/repo/issues/1",
+		Title:            "Issue",
+		IncludeInContext: true,
+	}, nil
+}
+
+func (f *pluginRegistryFake) ResolveProjectAttachmentProvider(string) app.ProjectContextResolver {
+	return nil
 }
 
 func TestHTTPClientReportsDaemonErrors(t *testing.T) {

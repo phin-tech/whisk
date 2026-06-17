@@ -44,9 +44,10 @@ const (
 	StatusScopePTY     = "pty"
 	StatusScopeSession = "session"
 
-	AttachmentKindFile = "file"
-	AttachmentKindURL  = "url"
-	AttachmentKindNote = "note"
+	AttachmentKindFile     = "file"
+	AttachmentKindURL      = "url"
+	AttachmentKindNote     = "note"
+	AttachmentKindExternal = "external"
 
 	AttachmentScopeProject  = "project"
 	AttachmentScopeWorktree = "worktree"
@@ -118,6 +119,7 @@ type Project struct {
 	RootDir            string                   `json:"rootDir"`
 	Workflow           ProjectWorkflow          `json:"workflow"`
 	Preferences        ProjectPreferences       `json:"preferences"`
+	Attachments        []Attachment             `json:"attachments"`
 	Metadata           map[string]MetadataValue `json:"metadata,omitempty"`
 	NextWorkItemNumber int                      `json:"nextWorkItemNumber"`
 	CreatedAt          time.Time                `json:"createdAt"`
@@ -317,13 +319,18 @@ type WorktreeBinding struct {
 }
 
 type Attachment struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	Scope     string    `json:"scope"`
-	Path      string    `json:"path,omitempty"`
-	URL       string    `json:"url,omitempty"`
-	Note      string    `json:"note,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID               string                   `json:"id"`
+	Kind             string                   `json:"kind"`
+	Scope            string                   `json:"scope"`
+	Title            string                   `json:"title,omitempty"`
+	Path             string                   `json:"path,omitempty"`
+	URL              string                   `json:"url,omitempty"`
+	Note             string                   `json:"note,omitempty"`
+	Provider         string                   `json:"provider,omitempty"`
+	Target           string                   `json:"target,omitempty"`
+	IncludeInContext bool                     `json:"includeInContext,omitempty"`
+	Meta             map[string]MetadataValue `json:"meta,omitempty"`
+	CreatedAt        time.Time                `json:"createdAt"`
 }
 
 type HistoryEvent struct {
@@ -383,6 +390,42 @@ type UpdateProject struct {
 	Description *string
 	Slug        *string
 	Now         time.Time
+}
+
+type AddProjectAttachment struct {
+	ID               string
+	ProjectID        string
+	Kind             string
+	Scope            string
+	Title            string
+	Path             string
+	URL              string
+	Note             string
+	Provider         string
+	Target           string
+	IncludeInContext bool
+	Meta             map[string]MetadataValue
+	Now              time.Time
+}
+
+type UpdateProjectAttachment struct {
+	ID               string
+	ProjectID        string
+	Title            *string
+	Path             *string
+	URL              *string
+	Note             *string
+	Provider         *string
+	Target           *string
+	IncludeInContext *bool
+	Meta             map[string]MetadataValue
+	Now              time.Time
+}
+
+type DeleteProjectAttachment struct {
+	ID        string
+	ProjectID string
+	Now       time.Time
 }
 
 type CreateWorkItem struct {
@@ -1127,6 +1170,107 @@ func (s *State) UpdateProject(req UpdateProject) (Project, error) {
 	if err := validateProject(project); err != nil {
 		return Project{}, err
 	}
+	s.projects[project.ID] = project
+	return cloneProject(project), nil
+}
+
+func (s *State) AddProjectAttachment(req AddProjectAttachment) (Project, error) {
+	project, ok := s.projects[req.ProjectID]
+	if !ok {
+		return Project{}, fmt.Errorf("project %s not found", req.ProjectID)
+	}
+	attachment, err := validateAttachment(Attachment{
+		ID:               req.ID,
+		Kind:             req.Kind,
+		Scope:            req.Scope,
+		Title:            req.Title,
+		Path:             req.Path,
+		URL:              req.URL,
+		Note:             req.Note,
+		Provider:         req.Provider,
+		Target:           req.Target,
+		IncludeInContext: req.IncludeInContext,
+		Meta:             req.Meta,
+		CreatedAt:        req.Now,
+	})
+	if err != nil {
+		return Project{}, err
+	}
+	project.Attachments = append(project.Attachments, attachment)
+	project.UpdatedAt = req.Now
+	s.projects[project.ID] = project
+	return cloneProject(project), nil
+}
+
+func (s *State) UpdateProjectAttachment(req UpdateProjectAttachment) (Project, error) {
+	project, ok := s.projects[req.ProjectID]
+	if !ok {
+		return Project{}, fmt.Errorf("project %s not found", req.ProjectID)
+	}
+	index := -1
+	for i, attachment := range project.Attachments {
+		if attachment.ID == req.ID {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		return Project{}, fmt.Errorf("attachment %s not found", req.ID)
+	}
+	attachment := project.Attachments[index]
+	if req.Title != nil {
+		attachment.Title = *req.Title
+	}
+	if req.Path != nil {
+		attachment.Path = *req.Path
+	}
+	if req.URL != nil {
+		attachment.URL = *req.URL
+	}
+	if req.Note != nil {
+		attachment.Note = *req.Note
+	}
+	if req.Provider != nil {
+		attachment.Provider = *req.Provider
+	}
+	if req.Target != nil {
+		attachment.Target = *req.Target
+	}
+	if req.IncludeInContext != nil {
+		attachment.IncludeInContext = *req.IncludeInContext
+	}
+	if req.Meta != nil {
+		attachment.Meta = req.Meta
+	}
+	validated, err := validateAttachment(attachment)
+	if err != nil {
+		return Project{}, err
+	}
+	project.Attachments[index] = validated
+	project.UpdatedAt = req.Now
+	s.projects[project.ID] = project
+	return cloneProject(project), nil
+}
+
+func (s *State) DeleteProjectAttachment(req DeleteProjectAttachment) (Project, error) {
+	project, ok := s.projects[req.ProjectID]
+	if !ok {
+		return Project{}, fmt.Errorf("project %s not found", req.ProjectID)
+	}
+	next := project.Attachments[:0]
+	found := false
+	for _, attachment := range project.Attachments {
+		if attachment.ID == req.ID {
+			found = true
+			continue
+		}
+		next = append(next, attachment)
+	}
+	if !found {
+		return Project{}, fmt.Errorf("attachment %s not found", req.ID)
+	}
+	project.Attachments = next
+	project.UpdatedAt = req.Now
 	s.projects[project.ID] = project
 	return cloneProject(project), nil
 }
@@ -2248,6 +2392,11 @@ func validateProject(project Project) error {
 	if err := validateMetadataMap(project.Metadata); err != nil {
 		return err
 	}
+	for _, attachment := range project.Attachments {
+		if _, err := validateAttachment(attachment); err != nil {
+			return err
+		}
+	}
 	return validateWorkflowTemplate(WorkflowTemplate{
 		ID:     project.Workflow.ID,
 		Name:   project.Workflow.Name,
@@ -2458,17 +2607,36 @@ func validateAttachment(attachment Attachment) (Attachment, error) {
 		if filepath.IsAbs(attachment.Path) && attachment.Scope != AttachmentScopeExternal {
 			return Attachment{}, fmt.Errorf("absolute attachment path requires external scope")
 		}
+		attachment.Title = strings.TrimSpace(attachment.Title)
 		attachment.Path = filepath.Clean(attachment.Path)
 	case AttachmentKindURL:
 		if strings.TrimSpace(attachment.URL) == "" {
 			return Attachment{}, fmt.Errorf("attachment url required")
 		}
+		attachment.Title = strings.TrimSpace(attachment.Title)
+		attachment.URL = strings.TrimSpace(attachment.URL)
 	case AttachmentKindNote:
 		if strings.TrimSpace(attachment.Note) == "" {
 			return Attachment{}, fmt.Errorf("attachment note required")
 		}
+		attachment.Title = strings.TrimSpace(attachment.Title)
+		attachment.Note = strings.TrimSpace(attachment.Note)
+	case AttachmentKindExternal:
+		attachment.Provider = strings.TrimSpace(attachment.Provider)
+		attachment.Target = strings.TrimSpace(attachment.Target)
+		attachment.Title = strings.TrimSpace(attachment.Title)
+		attachment.URL = strings.TrimSpace(attachment.URL)
+		if attachment.Provider == "" {
+			return Attachment{}, fmt.Errorf("attachment provider required")
+		}
+		if attachment.Target == "" {
+			return Attachment{}, fmt.Errorf("attachment target required")
+		}
 	default:
 		return Attachment{}, fmt.Errorf("unsupported attachment kind %s", attachment.Kind)
+	}
+	if err := validateMetadataMap(attachment.Meta); err != nil {
+		return Attachment{}, err
 	}
 	return attachment, nil
 }
@@ -2648,6 +2816,7 @@ func cloneProject(project Project) Project {
 	project.Workflow.Stages = cloneStages(project.Workflow.Stages)
 	project.Workflow.TransitionRules = cloneTransitionRules(project.Workflow.TransitionRules)
 	project.Preferences = defaultProjectPreferences(project.Preferences)
+	project.Attachments = append([]Attachment(nil), project.Attachments...)
 	project.Metadata = cloneMetadata(project.Metadata)
 	return project
 }

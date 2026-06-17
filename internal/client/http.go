@@ -153,6 +153,39 @@ func (c *HTTPClient) OpenAgentHookLog(ctx context.Context) (protocol.AgentHookLo
 	return status, err
 }
 
+func (c *HTTPClient) ListPlugins(ctx context.Context) ([]protocol.PluginStatus, error) {
+	var plugins []protocol.PluginStatus
+	err := c.get(ctx, "/v1/plugins", nil, &plugins)
+	return plugins, err
+}
+
+func (c *HTTPClient) RescanPlugins(ctx context.Context) ([]protocol.PluginStatus, error) {
+	var plugins []protocol.PluginStatus
+	err := c.post(ctx, "/v1/plugins/rescan", struct{}{}, &plugins)
+	return plugins, err
+}
+
+func (c *HTTPClient) TrustPlugin(ctx context.Context, id string) (protocol.PluginStatus, error) {
+	var status protocol.PluginStatus
+	path := "/v1/plugins/" + url.PathEscape(id) + "/trust"
+	err := c.post(ctx, path, struct{}{}, &status)
+	return status, err
+}
+
+func (c *HTTPClient) UntrustPlugin(ctx context.Context, id string) (protocol.PluginStatus, error) {
+	var status protocol.PluginStatus
+	path := "/v1/plugins/" + url.PathEscape(id) + "/untrust"
+	err := c.post(ctx, path, struct{}{}, &status)
+	return status, err
+}
+
+func (c *HTTPClient) RunPluginProjectAttachmentTemplate(ctx context.Context, pluginID string, templateID string, req protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error) {
+	var project protocol.Project
+	path := "/v1/plugins/" + url.PathEscape(pluginID) + "/project-attachment-templates/" + url.PathEscape(templateID)
+	err := c.post(ctx, path, req, &project)
+	return project, err
+}
+
 func (c *HTTPClient) ListSessions(ctx context.Context) ([]session.Session, error) {
 	var sessions []session.Session
 	err := c.get(ctx, "/v1/sessions", nil, &sessions)

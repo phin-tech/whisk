@@ -1,5 +1,7 @@
 """Contains all the data models used in inputs/outputs"""
 
+from .add_project_attachment_request import AddProjectAttachmentRequest
+from .add_project_attachment_request_meta import AddProjectAttachmentRequestMeta
 from .add_pty_bookmark_request import AddPTYBookmarkRequest
 from .add_work_item_attachment_request import AddWorkItemAttachmentRequest
 from .agent_bridge_approval import AgentBridgeApproval
@@ -22,6 +24,7 @@ from .artifact import Artifact
 from .artifact_metadata import ArtifactMetadata
 from .ask_question_request import AskQuestionRequest
 from .attachment import Attachment
+from .attachment_meta import AttachmentMeta
 from .bind_work_item_worktree_request import BindWorkItemWorktreeRequest
 from .bookmark import Bookmark
 from .cancel_work_item_run_request import CancelWorkItemRunRequest
@@ -38,6 +41,7 @@ from .create_work_item_request import CreateWorkItemRequest
 from .create_worktree_request import CreateWorktreeRequest
 from .created_session import CreatedSession
 from .created_worktree import CreatedWorktree
+from .delete_project_attachment_request import DeleteProjectAttachmentRequest
 from .delete_work_item_request import DeleteWorkItemRequest
 from .detach_pane_pty_request import DetachPanePTYRequest
 from .detached_pane_pty import DetachedPanePTY
@@ -58,7 +62,13 @@ from .metadata_value import MetadataValue
 from .move_work_item_request import MoveWorkItemRequest
 from .output_snapshot import OutputSnapshot
 from .pane import Pane
+from .plugin_resolver import PluginResolver
+from .plugin_status import PluginStatus
+from .plugin_template_field import PluginTemplateField
 from .project import Project
+from .project_attachment_template import ProjectAttachmentTemplate
+from .project_context import ProjectContext
+from .project_context_item import ProjectContextItem
 from .project_detail import ProjectDetail
 from .project_metadata import ProjectMetadata
 from .project_preferences import ProjectPreferences
@@ -78,6 +88,12 @@ from .resolve_agent_bridge_approval_request import ResolveAgentBridgeApprovalReq
 from .restart_pane_pty_request import RestartPanePTYRequest
 from .restarted_pane_pty import RestartedPanePTY
 from .run_event import RunEvent
+from .run_plugin_project_attachment_template_request import (
+    RunPluginProjectAttachmentTemplateRequest,
+)
+from .run_plugin_project_attachment_template_request_values import (
+    RunPluginProjectAttachmentTemplateRequestValues,
+)
 from .runtime_event import RuntimeEvent
 from .session import Session
 from .session_panes_type_0 import SessionPanesType0
@@ -101,6 +117,8 @@ from .status_event import StatusEvent
 from .submit_draft_plan_request import SubmitDraftPlanRequest
 from .submit_review_feedback_request import SubmitReviewFeedbackRequest
 from .transition_rule import TransitionRule
+from .update_project_attachment_request import UpdateProjectAttachmentRequest
+from .update_project_attachment_request_meta import UpdateProjectAttachmentRequestMeta
 from .update_project_request import UpdateProjectRequest
 from .work_item import WorkItem
 from .work_item_metadata import WorkItemMetadata
@@ -116,6 +134,8 @@ from .worktrunk_status import WorktrunkStatus
 from .write_pty_request import WritePTYRequest
 
 __all__ = (
+    "AddProjectAttachmentRequest",
+    "AddProjectAttachmentRequestMeta",
     "AddPTYBookmarkRequest",
     "AddWorkItemAttachmentRequest",
     "AgentBridgeApproval",
@@ -138,6 +158,7 @@ __all__ = (
     "ArtifactMetadata",
     "AskQuestionRequest",
     "Attachment",
+    "AttachmentMeta",
     "BindWorkItemWorktreeRequest",
     "Bookmark",
     "CancelWorkItemRunRequest",
@@ -154,6 +175,7 @@ __all__ = (
     "CreateSessionRequest",
     "CreateWorkItemRequest",
     "CreateWorktreeRequest",
+    "DeleteProjectAttachmentRequest",
     "DeleteWorkItemRequest",
     "DetachedPanePTY",
     "DetachPanePTYRequest",
@@ -174,7 +196,13 @@ __all__ = (
     "MoveWorkItemRequest",
     "OutputSnapshot",
     "Pane",
+    "PluginResolver",
+    "PluginStatus",
+    "PluginTemplateField",
     "Project",
+    "ProjectAttachmentTemplate",
+    "ProjectContext",
+    "ProjectContextItem",
     "ProjectDetail",
     "ProjectMetadata",
     "ProjectPreferences",
@@ -192,6 +220,8 @@ __all__ = (
     "RestartedPanePTY",
     "RestartPanePTYRequest",
     "RunEvent",
+    "RunPluginProjectAttachmentTemplateRequest",
+    "RunPluginProjectAttachmentTemplateRequestValues",
     "RuntimeEvent",
     "Session",
     "SessionPanesType0",
@@ -215,6 +245,8 @@ __all__ = (
     "SubmitDraftPlanRequest",
     "SubmitReviewFeedbackRequest",
     "TransitionRule",
+    "UpdateProjectAttachmentRequest",
+    "UpdateProjectAttachmentRequestMeta",
     "UpdateProjectRequest",
     "WorkflowEvent",
     "WorkflowStage",

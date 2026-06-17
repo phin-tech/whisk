@@ -33,6 +33,34 @@ func (c *HTTPClient) GetProjectDetail(ctx context.Context, projectID string) (pr
 	return detail, err
 }
 
+func (c *HTTPClient) AddProjectAttachment(ctx context.Context, req protocol.AddProjectAttachmentRequest) (protocol.Project, error) {
+	var project protocol.Project
+	path := "/v1/projects/" + url.PathEscape(req.ProjectID) + "/attachments"
+	err := c.post(ctx, path, req, &project)
+	return project, err
+}
+
+func (c *HTTPClient) UpdateProjectAttachment(ctx context.Context, attachmentID string, req protocol.UpdateProjectAttachmentRequest) (protocol.Project, error) {
+	var project protocol.Project
+	path := "/v1/project-attachments/" + url.PathEscape(attachmentID) + "/update"
+	err := c.post(ctx, path, req, &project)
+	return project, err
+}
+
+func (c *HTTPClient) DeleteProjectAttachment(ctx context.Context, attachmentID string, req protocol.DeleteProjectAttachmentRequest) (protocol.Project, error) {
+	var project protocol.Project
+	path := "/v1/project-attachments/" + url.PathEscape(attachmentID) + "/delete"
+	err := c.post(ctx, path, req, &project)
+	return project, err
+}
+
+func (c *HTTPClient) GetProjectContext(ctx context.Context, projectID string) (protocol.ProjectContext, error) {
+	var projectContext protocol.ProjectContext
+	path := "/v1/projects/" + url.PathEscape(projectID) + "/context"
+	err := c.get(ctx, path, nil, &projectContext)
+	return projectContext, err
+}
+
 func (c *HTTPClient) ListWorkflowTemplates(ctx context.Context) ([]protocol.WorkflowTemplate, error) {
 	var templates []protocol.WorkflowTemplate
 	err := c.get(ctx, "/v1/workflow-templates", nil, &templates)

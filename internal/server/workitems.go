@@ -68,6 +68,103 @@ func (s *HTTPServer) getProjectDetail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *HTTPServer) addProjectAttachment(w http.ResponseWriter, r *http.Request) {
+	var req protocol.AddProjectAttachmentRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.ProjectID = pathValue(r, "projectID", req.ProjectID)
+	project, err := s.runtime.AddProjectAttachment(r.Context(), app.AddProjectAttachmentRequest{
+		ProjectID:        req.ProjectID,
+		Kind:             req.Kind,
+		Scope:            req.Scope,
+		Title:            req.Title,
+		Path:             req.Path,
+		URL:              req.URL,
+		Note:             req.Note,
+		Provider:         req.Provider,
+		Target:           req.Target,
+		IncludeInContext: req.IncludeInContext,
+		Meta:             req.Meta,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, project)
+}
+
+func (s *HTTPServer) updateProjectAttachment(w http.ResponseWriter, r *http.Request) {
+	var req protocol.UpdateProjectAttachmentRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	project, err := s.runtime.UpdateProjectAttachment(r.Context(), app.UpdateProjectAttachmentRequest{
+		ID:               pathValue(r, "attachmentID", ""),
+		ProjectID:        req.ProjectID,
+		Title:            req.Title,
+		Path:             req.Path,
+		URL:              req.URL,
+		Note:             req.Note,
+		Provider:         req.Provider,
+		Target:           req.Target,
+		IncludeInContext: req.IncludeInContext,
+		Meta:             req.Meta,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, project)
+}
+
+func (s *HTTPServer) deleteProjectAttachment(w http.ResponseWriter, r *http.Request) {
+	var req protocol.DeleteProjectAttachmentRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	project, err := s.runtime.DeleteProjectAttachment(r.Context(), app.DeleteProjectAttachmentRequest{
+		ID:        pathValue(r, "attachmentID", ""),
+		ProjectID: req.ProjectID,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, project)
+}
+
+func (s *HTTPServer) getProjectContext(w http.ResponseWriter, r *http.Request) {
+	context, err := s.runtime.ProjectContext(r.Context(), pathValue(r, "projectID", ""))
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, protocol.ProjectContext{
+		ProjectID: context.ProjectID,
+		Items:     toProtocolProjectContextItems(context.Items),
+	})
+}
+
+func toProtocolProjectContextItems(items []app.ProjectContextItem) []protocol.ProjectContextItem {
+	out := make([]protocol.ProjectContextItem, 0, len(items))
+	for _, item := range items {
+		out = append(out, protocol.ProjectContextItem{
+			AttachmentID: item.AttachmentID,
+			Kind:         item.Kind,
+			Provider:     item.Provider,
+			Target:       item.Target,
+			Title:        item.Title,
+			Delivery:     item.Delivery,
+			ContentType:  item.ContentType,
+			Content:      item.Content,
+			SourceURL:    item.SourceURL,
+			Error:        item.Error,
+		})
+	}
+	return out
+}
+
 func (s *HTTPServer) startPlanning(w http.ResponseWriter, r *http.Request) {
 	var req protocol.StartPlanningRequest
 	if !decodeJSON(w, r, &req) {
