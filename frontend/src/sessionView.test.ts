@@ -3,6 +3,7 @@ import {
   paneIds,
   ptyRowsFromInventory,
   runtimeRefreshTargets,
+  sessionGroups,
   visiblePtyIds,
 } from "./sessionView";
 
@@ -95,6 +96,28 @@ describe("ptyRowsFromInventory", () => {
         detail: "/repo / 80x24",
         running: true,
       },
+    ]);
+  });
+});
+
+describe("sessionGroups", () => {
+  const sessions = [
+    { id: "sess_01", name: "api", projectId: "proj_01", rootDir: "/repo/api", windows: {}, panes: {} },
+    { id: "sess_02", name: "web", projectId: "proj_01", rootDir: "/repo/web", windows: {}, panes: {} },
+    { id: "sess_03", name: "scratch", rootDir: "/tmp", windows: {}, panes: {} },
+  ];
+
+  it("groups sessions by project, folder, or recent order", () => {
+    expect(sessionGroups(sessions, [{ id: "proj_01", name: "Whisk" }], "project", "")).toEqual([
+      { id: "proj_01", title: "Whisk", sessions: [sessions[0], sessions[1]] },
+      { id: "none", title: "No project", sessions: [sessions[2]] },
+    ]);
+    expect(sessionGroups(sessions, [], "folder", "repo")).toEqual([
+      { id: "/repo/api", title: "/repo/api", sessions: [sessions[0]] },
+      { id: "/repo/web", title: "/repo/web", sessions: [sessions[1]] },
+    ]);
+    expect(sessionGroups(sessions, [], "recent", "scratch")).toEqual([
+      { id: "recent", title: "Recent", sessions: [sessions[2]] },
     ]);
   });
 });

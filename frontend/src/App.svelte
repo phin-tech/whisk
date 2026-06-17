@@ -122,6 +122,9 @@
   let activeSessionId = "";
   let activePaneId = "";
   let activeProjectId = "";
+  let workFilterQuery = "";
+  let workFilterStageId = "";
+  let workFilterRunState = "";
   let activeMain: MainView = "session";
   let activeSidebar: SidebarId | null = "sessions";
   let commandPaletteOpen = false;
@@ -344,6 +347,14 @@
       return;
     }
     projectDetail = await LoadProjectDetail(activeProjectId);
+  }
+
+  function syncActiveProjectDetailSessions() {
+    if (!projectDetail || projectDetail.project.id !== activeProjectId) return;
+    projectDetail = {
+      ...projectDetail,
+      sessions: sessions.filter((session) => session.projectId === activeProjectId),
+    };
   }
 
   async function refreshWorkItems() {
@@ -721,6 +732,9 @@
   function selectProject(projectId: string) {
     activeMain = "work";
     activeProjectId = projectId;
+    workFilterQuery = "";
+    workFilterStageId = "";
+    workFilterRunState = "";
     void refreshWorkState().catch((err) => {
       error = backendError(err);
     });
@@ -1115,12 +1129,14 @@
     loadingSession = true;
     try {
       sessions = await CloseSession({ sessionId: session.id });
+      syncActiveProjectDetailSessions();
       if (activeSessionId === session.id) {
         activeSessionId = sessions[0]?.id ?? "";
         activePaneId = firstPaneId(sessions[0]);
       }
       await refreshPTYs();
       await refreshVisibleOutput();
+      if (activeMain === "projects") await refreshProjectDetail();
     } catch (err) {
       error = `Close session failed: ${backendError(err)}`;
     } finally {
@@ -1128,18 +1144,23 @@
     }
   }
 
-  async function unassignProjectSession(sessionId: string) {
+  async function setSessionProject(sessionId: string, projectId: string) {
     error = "";
     loadingSession = true;
     try {
-      await SetSessionProject({ sessionId, projectId: "" });
+      await SetSessionProject({ sessionId, projectId });
       await refreshSessions();
-      await refreshProjectDetail();
+      syncActiveProjectDetailSessions();
+      if (activeProjectId) await refreshProjectDetail();
     } catch (err) {
-      error = `Remove session from project failed: ${backendError(err)}`;
+      error = `${projectId ? "Move" : "Remove"} session ${projectId ? "to" : "from"} project failed: ${backendError(err)}`;
     } finally {
       loadingSession = false;
     }
+  }
+
+  async function unassignProjectSession(sessionId: string) {
+    await setSessionProject(sessionId, "");
   }
 
   async function openSessionById(sessionId: string) {
@@ -1273,6 +1294,9 @@
           {agentBridgeEvents}
         {activeSessionId}
         {activeProjectId}
+        bind:workFilterQuery
+        bind:workFilterStageId
+        bind:workFilterRunState
         {loadingSession}
         {loadingPtys}
         {loadingWork}
@@ -1282,6 +1306,7 @@
         onNewSession={openNewSession}
         onSelectSession={selectSession}
         onCloseSession={closeSession}
+        onSetSessionProject={(sessionId, projectId) => void setSessionProject(sessionId, projectId)}
         onRefreshPtys={() => void refreshPTYs()}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
@@ -1291,10 +1316,6 @@
         onNewProject={openNewProject}
         onSelectProject={activeSidebar === "projects" ? selectProjectDetail : selectProject}
         onCreateWorkItem={createWorkItem}
-        onMoveWorkItem={moveWorkItem}
-        onGenerateWorktree={generateWorktree}
-        onAttachFile={attachFile}
-        onDeleteWorkItem={deleteWorkItem}
       />
     {/if}
 
@@ -1361,6 +1382,9 @@
             {gateReports}
             {workflowEvents}
             {activeProjectId}
+            filterQuery={workFilterQuery}
+            filterStageId={workFilterStageId}
+            filterRunState={workFilterRunState}
             loading={loadingWork}
             onRefresh={() => void refreshProjects()}
             onCreateWorkItem={createWorkItem}
@@ -1479,6 +1503,9 @@
         {agentBridgeEvents}
         {activeSessionId}
         {activeProjectId}
+        bind:workFilterQuery
+        bind:workFilterStageId
+        bind:workFilterRunState
         {loadingSession}
         {loadingPtys}
         {loadingWork}
@@ -1488,6 +1515,7 @@
         onNewSession={openNewSession}
         onSelectSession={selectSession}
         onCloseSession={closeSession}
+        onSetSessionProject={(sessionId, projectId) => void setSessionProject(sessionId, projectId)}
         onRefreshPtys={() => void refreshPTYs()}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
@@ -1497,10 +1525,6 @@
         onNewProject={openNewProject}
         onSelectProject={activeSidebar === "projects" ? selectProjectDetail : selectProject}
         onCreateWorkItem={createWorkItem}
-        onMoveWorkItem={moveWorkItem}
-        onGenerateWorktree={generateWorktree}
-        onAttachFile={attachFile}
-        onDeleteWorkItem={deleteWorkItem}
       />
       <div class="flex h-full w-[36px] shrink-0 flex-col border-l border-hairline bg-bg-base/96">
         <ActivityRail

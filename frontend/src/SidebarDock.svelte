@@ -19,6 +19,9 @@
   export let agentBridgeEvents: AgentBridgeEvent[] = [];
   export let activeSessionId = "";
   export let activeProjectId = "";
+  export let workFilterQuery = "";
+  export let workFilterStageId = "";
+  export let workFilterRunState = "";
   export let loadingSession = false;
   export let loadingPtys = false;
   export let loadingWork = false;
@@ -28,6 +31,7 @@
   export let onNewSession: () => void;
   export let onSelectSession: (session: Session) => void;
   export let onCloseSession: (session: Session) => void;
+  export let onSetSessionProject: (sessionId: string, projectId: string) => void;
   export let onRefreshPtys: () => void;
   export let onRefreshStatusEvents: () => void;
   export let onClearNotifications: () => void;
@@ -41,13 +45,6 @@
     title: string;
     bodyMarkdown: string;
   }) => void;
-  export let onMoveWorkItem: (workItemId: string, stageId: string) => void;
-  export let onGenerateWorktree: (request: {
-    workItemId: string;
-    branch: string;
-  }) => void;
-  export let onAttachFile: (workItemId: string, path: string) => void;
-  export let onDeleteWorkItem: (workItemId: string) => void;
 
   const minWidth = 240;
   const maxWidth = 800;
@@ -116,12 +113,14 @@
       {#if activePanel === "sessions"}
         <SessionsPanel
           {sessions}
+          {projects}
           {activeSessionId}
           loading={loadingSession}
           onclose={onClose}
           {onNewSession}
           {onSelectSession}
           {onCloseSession}
+          {onSetSessionProject}
         />
       {:else}
         {#if activePanel === "notifications"}
@@ -141,15 +140,14 @@
             {projects}
             {workItems}
             {activeProjectId}
+            bind:filterQuery={workFilterQuery}
+            bind:filterStageId={workFilterStageId}
+            bind:filterRunState={workFilterRunState}
             loading={loadingWork}
             onclose={onClose}
             onRefresh={onRefreshWork}
             {onSelectProject}
             {onCreateWorkItem}
-            {onMoveWorkItem}
-            {onGenerateWorktree}
-            {onAttachFile}
-            {onDeleteWorkItem}
           />
         {:else if activePanel === "projects"}
           <ProjectsPanel

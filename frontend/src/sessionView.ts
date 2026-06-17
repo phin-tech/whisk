@@ -7,8 +7,24 @@ type LayoutNodeLike = {
 
 type SessionLike = {
   id: string;
+  projectId?: string;
+  name?: string;
+  rootDir?: string;
   windows: { [_ in string]?: WindowLike };
   panes: { [_ in string]?: { id?: string; currentPtyId?: string | null } };
+};
+
+type ProjectLike = {
+  id: string;
+  name: string;
+};
+
+export type SessionGroupMode = "recent" | "project" | "folder";
+
+export type SessionGroup<T extends SessionLike> = {
+  id: string;
+  title: string;
+  sessions: T[];
 };
 
 type WindowLike = {
@@ -96,6 +112,35 @@ export function ptyRowsFromInventory(ptys: PtyInfoLike[]) {
     detail: `${pty.workingDir || "."} / ${pty.cols}x${pty.rows}`,
     running: pty.running,
   }));
+}
+
+export function sessionGroups<T extends SessionLike>(
+  sessions: T[],
+  projects: ProjectLike[],
+  mode: SessionGroupMode,
+  query: string,
+): SessionGroup<T>[] {
+  const needle = query.trim().toLowerCase();
+  const filtered = sessions.filter((session) => {
+    if (!needle) return true;
+    return `${session.name ?? ""} ${session.rootDir ?? ""} ${session.projectId ?? ""}`
+      .toLowerCase()
+      .includes(needle);
+  });
+  if (mode === "recent") {
+    return filtered.length === 0 ? [] : [{ id: "recent", title: "Recent", sessions: filtered }];
+  }
+
+  const projectNames = new Map(projects.map((project) => [project.id, project.name]));
+  const groups = new Map<string, SessionGroup<T>>();
+  for (const session of filtered) {
+    const key = mode === "project" ? session.projectId || "none" : session.rootDir || ".";
+    const title =
+      mode === "project" ? (session.projectId ? (projectNames.get(session.projectId) ?? session.projectId) : "No project") : key;
+    if (!groups.has(key)) groups.set(key, { id: key, title, sessions: [] });
+    groups.get(key)?.sessions.push(session);
+  }
+  return Array.from(groups.values());
 }
 
 export function runtimeRefreshTargets(event: RuntimeEventLike) {

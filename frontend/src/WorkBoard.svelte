@@ -45,6 +45,9 @@
   export let gateReports: GateReport[] = [];
   export let workflowEvents: WorkflowEvent[] = [];
   export let activeProjectId = "";
+  export let filterQuery = "";
+  export let filterStageId = "";
+  export let filterRunState = "";
   export let loading = false;
   export let onRefresh: () => void;
   export let onCreateWorkItem: (request: {
@@ -100,7 +103,9 @@
 
   $: activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   $: stages = activeProject?.workflow?.stages ?? [];
-  $: itemsByStage = groupWorkItemsByStage(workItems, stages);
+  $: filteredWorkItems = filterWorkItems(workItems);
+  $: boardStages = filterStageId ? stages.filter((stage) => stage.id === filterStageId) : stages;
+  $: itemsByStage = groupWorkItemsByStage(filteredWorkItems, stages);
   $: detailItem = workItems.find((item) => item.id === detailItemId) ?? null;
   $: runsByItem = groupRunsByItem(workItemRuns);
   $: detailRuns = detailItem ? (runsByItem[detailItem.id] ?? []) : [];
@@ -154,6 +159,18 @@
       itemRuns.sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt));
     }
     return result;
+  }
+
+  function filterWorkItems(items: WorkItem[]) {
+    const query = filterQuery.trim().toLowerCase();
+    return items.filter((item) => {
+      if (filterStageId && item.stageId !== filterStageId) return false;
+      if (filterRunState && (item.runState || "idle") !== filterRunState) return false;
+      if (!query) return true;
+      return `#${item.number} ${item.title} ${item.bodyMarkdown} ${item.stageId} ${item.runState}`
+        .toLowerCase()
+        .includes(query);
+    });
   }
 
   function timestamp(value: unknown) {
@@ -269,7 +286,7 @@
   }
 
   function setAllColumnsCollapsed(collapsed: boolean) {
-    const next = collapsed ? new Set(stages.map((stage) => stage.id)) : new Set<string>();
+    const next = collapsed ? new Set(boardStages.map((stage) => stage.id)) : new Set<string>();
     collapsedStageIds = next;
     if (typeof localStorage !== "undefined" && activeProjectId) {
       localStorage.setItem(collapsedStageStorageKey(activeProjectId), serializeCollapsedStages(next));
@@ -452,7 +469,7 @@
       <button
         type="button"
         class="hidden h-9 items-center justify-center rounded-md border border-white/14 bg-white/6 px-2.5 text-[12px] font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary sm:inline-flex"
-        disabled={loading || stages.length === 0}
+        disabled={loading || boardStages.length === 0}
         on:click={() => setAllColumnsCollapsed(false)}
       >
         Expand
@@ -460,7 +477,7 @@
       <button
         type="button"
         class="hidden h-9 items-center justify-center rounded-md border border-white/14 bg-white/6 px-2.5 text-[12px] font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary sm:inline-flex"
-        disabled={loading || stages.length === 0}
+        disabled={loading || boardStages.length === 0}
         on:click={() => setAllColumnsCollapsed(true)}
       >
         Collapse
@@ -482,7 +499,7 @@
 
     <div class="app-scrollbar min-h-0 flex-1 overflow-auto p-3">
       <div class="flex min-h-full min-w-max items-stretch gap-3">
-        {#each stages as stage (stage.id)}
+        {#each boardStages as stage (stage.id)}
           {@const stageItems = itemsByStage[stage.id] ?? []}
           {@const collapsed = collapsedStageIds.has(stage.id)}
           {@const stageHasAttention = hasStageAttention(stage)}
