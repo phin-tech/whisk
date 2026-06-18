@@ -14,6 +14,7 @@
     StatusEvent,
     Artifact,
     GateReport,
+    OnboardingStatus,
     PluginStatus,
     ProjectAttachmentTemplate,
     MetadataValue,
@@ -31,6 +32,7 @@
     AskQuestion,
     BindWorkItemWorktree,
     CancelWorkItemRun,
+    ClosePane,
     CloseSession,
     CompleteExecution,
     CompleteGate,
@@ -43,8 +45,10 @@
     DeleteWorkItem,
     CheckAgentHookIntegration,
     AgentHookLogStatus as LoadAgentHookLogStatus,
+    ApplyOnboarding,
     ClearAgentHookLog,
     InstallAgentHookIntegration,
+    KillPTY,
     ListAgentBridgeApprovals,
     ListAgentBridgeEvents,
     ListAgentHookIntegrations,
@@ -86,12 +90,14 @@
     UpdateProject,
     UpdateProjectAttachment,
     ListPlugins,
+    OnboardingStatus as LoadOnboardingStatus,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
   import CommandPalette from "./CommandPalette.svelte";
   import LayoutView from "./LayoutView.svelte";
   import NewProjectDialog from "./NewProjectDialog.svelte";
   import NewSessionDialog from "./NewSessionDialog.svelte";
+  import OnboardingPanel from "./OnboardingPanel.svelte";
   import ProjectsView from "./ProjectsView.svelte";
   import SettingsView from "./SettingsView.svelte";
   import SidebarDock from "./SidebarDock.svelte";
@@ -106,7 +112,7 @@
     type PTYStreamFrame,
   } from "./ptyStream";
   import { commandIdForShortcut, sessionSplitCommands } from "./sessionCommands";
-  import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
+  import { activeWindow, closePaneRequest, firstPaneId, killPTYRequest, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
     normalizeStartupView,
     startupTarget,
@@ -153,6 +159,9 @@
   let pendingSessionRootDir = "";
   let pendingSessionWorkingDir = "";
   let settingsOpen = false;
+  let onboardingOpen = false;
+  let onboardingBusy = false;
+  let onboardingStatus: OnboardingStatus | null = null;
   let railSide: RailSide = "right";
   let startupView: StartupView = "sessions";
   let terminalFontSize = 13;
@@ -647,6 +656,27 @@
 
   async function refreshPlugins() {
     plugins = await ListPlugins();
+  }
+
+  async function refreshOnboarding(openIfNeeded = false) {
+    onboardingStatus = await LoadOnboardingStatus();
+    if (openIfNeeded && onboardingStatus.shouldShow) {
+      onboardingOpen = true;
+    }
+  }
+
+  async function applyOnboarding(itemIds: string[]) {
+    onboardingBusy = true;
+    error = "";
+    try {
+      onboardingStatus = await ApplyOnboarding({ itemIds });
+      await Promise.all([refreshAgentHookIntegrations(), refreshPlugins()]);
+      onboardingOpen = onboardingStatus.shouldShow;
+    } catch (err) {
+      error = `Onboarding failed: ${backendError(err)}`;
+    } finally {
+      onboardingBusy = false;
+    }
   }
 
   async function rescanPlugins() {
@@ -1357,6 +1387,43 @@
     }
   }
 
+  async function closePane(paneId: string) {
+    const req = closePaneRequest(activeSession, activeSessionWindow?.id ?? "", paneId);
+    if (!req) return;
+    const ptyId = activeSession?.panes[paneId]?.currentPtyId;
+    if (ptyId && !window.confirm(`Close pane and kill PTY ${ptyId}?`)) return;
+    error = "";
+    loadingSession = true;
+    try {
+      const updated = await ClosePane(req);
+      sessions = sessions.map((session) => (session.id === updated.id ? updated : session));
+      activePaneId = updated.panes[activePaneId] ? activePaneId : firstPaneId(updated);
+      await refreshVisibleOutput();
+    } catch (err) {
+      error = `Close pane failed: ${backendError(err)}`;
+    } finally {
+      loadingSession = false;
+    }
+  }
+
+  async function killPanePTY(paneId: string) {
+    const req = killPTYRequest(activeSession?.panes[paneId]);
+    if (!req) return;
+    await killPTY(req.ptyId);
+  }
+
+  async function killPTY(ptyId: string) {
+    if (!window.confirm(`Kill PTY ${ptyId}?`)) return;
+    error = "";
+    try {
+      await KillPTY({ ptyId });
+      await refreshPTYs();
+      await refreshOutput(ptyId);
+    } catch (err) {
+      error = `Kill PTY failed: ${backendError(err)}`;
+    }
+  }
+
   async function setSessionProject(sessionId: string, projectId: string) {
     error = "";
     loadingSession = true;
@@ -1445,6 +1512,13 @@
     }
   }
 
+  function openOnboarding() {
+    onboardingOpen = true;
+    void refreshOnboarding(false).catch((err) => {
+      error = backendError(err);
+    });
+  }
+
   onMount(() => {
     stopCommandEvents = Events.On("command:run", (event) => {
       void executeCommand(String(event.data));
@@ -1456,6 +1530,7 @@
       .then(refreshSessions)
       .then(refreshPTYs)
       .then(refreshPlugins)
+      .then(() => refreshOnboarding(true))
       .then(refreshProjects)
       .then(refreshStatusEvents)
       .then(refreshVisibleOutput)
@@ -1531,6 +1606,7 @@
         onCloseSession={closeSession}
         onSetSessionProject={(sessionId, projectId) => void setSessionProject(sessionId, projectId)}
         onRefreshPtys={() => void refreshPTYs()}
+        onKillPTY={(ptyId) => void killPTY(ptyId)}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
@@ -1646,6 +1722,10 @@
               {terminalCursorBlink}
               onFocus={(paneId) => (activePaneId = paneId)}
               onInput={(ptyId) => refreshOutput(ptyId).catch((err) => (error = backendError(err)))}
+              onClose={(paneId) => void closePane(paneId)}
+              onKillPTY={(paneId) => void killPanePTY(paneId)}
+              canClose={(paneId) =>
+                Boolean(closePaneRequest(activeSession, activeSessionWindow?.id ?? "", paneId))}
             />
           {/if}
         {:else}
@@ -1719,6 +1799,15 @@
           onClearAgentHookLog={() => void clearAgentHookLog()}
           onOpenAgentHookLog={() => void openAgentHookLog()}
           onCopyAgentHookLogPath={(path) => void copyAgentHookLogPath(path)}
+          onRunOnboarding={openOnboarding}
+        />
+
+        <OnboardingPanel
+          visible={onboardingOpen}
+          status={onboardingStatus}
+          busy={onboardingBusy}
+          onclose={() => (onboardingOpen = false)}
+          onapply={(ids) => void applyOnboarding(ids)}
         />
       </div>
     </section>
@@ -1749,6 +1838,7 @@
         onCloseSession={closeSession}
         onSetSessionProject={(sessionId, projectId) => void setSessionProject(sessionId, projectId)}
         onRefreshPtys={() => void refreshPTYs()}
+        onKillPTY={(ptyId) => void killPTY(ptyId)}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}

@@ -226,6 +226,14 @@ func (s *Service) ClearDaemon(ctx context.Context, req protocol.ClearDaemonReque
 	return s.client.ClearDaemon(ctx, req)
 }
 
+func (s *Service) OnboardingStatus(ctx context.Context) (protocol.OnboardingStatus, error) {
+	return s.client.OnboardingStatus(ctx)
+}
+
+func (s *Service) ApplyOnboarding(ctx context.Context, req protocol.OnboardingApplyRequest) (protocol.OnboardingStatus, error) {
+	return s.client.ApplyOnboarding(ctx, req)
+}
+
 func (s *Service) ListSessions(ctx context.Context) ([]session.Session, error) {
 	return s.client.ListSessions(ctx)
 }

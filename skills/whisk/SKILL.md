@@ -1,6 +1,7 @@
 ---
 name: whisk
 description: Use Whisk's daemon-backed CLI for Whisk sessions, daemon-managed PTYs, projects, work items, runs, workflows, questions, gates, status updates, plugins, forwards, and agent bridge hooks. Trigger when Codex is running inside a Whisk session or needs to manage Whisk/whiskd runtime state through the CLI.
+version: "1"
 ---
 
 # Whisk

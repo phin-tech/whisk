@@ -45,6 +45,7 @@
   export let onClearAgentHookLog: () => void;
   export let onOpenAgentHookLog: () => void;
   export let onCopyAgentHookLogPath: (path: string) => void;
+  export let onRunOnboarding: () => void;
 
   type Category = "general" | "sessions" | "terminal" | "shortcuts" | "daemon" | "plugins" | "integrations";
 
@@ -205,6 +206,23 @@
                 </button>
               {/each}
             </div>
+          </div>
+
+          <div class="mt-4 flex items-center justify-between gap-3 py-2">
+            <div>
+              <div class="text-[13px]">Onboarding</div>
+              <div class="mt-0.5 text-[11px] text-text-muted">
+                Agent hooks, skills, and plugin trust.
+              </div>
+            </div>
+            <button
+              type="button"
+              class="inline-flex h-7 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-primary transition-colors hover:border-accent hover:text-accent"
+              on:click={onRunOnboarding}
+            >
+              <RefreshCw size={13} />
+              <span>Re-run</span>
+            </button>
           </div>
 
           <div class="mt-4 flex items-center justify-between py-2">

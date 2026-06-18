@@ -58,6 +58,18 @@ func (c *HTTPClient) ClearDaemon(ctx context.Context, req protocol.ClearDaemonRe
 	return response, err
 }
 
+func (c *HTTPClient) OnboardingStatus(ctx context.Context) (protocol.OnboardingStatus, error) {
+	var status protocol.OnboardingStatus
+	err := c.get(ctx, "/v1/onboarding", nil, &status)
+	return status, err
+}
+
+func (c *HTTPClient) ApplyOnboarding(ctx context.Context, req protocol.OnboardingApplyRequest) (protocol.OnboardingStatus, error) {
+	var status protocol.OnboardingStatus
+	err := c.post(ctx, "/v1/onboarding/apply", req, &status)
+	return status, err
+}
+
 func (c *HTTPClient) AgentBridgeHook(ctx context.Context, bridgeID string, req protocol.AgentBridgeHookRequest) (protocol.AgentBridgeHookResponse, error) {
 	var response protocol.AgentBridgeHookResponse
 	path := "/v1/agent-bridges/" + url.PathEscape(bridgeID) + "/hooks"

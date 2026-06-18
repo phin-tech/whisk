@@ -372,6 +372,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get local onboarding status */
+        get: operations["getOnboarding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply selected local onboarding items */
+        post: operations["applyOnboarding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/plugins": {
         parameters: {
             query?: never;
@@ -1668,6 +1702,22 @@ export interface components {
             type: string;
             worktreePath?: string;
         };
+        Item: {
+            description?: string;
+            detail?: string;
+            hash?: string;
+            id: string;
+            installedHash?: string;
+            installedVersion?: string;
+            kind: string;
+            label: string;
+            latestVersion?: string;
+            path?: string;
+            selectedByDefault: boolean;
+            status: string;
+            target: string;
+            version?: string;
+        };
         KillPTYRequest: {
             ptyId: string;
         };
@@ -1711,6 +1761,15 @@ export interface components {
             actor?: string;
             id: string;
             stageId: string;
+        };
+        OnboardingApplyRequest: {
+            itemIds: string[] | null;
+        };
+        OnboardingStatus: {
+            items: components["schemas"]["Item"][] | null;
+            localDaemon: boolean;
+            shouldShow: boolean;
+            statePath: string;
         };
         OutputSnapshot: {
             /** Format: int64 */
@@ -2914,6 +2973,68 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    applyOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStatus"];
+                };
             };
             /** @description error */
             default: {

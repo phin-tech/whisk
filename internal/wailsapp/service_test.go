@@ -49,6 +49,14 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || cleared.SessionsCleared != 1 || !fake.clearCalled {
 		t.Fatalf("clear daemon = %#v, called = %v, err = %v", cleared, fake.clearCalled, err)
 	}
+	fake.onboardingStatus = protocol.OnboardingStatus{ShouldShow: true}
+	onboardingStatus, err := service.OnboardingStatus(ctx)
+	if err != nil || !onboardingStatus.ShouldShow {
+		t.Fatalf("onboarding status = %#v, err = %v", onboardingStatus, err)
+	}
+	if _, err := service.ApplyOnboarding(ctx, protocol.OnboardingApplyRequest{ItemIDs: []string{"skill:codex"}}); err != nil || fake.onboardingApplyReq.ItemIDs[0] != "skill:codex" {
+		t.Fatalf("apply onboarding req = %#v, err = %v", fake.onboardingApplyReq, err)
+	}
 	sessions, err := service.ListSessions(ctx)
 	if err != nil || sessions[0].ID != "sess_01" {
 		t.Fatalf("list sessions = %#v, %v", sessions, err)
@@ -566,6 +574,8 @@ type runtimeClientFake struct {
 	setAgentHookLogReq       protocol.SetAgentHookLogSettingsRequest
 	clearAgentHookLogCalled  bool
 	openAgentHookLogCalled   bool
+	onboardingApplyReq       protocol.OnboardingApplyRequest
+	onboardingStatus         protocol.OnboardingStatus
 	createForwardReq         protocol.CreateHTTPForwardRequest
 	deleteForwardID          string
 }
@@ -573,6 +583,15 @@ type runtimeClientFake struct {
 func (f *runtimeClientFake) ClearDaemon(context.Context, protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error) {
 	f.clearCalled = true
 	return f.clearResponse, nil
+}
+
+func (f *runtimeClientFake) OnboardingStatus(context.Context) (protocol.OnboardingStatus, error) {
+	return f.onboardingStatus, nil
+}
+
+func (f *runtimeClientFake) ApplyOnboarding(_ context.Context, req protocol.OnboardingApplyRequest) (protocol.OnboardingStatus, error) {
+	f.onboardingApplyReq = req
+	return f.onboardingStatus, nil
 }
 
 func (f *runtimeClientFake) ListSessions(context.Context) ([]session.Session, error) {

@@ -7,6 +7,9 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as onboarding$0 from "../domain/onboarding/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as ptybookmark$0 from "../domain/ptybookmark/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -1239,6 +1242,71 @@ export class NextEventRequest {
     }
 }
 
+export class OnboardingApplyRequest {
+    "itemIds": string[];
+
+    /** Creates a new OnboardingApplyRequest instance. */
+    constructor($$source: Partial<OnboardingApplyRequest> = {}) {
+        if (!("itemIds" in $$source)) {
+            this["itemIds"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OnboardingApplyRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): OnboardingApplyRequest {
+        const $$createField0_0 = $$createType8;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("itemIds" in $$parsedSource) {
+            $$parsedSource["itemIds"] = $$createField0_0($$parsedSource["itemIds"]);
+        }
+        return new OnboardingApplyRequest($$parsedSource as Partial<OnboardingApplyRequest>);
+    }
+}
+
+export const OnboardingItem = onboarding$0.Item;
+export type OnboardingItem = onboarding$0.Item;
+
+export class OnboardingStatus {
+    "items": OnboardingItem[];
+    "shouldShow": boolean;
+    "localDaemon": boolean;
+    "statePath": string;
+
+    /** Creates a new OnboardingStatus instance. */
+    constructor($$source: Partial<OnboardingStatus> = {}) {
+        if (!("items" in $$source)) {
+            this["items"] = [];
+        }
+        if (!("shouldShow" in $$source)) {
+            this["shouldShow"] = false;
+        }
+        if (!("localDaemon" in $$source)) {
+            this["localDaemon"] = false;
+        }
+        if (!("statePath" in $$source)) {
+            this["statePath"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OnboardingStatus instance from a string or object.
+     */
+    static createFrom($$source: any = {}): OnboardingStatus {
+        const $$createField0_0 = $$createType10;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("items" in $$parsedSource) {
+            $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
+        }
+        return new OnboardingStatus($$parsedSource as Partial<OnboardingStatus>);
+    }
+}
+
 export class OutputRequest {
     "ptyId": string;
     "fromOffset": number;
@@ -1431,8 +1499,8 @@ export class PluginStatus {
      * Creates a new PluginStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): PluginStatus {
-        const $$createField8_0 = $$createType10;
-        const $$createField9_0 = $$createType12;
+        const $$createField8_0 = $$createType12;
+        const $$createField9_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("resolvers" in $$parsedSource) {
             $$parsedSource["resolvers"] = $$createField8_0($$parsedSource["resolvers"]);
@@ -1512,7 +1580,7 @@ export class ProjectAttachmentTemplate {
      * Creates a new ProjectAttachmentTemplate instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectAttachmentTemplate {
-        const $$createField4_0 = $$createType14;
+        const $$createField4_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("fields" in $$parsedSource) {
             $$parsedSource["fields"] = $$createField4_0($$parsedSource["fields"]);
@@ -1541,7 +1609,7 @@ export class ProjectContext {
      * Creates a new ProjectContext instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectContext {
-        const $$createField1_0 = $$createType16;
+        const $$createField1_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField1_0($$parsedSource["items"]);
@@ -1614,10 +1682,10 @@ export class ProjectDetail {
      * Creates a new ProjectDetail instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectDetail {
-        const $$createField0_0 = $$createType17;
-        const $$createField1_0 = $$createType19;
-        const $$createField2_0 = $$createType20;
-        const $$createField3_0 = $$createType22;
+        const $$createField0_0 = $$createType19;
+        const $$createField1_0 = $$createType21;
+        const $$createField2_0 = $$createType22;
+        const $$createField3_0 = $$createType24;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("project" in $$parsedSource) {
             $$parsedSource["project"] = $$createField0_0($$parsedSource["project"]);
@@ -1769,9 +1837,9 @@ export class ReportStatusResponse {
      * Creates a new ReportStatusResponse instance from a string or object.
      */
     static createFrom($$source: any = {}): ReportStatusResponse {
-        const $$createField0_0 = $$createType23;
-        const $$createField1_0 = $$createType24;
-        const $$createField2_0 = $$createType25;
+        const $$createField0_0 = $$createType25;
+        const $$createField1_0 = $$createType26;
+        const $$createField2_0 = $$createType27;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("event" in $$parsedSource) {
             $$parsedSource["event"] = $$createField0_0($$parsedSource["event"]);
@@ -1920,7 +1988,7 @@ export class RunPluginProjectAttachmentTemplateRequest {
      * Creates a new RunPluginProjectAttachmentTemplateRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): RunPluginProjectAttachmentTemplateRequest {
-        const $$createField1_0 = $$createType26;
+        const $$createField1_0 = $$createType28;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("values" in $$parsedSource) {
             $$parsedSource["values"] = $$createField1_0($$parsedSource["values"]);
@@ -2219,9 +2287,9 @@ export class StartPTYOptions {
      * Creates a new StartPTYOptions instance from a string or object.
      */
     static createFrom($$source: any = {}): StartPTYOptions {
-        const $$createField3_0 = $$createType26;
+        const $$createField3_0 = $$createType28;
         const $$createField4_0 = $$createType8;
-        const $$createField6_0 = $$createType28;
+        const $$createField6_0 = $$createType30;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("env" in $$parsedSource) {
             $$parsedSource["env"] = $$createField3_0($$parsedSource["env"]);
@@ -2349,7 +2417,7 @@ export class StartedHTTPForward {
      * Creates a new StartedHTTPForward instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedHTTPForward {
-        const $$createField2_0 = $$createType29;
+        const $$createField2_0 = $$createType31;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("forward" in $$parsedSource) {
             $$parsedSource["forward"] = $$createField2_0($$parsedSource["forward"]);
@@ -2604,7 +2672,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType30;
+        const $$createField2_0 = $$createType32;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -2648,25 +2716,27 @@ const $$createType5 = StartPTYOptions.createFrom;
 const $$createType6 = $Create.Nullable($$createType5);
 const $$createType7 = session$0.Session.createFrom;
 const $$createType8 = $Create.Array($Create.Any);
-const $$createType9 = PluginResolver.createFrom;
+const $$createType9 = onboarding$0.Item.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = ProjectAttachmentTemplate.createFrom;
+const $$createType11 = PluginResolver.createFrom;
 const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = PluginTemplateField.createFrom;
+const $$createType13 = ProjectAttachmentTemplate.createFrom;
 const $$createType14 = $Create.Array($$createType13);
-const $$createType15 = ProjectContextItem.createFrom;
+const $$createType15 = PluginTemplateField.createFrom;
 const $$createType16 = $Create.Array($$createType15);
-const $$createType17 = workitem$0.Project.createFrom;
-const $$createType18 = workitem$0.WorkItem.createFrom;
-const $$createType19 = $Create.Array($$createType18);
-const $$createType20 = $Create.Array($$createType7);
-const $$createType21 = workitem$0.WorkItemRun.createFrom;
-const $$createType22 = $Create.Array($$createType21);
-const $$createType23 = workitem$0.StatusEvent.createFrom;
-const $$createType24 = $Create.Nullable($$createType21);
-const $$createType25 = $Create.Nullable($$createType18);
-const $$createType26 = $Create.Map($Create.Any, $Create.Any);
-const $$createType27 = StartPTYAgentBridgeOptions.createFrom;
-const $$createType28 = $Create.Nullable($$createType27);
-const $$createType29 = HTTPForward.createFrom;
-const $$createType30 = WorktrunkBinary.createFrom;
+const $$createType17 = ProjectContextItem.createFrom;
+const $$createType18 = $Create.Array($$createType17);
+const $$createType19 = workitem$0.Project.createFrom;
+const $$createType20 = workitem$0.WorkItem.createFrom;
+const $$createType21 = $Create.Array($$createType20);
+const $$createType22 = $Create.Array($$createType7);
+const $$createType23 = workitem$0.WorkItemRun.createFrom;
+const $$createType24 = $Create.Array($$createType23);
+const $$createType25 = workitem$0.StatusEvent.createFrom;
+const $$createType26 = $Create.Nullable($$createType23);
+const $$createType27 = $Create.Nullable($$createType20);
+const $$createType28 = $Create.Map($Create.Any, $Create.Any);
+const $$createType29 = StartPTYAgentBridgeOptions.createFrom;
+const $$createType30 = $Create.Nullable($$createType29);
+const $$createType31 = HTTPForward.createFrom;
+const $$createType32 = WorktrunkBinary.createFrom;

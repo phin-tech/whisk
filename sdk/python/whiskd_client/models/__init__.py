@@ -51,6 +51,7 @@ from .gate_config import GateConfig
 from .gate_report import GateReport
 from .history_event import HistoryEvent
 from .http_forward import HTTPForward
+from .item import Item
 from .kill_pty_request import KillPTYRequest
 from .launch_execution_request import LaunchExecutionRequest
 from .launch_work_item_run_request import LaunchWorkItemRunRequest
@@ -60,6 +61,8 @@ from .mark_agent_bridge_event_read_request import MarkAgentBridgeEventReadReques
 from .mark_status_event_read_request import MarkStatusEventReadRequest
 from .metadata_value import MetadataValue
 from .move_work_item_request import MoveWorkItemRequest
+from .onboarding_apply_request import OnboardingApplyRequest
+from .onboarding_status import OnboardingStatus
 from .output_snapshot import OutputSnapshot
 from .pane import Pane
 from .plugin_resolver import PluginResolver
@@ -185,6 +188,7 @@ __all__ = (
     "GateReport",
     "HistoryEvent",
     "HTTPForward",
+    "Item",
     "KillPTYRequest",
     "LaunchExecutionRequest",
     "LaunchWorkItemRunRequest",
@@ -194,6 +198,8 @@ __all__ = (
     "MarkStatusEventReadRequest",
     "MetadataValue",
     "MoveWorkItemRequest",
+    "OnboardingApplyRequest",
+    "OnboardingStatus",
     "OutputSnapshot",
     "Pane",
     "PluginResolver",

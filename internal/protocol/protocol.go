@@ -3,6 +3,7 @@ package protocol
 import (
 	"time"
 
+	"github.com/phin-tech/whisk/internal/domain/onboarding"
 	"github.com/phin-tech/whisk/internal/domain/ptybookmark"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
@@ -13,6 +14,19 @@ const DaemonAPIVersion = 18
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
 	GitSHA     string `json:"gitSha"`
+}
+
+type OnboardingItem = onboarding.Item
+
+type OnboardingStatus struct {
+	Items       []OnboardingItem `json:"items"`
+	ShouldShow  bool             `json:"shouldShow"`
+	LocalDaemon bool             `json:"localDaemon"`
+	StatePath   string           `json:"statePath"`
+}
+
+type OnboardingApplyRequest struct {
+	ItemIDs []string `json:"itemIds"`
 }
 
 type ClearDaemonRequest struct{}

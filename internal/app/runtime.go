@@ -140,6 +140,9 @@ type RuntimeConfig struct {
 	WorkItemStore              WorkItemStore
 	DaemonURL                  string
 	CLIPath                    string
+	DaemonAPIVersion           int
+	OnboardingSkillDir         string
+	OnboardingStatePath        string
 	AgentHookPaths             *agenthooks.Paths
 	AgentHookLogPaths          *agenthooklog.Paths
 	AgentBridgeApprovalTimeout time.Duration
@@ -160,6 +163,9 @@ type Runtime struct {
 	workItemStore              WorkItemStore
 	daemonURL                  string
 	cliPath                    string
+	daemonAPIVersion           int
+	onboardingSkillDir         string
+	onboardingStatePath        string
 	agentHookPaths             *agenthooks.Paths
 	agentHookLogPaths          *agenthooklog.Paths
 	agentHookLogEnabled        bool
@@ -471,6 +477,9 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		workItemStore:              config.WorkItemStore,
 		daemonURL:                  config.DaemonURL,
 		cliPath:                    config.CLIPath,
+		daemonAPIVersion:           config.DaemonAPIVersion,
+		onboardingSkillDir:         config.OnboardingSkillDir,
+		onboardingStatePath:        config.OnboardingStatePath,
 		agentHookPaths:             config.AgentHookPaths,
 		agentHookLogPaths:          config.AgentHookLogPaths,
 		agentHookLogEnabled:        true,
@@ -1189,6 +1198,31 @@ func (r *Runtime) reconcileLoadedWorkItemRuns(ctx context.Context) error {
 }
 
 func (r *Runtime) ClosePane(ctx context.Context, req ClosePaneRequest) (session.Session, error) {
+	current, ok := r.state.Get(req.SessionID)
+	if !ok {
+		return session.Session{}, fmt.Errorf("session %s not found", req.SessionID)
+	}
+	pane, ok := current.Panes[req.PaneID]
+	if !ok || pane.WindowID != req.WindowID {
+		return session.Session{}, fmt.Errorf("pane %s not found", req.PaneID)
+	}
+	var closedPTYID string
+	if pane.CurrentPTYID != nil && *pane.CurrentPTYID != "" {
+		closedPTYID = *pane.CurrentPTYID
+		if r.ptys == nil {
+			return session.Session{}, fmt.Errorf("pty backend required")
+		}
+		running, err := r.ptyIDIsRunning(ctx, pane.CurrentPTYID)
+		if err != nil {
+			return session.Session{}, err
+		}
+		if running {
+			if _, err := r.ptys.Kill(ctx, closedPTYID); err != nil {
+				return session.Session{}, err
+			}
+			r.markPTYKilled(closedPTYID)
+		}
+	}
 	updated, err := r.state.ClosePane(session.ClosePane{
 		SessionID: req.SessionID,
 		WindowID:  req.WindowID,
@@ -1200,7 +1234,16 @@ func (r *Runtime) ClosePane(ctx context.Context, req ClosePaneRequest) (session.
 	if err := r.persistSessions(ctx); err != nil {
 		return session.Session{}, err
 	}
+	if closedPTYID != "" {
+		r.detachPTY(closedPTYID, req.SessionID, req.WindowID, req.PaneID)
+		if err := r.cancelRunsLinkedToClosedTerminals(ctx, nil, []string{closedPTYID}); err != nil {
+			return session.Session{}, err
+		}
+	}
 	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
+	if closedPTYID != "" {
+		r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: closedPTYID})
+	}
 	return updated, nil
 }
 

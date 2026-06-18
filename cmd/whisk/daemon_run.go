@@ -26,6 +26,7 @@ import (
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/events"
+	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/server"
 )
 
@@ -98,16 +99,17 @@ func serveDaemon(addr string) error {
 		return err
 	}
 	runtime, err := app.NewRuntimeWithError(app.RuntimeConfig{
-		PTYBackend:      native.NewBackend(),
-		Worktrees:       worktrunk.NewBackend(nil),
-		Plugins:         pluginManager,
-		EventSink:       eventBus,
-		SessionStore:    store,
-		TranscriptStore: transcripts,
-		BookmarkStore:   bookmarks,
-		WorkItemStore:   workItems,
-		DaemonURL:       "http://" + addr,
-		CLIPath:         whiskCLIPath(),
+		PTYBackend:       native.NewBackend(),
+		Worktrees:        worktrunk.NewBackend(nil),
+		Plugins:          pluginManager,
+		EventSink:        eventBus,
+		SessionStore:     store,
+		TranscriptStore:  transcripts,
+		BookmarkStore:    bookmarks,
+		WorkItemStore:    workItems,
+		DaemonURL:        "http://" + addr,
+		CLIPath:          whiskCLIPath(),
+		DaemonAPIVersion: protocol.DaemonAPIVersion,
 	})
 	if err != nil {
 		return err
