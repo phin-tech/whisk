@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -203,7 +204,7 @@ func runSessionClose(args []string) error {
 
 func runSessionPTY(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk session pty <list|output|tail|kill>")
+		return fmt.Errorf("usage: whisk session pty <list|output|tail|write|resize|kill>")
 	}
 	switch args[0] {
 	case "list":
@@ -212,10 +213,14 @@ func runSessionPTY(args []string) error {
 		return runSessionPTYOutput(args[1:])
 	case "tail":
 		return runSessionPTYTail(args[1:])
+	case "write":
+		return runSessionPTYWrite(args[1:])
+	case "resize":
+		return runSessionPTYResize(args[1:])
 	case "kill":
 		return runSessionPTYKill(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk session pty <list|output|tail|kill>")
+		return fmt.Errorf("usage: whisk session pty <list|output|tail|write|resize|kill>")
 	}
 }
 
@@ -419,6 +424,55 @@ func skipEscapeSequence(input []byte, start int) int {
 	default:
 		return start + 1
 	}
+}
+
+func runSessionPTYWrite(args []string) error {
+	flags := flag.NewFlagSet("session pty write", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	data := flags.String("data", "", "data to write")
+	fromStdin := flags.Bool("stdin", false, "read data from stdin")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 || (*data == "" && !*fromStdin) || (*data != "" && *fromStdin) {
+		return fmt.Errorf("usage: whisk session pty write [-url http://127.0.0.1:8787] (-data text | -stdin) <pty-id>")
+	}
+	writeData := *data
+	if *fromStdin {
+		raw, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return err
+		}
+		writeData = string(raw)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return client.NewHTTP(*baseURL, nil).WritePTY(ctx, protocol.WritePTYRequest{
+		PtyID: flags.Arg(0),
+		Data:  writeData,
+	})
+}
+
+func runSessionPTYResize(args []string) error {
+	flags := flag.NewFlagSet("session pty resize", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	cols := flags.Int("cols", 0, "terminal columns")
+	rows := flags.Int("rows", 0, "terminal rows")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 || *cols <= 0 || *rows <= 0 {
+		return fmt.Errorf("usage: whisk session pty resize [-url http://127.0.0.1:8787] -cols n -rows n <pty-id>")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return client.NewHTTP(*baseURL, nil).ResizePTY(ctx, protocol.ResizePTYRequest{
+		PtyID: flags.Arg(0),
+		Cols:  *cols,
+		Rows:  *rows,
+	})
 }
 
 func runSessionPTYKill(args []string) error {

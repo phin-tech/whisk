@@ -309,6 +309,48 @@ func TestRunSessionPTYKillUsesPTYKillEndpoint(t *testing.T) {
 	}
 }
 
+func TestRunSessionPTYWriteUsesPTYWriteEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/ptys/pty_01/write" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req protocol.WritePTYRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.PtyID != "pty_01" || req.Data != "printf ok\n" {
+			t.Fatalf("request = %#v", req)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	if err := run([]string{"session", "pty", "write", "-url", server.URL, "-data", "printf ok\n", "pty_01"}); err != nil {
+		t.Fatalf("session pty write: %v", err)
+	}
+}
+
+func TestRunSessionPTYResizeUsesPTYResizeEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/ptys/pty_01/resize" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req protocol.ResizePTYRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.PtyID != "pty_01" || req.Cols != 120 || req.Rows != 40 {
+			t.Fatalf("request = %#v", req)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	if err := run([]string{"session", "pty", "resize", "-url", server.URL, "-cols", "120", "-rows", "40", "pty_01"}); err != nil {
+		t.Fatalf("session pty resize: %v", err)
+	}
+}
+
 func TestRunSessionPTYOutputUsesPTYOutputEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/v1/ptys/pty_01/output" {
