@@ -339,6 +339,17 @@ type RunPluginProjectAttachmentTemplateRequest struct {
 	Values    map[string]string `json:"values,omitempty"`
 }
 
+// RegistryPlugin is one installable plugin advertised by the configured plugin
+// registry, annotated with local install and trust state.
+type RegistryPlugin struct {
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	SourceType  string `json:"sourceType"`
+	Installed   bool   `json:"installed"`
+	Trusted     bool   `json:"trusted"`
+}
+
 type AgentHookLogStatus struct {
 	Enabled           bool   `json:"enabled"`
 	ClearAfterSession bool   `json:"clearAfterSession"`

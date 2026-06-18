@@ -340,6 +340,14 @@ func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 	if err != nil || len(plugins) != 1 || plugins[0].ID != "github" {
 		t.Fatalf("plugins = %#v, err = %v", plugins, err)
 	}
+	registry, err := daemon.ListRegistryPlugins(ctx)
+	if err != nil || len(registry) != 1 || registry[0].SourceType != "path" {
+		t.Fatalf("registry = %#v, err = %v", registry, err)
+	}
+	installed, err := daemon.InstallPlugin(ctx, "github")
+	if err != nil || installed.ID != "github" || installed.Trusted {
+		t.Fatalf("install = %#v, err = %v", installed, err)
+	}
 	trusted, err := daemon.TrustPlugin(ctx, "github")
 	if err != nil || !trusted.Trusted {
 		t.Fatalf("trust = %#v, err = %v", trusted, err)
@@ -535,6 +543,16 @@ func (f *pluginRegistryFake) TrustPlugin(_ context.Context, id string) (app.Plug
 
 func (f *pluginRegistryFake) UntrustPlugin(_ context.Context, id string) (app.PluginStatus, error) {
 	status := app.PluginStatus{ID: id, Name: "GitHub", Valid: true}
+	f.statuses = []app.PluginStatus{status}
+	return status, nil
+}
+
+func (f *pluginRegistryFake) ListRegistryPlugins(context.Context) ([]app.RegistryPlugin, error) {
+	return []app.RegistryPlugin{{ID: "github", Name: "GitHub Issues", SourceType: "path", Installed: false}}, nil
+}
+
+func (f *pluginRegistryFake) InstallPlugin(_ context.Context, id string) (app.PluginStatus, error) {
+	status := app.PluginStatus{ID: id, Name: "GitHub Issues", Valid: true}
 	f.statuses = []app.PluginStatus{status}
 	return status, nil
 }

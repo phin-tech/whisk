@@ -936,6 +936,81 @@
         }
       }
     },
+    "/v1/plugin-registry": {
+      "get": {
+        "operationId": "listRegistryPlugins",
+        "summary": "List installable plugins from the configured registry",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RegistryPlugin"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/plugin-registry/{pluginID}/install": {
+      "post": {
+        "operationId": "installRegistryPlugin",
+        "summary": "Install a plugin from the configured registry (untrusted)",
+        "tags": [
+          "plugins"
+        ],
+        "parameters": [
+          {
+            "name": "pluginID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/plugins": {
       "get": {
         "operationId": "listPlugins",
@@ -5766,6 +5841,35 @@
         },
         "required": [
           "workItemId"
+        ],
+        "type": "object"
+      },
+      "RegistryPlugin": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sourceType": {
+            "type": "string"
+          },
+          "trusted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "sourceType",
+          "installed",
+          "trusted"
         ],
         "type": "object"
       },

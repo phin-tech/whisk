@@ -40,6 +40,8 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("POST /v1/agent-hook-log/clear", server.clearAgentHookLog)
 	mux.HandleFunc("POST /v1/agent-hook-log/open", server.openAgentHookLog)
 	mux.HandleFunc("GET /v1/plugins", server.listPlugins)
+	mux.HandleFunc("GET /v1/plugin-registry", server.listRegistryPlugins)
+	mux.HandleFunc("POST /v1/plugin-registry/{pluginID}/install", server.installRegistryPlugin)
 	mux.HandleFunc("POST /v1/plugins/rescan", server.rescanPlugins)
 	mux.HandleFunc("POST /v1/plugins/{pluginID}/trust", server.trustPlugin)
 	mux.HandleFunc("POST /v1/plugins/{pluginID}/untrust", server.untrustPlugin)

@@ -46,6 +46,7 @@ var (
 	apiAgentBridgeEventList     = []AgentBridgeEvent(nil)
 	apiAgentHookIntegrationList = []AgentHookIntegration(nil)
 	apiPluginList               = []PluginStatus(nil)
+	apiRegistryPluginList       = []RegistryPlugin(nil)
 )
 
 var APIRoutes = []APIRoute{
@@ -66,6 +67,8 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/agent-hook-log/clear", OperationID: "clearAgentHookLog", Tag: "agent-bridges", Summary: "Clear hook log files", Response: AgentHookLogStatus{}},
 	{Method: "POST", Path: "/v1/agent-hook-log/open", OperationID: "openAgentHookLog", Tag: "agent-bridges", Summary: "Open hook log in the platform editor", Response: AgentHookLogStatus{}},
 	{Method: "GET", Path: "/v1/plugins", OperationID: "listPlugins", Tag: "plugins", Summary: "List discovered plugins", Response: apiPluginList},
+	{Method: "GET", Path: "/v1/plugin-registry", OperationID: "listRegistryPlugins", Tag: "plugins", Summary: "List installable plugins from the configured registry", Response: apiRegistryPluginList},
+	{Method: "POST", Path: "/v1/plugin-registry/{pluginID}/install", OperationID: "installRegistryPlugin", Tag: "plugins", Summary: "Install a plugin from the configured registry (untrusted)", Response: PluginStatus{}, Status: 201},
 	{Method: "POST", Path: "/v1/plugins/rescan", OperationID: "rescanPlugins", Tag: "plugins", Summary: "Rescan plugin directories", Response: apiPluginList},
 	{Method: "POST", Path: "/v1/plugins/{pluginID}/trust", OperationID: "trustPlugin", Tag: "plugins", Summary: "Trust a discovered plugin", Response: PluginStatus{}},
 	{Method: "POST", Path: "/v1/plugins/{pluginID}/untrust", OperationID: "untrustPlugin", Tag: "plugins", Summary: "Untrust a discovered plugin", Response: PluginStatus{}},

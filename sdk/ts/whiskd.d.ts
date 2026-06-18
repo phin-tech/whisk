@@ -372,6 +372,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/plugin-registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List installable plugins from the configured registry */
+        get: operations["listRegistryPlugins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plugin-registry/{pluginID}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Install a plugin from the configured registry (untrusted) */
+        post: operations["installRegistryPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/plugins": {
         parameters: {
             query?: never;
@@ -1862,6 +1896,14 @@ export interface components {
             actor?: string;
             workItemId: string;
         };
+        RegistryPlugin: {
+            description?: string;
+            id: string;
+            installed: boolean;
+            name?: string;
+            sourceType: string;
+            trusted: boolean;
+        };
         RemoveWorktreeRequest: {
             alsoBranch: boolean;
             force: boolean;
@@ -2914,6 +2956,66 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listRegistryPlugins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryPlugin"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    installRegistryPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStatus"];
+                };
             };
             /** @description error */
             default: {

@@ -65,6 +65,7 @@ export {
     PromptTemplate,
     Question,
     QueueExecutionRequest,
+    RegistryPlugin,
     RemovePTYBookmarkRequest,
     RemoveWorktreeRequest,
     ReportStatusRequest,
