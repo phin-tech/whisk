@@ -638,6 +638,42 @@ func TestRuntimeCreateSessionWithInitialPTYSpawnsIntoDefaultPane(t *testing.T) {
 	}
 }
 
+func TestRuntimeCreateProjectSessionUsesWorkingDirAndProjectRootEnv(t *testing.T) {
+	ctx := context.Background()
+	rootDir := t.TempDir()
+	workingDir := t.TempDir()
+	ptyBackend := newMemoryPTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: ptyBackend})
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: rootDir})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    rootDir,
+		WorkingDir: workingDir,
+		ProjectID:  project.ID,
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if created.Session.RootDir != rootDir {
+		t.Fatalf("session root dir = %q", created.Session.RootDir)
+	}
+	if created.Session.Panes[created.PaneID].WorkingDir != workingDir {
+		t.Fatalf("pane working dir = %q", created.Session.Panes[created.PaneID].WorkingDir)
+	}
+	if len(ptyBackend.spawns) != 1 || ptyBackend.spawns[0].WorkingDir != workingDir {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	if got := ptyBackend.spawns[0].Env["WHISK_PROJECT_ROOT"]; got != rootDir {
+		t.Fatalf("WHISK_PROJECT_ROOT = %q, want %q", got, rootDir)
+	}
+}
+
 func TestRuntimeCreateSessionRejectsMissingOrInvalidRootDir(t *testing.T) {
 	ctx := context.Background()
 	runtime := app.NewRuntime(app.RuntimeConfig{})

@@ -7,27 +7,31 @@
   export let visible = false;
   export let loading = false;
   export let initialRootDir = "";
+  export let initialWorkingDir = "";
   export let onclose: () => void;
   export let oncreate: (request: {
     name: string;
     rootDir: string;
+    workingDir: string;
     initialPty: { cols: number; rows: number; command: string } | null;
   }) => void;
 
   let name = "";
   let rootDir = "";
+  let workingDir = "";
   let command = "";
   let initialPty = true;
   let localError = "";
   let previousVisible = false;
 
-  $: canCreate = rootDir.trim().length > 0 && !loading;
+  $: canCreate = rootDir.trim().length > 0 && workingDir.trim().length > 0 && !loading;
   $: if (visible && !previousVisible) reset();
   $: previousVisible = visible;
 
   function reset() {
     name = "";
     rootDir = initialRootDir;
+    workingDir = initialWorkingDir || initialRootDir;
     command = "";
     initialPty = true;
     localError = "";
@@ -39,6 +43,7 @@
     oncreate({
       name: name.trim(),
       rootDir: rootDir.trim(),
+      workingDir: workingDir.trim(),
       initialPty: initialPty ? { cols: 0, rows: 0, command: command.trim() } : null,
     });
   }
@@ -57,6 +62,26 @@
       });
       if (typeof selected === "string" && selected.length > 0) {
         rootDir = selected;
+      }
+    } catch (err) {
+      localError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  async function chooseWorkingDir() {
+    localError = "";
+    try {
+      const selected = await Dialogs.OpenFile({
+        Title: "Working directory",
+        ButtonText: "Choose",
+        Directory: workingDir || rootDir || undefined,
+        CanChooseDirectories: true,
+        CanChooseFiles: false,
+        CanCreateDirectories: true,
+        AllowsMultipleSelection: false,
+      });
+      if (typeof selected === "string" && selected.length > 0) {
+        workingDir = selected;
       }
     } catch (err) {
       localError = err instanceof Error ? err.message : String(err);
@@ -133,6 +158,31 @@
               class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
               disabled={loading}
               on:click={chooseRootDir}
+            >
+              <FolderOpen size={15} />
+            </button>
+          </div>
+        </label>
+
+        <label class="block">
+          <span class="mb-1 block text-[11px] font-semibold uppercase tracking-widest text-text-muted">
+            Working directory
+          </span>
+          <div class="flex gap-2">
+            <input
+              class="h-9 min-w-0 flex-1 rounded border border-border bg-bg-deep px-2.5 font-mono text-[12px] text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent-dim"
+              type="text"
+              bind:value={workingDir}
+              placeholder="/path/to/start"
+              disabled={loading}
+            />
+            <button
+              type="button"
+              aria-label="Choose working directory"
+              title="Choose working directory"
+              class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+              disabled={loading}
+              on:click={chooseWorkingDir}
             >
               <FolderOpen size={15} />
             </button>

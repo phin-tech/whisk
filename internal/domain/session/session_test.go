@@ -47,6 +47,28 @@ func TestCreateSessionCreatesDefaultWindowAndPane(t *testing.T) {
 	}
 }
 
+func TestCreateSessionSeparatesRootDirAndWorkingDir(t *testing.T) {
+	state := session.NewState()
+
+	created, err := state.CreateSession(session.CreateSession{
+		SessionID:  "sess_01",
+		WindowID:   "win_01",
+		PaneID:     "pane_01",
+		RootDir:    "/repo",
+		WorkingDir: "/repo/tools",
+	})
+
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if created.RootDir != "/repo" {
+		t.Fatalf("root dir = %q", created.RootDir)
+	}
+	if created.Panes["pane_01"].WorkingDir != "/repo/tools" {
+		t.Fatalf("pane working dir = %q", created.Panes["pane_01"].WorkingDir)
+	}
+}
+
 func TestCreateSessionAssignsProject(t *testing.T) {
 	state := session.NewState()
 

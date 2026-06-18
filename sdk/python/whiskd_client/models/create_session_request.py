@@ -23,12 +23,14 @@ class CreateSessionRequest:
         root_dir (str):
         initial_pty (None | StartPTYOptions | Unset):
         project_id (str | Unset):
+        working_dir (str | Unset):
     """
 
     name: str
     root_dir: str
     initial_pty: None | StartPTYOptions | Unset = UNSET
     project_id: str | Unset = UNSET
+    working_dir: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -48,6 +50,8 @@ class CreateSessionRequest:
 
         project_id = self.project_id
 
+        working_dir = self.working_dir
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -60,6 +64,8 @@ class CreateSessionRequest:
             field_dict["initialPty"] = initial_pty
         if project_id is not UNSET:
             field_dict["projectId"] = project_id
+        if working_dir is not UNSET:
+            field_dict["workingDir"] = working_dir
 
         return field_dict
 
@@ -91,11 +97,14 @@ class CreateSessionRequest:
 
         project_id = d.pop("projectId", UNSET)
 
+        working_dir = d.pop("workingDir", UNSET)
+
         create_session_request = cls(
             name=name,
             root_dir=root_dir,
             initial_pty=initial_pty,
             project_id=project_id,
+            working_dir=working_dir,
         )
 
         create_session_request.additional_properties = d

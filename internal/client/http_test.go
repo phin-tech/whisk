@@ -93,6 +93,19 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	if len(ptys) != 1 || ptys[0].ID != created.MainPtyID || ptys[0].SessionID != created.Session.ID {
 		t.Fatalf("ptys = %#v", ptys)
 	}
+	sessionRoot := t.TempDir()
+	sessionWorkingDir := t.TempDir()
+	separateDir, err := daemon.CreateSession(ctx, protocol.CreateSessionRequest{
+		Name:       "Separate",
+		RootDir:    sessionRoot,
+		WorkingDir: sessionWorkingDir,
+	})
+	if err != nil {
+		t.Fatalf("create session with working dir: %v", err)
+	}
+	if separateDir.Session.RootDir != sessionRoot || separateDir.Session.Panes[separateDir.PaneID].WorkingDir != sessionWorkingDir {
+		t.Fatalf("separate dir session = %#v", separateDir.Session)
+	}
 	bookmark, err := daemon.AddPTYBookmark(ctx, protocol.AddPTYBookmarkRequest{
 		PTYID:  created.MainPtyID,
 		Offset: 2,

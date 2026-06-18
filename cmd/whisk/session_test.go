@@ -118,6 +118,33 @@ func TestRunSessionCreatePostsProjectID(t *testing.T) {
 	}
 }
 
+func TestRunSessionCreatePostsWorkingDir(t *testing.T) {
+	root := t.TempDir()
+	workingDir := t.TempDir()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/sessions" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req protocol.CreateSessionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.RootDir != root || req.WorkingDir != workingDir {
+			t.Fatalf("request = %#v", req)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.CreatedSession{
+			Session: session.Session{ID: "ses_01", RootDir: root, Panes: map[string]session.Pane{}},
+			PaneID:  "pane_01",
+		})
+	}))
+	defer server.Close()
+
+	if err := run([]string{"session", "create", "-url", server.URL, "-root", root, "-working-dir", workingDir, "-pty=false"}); err != nil {
+		t.Fatalf("session create: %v", err)
+	}
+}
+
 func TestRunSessionCreateResolvesRelativeRoot(t *testing.T) {
 	absRoot, err := filepath.Abs(".")
 	if err != nil {

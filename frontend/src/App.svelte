@@ -151,6 +151,7 @@
   let newSessionOpen = false;
   let pendingSessionProjectId = "";
   let pendingSessionRootDir = "";
+  let pendingSessionWorkingDir = "";
   let settingsOpen = false;
   let railSide: RailSide = "right";
   let startupView: StartupView = "sessions";
@@ -576,6 +577,7 @@
     settingsOpen = false;
     pendingSessionProjectId = "";
     pendingSessionRootDir = "";
+    pendingSessionWorkingDir = "";
     activeMain = "session";
     newSessionOpen = true;
   }
@@ -587,12 +589,14 @@
     settingsOpen = false;
     pendingSessionProjectId = project.id;
     pendingSessionRootDir = project.rootDir;
+    pendingSessionWorkingDir = project.rootDir;
     newSessionOpen = true;
   }
 
   async function createSession(request: {
     name: string;
     rootDir: string;
+    workingDir: string;
     initialPty: { cols: number; rows: number; command: string } | null;
   }) {
     error = "";
@@ -601,6 +605,7 @@
       const created = await CreateSession({
         name: request.name,
         rootDir: request.rootDir,
+        workingDir: request.workingDir,
         projectId: pendingSessionProjectId,
         initialPty: request.initialPty,
       });
@@ -618,6 +623,7 @@
       }
       pendingSessionProjectId = "";
       pendingSessionRootDir = "";
+      pendingSessionWorkingDir = "";
       newSessionOpen = false;
       await refreshPTYs();
       if (created.ptyId) await refreshOutput(created.ptyId);
@@ -1672,6 +1678,7 @@
           visible={newSessionOpen}
           loading={loadingSession}
           initialRootDir={pendingSessionRootDir}
+          initialWorkingDir={pendingSessionWorkingDir}
           onclose={() => (newSessionOpen = false)}
           oncreate={createSession}
         />
