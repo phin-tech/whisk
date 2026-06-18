@@ -12,8 +12,21 @@ type PluginRegistry interface {
 	RescanPlugins(context.Context) ([]PluginStatus, error)
 	TrustPlugin(context.Context, string) (PluginStatus, error)
 	UntrustPlugin(context.Context, string) (PluginStatus, error)
+	ListRegistryPlugins(context.Context) ([]RegistryPlugin, error)
+	InstallPlugin(context.Context, string) (PluginStatus, error)
 	RunProjectAttachmentTemplate(context.Context, RunPluginProjectAttachmentTemplateRequest) (AddProjectAttachmentRequest, error)
 	ResolveProjectAttachmentProvider(string) ProjectContextResolver
+}
+
+// RegistryPlugin is one installable plugin advertised by the configured plugin
+// registry, annotated with whether it is already installed and trusted locally.
+type RegistryPlugin struct {
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	SourceType  string `json:"sourceType"`
+	Installed   bool   `json:"installed"`
+	Trusted     bool   `json:"trusted"`
 }
 
 type PluginStatus struct {
@@ -97,6 +110,20 @@ func (r *Runtime) UntrustPlugin(ctx context.Context, id string) (PluginStatus, e
 		return PluginStatus{}, nil
 	}
 	return r.plugins.UntrustPlugin(ctx, id)
+}
+
+func (r *Runtime) ListRegistryPlugins(ctx context.Context) ([]RegistryPlugin, error) {
+	if r.plugins == nil {
+		return nil, nil
+	}
+	return r.plugins.ListRegistryPlugins(ctx)
+}
+
+func (r *Runtime) InstallPlugin(ctx context.Context, id string) (PluginStatus, error) {
+	if r.plugins == nil {
+		return PluginStatus{}, fmt.Errorf("plugins are not configured")
+	}
+	return r.plugins.InstallPlugin(ctx, id)
 }
 
 func (r *Runtime) RunPluginProjectAttachmentTemplate(ctx context.Context, req RunPluginProjectAttachmentTemplateRequest) (workitem.Project, error) {

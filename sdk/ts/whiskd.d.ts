@@ -372,15 +372,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/onboarding": {
+    "/v1/plugin-registry": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get local onboarding status */
-        get: operations["getOnboarding"];
+        /** List installable plugins from the configured registry */
+        get: operations["listRegistryPlugins"];
         put?: never;
         post?: never;
         delete?: never;
@@ -389,7 +389,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/onboarding/apply": {
+    "/v1/plugin-registry/{pluginID}/install": {
         parameters: {
             query?: never;
             header?: never;
@@ -398,8 +398,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Apply selected local onboarding items */
-        post: operations["applyOnboarding"];
+        /** Install a plugin from the configured registry (untrusted) */
+        post: operations["installRegistryPlugin"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1702,22 +1702,6 @@ export interface components {
             type: string;
             worktreePath?: string;
         };
-        Item: {
-            description?: string;
-            detail?: string;
-            hash?: string;
-            id: string;
-            installedHash?: string;
-            installedVersion?: string;
-            kind: string;
-            label: string;
-            latestVersion?: string;
-            path?: string;
-            selectedByDefault: boolean;
-            status: string;
-            target: string;
-            version?: string;
-        };
         KillPTYRequest: {
             ptyId: string;
         };
@@ -1761,15 +1745,6 @@ export interface components {
             actor?: string;
             id: string;
             stageId: string;
-        };
-        OnboardingApplyRequest: {
-            itemIds: string[] | null;
-        };
-        OnboardingStatus: {
-            items: components["schemas"]["Item"][] | null;
-            localDaemon: boolean;
-            shouldShow: boolean;
-            statePath: string;
         };
         OutputSnapshot: {
             /** Format: int64 */
@@ -1920,6 +1895,14 @@ export interface components {
         QueueExecutionRequest: {
             actor?: string;
             workItemId: string;
+        };
+        RegistryPlugin: {
+            description?: string;
+            id: string;
+            installed: boolean;
+            name?: string;
+            sourceType: string;
+            trusted: boolean;
         };
         RemoveWorktreeRequest: {
             alsoBranch: boolean;
@@ -2985,7 +2968,7 @@ export interface operations {
             };
         };
     };
-    getOnboarding: {
+    listRegistryPlugins: {
         parameters: {
             query?: never;
             header?: never;
@@ -3000,7 +2983,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OnboardingStatus"];
+                    "application/json": components["schemas"]["RegistryPlugin"][];
                 };
             };
             /** @description error */
@@ -3014,26 +2997,24 @@ export interface operations {
             };
         };
     };
-    applyOnboarding: {
+    installRegistryPlugin: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                pluginID: string;
+            };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OnboardingApplyRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description success */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OnboardingStatus"];
+                    "application/json": components["schemas"]["PluginStatus"];
                 };
             };
             /** @description error */

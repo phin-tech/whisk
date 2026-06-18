@@ -83,6 +83,7 @@ from .prompt_template import PromptTemplate
 from .pty_info import PTYInfo
 from .question import Question
 from .queue_execution_request import QueueExecutionRequest
+from .registry_plugin import RegistryPlugin
 from .remove_worktree_request import RemoveWorktreeRequest
 from .report_status_request import ReportStatusRequest
 from .report_status_response import ReportStatusResponse
@@ -218,6 +219,7 @@ __all__ = (
     "PTYInfo",
     "Question",
     "QueueExecutionRequest",
+    "RegistryPlugin",
     "RemoveWorktreeRequest",
     "ReportStatusRequest",
     "ReportStatusResponse",

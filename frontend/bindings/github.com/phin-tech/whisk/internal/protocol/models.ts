@@ -1734,6 +1734,45 @@ export class QueueExecutionRequest {
     }
 }
 
+/**
+ * RegistryPlugin is one installable plugin advertised by the configured plugin
+ * registry, annotated with local install and trust state.
+ */
+export class RegistryPlugin {
+    "id": string;
+    "name"?: string;
+    "description"?: string;
+    "sourceType": string;
+    "installed": boolean;
+    "trusted": boolean;
+
+    /** Creates a new RegistryPlugin instance. */
+    constructor($$source: Partial<RegistryPlugin> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("sourceType" in $$source)) {
+            this["sourceType"] = "";
+        }
+        if (!("installed" in $$source)) {
+            this["installed"] = false;
+        }
+        if (!("trusted" in $$source)) {
+            this["trusted"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RegistryPlugin instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RegistryPlugin {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RegistryPlugin($$parsedSource as Partial<RegistryPlugin>);
+    }
+}
+
 export class RemovePTYBookmarkRequest {
     "bookmarkId": string;
 

@@ -191,6 +191,19 @@ func (c *HTTPClient) UntrustPlugin(ctx context.Context, id string) (protocol.Plu
 	return status, err
 }
 
+func (c *HTTPClient) ListRegistryPlugins(ctx context.Context) ([]protocol.RegistryPlugin, error) {
+	var plugins []protocol.RegistryPlugin
+	err := c.get(ctx, "/v1/plugin-registry", nil, &plugins)
+	return plugins, err
+}
+
+func (c *HTTPClient) InstallPlugin(ctx context.Context, id string) (protocol.PluginStatus, error) {
+	var status protocol.PluginStatus
+	path := "/v1/plugin-registry/" + url.PathEscape(id) + "/install"
+	err := c.post(ctx, path, struct{}{}, &status)
+	return status, err
+}
+
 func (c *HTTPClient) RunPluginProjectAttachmentTemplate(ctx context.Context, pluginID string, templateID string, req protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error) {
 	var project protocol.Project
 	path := "/v1/plugins/" + url.PathEscape(pluginID) + "/project-attachment-templates/" + url.PathEscape(templateID)

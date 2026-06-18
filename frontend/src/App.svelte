@@ -16,6 +16,7 @@
     GateReport,
     OnboardingStatus,
     PluginStatus,
+    RegistryPlugin,
     ProjectAttachmentTemplate,
     MetadataValue,
     Question,
@@ -91,6 +92,8 @@
     UpdateProjectAttachment,
     ListPlugins,
     OnboardingStatus as LoadOnboardingStatus,
+    ListRegistryPlugins,
+    InstallPlugin,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
   import CommandPalette from "./CommandPalette.svelte";
@@ -139,6 +142,8 @@
   let agentBridgeApprovals: AgentBridgeApproval[] = [];
   let agentBridgeEvents: AgentBridgeEvent[] = [];
   let plugins: PluginStatus[] = [];
+  let registryPlugins: RegistryPlugin[] = [];
+  let installingPluginId = "";
   let agentHookIntegrations: AgentHookIntegration[] = [];
   let agentHookLogStatus: AgentHookLogStatus | null = null;
   let agentHookAction = "";
@@ -695,6 +700,30 @@
       plugins = plugins.map((plugin) => (plugin.id === pluginId ? status : plugin));
     } catch (err) {
       error = `Update plugin trust failed: ${backendError(err)}`;
+    }
+  }
+
+  async function refreshRegistryPlugins() {
+    error = "";
+    try {
+      registryPlugins = (await ListRegistryPlugins()) ?? [];
+    } catch (err) {
+      error = `List registry plugins failed: ${backendError(err)}`;
+    }
+  }
+
+  async function installPlugin(pluginId: string) {
+    error = "";
+    installingPluginId = pluginId;
+    try {
+      await InstallPlugin(pluginId);
+      // Installed plugins land untrusted; refresh both the discovered set and
+      // the registry so install state and trust toggles reflect the new plugin.
+      await Promise.all([refreshPlugins(), refreshRegistryPlugins()]);
+    } catch (err) {
+      error = `Install plugin failed: ${backendError(err)}`;
+    } finally {
+      installingPluginId = "";
     }
   }
 
@@ -1477,7 +1506,7 @@
   function toggleSettings() {
     settingsOpen = !settingsOpen;
     if (!settingsOpen) return;
-    void Promise.all([refreshAgentHookIntegrations(), refreshPlugins()]).catch((err) => {
+    void Promise.all([refreshAgentHookIntegrations(), refreshPlugins(), refreshRegistryPlugins()]).catch((err) => {
       error = backendError(err);
     });
   }
@@ -1779,6 +1808,8 @@
           {keepDaemonAlive}
           {agentHookIntegrations}
           {plugins}
+          {registryPlugins}
+          {installingPluginId}
           {agentHookLogStatus}
           {agentHookAction}
           {agentHookNotice}
@@ -1791,6 +1822,8 @@
           onRefreshAgentHookIntegrations={() => void refreshAgentHookIntegrations()}
           onRefreshPlugins={() => void rescanPlugins()}
           onSetPluginTrusted={(pluginId, trusted) => void setPluginTrusted(pluginId, trusted)}
+          onRefreshRegistry={() => void refreshRegistryPlugins()}
+          onInstallPlugin={(pluginId) => void installPlugin(pluginId)}
           onCheckAgentHookIntegration={(provider) => void checkAgentHookIntegration(provider)}
           onInstallAgentHookIntegration={(provider) => void installAgentHookIntegration(provider)}
           onRemoveAgentHookIntegration={(provider) => void removeAgentHookIntegration(provider)}

@@ -64,14 +64,34 @@ type Manager struct {
 	dirs      map[string]string
 	trusted   map[string]bool
 	resolvers map[string]app.ProjectContextResolver
+	installer *Installer
 }
 
 func NewManager(envDirs []string, settings SettingsStore) (*Manager, error) {
 	manager := &Manager{envDirs: envDirs, settings: settings}
+	manager.installer = defaultInstaller()
 	if _, err := manager.RescanPlugins(context.Background()); err != nil {
 		return nil, err
 	}
 	return manager, nil
+}
+
+// defaultInstaller builds an Installer that fetches from the registry named by
+// WHISK_PLUGIN_REGISTRY (default: github phin-tech/whisk-plugins) and installs
+// into the shared config plugin directory. It returns nil if the environment
+// can't be resolved; the registry endpoints then report that installation is
+// unavailable rather than crashing the daemon.
+func defaultInstaller() *Installer {
+	transport, err := NewTransport(os.Getenv("WHISK_PLUGIN_REGISTRY"))
+	if err != nil {
+		return nil
+	}
+	configDir, err := configPluginDir()
+	if err != nil {
+		return nil
+	}
+	lockPath := filepath.Join(filepath.Dir(configDir), "plugins.lock.json")
+	return NewInstaller(transport, configDir, lockPath)
 }
 
 func (m *Manager) ListPlugins(context.Context) ([]app.PluginStatus, error) {

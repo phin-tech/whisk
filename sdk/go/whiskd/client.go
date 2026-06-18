@@ -101,6 +101,7 @@ type ProjectPreferences = protocol.ProjectPreferences
 type PromptTemplate = protocol.PromptTemplate
 type Question = protocol.Question
 type QueueExecutionRequest = protocol.QueueExecutionRequest
+type RegistryPlugin = protocol.RegistryPlugin
 type RemovePTYBookmarkRequest = protocol.RemovePTYBookmarkRequest
 type RemoveWorktreeRequest = protocol.RemoveWorktreeRequest
 type ReportStatusRequest = protocol.ReportStatusRequest
