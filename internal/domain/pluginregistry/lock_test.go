@@ -12,6 +12,7 @@ func TestLockRoundTrip(t *testing.T) {
 		t.Fatalf("ParseLock(nil): %v", err)
 	}
 	lock = lock.Set(pluginregistry.LockEntry{
+		Registry:    "phin-tech",
 		ID:          "github-issues",
 		Source:      pluginregistry.Source{Type: pluginregistry.SourcePath, Path: "plugins/github-issues"},
 		Version:     "0.1.0",
@@ -25,17 +26,33 @@ func TestLockRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLock: %v", err)
 	}
-	entry, ok := reparsed.Get("github-issues")
+	entry, ok := reparsed.Get("phin-tech", "github-issues")
 	if !ok || entry.Fingerprint != "sha256:abc" || entry.Version != "0.1.0" {
 		t.Fatalf("entry = %#v ok = %v", entry, ok)
 	}
 }
 
+func TestLockNamespacesByRegistry(t *testing.T) {
+	lock := pluginregistry.Lock{}
+	lock = lock.Set(pluginregistry.LockEntry{Registry: "phin-tech", ID: "github", Fingerprint: "1"})
+	lock = lock.Set(pluginregistry.LockEntry{Registry: "acme", ID: "github", Fingerprint: "2"})
+
+	// Same id, different registries: both coexist.
+	if len(lock.Plugins) != 2 {
+		t.Fatalf("plugins = %d, want 2", len(lock.Plugins))
+	}
+	phin, _ := lock.Get("phin-tech", "github")
+	acme, _ := lock.Get("acme", "github")
+	if phin.Fingerprint != "1" || acme.Fingerprint != "2" {
+		t.Fatalf("phin = %#v acme = %#v", phin, acme)
+	}
+}
+
 func TestLockSetReplacesAndSorts(t *testing.T) {
 	lock := pluginregistry.Lock{}
-	lock = lock.Set(pluginregistry.LockEntry{ID: "zeta", Fingerprint: "1"})
-	lock = lock.Set(pluginregistry.LockEntry{ID: "alpha", Fingerprint: "2"})
-	lock = lock.Set(pluginregistry.LockEntry{ID: "zeta", Fingerprint: "updated"})
+	lock = lock.Set(pluginregistry.LockEntry{Registry: "r", ID: "zeta", Fingerprint: "1"})
+	lock = lock.Set(pluginregistry.LockEntry{Registry: "r", ID: "alpha", Fingerprint: "2"})
+	lock = lock.Set(pluginregistry.LockEntry{Registry: "r", ID: "zeta", Fingerprint: "updated"})
 
 	if len(lock.Plugins) != 2 {
 		t.Fatalf("plugins = %d, want 2", len(lock.Plugins))
@@ -43,7 +60,7 @@ func TestLockSetReplacesAndSorts(t *testing.T) {
 	if lock.Plugins[0].ID != "alpha" {
 		t.Fatalf("not sorted: %#v", lock.Plugins)
 	}
-	zeta, _ := lock.Get("zeta")
+	zeta, _ := lock.Get("r", "zeta")
 	if zeta.Fingerprint != "updated" {
 		t.Fatalf("zeta not replaced: %#v", zeta)
 	}

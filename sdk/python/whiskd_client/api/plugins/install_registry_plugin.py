@@ -1,26 +1,31 @@
 from http import HTTPStatus
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 
 from ...client import AuthenticatedClient, Client
 from ...models.error_response import ErrorResponse
+from ...models.install_registry_plugin_request import InstallRegistryPluginRequest
 from ...models.plugin_status import PluginStatus
 from ...types import Response
 
 
 def _get_kwargs(
-    plugin_id: str,
+    *,
+    body: InstallRegistryPluginRequest,
 ) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
-        "url": "/v1/plugin-registry/{plugin_id}/install".format(
-            plugin_id=quote(str(plugin_id), safe=""),
-        ),
+        "url": "/v1/plugin-registry/install",
     }
 
+    _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -49,14 +54,14 @@ def _build_response(
 
 
 def sync_detailed(
-    plugin_id: str,
     *,
     client: AuthenticatedClient | Client,
+    body: InstallRegistryPluginRequest,
 ) -> Response[ErrorResponse | PluginStatus]:
-    """Install a plugin from the configured registry (untrusted)
+    """Install a plugin from a configured registry (untrusted)
 
     Args:
-        plugin_id (str):
+        body (InstallRegistryPluginRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -67,7 +72,7 @@ def sync_detailed(
     """
 
     kwargs = _get_kwargs(
-        plugin_id=plugin_id,
+        body=body,
     )
 
     response = client.get_httpx_client().request(
@@ -78,14 +83,14 @@ def sync_detailed(
 
 
 def sync(
-    plugin_id: str,
     *,
     client: AuthenticatedClient | Client,
+    body: InstallRegistryPluginRequest,
 ) -> ErrorResponse | PluginStatus | None:
-    """Install a plugin from the configured registry (untrusted)
+    """Install a plugin from a configured registry (untrusted)
 
     Args:
-        plugin_id (str):
+        body (InstallRegistryPluginRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -96,20 +101,20 @@ def sync(
     """
 
     return sync_detailed(
-        plugin_id=plugin_id,
         client=client,
+        body=body,
     ).parsed
 
 
 async def asyncio_detailed(
-    plugin_id: str,
     *,
     client: AuthenticatedClient | Client,
+    body: InstallRegistryPluginRequest,
 ) -> Response[ErrorResponse | PluginStatus]:
-    """Install a plugin from the configured registry (untrusted)
+    """Install a plugin from a configured registry (untrusted)
 
     Args:
-        plugin_id (str):
+        body (InstallRegistryPluginRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -120,7 +125,7 @@ async def asyncio_detailed(
     """
 
     kwargs = _get_kwargs(
-        plugin_id=plugin_id,
+        body=body,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -129,14 +134,14 @@ async def asyncio_detailed(
 
 
 async def asyncio(
-    plugin_id: str,
     *,
     client: AuthenticatedClient | Client,
+    body: InstallRegistryPluginRequest,
 ) -> ErrorResponse | PluginStatus | None:
-    """Install a plugin from the configured registry (untrusted)
+    """Install a plugin from a configured registry (untrusted)
 
     Args:
-        plugin_id (str):
+        body (InstallRegistryPluginRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -148,7 +153,7 @@ async def asyncio(
 
     return (
         await asyncio_detailed(
-            plugin_id=plugin_id,
             client=client,
+            body=body,
         )
     ).parsed

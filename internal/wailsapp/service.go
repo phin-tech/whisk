@@ -554,8 +554,8 @@ func (s *Service) ListRegistryPlugins(ctx context.Context) ([]protocol.RegistryP
 	return s.client.ListRegistryPlugins(ctx)
 }
 
-func (s *Service) InstallPlugin(ctx context.Context, id string) (protocol.PluginStatus, error) {
-	return s.client.InstallPlugin(ctx, id)
+func (s *Service) InstallPlugin(ctx context.Context, registry, id string) (protocol.PluginStatus, error) {
+	return s.client.InstallPlugin(ctx, registry, id)
 }
 
 func (s *Service) RunPluginProjectAttachmentTemplate(ctx context.Context, pluginID string, templateID string, req protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error) {

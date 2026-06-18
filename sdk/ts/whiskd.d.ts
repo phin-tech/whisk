@@ -372,6 +372,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get local onboarding status */
+        get: operations["getOnboarding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply selected local onboarding items */
+        post: operations["applyOnboarding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/plugin-registry": {
         parameters: {
             query?: never;
@@ -379,7 +413,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List installable plugins from the configured registry */
+        /** List installable plugins from the configured registries */
         get: operations["listRegistryPlugins"];
         put?: never;
         post?: never;
@@ -389,7 +423,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/plugin-registry/{pluginID}/install": {
+    "/v1/plugin-registry/install": {
         parameters: {
             query?: never;
             header?: never;
@@ -398,7 +432,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Install a plugin from the configured registry (untrusted) */
+        /** Install a plugin from a configured registry (untrusted) */
         post: operations["installRegistryPlugin"];
         delete?: never;
         options?: never;
@@ -1702,6 +1736,26 @@ export interface components {
             type: string;
             worktreePath?: string;
         };
+        InstallRegistryPluginRequest: {
+            id: string;
+            registry?: string;
+        };
+        Item: {
+            description?: string;
+            detail?: string;
+            hash?: string;
+            id: string;
+            installedHash?: string;
+            installedVersion?: string;
+            kind: string;
+            label: string;
+            latestVersion?: string;
+            path?: string;
+            selectedByDefault: boolean;
+            status: string;
+            target: string;
+            version?: string;
+        };
         KillPTYRequest: {
             ptyId: string;
         };
@@ -1746,6 +1800,15 @@ export interface components {
             id: string;
             stageId: string;
         };
+        OnboardingApplyRequest: {
+            itemIds: string[] | null;
+        };
+        OnboardingStatus: {
+            items: components["schemas"]["Item"][] | null;
+            localDaemon: boolean;
+            shouldShow: boolean;
+            statePath: string;
+        };
         OutputSnapshot: {
             /** Format: int64 */
             offset: number;
@@ -1787,6 +1850,7 @@ export interface components {
             manifestPath: string;
             name: string;
             projectAttachmentTemplates?: components["schemas"]["ProjectAttachmentTemplate"][];
+            registry?: string;
             resolvers?: components["schemas"]["PluginResolver"][];
             trusted: boolean;
             valid: boolean;
@@ -1901,6 +1965,7 @@ export interface components {
             id: string;
             installed: boolean;
             name?: string;
+            registry: string;
             sourceType: string;
             trusted: boolean;
         };
@@ -2968,6 +3033,68 @@ export interface operations {
             };
         };
     };
+    getOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    applyOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listRegistryPlugins: {
         parameters: {
             query?: never;
@@ -3001,12 +3128,14 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                pluginID: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallRegistryPluginRequest"];
+            };
+        };
         responses: {
             /** @description success */
             201: {

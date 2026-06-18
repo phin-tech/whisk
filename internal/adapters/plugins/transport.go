@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -160,16 +161,148 @@ func readDirFiles(root string) (map[string][]byte, error) {
 	return files, nil
 }
 
-// GitHubTransport fetches the catalog via raw.githubusercontent and plugin
-// bundles via codeload tarballs. No git binary is required.
+// GitTransport fetches a registry by shelling out to git, reusing whatever auth
+// the user already has locally (SSH keys, credential helpers, gh). It works with
+// any git host, not just GitHub. The registry repo is kept as a shallow clone in
+// CacheDir and updated in place; plugin bundles are read from that clone.
+type GitTransport struct {
+	RepoURL  string
+	Ref      string
+	CacheDir string
+	GitPath  string // defaults to "git"
+}
+
+func (t *GitTransport) git() string {
+	if t.GitPath != "" {
+		return t.GitPath
+	}
+	return "git"
+}
+
+func (t *GitTransport) ref() string {
+	if t.Ref == "" {
+		return ""
+	}
+	return t.Ref
+}
+
+func (t *GitTransport) Registry(ctx context.Context) ([]byte, error) {
+	if err := t.ensureRepo(ctx, t.RepoURL, t.ref(), t.CacheDir); err != nil {
+		return nil, err
+	}
+	return os.ReadFile(filepath.Join(t.CacheDir, "registry.json"))
+}
+
+func (t *GitTransport) Fetch(ctx context.Context, source pluginregistry.Source) (map[string][]byte, error) {
+	switch source.Type {
+	case pluginregistry.SourcePath:
+		if err := t.ensureRepo(ctx, t.RepoURL, t.ref(), t.CacheDir); err != nil {
+			return nil, err
+		}
+		return readDirFiles(filepath.Join(t.CacheDir, filepath.FromSlash(source.Path)))
+	case pluginregistry.SourceGit:
+		// An external git-source entry: clone it into a temp dir using the same
+		// local auth and read its subdir.
+		dir, err := os.MkdirTemp("", "whisk-plugin-git-*")
+		if err != nil {
+			return nil, err
+		}
+		defer os.RemoveAll(dir)
+		url := gitCloneURL(source.Repo)
+		if err := t.ensureRepo(ctx, url, source.Ref, dir); err != nil {
+			return nil, err
+		}
+		return readDirFiles(filepath.Join(dir, filepath.FromSlash(source.Subdir)))
+	default:
+		return nil, fmt.Errorf("unsupported source type %q", source.Type)
+	}
+}
+
+// ensureRepo makes dir a shallow clone of url at ref, cloning on first use and
+// fetching+resetting on subsequent calls.
+func (t *GitTransport) ensureRepo(ctx context.Context, url, ref, dir string) error {
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+		// Existing clone: fetch and hard-reset to the ref.
+		fetchRef := ref
+		if fetchRef == "" {
+			fetchRef = "HEAD"
+		}
+		if err := t.run(ctx, dir, "fetch", "--depth", "1", "origin", fetchRef); err != nil {
+			return err
+		}
+		return t.run(ctx, dir, "reset", "--hard", "FETCH_HEAD")
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		return err
+	}
+	args := []string{"clone", "--depth", "1"}
+	if ref != "" {
+		args = append(args, "--branch", ref)
+	}
+	args = append(args, url, dir)
+	return t.run(ctx, "", args...)
+}
+
+func (t *GitTransport) run(ctx context.Context, dir string, args ...string) error {
+	cmd := exec.CommandContext(ctx, t.git(), args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("git %s: %w: %s", args[0], err, msg)
+		}
+		return fmt.Errorf("git %s: %w", args[0], err)
+	}
+	return nil
+}
+
+// gitCloneURL turns an "owner/repo" shorthand into an SSH URL (so local keys are
+// used). Full URLs, SSH specs, and local filesystem paths are passed through
+// unchanged so git can clone them directly.
+func gitCloneURL(spec string) string {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return spec
+	}
+	if strings.Contains(spec, "://") || strings.HasPrefix(spec, "git@") {
+		return spec
+	}
+	if filepath.IsAbs(spec) || strings.HasPrefix(spec, ".") || strings.HasPrefix(spec, "~") {
+		return spec
+	}
+	parts := strings.Split(strings.Trim(spec, "/"), "/")
+	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
+		return "git@github.com:" + strings.TrimSuffix(spec, ".git") + ".git"
+	}
+	return spec
+}
+
+// GitHubTransport fetches the catalog and plugin bundles from GitHub. For public
+// repos it uses raw.githubusercontent + codeload tarballs (no auth, no git). When
+// Token is set (private repos) it uses the authenticated GitHub API: the contents
+// endpoint for the catalog and the tarball endpoint for bundles.
 type GitHubTransport struct {
 	Owner  string
 	Repo   string
 	Ref    string
+	Token  string
 	Client *http.Client
 	// BaseURLs override host roots for testing. Empty means the real hosts.
 	RawBase      string
 	CodeloadBase string
+	APIBase      string
+}
+
+func (t *GitHubTransport) useAPI() bool { return t.Token != "" }
+
+func (t *GitHubTransport) apiBase() string {
+	if t.APIBase != "" {
+		return t.APIBase
+	}
+	return "https://api.github.com"
 }
 
 func (t *GitHubTransport) httpClient() *http.Client {
@@ -201,8 +334,12 @@ func (t *GitHubTransport) ref() string {
 }
 
 func (t *GitHubTransport) Registry(ctx context.Context) ([]byte, error) {
+	if t.useAPI() {
+		url := fmt.Sprintf("%s/repos/%s/%s/contents/registry.json?ref=%s", t.apiBase(), t.Owner, t.Repo, t.ref())
+		return t.getWith(ctx, url, "application/vnd.github.raw")
+	}
 	url := fmt.Sprintf("%s/%s/%s/%s/registry.json", t.rawBase(), t.Owner, t.Repo, t.ref())
-	return t.get(ctx, url)
+	return t.getWith(ctx, url, "")
 }
 
 func (t *GitHubTransport) Fetch(ctx context.Context, source pluginregistry.Source) (map[string][]byte, error) {
@@ -228,7 +365,10 @@ func (t *GitHubTransport) Fetch(ctx context.Context, source pluginregistry.Sourc
 // wraps everything in a top-level "<repo>-<ref>/" directory which is stripped.
 func (t *GitHubTransport) tarball(ctx context.Context, owner, repo, ref, subdir string) (map[string][]byte, error) {
 	url := fmt.Sprintf("%s/%s/%s/tar.gz/%s", t.codeloadBase(), owner, repo, ref)
-	body, err := t.getReader(ctx, url)
+	if t.useAPI() {
+		url = fmt.Sprintf("%s/repos/%s/%s/tarball/%s", t.apiBase(), owner, repo, ref)
+	}
+	body, err := t.getReader(ctx, url, "")
 	if err != nil {
 		return nil, err
 	}
@@ -305,8 +445,8 @@ func withinSubdir(rel, want string) (string, bool) {
 	return strings.TrimPrefix(rel, prefix), true
 }
 
-func (t *GitHubTransport) get(ctx context.Context, url string) ([]byte, error) {
-	body, err := t.getReader(ctx, url)
+func (t *GitHubTransport) getWith(ctx context.Context, url, accept string) ([]byte, error) {
+	body, err := t.getReader(ctx, url, accept)
 	if err != nil {
 		return nil, err
 	}
@@ -314,10 +454,16 @@ func (t *GitHubTransport) get(ctx context.Context, url string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(body, maxBundleBytes))
 }
 
-func (t *GitHubTransport) getReader(ctx context.Context, url string) (io.ReadCloser, error) {
+func (t *GitHubTransport) getReader(ctx context.Context, url, accept string) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
+	}
+	if t.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+t.Token)
+	}
+	if accept != "" {
+		req.Header.Set("Accept", accept)
 	}
 	resp, err := t.httpClient().Do(req)
 	if err != nil {

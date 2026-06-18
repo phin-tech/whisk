@@ -13,14 +13,15 @@ type PluginRegistry interface {
 	TrustPlugin(context.Context, string) (PluginStatus, error)
 	UntrustPlugin(context.Context, string) (PluginStatus, error)
 	ListRegistryPlugins(context.Context) ([]RegistryPlugin, error)
-	InstallPlugin(context.Context, string) (PluginStatus, error)
+	InstallPlugin(ctx context.Context, registry, id string) (PluginStatus, error)
 	RunProjectAttachmentTemplate(context.Context, RunPluginProjectAttachmentTemplateRequest) (AddProjectAttachmentRequest, error)
 	ResolveProjectAttachmentProvider(string) ProjectContextResolver
 }
 
-// RegistryPlugin is one installable plugin advertised by the configured plugin
+// RegistryPlugin is one installable plugin advertised by a configured plugin
 // registry, annotated with whether it is already installed and trusted locally.
 type RegistryPlugin struct {
+	Registry    string `json:"registry"`
 	ID          string `json:"id"`
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -31,6 +32,7 @@ type RegistryPlugin struct {
 
 type PluginStatus struct {
 	ID                         string                      `json:"id"`
+	Registry                   string                      `json:"registry,omitempty"`
 	Name                       string                      `json:"name"`
 	Version                    string                      `json:"version"`
 	Dir                        string                      `json:"dir"`
@@ -119,11 +121,11 @@ func (r *Runtime) ListRegistryPlugins(ctx context.Context) ([]RegistryPlugin, er
 	return r.plugins.ListRegistryPlugins(ctx)
 }
 
-func (r *Runtime) InstallPlugin(ctx context.Context, id string) (PluginStatus, error) {
+func (r *Runtime) InstallPlugin(ctx context.Context, registry, id string) (PluginStatus, error) {
 	if r.plugins == nil {
 		return PluginStatus{}, fmt.Errorf("plugins are not configured")
 	}
-	return r.plugins.InstallPlugin(ctx, id)
+	return r.plugins.InstallPlugin(ctx, registry, id)
 }
 
 func (r *Runtime) RunPluginProjectAttachmentTemplate(ctx context.Context, req RunPluginProjectAttachmentTemplateRequest) (workitem.Project, error) {

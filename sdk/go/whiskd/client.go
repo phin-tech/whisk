@@ -69,6 +69,7 @@ type DetectWorktrunkRequest = protocol.DetectWorktrunkRequest
 type ErrorResponse = protocol.ErrorResponse
 type GateReport = protocol.GateReport
 type HTTPForward = protocol.HTTPForward
+type InstallRegistryPluginRequest = protocol.InstallRegistryPluginRequest
 type KillPTYRequest = protocol.KillPTYRequest
 type LaunchExecutionRequest = protocol.LaunchExecutionRequest
 type LaunchWorkItemRunRequest = protocol.LaunchWorkItemRunRequest

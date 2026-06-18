@@ -7,8 +7,10 @@ import (
 )
 
 // LockEntry records exactly what was materialized for one installed plugin so
-// installs are reproducible and auditable.
+// installs are reproducible and auditable. A plugin is identified by the
+// (Registry, ID) pair, since two registries may advertise the same id.
 type LockEntry struct {
+	Registry    string `json:"registry"`
 	ID          string `json:"id"`
 	Source      Source `json:"source"`
 	Version     string `json:"version,omitempty"`
@@ -39,23 +41,24 @@ func ParseLock(data []byte) (Lock, error) {
 	return lock, nil
 }
 
-// Get returns the lock entry for the given id.
-func (l Lock) Get(id string) (LockEntry, bool) {
+// Get returns the lock entry for the given registry and id.
+func (l Lock) Get(registry, id string) (LockEntry, bool) {
 	for _, entry := range l.Plugins {
-		if entry.ID == id {
+		if entry.Registry == registry && entry.ID == id {
 			return entry, true
 		}
 	}
 	return LockEntry{}, false
 }
 
-// Set inserts or replaces the entry for entry.ID and returns the updated lock.
-// Entries are kept sorted by id so the serialized lockfile is stable.
+// Set inserts or replaces the entry for (entry.Registry, entry.ID) and returns
+// the updated lock. Entries are kept sorted by (registry, id) so the serialized
+// lockfile is stable.
 func (l Lock) Set(entry LockEntry) Lock {
 	next := make([]LockEntry, 0, len(l.Plugins)+1)
 	replaced := false
 	for _, existing := range l.Plugins {
-		if existing.ID == entry.ID {
+		if existing.Registry == entry.Registry && existing.ID == entry.ID {
 			next = append(next, entry)
 			replaced = true
 			continue
@@ -65,7 +68,12 @@ func (l Lock) Set(entry LockEntry) Lock {
 	if !replaced {
 		next = append(next, entry)
 	}
-	sort.Slice(next, func(i, j int) bool { return next[i].ID < next[j].ID })
+	sort.Slice(next, func(i, j int) bool {
+		if next[i].Registry != next[j].Registry {
+			return next[i].Registry < next[j].Registry
+		}
+		return next[i].ID < next[j].ID
+	})
 	version := l.Version
 	if version == 0 {
 		version = lockVersion

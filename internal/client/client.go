@@ -30,7 +30,7 @@ type RuntimeClient interface {
 	TrustPlugin(ctx context.Context, id string) (protocol.PluginStatus, error)
 	UntrustPlugin(ctx context.Context, id string) (protocol.PluginStatus, error)
 	ListRegistryPlugins(ctx context.Context) ([]protocol.RegistryPlugin, error)
-	InstallPlugin(ctx context.Context, id string) (protocol.PluginStatus, error)
+	InstallPlugin(ctx context.Context, registry, id string) (protocol.PluginStatus, error)
 	RunPluginProjectAttachmentTemplate(ctx context.Context, pluginID string, templateID string, req protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error)
 	ListSessions(ctx context.Context) ([]session.Session, error)
 	CreateSession(ctx context.Context, req protocol.CreateSessionRequest) (protocol.CreatedSession, error)

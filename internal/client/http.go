@@ -197,10 +197,9 @@ func (c *HTTPClient) ListRegistryPlugins(ctx context.Context) ([]protocol.Regist
 	return plugins, err
 }
 
-func (c *HTTPClient) InstallPlugin(ctx context.Context, id string) (protocol.PluginStatus, error) {
+func (c *HTTPClient) InstallPlugin(ctx context.Context, registry, id string) (protocol.PluginStatus, error) {
 	var status protocol.PluginStatus
-	path := "/v1/plugin-registry/" + url.PathEscape(id) + "/install"
-	err := c.post(ctx, path, struct{}{}, &status)
+	err := c.post(ctx, "/v1/plugin-registry/install", protocol.InstallRegistryPluginRequest{Registry: registry, ID: id}, &status)
 	return status, err
 }
 

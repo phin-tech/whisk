@@ -5,6 +5,56 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+/**
+ * PluginRegistryConfig describes one plugin registry source.
+ */
+export class PluginRegistryConfig {
+    /**
+     * Name is the registry namespace (e.g. "phin-tech", "acme"). Plugins from
+     * this registry install under it, so names must be unique.
+     */
+    "name": string;
+
+    /**
+     * Source locates the registry: "owner/repo[@ref]", a GitHub/SSH URL, or a
+     * local directory.
+     */
+    "source": string;
+
+    /**
+     * Transport forces a fetch mechanism: "tarball" (GitHub HTTP, default for
+     * owner/repo), "git" (shell out to git, reusing local SSH/credential auth),
+     * or "local" (a directory). Empty auto-detects from Source.
+     */
+    "transport"?: string;
+
+    /**
+     * TokenEnv names an environment variable holding a token for private
+     * tarball/API access. The secret is never persisted in settings.
+     */
+    "tokenEnv"?: string;
+
+    /** Creates a new PluginRegistryConfig instance. */
+    constructor($$source: Partial<PluginRegistryConfig> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("source" in $$source)) {
+            this["source"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PluginRegistryConfig instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PluginRegistryConfig {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PluginRegistryConfig($$parsedSource as Partial<PluginRegistryConfig>);
+    }
+}
+
 export class Settings {
     "startupView": string;
 
@@ -25,6 +75,14 @@ export class Settings {
     "keybindings"?: { [_ in string]?: string };
     "trustedPlugins"?: string[];
 
+    /**
+     * PluginRegistries configures the plugin registries the daemon can install
+     * from. When empty, the daemon falls back to the WHISK_PLUGIN_REGISTRY env
+     * var and then a built-in default. Each registry installs into its own
+     * namespace, so two registries may advertise the same plugin id.
+     */
+    "pluginRegistries"?: PluginRegistryConfig[];
+
     /** Creates a new Settings instance. */
     constructor($$source: Partial<Settings> = {}) {
         if (!("startupView" in $$source)) {
@@ -43,12 +101,16 @@ export class Settings {
     static createFrom($$source: any = {}): Settings {
         const $$createField4_0 = $$createType0;
         const $$createField5_0 = $$createType1;
+        const $$createField6_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("keybindings" in $$parsedSource) {
             $$parsedSource["keybindings"] = $$createField4_0($$parsedSource["keybindings"]);
         }
         if ("trustedPlugins" in $$parsedSource) {
             $$parsedSource["trustedPlugins"] = $$createField5_0($$parsedSource["trustedPlugins"]);
+        }
+        if ("pluginRegistries" in $$parsedSource) {
+            $$parsedSource["pluginRegistries"] = $$createField6_0($$parsedSource["pluginRegistries"]);
         }
         return new Settings($$parsedSource as Partial<Settings>);
     }
@@ -57,3 +119,5 @@ export class Settings {
 // Private type creation functions
 const $$createType0 = $Create.Map($Create.Any, $Create.Any);
 const $$createType1 = $Create.Array($Create.Any);
+const $$createType2 = PluginRegistryConfig.createFrom;
+const $$createType3 = $Create.Array($$createType2);

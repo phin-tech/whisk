@@ -936,10 +936,82 @@
         }
       }
     },
+    "/v1/onboarding": {
+      "get": {
+        "operationId": "getOnboarding",
+        "summary": "Get local onboarding status",
+        "tags": [
+          "system"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/onboarding/apply": {
+      "post": {
+        "operationId": "applyOnboarding",
+        "summary": "Apply selected local onboarding items",
+        "tags": [
+          "system"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingApplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/plugin-registry": {
       "get": {
         "operationId": "listRegistryPlugins",
-        "summary": "List installable plugins from the configured registry",
+        "summary": "List installable plugins from the configured registries",
         "tags": [
           "plugins"
         ],
@@ -970,23 +1042,23 @@
         }
       }
     },
-    "/v1/plugin-registry/{pluginID}/install": {
+    "/v1/plugin-registry/install": {
       "post": {
         "operationId": "installRegistryPlugin",
-        "summary": "Install a plugin from the configured registry (untrusted)",
+        "summary": "Install a plugin from a configured registry (untrusted)",
         "tags": [
           "plugins"
         ],
-        "parameters": [
-          {
-            "name": "pluginID",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallRegistryPluginRequest"
+              }
             }
           }
-        ],
+        },
         "responses": {
           "201": {
             "content": {
@@ -5131,6 +5203,75 @@
         ],
         "type": "object"
       },
+      "InstallRegistryPluginRequest": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "registry": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "Item": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "installedHash": {
+            "type": "string"
+          },
+          "installedVersion": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "latestVersion": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "selectedByDefault": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "target",
+          "status",
+          "selectedByDefault"
+        ],
+        "type": "object"
+      },
       "KillPTYRequest": {
         "properties": {
           "ptyId": {
@@ -5286,6 +5427,48 @@
         ],
         "type": "object"
       },
+      "OnboardingApplyRequest": {
+        "properties": {
+          "itemIds": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "required": [
+          "itemIds"
+        ],
+        "type": "object"
+      },
+      "OnboardingStatus": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "localDaemon": {
+            "type": "boolean"
+          },
+          "shouldShow": {
+            "type": "boolean"
+          },
+          "statePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "shouldShow",
+          "localDaemon",
+          "statePath"
+        ],
+        "type": "object"
+      },
       "OutputSnapshot": {
         "properties": {
           "offset": {
@@ -5430,6 +5613,9 @@
               "$ref": "#/components/schemas/ProjectAttachmentTemplate"
             },
             "type": "array"
+          },
+          "registry": {
+            "type": "string"
           },
           "resolvers": {
             "items": {
@@ -5858,6 +6044,9 @@
           "name": {
             "type": "string"
           },
+          "registry": {
+            "type": "string"
+          },
           "sourceType": {
             "type": "string"
           },
@@ -5866,6 +6055,7 @@
           }
         },
         "required": [
+          "registry",
           "id",
           "sourceType",
           "installed",

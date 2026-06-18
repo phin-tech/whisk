@@ -51,6 +51,7 @@ from .gate_config import GateConfig
 from .gate_report import GateReport
 from .history_event import HistoryEvent
 from .http_forward import HTTPForward
+from .install_registry_plugin_request import InstallRegistryPluginRequest
 from .item import Item
 from .kill_pty_request import KillPTYRequest
 from .launch_execution_request import LaunchExecutionRequest
@@ -189,6 +190,7 @@ __all__ = (
     "GateReport",
     "HistoryEvent",
     "HTTPForward",
+    "InstallRegistryPluginRequest",
     "Item",
     "KillPTYRequest",
     "LaunchExecutionRequest",

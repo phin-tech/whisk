@@ -996,11 +996,11 @@ func (f *runtimeClientFake) UntrustPlugin(context.Context, string) (protocol.Plu
 }
 
 func (f *runtimeClientFake) ListRegistryPlugins(context.Context) ([]protocol.RegistryPlugin, error) {
-	return []protocol.RegistryPlugin{{ID: "github", Name: "GitHub Issues", SourceType: "path"}}, nil
+	return []protocol.RegistryPlugin{{Registry: "phin-tech", ID: "github", Name: "GitHub Issues", SourceType: "path"}}, nil
 }
 
-func (f *runtimeClientFake) InstallPlugin(context.Context, string) (protocol.PluginStatus, error) {
-	return protocol.PluginStatus{ID: "github", Valid: true}, nil
+func (f *runtimeClientFake) InstallPlugin(_ context.Context, registry, id string) (protocol.PluginStatus, error) {
+	return protocol.PluginStatus{ID: id, Registry: registry, Valid: true}, nil
 }
 
 func (f *runtimeClientFake) RunPluginProjectAttachmentTemplate(context.Context, string, string, protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error) {

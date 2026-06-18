@@ -36,7 +36,8 @@ func newFixtureInstaller(t *testing.T, transport Transport) (*Installer, string,
 	t.Helper()
 	target := t.TempDir()
 	lockPath := filepath.Join(t.TempDir(), "plugins.lock.json")
-	return NewInstaller(transport, target, lockPath), target, lockPath
+	registries := []namedRegistry{{Name: "test", Transport: transport}}
+	return NewInstaller(registries, target, lockPath), target, lockPath
 }
 
 func TestInstallerInstallsPathPluginUntrusted(t *testing.T) {
@@ -51,7 +52,7 @@ func TestInstallerInstallsPathPluginUntrusted(t *testing.T) {
 	}
 	installer, target, lockPath := newFixtureInstaller(t, transport)
 
-	result, err := installer.Install(context.Background(), "github-issues")
+	result, err := installer.Install(context.Background(), "test", "github-issues")
 	if err != nil {
 		t.Fatalf("Install: %v", err)
 	}
@@ -60,11 +61,11 @@ func TestInstallerInstallsPathPluginUntrusted(t *testing.T) {
 	}
 
 	// Files landed on disk.
-	manifest := filepath.Join(target, "github-issues", "plugin.json")
+	manifest := filepath.Join(target, "test", "github-issues", "plugin.json")
 	if _, err := os.Stat(manifest); err != nil {
 		t.Fatalf("plugin.json not installed: %v", err)
 	}
-	script := filepath.Join(target, "github-issues", "resolve.mjs")
+	script := filepath.Join(target, "test", "github-issues", "resolve.mjs")
 	if _, err := os.Stat(script); err != nil {
 		t.Fatalf("resolve.mjs not installed: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestInstallerInstallsPathPluginUntrusted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse lock: %v", err)
 	}
-	entry, ok := lock.Get("github-issues")
+	entry, ok := lock.Get("test", "github-issues")
 	if !ok || entry.Fingerprint != result.Fingerprint {
 		t.Fatalf("lock entry = %#v ok = %v", entry, ok)
 	}
@@ -94,7 +95,7 @@ func TestInstallerGitSource(t *testing.T) {
 		},
 	}
 	installer, _, _ := newFixtureInstaller(t, transport)
-	if _, err := installer.Install(context.Background(), "linear"); err != nil {
+	if _, err := installer.Install(context.Background(), "test", "linear"); err != nil {
 		t.Fatalf("Install git source: %v", err)
 	}
 	if len(transport.fetched) != 1 || transport.fetched[0].Type != pluginregistry.SourceGit {
@@ -105,7 +106,7 @@ func TestInstallerGitSource(t *testing.T) {
 func TestInstallerRejectsUnknownID(t *testing.T) {
 	transport := &fakeTransport{registry: []byte(`{"version":1,"plugins":[]}`)}
 	installer, _, _ := newFixtureInstaller(t, transport)
-	if _, err := installer.Install(context.Background(), "missing"); err == nil {
+	if _, err := installer.Install(context.Background(), "test", "missing"); err == nil {
 		t.Fatal("Install(missing) = nil error, want error")
 	}
 }
@@ -118,7 +119,7 @@ func TestInstallerRejectsManifestIDMismatch(t *testing.T) {
 		},
 	}
 	installer, _, _ := newFixtureInstaller(t, transport)
-	if _, err := installer.Install(context.Background(), "github-issues"); err == nil {
+	if _, err := installer.Install(context.Background(), "test", "github-issues"); err == nil {
 		t.Fatal("Install with mismatched manifest id = nil error, want error")
 	}
 }
@@ -129,7 +130,7 @@ func TestInstallerRejectsBundleWithoutManifest(t *testing.T) {
 		bundles:  map[string]map[string][]byte{"p": {"resolve.mjs": []byte("x")}},
 	}
 	installer, _, _ := newFixtureInstaller(t, transport)
-	if _, err := installer.Install(context.Background(), "x"); err == nil {
+	if _, err := installer.Install(context.Background(), "test", "x"); err == nil {
 		t.Fatal("Install without plugin.json = nil error, want error")
 	}
 }
@@ -142,15 +143,15 @@ func TestInstallerReinstallReplacesFiles(t *testing.T) {
 		},
 	}
 	installer, target, _ := newFixtureInstaller(t, transport)
-	if _, err := installer.Install(context.Background(), "x"); err != nil {
+	if _, err := installer.Install(context.Background(), "test", "x"); err != nil {
 		t.Fatalf("first install: %v", err)
 	}
 	// Second install drops stale.mjs.
 	transport.bundles["p"] = map[string][]byte{"plugin.json": []byte(`{"id":"x"}`)}
-	if _, err := installer.Install(context.Background(), "x"); err != nil {
+	if _, err := installer.Install(context.Background(), "test", "x"); err != nil {
 		t.Fatalf("reinstall: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(target, "x", "stale.mjs")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(target, "test", "x", "stale.mjs")); !os.IsNotExist(err) {
 		t.Fatalf("stale file survived reinstall: err = %v", err)
 	}
 }

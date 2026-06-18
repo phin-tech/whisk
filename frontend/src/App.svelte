@@ -712,11 +712,11 @@
     }
   }
 
-  async function installPlugin(pluginId: string) {
+  async function installPlugin(registry: string, pluginId: string) {
     error = "";
-    installingPluginId = pluginId;
+    installingPluginId = `${registry}/${pluginId}`;
     try {
-      await InstallPlugin(pluginId);
+      await InstallPlugin(registry, pluginId);
       // Installed plugins land untrusted; refresh both the discovered set and
       // the registry so install state and trust toggles reflect the new plugin.
       await Promise.all([refreshPlugins(), refreshRegistryPlugins()]);
@@ -1823,7 +1823,7 @@
           onRefreshPlugins={() => void rescanPlugins()}
           onSetPluginTrusted={(pluginId, trusted) => void setPluginTrusted(pluginId, trusted)}
           onRefreshRegistry={() => void refreshRegistryPlugins()}
-          onInstallPlugin={(pluginId) => void installPlugin(pluginId)}
+          onInstallPlugin={(registry, pluginId) => void installPlugin(registry, pluginId)}
           onCheckAgentHookIntegration={(provider) => void checkAgentHookIntegration(provider)}
           onInstallAgentHookIntegration={(provider) => void installAgentHookIntegration(provider)}
           onRemoveAgentHookIntegration={(provider) => void removeAgentHookIntegration(provider)}

@@ -8,61 +8,35 @@ from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-T = TypeVar("T", bound="RegistryPlugin")
+T = TypeVar("T", bound="InstallRegistryPluginRequest")
 
 
 @_attrs_define
-class RegistryPlugin:
+class InstallRegistryPluginRequest:
     """
     Attributes:
         id (str):
-        installed (bool):
-        registry (str):
-        source_type (str):
-        trusted (bool):
-        description (str | Unset):
-        name (str | Unset):
+        registry (str | Unset):
     """
 
     id: str
-    installed: bool
-    registry: str
-    source_type: str
-    trusted: bool
-    description: str | Unset = UNSET
-    name: str | Unset = UNSET
+    registry: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         id = self.id
 
-        installed = self.installed
-
         registry = self.registry
-
-        source_type = self.source_type
-
-        trusted = self.trusted
-
-        description = self.description
-
-        name = self.name
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
                 "id": id,
-                "installed": installed,
-                "registry": registry,
-                "sourceType": source_type,
-                "trusted": trusted,
             }
         )
-        if description is not UNSET:
-            field_dict["description"] = description
-        if name is not UNSET:
-            field_dict["name"] = name
+        if registry is not UNSET:
+            field_dict["registry"] = registry
 
         return field_dict
 
@@ -71,30 +45,15 @@ class RegistryPlugin:
         d = dict(src_dict)
         id = d.pop("id")
 
-        installed = d.pop("installed")
+        registry = d.pop("registry", UNSET)
 
-        registry = d.pop("registry")
-
-        source_type = d.pop("sourceType")
-
-        trusted = d.pop("trusted")
-
-        description = d.pop("description", UNSET)
-
-        name = d.pop("name", UNSET)
-
-        registry_plugin = cls(
+        install_registry_plugin_request = cls(
             id=id,
-            installed=installed,
             registry=registry,
-            source_type=source_type,
-            trusted=trusted,
-            description=description,
-            name=name,
         )
 
-        registry_plugin.additional_properties = d
-        return registry_plugin
+        install_registry_plugin_request.additional_properties = d
+        return install_registry_plugin_request
 
     @property
     def additional_keys(self) -> list[str]:

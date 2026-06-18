@@ -11,19 +11,33 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/pluginregistry"
 )
 
-// Installer materializes registry plugins onto disk. It downloads a plugin's
-// file bundle through a Transport, verifies the bundle carries a matching
-// plugin.json, writes it atomically into the plugin directory, and records the
+// namedRegistry pairs a registry namespace with the transport that fetches it.
+type namedRegistry struct {
+	Name      string
+	Transport Transport
+}
+
+// Installer materializes registry plugins onto disk across one or more
+// registries. It downloads a plugin's file bundle through the owning registry's
+// Transport, verifies the bundle carries a matching plugin.json, writes it
+// atomically into the plugin directory (namespaced by registry), and records the
 // install in a lockfile. Installation never grants trust: the plugin lands
 // untrusted and the user must trust it before its commands run.
 type Installer struct {
-	transport Transport
-	targetDir string
-	lockPath  string
+	registries []namedRegistry
+	targetDir  string
+	lockPath   string
+}
+
+// AvailablePlugin is a registry catalog entry tagged with its registry.
+type AvailablePlugin struct {
+	Registry string
+	Entry    pluginregistry.Entry
 }
 
 // InstalledPlugin reports the outcome of an install.
 type InstalledPlugin struct {
+	Registry    string
 	ID          string
 	Name        string
 	Dir         string
@@ -31,45 +45,88 @@ type InstalledPlugin struct {
 	Fingerprint string
 }
 
-func NewInstaller(transport Transport, targetDir, lockPath string) *Installer {
-	return &Installer{transport: transport, targetDir: targetDir, lockPath: lockPath}
+func NewInstaller(registries []namedRegistry, targetDir, lockPath string) *Installer {
+	return &Installer{registries: registries, targetDir: targetDir, lockPath: lockPath}
 }
 
-// Available returns the registry catalog entries, sorted by id.
-func (i *Installer) Available(ctx context.Context) ([]pluginregistry.Entry, error) {
-	registry, err := i.registry(ctx)
-	if err != nil {
-		return nil, err
+// RegistryNames returns the configured registry namespaces in order.
+func (i *Installer) RegistryNames() []string {
+	names := make([]string, 0, len(i.registries))
+	for _, registry := range i.registries {
+		names = append(names, registry.Name)
 	}
-	return registry.SortedPlugins(), nil
+	return names
 }
 
-func (i *Installer) registry(ctx context.Context) (pluginregistry.Registry, error) {
-	data, err := i.transport.Registry(ctx)
+// Available returns the merged catalog across all registries, sorted by
+// (registry, id). A registry that fails to fetch is skipped and its error
+// returned alongside the entries that did resolve, so one unreachable registry
+// does not blank the whole list.
+func (i *Installer) Available(ctx context.Context) ([]AvailablePlugin, error) {
+	var out []AvailablePlugin
+	var firstErr error
+	for _, registry := range i.registries {
+		catalog, err := i.catalog(ctx, registry)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("registry %q: %w", registry.Name, err)
+			}
+			continue
+		}
+		for _, entry := range catalog.SortedPlugins() {
+			out = append(out, AvailablePlugin{Registry: registry.Name, Entry: entry})
+		}
+	}
+	return out, firstErr
+}
+
+func (i *Installer) catalog(ctx context.Context, registry namedRegistry) (pluginregistry.Registry, error) {
+	data, err := registry.Transport.Registry(ctx)
 	if err != nil {
 		return pluginregistry.Registry{}, fmt.Errorf("fetch registry: %w", err)
 	}
 	return pluginregistry.ParseRegistry(data)
 }
 
-// Install fetches and installs the plugin with the given id. It returns an error
-// if the id is unknown, the bundle is missing a valid plugin.json, or the
-// manifest id does not match the registry id.
-func (i *Installer) Install(ctx context.Context, id string) (InstalledPlugin, error) {
+func (i *Installer) find(registryName string) (namedRegistry, bool) {
+	for _, registry := range i.registries {
+		if registry.Name == registryName {
+			return registry, true
+		}
+	}
+	return namedRegistry{}, false
+}
+
+// Install fetches and installs the plugin id from the named registry. When
+// registryName is empty and exactly one registry is configured, that registry
+// is used; otherwise the registry must be named to disambiguate.
+func (i *Installer) Install(ctx context.Context, registryName, id string) (InstalledPlugin, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return InstalledPlugin{}, fmt.Errorf("plugin id is required")
 	}
-	registry, err := i.registry(ctx)
+	registryName = strings.TrimSpace(registryName)
+	if registryName == "" {
+		if len(i.registries) != 1 {
+			return InstalledPlugin{}, fmt.Errorf("registry must be specified (configured: %s)", strings.Join(i.RegistryNames(), ", "))
+		}
+		registryName = i.registries[0].Name
+	}
+	registry, ok := i.find(registryName)
+	if !ok {
+		return InstalledPlugin{}, fmt.Errorf("registry %q is not configured", registryName)
+	}
+
+	catalog, err := i.catalog(ctx, registry)
 	if err != nil {
 		return InstalledPlugin{}, err
 	}
-	entry, ok := registry.Find(id)
+	entry, ok := catalog.Find(id)
 	if !ok {
-		return InstalledPlugin{}, fmt.Errorf("plugin %q not found in registry", id)
+		return InstalledPlugin{}, fmt.Errorf("plugin %q not found in registry %q", id, registryName)
 	}
 
-	files, err := i.transport.Fetch(ctx, entry.Source)
+	files, err := registry.Transport.Fetch(ctx, entry.Source)
 	if err != nil {
 		return InstalledPlugin{}, fmt.Errorf("fetch plugin %q: %w", id, err)
 	}
@@ -83,16 +140,17 @@ func (i *Installer) Install(ctx context.Context, id string) (InstalledPlugin, er
 	}
 
 	fingerprint := pluginregistry.Fingerprint(files)
-	dir := filepath.Join(i.targetDir, id)
+	dir := filepath.Join(i.targetDir, registryName, id)
 	if err := writeBundle(dir, files); err != nil {
 		return InstalledPlugin{}, fmt.Errorf("install plugin %q: %w", id, err)
 	}
 
-	if err := i.recordLock(entry, manifest.Version, fingerprint); err != nil {
+	if err := i.recordLock(registryName, entry, manifest.Version, fingerprint); err != nil {
 		return InstalledPlugin{}, fmt.Errorf("record lock for %q: %w", id, err)
 	}
 
 	return InstalledPlugin{
+		Registry:    registryName,
 		ID:          id,
 		Name:        manifest.Name,
 		Dir:         dir,
@@ -150,7 +208,7 @@ func writeBundle(dir string, files map[string][]byte) error {
 	return os.Rename(staging, dir)
 }
 
-func (i *Installer) recordLock(entry pluginregistry.Entry, version, fingerprint string) error {
+func (i *Installer) recordLock(registry string, entry pluginregistry.Entry, version, fingerprint string) error {
 	if i.lockPath == "" {
 		return nil
 	}
@@ -163,6 +221,7 @@ func (i *Installer) recordLock(entry pluginregistry.Entry, version, fingerprint 
 		return err
 	}
 	lock = lock.Set(pluginregistry.LockEntry{
+		Registry:    registry,
 		ID:          entry.ID,
 		Source:      entry.Source,
 		Version:     version,

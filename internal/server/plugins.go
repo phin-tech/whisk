@@ -35,7 +35,11 @@ func (s *HTTPServer) listRegistryPlugins(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *HTTPServer) installRegistryPlugin(w http.ResponseWriter, r *http.Request) {
-	status, err := s.runtime.InstallPlugin(r.Context(), pathValue(r, "pluginID", ""))
+	var req protocol.InstallRegistryPluginRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	status, err := s.runtime.InstallPlugin(r.Context(), req.Registry, req.ID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -47,6 +51,7 @@ func protocolRegistryPlugins(plugins []app.RegistryPlugin) []protocol.RegistryPl
 	out := make([]protocol.RegistryPlugin, 0, len(plugins))
 	for _, plugin := range plugins {
 		out = append(out, protocol.RegistryPlugin{
+			Registry:    plugin.Registry,
 			ID:          plugin.ID,
 			Name:        plugin.Name,
 			Description: plugin.Description,
@@ -130,6 +135,7 @@ func protocolPluginStatus(status app.PluginStatus) protocol.PluginStatus {
 	}
 	return protocol.PluginStatus{
 		ID:                         status.ID,
+		Registry:                   status.Registry,
 		Name:                       status.Name,
 		Version:                    status.Version,
 		Dir:                        status.Dir,

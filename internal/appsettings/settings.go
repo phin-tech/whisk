@@ -28,6 +28,28 @@ type Settings struct {
 	// from the map use their built-in default; an empty map means all defaults.
 	Keybindings    map[string]string `json:"keybindings,omitempty"`
 	TrustedPlugins []string          `json:"trustedPlugins,omitempty"`
+	// PluginRegistries configures the plugin registries the daemon can install
+	// from. When empty, the daemon falls back to the WHISK_PLUGIN_REGISTRY env
+	// var and then a built-in default. Each registry installs into its own
+	// namespace, so two registries may advertise the same plugin id.
+	PluginRegistries []PluginRegistryConfig `json:"pluginRegistries,omitempty"`
+}
+
+// PluginRegistryConfig describes one plugin registry source.
+type PluginRegistryConfig struct {
+	// Name is the registry namespace (e.g. "phin-tech", "acme"). Plugins from
+	// this registry install under it, so names must be unique.
+	Name string `json:"name"`
+	// Source locates the registry: "owner/repo[@ref]", a GitHub/SSH URL, or a
+	// local directory.
+	Source string `json:"source"`
+	// Transport forces a fetch mechanism: "tarball" (GitHub HTTP, default for
+	// owner/repo), "git" (shell out to git, reusing local SSH/credential auth),
+	// or "local" (a directory). Empty auto-detects from Source.
+	Transport string `json:"transport,omitempty"`
+	// TokenEnv names an environment variable holding a token for private
+	// tarball/API access. The secret is never persisted in settings.
+	TokenEnv string `json:"tokenEnv,omitempty"`
 }
 
 type Store struct {
@@ -53,6 +75,11 @@ func Normalize(settings Settings) (Settings, error) {
 	}
 	settings.Keybindings = normalizeKeybindings(settings.Keybindings)
 	settings.TrustedPlugins = normalizeTrustedPlugins(settings.TrustedPlugins)
+	registries, err := normalizePluginRegistries(settings.PluginRegistries)
+	if err != nil {
+		return Settings{}, err
+	}
+	settings.PluginRegistries = registries
 	switch settings.StartupView {
 	case StartupViewSessions, StartupViewKanban:
 		return settings, nil
@@ -81,6 +108,43 @@ func normalizeKeybindings(bindings map[string]string) map[string]string {
 		return nil
 	}
 	return cleaned
+}
+
+// normalizePluginRegistries trims entries, drops blanks, and rejects duplicate
+// names (the namespace must be unique). Order is preserved so the UI lists
+// registries as configured.
+func normalizePluginRegistries(registries []PluginRegistryConfig) ([]PluginRegistryConfig, error) {
+	if len(registries) == 0 {
+		return nil, nil
+	}
+	seen := map[string]bool{}
+	out := make([]PluginRegistryConfig, 0, len(registries))
+	for _, registry := range registries {
+		registry.Name = strings.TrimSpace(registry.Name)
+		registry.Source = strings.TrimSpace(registry.Source)
+		registry.Transport = strings.TrimSpace(registry.Transport)
+		registry.TokenEnv = strings.TrimSpace(registry.TokenEnv)
+		if registry.Name == "" || registry.Source == "" {
+			continue
+		}
+		if strings.ContainsAny(registry.Name, "/\\") {
+			return nil, fmt.Errorf("plugin registry name %q must not contain path separators", registry.Name)
+		}
+		if seen[registry.Name] {
+			return nil, fmt.Errorf("duplicate plugin registry name %q", registry.Name)
+		}
+		switch registry.Transport {
+		case "", "tarball", "git", "local":
+		default:
+			return nil, fmt.Errorf("plugin registry %q has unknown transport %q", registry.Name, registry.Transport)
+		}
+		seen[registry.Name] = true
+		out = append(out, registry)
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
 }
 
 func normalizeTrustedPlugins(ids []string) []string {
