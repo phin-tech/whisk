@@ -90,6 +90,14 @@ daemon API surface.
 Prefer a small stable protocol over capability negotiation. Avoid Roux-style
 "who owns this right now?" branches.
 
+User-facing daemon actions should follow the principle of least surprise. A
+command named after an object-level action should complete that action end to
+end at the daemon boundary: for example, closing a pane with an attached PTY
+should handle the PTY according to the normal user expectation, not require the
+GUI to guess a multi-step kill/detach/close sequence. Offer separate actions
+only when users clearly need distinct outcomes, such as keeping a PTY running
+after detaching it from a pane.
+
 ## Streaming And Events
 
 PTY output should use a streaming path for interactive latency. Snapshot/replay

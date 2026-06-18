@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  closePaneRequest,
+  killPTYRequest,
   paneIds,
   ptyRowsFromInventory,
   runtimeRefreshTargets,
@@ -74,6 +76,57 @@ describe("visiblePtyIds", () => {
   });
 });
 
+describe("closePaneRequest", () => {
+  const session = {
+    id: "sess_01",
+    windows: {
+      win_01: {
+        id: "win_01",
+        layout: {
+          kind: "split",
+          direction: "horizontal",
+          children: [
+            { kind: "leaf", paneId: "pane_01" },
+            { kind: "leaf", paneId: "pane_02" },
+          ],
+        },
+      },
+    },
+    panes: {
+      pane_01: { id: "pane_01", currentPtyId: "pty_01" },
+      pane_02: { id: "pane_02" },
+    },
+  };
+
+  it("builds the daemon close request for empty split panes", () => {
+    expect(closePaneRequest(session, "win_01", "pane_02")).toEqual({
+      sessionId: "sess_01",
+      windowId: "win_01",
+      paneId: "pane_02",
+    });
+  });
+
+  it("builds the daemon close request for split panes that still own PTYs", () => {
+    expect(closePaneRequest(session, "win_01", "pane_01")).toEqual({
+      sessionId: "sess_01",
+      windowId: "win_01",
+      paneId: "pane_01",
+    });
+  });
+});
+
+describe("killPTYRequest", () => {
+  it("builds the daemon kill request for panes with PTYs", () => {
+    expect(killPTYRequest({ id: "pane_01", currentPtyId: "pty_01" })).toEqual({
+      ptyId: "pty_01",
+    });
+  });
+
+  it("does not build a kill request for empty panes", () => {
+    expect(killPTYRequest({ id: "pane_02" })).toBeNull();
+  });
+});
+
 describe("ptyRowsFromInventory", () => {
   it("formats daemon PTY inventory without deriving ownership locally", () => {
     expect(
@@ -87,6 +140,16 @@ describe("ptyRowsFromInventory", () => {
           sessionId: "sess_01",
           paneId: "pane_01",
         },
+        {
+          id: "pty_02",
+          workingDir: "/repo",
+          cols: 80,
+          rows: 24,
+          running: false,
+          status: "killed",
+          sessionId: "sess_01",
+          paneId: "pane_01",
+        },
       ]),
     ).toEqual([
       {
@@ -95,6 +158,15 @@ describe("ptyRowsFromInventory", () => {
         subtitle: "sess_01 / pane_01",
         detail: "/repo / 80x24",
         running: true,
+        status: "running",
+      },
+      {
+        id: "pty_02",
+        title: "pty_02",
+        subtitle: "sess_01 / pane_01",
+        detail: "/repo / 80x24",
+        running: false,
+        status: "killed",
       },
     ]);
   });

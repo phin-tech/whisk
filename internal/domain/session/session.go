@@ -387,9 +387,6 @@ func (s *State) ClosePane(req ClosePane) (Session, error) {
 	if !ok || pane.WindowID != req.WindowID {
 		return Session{}, fmt.Errorf("pane %s not found", req.PaneID)
 	}
-	if pane.CurrentPTYID != nil {
-		return Session{}, fmt.Errorf("pane %s has current pty", req.PaneID)
-	}
 	if countWindowPanes(current, req.WindowID) <= 1 {
 		return Session{}, fmt.Errorf("cannot close last pane in window")
 	}

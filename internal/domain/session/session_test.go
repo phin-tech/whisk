@@ -529,7 +529,7 @@ func TestClosePaneRemovesPaneAndLayoutLeaf(t *testing.T) {
 	}
 }
 
-func TestClosePaneRejectsLastPaneAndPaneWithCurrentPTY(t *testing.T) {
+func TestClosePaneRejectsLastPaneAndRemovesPaneWithCurrentPTY(t *testing.T) {
 	state := session.NewState()
 	ptyID := "pty_01"
 	_, err := state.CreateSession(session.CreateSession{
@@ -547,7 +547,7 @@ func TestClosePaneRejectsLastPaneAndPaneWithCurrentPTY(t *testing.T) {
 		WindowID:  "win_01",
 		PaneID:    "pane_01",
 	}); err == nil {
-		t.Fatalf("expected current pty close error")
+		t.Fatalf("expected last pane close error")
 	}
 	if _, err := state.SplitPane(session.SplitPane{
 		SessionID:    "sess_01",
@@ -557,19 +557,23 @@ func TestClosePaneRejectsLastPaneAndPaneWithCurrentPTY(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("split pane: %v", err)
 	}
-	if _, err := state.ClosePane(session.ClosePane{
+	updated, err := state.ClosePane(session.ClosePane{
 		SessionID: "sess_01",
 		WindowID:  "win_01",
-		PaneID:    "pane_02",
-	}); err != nil {
-		t.Fatalf("close empty pane: %v", err)
+		PaneID:    "pane_01",
+	})
+	if err != nil {
+		t.Fatalf("close pane with current pty: %v", err)
+	}
+	if _, ok := updated.Panes["pane_01"]; ok {
+		t.Fatalf("closed pane still present: %#v", updated.Panes)
 	}
 	if _, err := state.ClosePane(session.ClosePane{
 		SessionID: "sess_01",
 		WindowID:  "win_01",
-		PaneID:    "pane_01",
+		PaneID:    "pane_02",
 	}); err == nil {
-		t.Fatalf("expected last pane/current pty close error")
+		t.Fatalf("expected last pane close error")
 	}
 }
 

@@ -33,6 +33,7 @@
   export let onCloseSession: (session: Session) => void;
   export let onSetSessionProject: (sessionId: string, projectId: string) => void;
   export let onRefreshPtys: () => void;
+  export let onKillPTY: (ptyId: string) => void;
   export let onRefreshStatusEvents: () => void;
   export let onClearNotifications: () => void;
   export let onSelectStatusEvent: (event: StatusEvent) => void;
@@ -160,7 +161,7 @@
             {onSelectProject}
           />
         {:else if activePanel === "ptys"}
-          <PtysPanel ptys={ptys} loading={loadingPtys} onclose={onClose} onRefresh={onRefreshPtys} />
+          <PtysPanel ptys={ptys} loading={loadingPtys} onclose={onClose} onRefresh={onRefreshPtys} onKill={onKillPTY} />
         {/if}
       {/if}
     </div>

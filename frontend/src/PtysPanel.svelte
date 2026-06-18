@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CircleStop from "@lucide/svelte/icons/circle-stop";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import type { PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { ptyRowsFromInventory } from "./sessionView";
@@ -8,6 +9,7 @@
   export let loading = false;
   export let onclose: () => void;
   export let onRefresh: () => void;
+  export let onKill: (ptyId: string) => void;
 
   $: rows = ptyRowsFromInventory(ptys);
 </script>
@@ -52,8 +54,18 @@
                 {row.title}
               </span>
               <span class="shrink-0 text-[10px] uppercase text-text-muted">
-                {row.running ? "running" : "exited"}
+                {row.status}
               </span>
+              <button
+                type="button"
+                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-red/40 hover:bg-red/10 hover:text-red focus:outline-none focus:ring-1 focus:ring-red disabled:cursor-not-allowed disabled:opacity-35"
+                disabled={!row.running}
+                aria-label={`Kill PTY ${row.id}`}
+                title={row.running ? `Kill PTY ${row.id}` : "PTY is not running"}
+                on:click={() => onKill(row.id)}
+              >
+                <CircleStop size={13} />
+              </button>
             </div>
             <div class="mt-1 grid gap-0.5 text-[10px] text-text-muted">
               <div class="truncate">{row.subtitle}</div>

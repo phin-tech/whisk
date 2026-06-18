@@ -14,6 +14,11 @@ type SessionLike = {
   panes: { [_ in string]?: { id?: string; currentPtyId?: string | null } };
 };
 
+type PaneLike = {
+  id?: string;
+  currentPtyId?: string | null;
+};
+
 type ProjectLike = {
   id: string;
   name: string;
@@ -38,6 +43,7 @@ type PtyInfoLike = {
   cols: number;
   rows: number;
   running: boolean;
+  status?: string;
   sessionId: string;
   paneId: string;
 };
@@ -46,6 +52,16 @@ type RuntimeEventLike = {
   type: string;
   ptyId?: string;
   offset?: number;
+};
+
+export type ClosePaneRequestLike = {
+  sessionId: string;
+  windowId: string;
+  paneId: string;
+};
+
+export type KillPTYRequestLike = {
+  ptyId: string;
 };
 
 export function paneIds(node: LayoutNodeLike | undefined): string[] {
@@ -104,6 +120,23 @@ export function visiblePtyIds(
   return ptys;
 }
 
+export function closePaneRequest(
+  session: SessionLike | null | undefined,
+  windowId: string,
+  paneId: string,
+): ClosePaneRequestLike | null {
+  const window = session?.windows[windowId];
+  const pane = session?.panes[paneId];
+  const windowPaneIds = paneIds(window?.layout);
+  if (!session || !window || !pane || windowPaneIds.length <= 1) return null;
+  if (!windowPaneIds.includes(paneId)) return null;
+  return { sessionId: session.id, windowId, paneId };
+}
+
+export function killPTYRequest(pane: PaneLike | null | undefined): KillPTYRequestLike | null {
+  return pane?.currentPtyId ? { ptyId: pane.currentPtyId } : null;
+}
+
 export function ptyRowsFromInventory(ptys: PtyInfoLike[]) {
   return ptys.map((pty) => ({
     id: pty.id,
@@ -111,6 +144,7 @@ export function ptyRowsFromInventory(ptys: PtyInfoLike[]) {
     subtitle: `${pty.sessionId || "unowned"} / ${pty.paneId || "detached"}`,
     detail: `${pty.workingDir || "."} / ${pty.cols}x${pty.rows}`,
     running: pty.running,
+    status: pty.status || (pty.running ? "running" : "exited"),
   }));
 }
 

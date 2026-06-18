@@ -18,9 +18,23 @@ func TestDevAppTaskPreservesRunningDaemonAndCLI(t *testing.T) {
 	requireTaskLine(t, block, "WHISKD_PATH: \"{{.BIN_DIR}}/whisk\"")
 	requireTaskLine(t, block, "WHISK_CLI: \"{{.BIN_DIR}}/whisk\"")
 	requireTaskLine(t, block, "WHISKD_URL: \"http://{{.DEV_DAEMON_ADDR}}\"")
-	requireTaskLine(t, block, "WHISK_PLUGIN_DIRS: \"{{.ROOT_DIR}}/plugins/github-issues\"")
+	requireTaskLine(t, block, "WHISK_PLUGIN_DIRS: \"{{.ROOT_DIR}}/../whisk-plugins/registry/plugins/github-issues\"")
+	requireTaskLineAbsent(t, block, "{{.ROOT_DIR}}/plugins/github-issues")
 	requireTaskLineAbsent(t, block, "whisk daemon stop")
 	requireTaskLineAbsent(t, block, "{{.BIN_DIR}}/whiskd")
+}
+
+func TestSeedPluginsLiveOutsideThisRepo(t *testing.T) {
+	for _, path := range []string{
+		"plugins/github-issues/plugin.json",
+		"registry/plugins/github-issues/plugin.json",
+	} {
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("seed plugin copy belongs in ../whisk-plugins/registry/plugins/github-issues, not %s", path)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat seed plugin: %v", err)
+		}
+	}
 }
 
 func TestDevAppRestartTaskStopsDevDaemonThenRunsApp(t *testing.T) {

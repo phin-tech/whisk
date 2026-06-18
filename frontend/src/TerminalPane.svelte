@@ -2,7 +2,9 @@
   import { onMount } from "svelte";
   import { FitAddon } from "@xterm/addon-fit";
   import Check from "@lucide/svelte/icons/check";
+  import CircleStop from "@lucide/svelte/icons/circle-stop";
   import Clipboard from "@lucide/svelte/icons/clipboard";
+  import X from "@lucide/svelte/icons/x";
   import { Terminal } from "@xterm/xterm";
   import "@xterm/xterm/css/xterm.css";
   import type { Pane } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
@@ -15,6 +17,9 @@
   export let cursorBlink = true;
   export let onFocus: () => void;
   export let onInput: (ptyId: string) => void;
+  export let onClose: () => void;
+  export let onKillPTY: () => void;
+  export let canClose = false;
 
   let host: HTMLDivElement;
   let terminal: Terminal;
@@ -52,6 +57,18 @@
       copiedPtyId = "";
       copiedTimer = null;
     }, 1200);
+  }
+
+  function closePane(event: MouseEvent) {
+    event.stopPropagation();
+    if (!canClose) return;
+    onClose();
+  }
+
+  function killPTY(event: MouseEvent) {
+    event.stopPropagation();
+    if (!pane.currentPtyId) return;
+    onKillPTY();
   }
 
   function writeBase64Chunk(chunk: string) {
@@ -136,25 +153,52 @@
     class="flex h-7 shrink-0 items-center justify-between gap-2 border-b border-hairline bg-bg-base/95 px-2 text-[11px]"
   >
     <span class="truncate font-medium text-text-secondary">{pane.id}</span>
-    {#if pane.currentPtyId}
+    <div class="ml-auto flex min-w-0 items-center gap-1">
+      {#if pane.currentPtyId}
+        <button
+          type="button"
+          class="inline-flex min-w-0 items-center gap-1 rounded border border-transparent px-1 py-0.5 font-mono text-[10px] text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-surface hover:text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+          aria-label={`Copy PTY id ${pane.currentPtyId}`}
+          title={`Copy PTY id: ${pane.currentPtyId}`}
+          on:click={copyPtyId}
+          on:keydown|stopPropagation
+        >
+          <span class="truncate">{pane.currentPtyId}</span>
+          {#if copiedPtyId === pane.currentPtyId}
+            <Check size={11} />
+          {:else}
+            <Clipboard size={11} />
+          {/if}
+        </button>
+        <button
+          type="button"
+          class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-red hover:bg-bg-surface hover:text-red focus:outline-none focus:ring-1 focus:ring-red"
+          aria-label={`Kill PTY ${pane.currentPtyId}`}
+          title={`Kill PTY ${pane.currentPtyId}`}
+          on:click={killPTY}
+          on:keydown|stopPropagation
+        >
+          <CircleStop size={12} />
+        </button>
+      {:else}
+        <small class="truncate font-mono text-[10px] text-text-muted">empty</small>
+      {/if}
       <button
         type="button"
-        class="inline-flex min-w-0 items-center gap-1 rounded border border-transparent px-1 py-0.5 font-mono text-[10px] text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-surface hover:text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-        aria-label={`Copy PTY id ${pane.currentPtyId}`}
-        title={`Copy PTY id: ${pane.currentPtyId}`}
-        on:click={copyPtyId}
+        class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-surface hover:text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-35"
+        aria-label={`Close pane ${pane.id}`}
+        title={canClose
+          ? pane.currentPtyId
+            ? `Close pane ${pane.id} and kill PTY ${pane.currentPtyId}`
+            : `Close pane ${pane.id}`
+          : "Cannot close the last pane"}
+        disabled={!canClose}
+        on:click={closePane}
         on:keydown|stopPropagation
       >
-        <span class="truncate">{pane.currentPtyId}</span>
-        {#if copiedPtyId === pane.currentPtyId}
-          <Check size={11} />
-        {:else}
-          <Clipboard size={11} />
-        {/if}
+        <X size={12} />
       </button>
-    {:else}
-      <small class="truncate font-mono text-[10px] text-text-muted">empty</small>
-    {/if}
+    </div>
   </div>
   <div bind:this={host} class="min-h-0 min-w-0 flex-1 overflow-hidden"></div>
 </div>

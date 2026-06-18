@@ -10,6 +10,9 @@
   export let terminalCursorBlink = true;
   export let onFocus: (paneId: string) => void;
   export let onInput: (ptyId: string) => void;
+  export let onClose: (paneId: string) => void;
+  export let onKillPTY: (paneId: string) => void;
+  export let canClose: (paneId: string) => boolean;
 </script>
 
 {#if node.kind === "leaf"}
@@ -24,6 +27,9 @@
         cursorBlink={terminalCursorBlink}
         onFocus={() => onFocus(pane.id)}
         onInput={onInput}
+        onClose={() => onClose(pane.id)}
+        onKillPTY={() => onKillPTY(pane.id)}
+        canClose={canClose(pane.id)}
       />
     {/key}
   {/if}
@@ -45,6 +51,9 @@
         {terminalCursorBlink}
         onFocus={onFocus}
         onInput={onInput}
+        onClose={onClose}
+        onKillPTY={onKillPTY}
+        canClose={canClose}
       />
       </div>
     {/each}

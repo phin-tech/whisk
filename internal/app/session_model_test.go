@@ -280,7 +280,7 @@ func TestRuntimeSetPaneWorkingDirRejectsRunningPTYAndValidatesFilesystem(t *test
 	}
 }
 
-func TestRuntimeClosePaneRejectsCurrentPTYAndClosesEmptySplitPane(t *testing.T) {
+func TestRuntimeClosePaneKillsCurrentPTYAndRemovesSplitPane(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	ctx := context.Background()
 	rootDir := t.TempDir()
@@ -304,23 +304,29 @@ func TestRuntimeClosePaneRejectsCurrentPTYAndClosesEmptySplitPane(t *testing.T) 
 	if err != nil {
 		t.Fatalf("split pane: %v", err)
 	}
-	if _, err := runtime.ClosePane(ctx, app.ClosePaneRequest{
-		SessionID: created.Session.ID,
-		WindowID:  created.WindowID,
-		PaneID:    created.PaneID,
-	}); err == nil {
-		t.Fatalf("expected close current pty error")
-	}
 	updated, err := runtime.ClosePane(ctx, app.ClosePaneRequest{
 		SessionID: created.Session.ID,
 		WindowID:  created.WindowID,
-		PaneID:    split.PaneID,
+		PaneID:    created.PaneID,
 	})
 	if err != nil {
-		t.Fatalf("close empty pane: %v", err)
+		t.Fatalf("close pane with current pty: %v", err)
 	}
-	if _, ok := updated.Panes[split.PaneID]; ok {
+	if _, ok := updated.Panes[created.PaneID]; ok {
 		t.Fatalf("closed pane still present: %#v", updated.Panes)
+	}
+	if _, ok := updated.Panes[split.PaneID]; !ok {
+		t.Fatalf("remaining pane missing: %#v", updated.Panes)
+	}
+	ptys, err := runtime.ListPTYs(ctx)
+	if err != nil {
+		t.Fatalf("list ptys: %v", err)
+	}
+	if len(ptys) != 1 {
+		t.Fatalf("ptys = %#v", ptys)
+	}
+	if ptys[0].ID != created.MainPtyID || ptys[0].Status != app.PTYStatusKilled || ptys[0].Running || ptys[0].PaneID != "" || ptys[0].OriginPaneID != created.PaneID {
+		t.Fatalf("closed pane pty = %#v", ptys[0])
 	}
 }
 
