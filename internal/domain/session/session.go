@@ -68,6 +68,7 @@ type CreateSession struct {
 	ProjectID    string
 	Name         string
 	RootDir      string
+	WorkingDir   string
 }
 
 type SplitPane struct {
@@ -164,6 +165,14 @@ func (s *State) CreateSession(req CreateSession) (Session, error) {
 	if err != nil {
 		return Session{}, err
 	}
+	workingDir := req.WorkingDir
+	if workingDir == "" {
+		workingDir = rootDir
+	}
+	workingDir, err = cleanAbsolutePath(workingDir, "working dir")
+	if err != nil {
+		return Session{}, err
+	}
 	if _, exists := s.sessions[req.SessionID]; exists {
 		return Session{}, fmt.Errorf("session %s already exists", req.SessionID)
 	}
@@ -195,7 +204,7 @@ func (s *State) CreateSession(req CreateSession) (Session, error) {
 				ID:           req.PaneID,
 				WindowID:     req.WindowID,
 				CurrentPTYID: cloneStringPtr(req.InitialPTYID),
-				WorkingDir:   rootDir,
+				WorkingDir:   workingDir,
 			},
 		},
 	}

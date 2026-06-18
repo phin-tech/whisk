@@ -697,6 +697,7 @@ export class CreateProjectRequest {
 export class CreateSessionRequest {
     "name": string;
     "rootDir": string;
+    "workingDir"?: string;
     "projectId"?: string;
     "initialPty"?: StartPTYOptions | null;
 
@@ -716,10 +717,10 @@ export class CreateSessionRequest {
      * Creates a new CreateSessionRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): CreateSessionRequest {
-        const $$createField3_0 = $$createType6;
+        const $$createField4_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("initialPty" in $$parsedSource) {
-            $$parsedSource["initialPty"] = $$createField3_0($$parsedSource["initialPty"]);
+            $$parsedSource["initialPty"] = $$createField4_0($$parsedSource["initialPty"]);
         }
         return new CreateSessionRequest($$parsedSource as Partial<CreateSessionRequest>);
     }

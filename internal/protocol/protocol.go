@@ -8,7 +8,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 17
+const DaemonAPIVersion = 18
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -29,6 +29,7 @@ type ClearDaemonResponse struct {
 type CreateSessionRequest struct {
 	Name       string           `json:"name"`
 	RootDir    string           `json:"rootDir"`
+	WorkingDir string           `json:"workingDir,omitempty"`
 	ProjectID  string           `json:"projectId,omitempty"`
 	InitialPTY *StartPTYOptions `json:"initialPty,omitempty"`
 }

@@ -105,6 +105,7 @@
     ptyAttachWebSocketURL,
     type PTYStreamFrame,
   } from "./ptyStream";
+  import { commandIdForShortcut, sessionSplitCommands } from "./sessionCommands";
   import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
     normalizeStartupView,
@@ -150,6 +151,7 @@
   let newSessionOpen = false;
   let pendingSessionProjectId = "";
   let pendingSessionRootDir = "";
+  let pendingSessionWorkingDir = "";
   let settingsOpen = false;
   let railSide: RailSide = "right";
   let startupView: StartupView = "sessions";
@@ -222,6 +224,10 @@
       shortcut: "Cmd ,",
       run: openPreferences,
     },
+    ...sessionSplitCommands({
+      canSplit: Boolean(activeSession && activePaneId),
+      split,
+    }),
     // Session-switch commands mirror the native Sessions menu (Cmd 1..0). They are gated on the
     // session count so only reachable slots appear in the palette.
     ...Array.from({ length: 10 }, (_, i) => ({
@@ -571,6 +577,7 @@
     settingsOpen = false;
     pendingSessionProjectId = "";
     pendingSessionRootDir = "";
+    pendingSessionWorkingDir = "";
     activeMain = "session";
     newSessionOpen = true;
   }
@@ -582,12 +589,14 @@
     settingsOpen = false;
     pendingSessionProjectId = project.id;
     pendingSessionRootDir = project.rootDir;
+    pendingSessionWorkingDir = project.rootDir;
     newSessionOpen = true;
   }
 
   async function createSession(request: {
     name: string;
     rootDir: string;
+    workingDir: string;
     initialPty: { cols: number; rows: number; command: string } | null;
   }) {
     error = "";
@@ -596,6 +605,7 @@
       const created = await CreateSession({
         name: request.name,
         rootDir: request.rootDir,
+        workingDir: request.workingDir,
         projectId: pendingSessionProjectId,
         initialPty: request.initialPty,
       });
@@ -613,6 +623,7 @@
       }
       pendingSessionProjectId = "";
       pendingSessionRootDir = "";
+      pendingSessionWorkingDir = "";
       newSessionOpen = false;
       await refreshPTYs();
       if (created.ptyId) await refreshOutput(created.ptyId);
@@ -1414,6 +1425,12 @@
   }
 
   function handleCommandKey(event: KeyboardEvent) {
+    const commandId = commandIdForShortcut(event);
+    if (commandId) {
+      event.preventDefault();
+      void executeCommand(commandId);
+      return;
+    }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
       void executeCommand("palette.open");
@@ -1661,6 +1678,7 @@
           visible={newSessionOpen}
           loading={loadingSession}
           initialRootDir={pendingSessionRootDir}
+          initialWorkingDir={pendingSessionWorkingDir}
           onclose={() => (newSessionOpen = false)}
           oncreate={createSession}
         />

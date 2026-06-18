@@ -279,6 +279,7 @@ type PTYTranscriptExit struct {
 type CreateSessionRequest struct {
 	Name       string
 	RootDir    string
+	WorkingDir string
 	ProjectID  string
 	InitialPTY *StartPTYOptions
 }
@@ -499,6 +500,13 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 	if err != nil {
 		return CreatedSession{}, err
 	}
+	workingDir := rootDir
+	if req.WorkingDir != "" {
+		workingDir, err = validateExistingRootDir(req.WorkingDir)
+		if err != nil {
+			return CreatedSession{}, err
+		}
+	}
 	if req.ProjectID != "" {
 		if _, ok := r.workItems.GetProject(req.ProjectID); !ok {
 			return CreatedSession{}, fmt.Errorf("project %s not found", req.ProjectID)
@@ -514,16 +522,16 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 			return CreatedSession{}, fmt.Errorf("pty backend required")
 		}
 		nextPTYID := r.ids()
-		bridgeLaunch, err := r.preparePTYAgentBridge(req.InitialPTY, nextPTYID, rootDir)
+		bridgeLaunch, err := r.preparePTYAgentBridge(req.InitialPTY, nextPTYID, workingDir)
 		if err != nil {
 			return CreatedSession{}, err
 		}
 		record, err := r.ptys.Spawn(ctx, SpawnPTYRequest{
 			ID:         nextPTYID,
-			WorkingDir: rootDir,
+			WorkingDir: workingDir,
 			Cols:       req.InitialPTY.Cols,
 			Rows:       req.InitialPTY.Rows,
-			Env:        r.ptyContextEnv(sessionID, nextPTYID, mergedAgentBridgeEnv(req.InitialPTY.Env, bridgeLaunch)),
+			Env:        r.ptyContextEnv(sessionID, nextPTYID, r.projectPTYEnv(req.ProjectID, mergedAgentBridgeEnv(req.InitialPTY.Env, bridgeLaunch))),
 			Command:    directPTYCommand(req.InitialPTY),
 			Args:       directPTYArgs(req.InitialPTY),
 		})
@@ -569,6 +577,7 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 		ProjectID:    req.ProjectID,
 		Name:         req.Name,
 		RootDir:      rootDir,
+		WorkingDir:   workingDir,
 	})
 	if err != nil {
 		return CreatedSession{}, err
@@ -662,7 +671,7 @@ func (r *Runtime) SplitPane(ctx context.Context, req SplitPaneRequest) (SplitPan
 			WorkingDir: target.WorkingDir,
 			Cols:       req.InitialPTY.Cols,
 			Rows:       req.InitialPTY.Rows,
-			Env:        r.ptyContextEnv(req.SessionID, newPtyID, mergedAgentBridgeEnv(req.InitialPTY.Env, bridgeLaunch)),
+			Env:        r.ptyContextEnv(req.SessionID, newPtyID, r.projectPTYEnv(current.ProjectID, mergedAgentBridgeEnv(req.InitialPTY.Env, bridgeLaunch))),
 			Command:    directPTYCommand(req.InitialPTY),
 			Args:       directPTYArgs(req.InitialPTY),
 		})
@@ -831,7 +840,7 @@ func (r *Runtime) StartPanePTY(ctx context.Context, req StartPanePTYRequest) (St
 		WorkingDir: pane.WorkingDir,
 		Cols:       req.Options.Cols,
 		Rows:       req.Options.Rows,
-		Env:        r.ptyContextEnv(req.SessionID, ptyID, mergedAgentBridgeEnv(req.Options.Env, bridgeLaunch)),
+		Env:        r.ptyContextEnv(req.SessionID, ptyID, r.projectPTYEnv(current.ProjectID, mergedAgentBridgeEnv(req.Options.Env, bridgeLaunch))),
 		Command:    directPTYCommand(&req.Options),
 		Args:       directPTYArgs(&req.Options),
 	})
@@ -939,7 +948,7 @@ func (r *Runtime) RestartPanePTY(ctx context.Context, req RestartPanePTYRequest)
 		WorkingDir: pane.WorkingDir,
 		Cols:       req.Options.Cols,
 		Rows:       req.Options.Rows,
-		Env:        r.ptyContextEnv(req.SessionID, newPTYID, mergedAgentBridgeEnv(req.Options.Env, bridgeLaunch)),
+		Env:        r.ptyContextEnv(req.SessionID, newPTYID, r.projectPTYEnv(current.ProjectID, mergedAgentBridgeEnv(req.Options.Env, bridgeLaunch))),
 		Command:    directPTYCommand(&req.Options),
 		Args:       directPTYArgs(&req.Options),
 	})
@@ -1408,6 +1417,22 @@ func (r *Runtime) ptyContextEnv(sessionID string, ptyID string, extra map[string
 	if len(env) == 0 {
 		return nil
 	}
+	return env
+}
+
+func (r *Runtime) projectPTYEnv(projectID string, extra map[string]string) map[string]string {
+	if projectID == "" {
+		return extra
+	}
+	project, ok := r.workItems.GetProject(projectID)
+	if !ok {
+		return extra
+	}
+	env := map[string]string{}
+	for key, value := range extra {
+		env[key] = value
+	}
+	env["WHISK_PROJECT_ROOT"] = project.RootDir
 	return env
 }
 

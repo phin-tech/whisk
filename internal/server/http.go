@@ -668,6 +668,7 @@ func (s *HTTPServer) createSession(w http.ResponseWriter, r *http.Request) {
 	created, err := s.runtime.CreateSession(r.Context(), app.CreateSessionRequest{
 		Name:       req.Name,
 		RootDir:    req.RootDir,
+		WorkingDir: req.WorkingDir,
 		ProjectID:  req.ProjectID,
 		InitialPTY: toAppStartPTYOptions(req.InitialPTY),
 	})

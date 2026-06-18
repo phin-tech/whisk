@@ -1580,6 +1580,7 @@ export interface components {
             name: string;
             projectId?: string;
             rootDir: string;
+            workingDir?: string;
         };
         CreateWorkItemRequest: {
             actor?: string;

@@ -80,6 +80,7 @@ func runSessionCreate(args []string) error {
 	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
 	name := flags.String("name", "", "session name")
 	rootDir := flags.String("root", "", "session root directory")
+	workingDir := flags.String("working-dir", "", "initial pane working directory")
 	projectID := flags.String("project", envOrDefault("WHISK_PROJECT_ID", envOrDefault("WHISK_PROJECT", "")), "project id")
 	command := flags.String("command", "", "initial command to run in the PTY shell")
 	startPTY := flags.Bool("pty", true, "start an initial PTY")
@@ -87,17 +88,25 @@ func runSessionCreate(args []string) error {
 		return err
 	}
 	if flags.NArg() != 0 || *rootDir == "" {
-		return fmt.Errorf("usage: whisk session create -root <path> [-project project-id] [-name name] [-command command] [-pty=false] [-url http://127.0.0.1:8787]")
+		return fmt.Errorf("usage: whisk session create -root <path> [-working-dir path] [-project project-id] [-name name] [-command command] [-pty=false] [-url http://127.0.0.1:8787]")
 	}
 	resolvedRoot, err := filepath.Abs(*rootDir)
 	if err != nil {
 		return err
 	}
+	resolvedWorkingDir := ""
+	if *workingDir != "" {
+		resolvedWorkingDir, err = filepath.Abs(*workingDir)
+		if err != nil {
+			return err
+		}
+	}
 
 	req := protocol.CreateSessionRequest{
-		Name:      *name,
-		RootDir:   resolvedRoot,
-		ProjectID: *projectID,
+		Name:       *name,
+		RootDir:    resolvedRoot,
+		WorkingDir: resolvedWorkingDir,
+		ProjectID:  *projectID,
 	}
 	if *startPTY {
 		req.InitialPTY = &protocol.StartPTYOptions{Command: *command}

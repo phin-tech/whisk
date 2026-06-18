@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "17",
+    "version": "18",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -4740,6 +4740,9 @@
             "type": "string"
           },
           "rootDir": {
+            "type": "string"
+          },
+          "workingDir": {
             "type": "string"
           }
         },
