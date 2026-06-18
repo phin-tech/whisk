@@ -105,6 +105,7 @@
     ptyAttachWebSocketURL,
     type PTYStreamFrame,
   } from "./ptyStream";
+  import { commandIdForShortcut, sessionSplitCommands } from "./sessionCommands";
   import { activeWindow, firstPaneId, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
     normalizeStartupView,
@@ -222,6 +223,10 @@
       shortcut: "Cmd ,",
       run: openPreferences,
     },
+    ...sessionSplitCommands({
+      canSplit: Boolean(activeSession && activePaneId),
+      split,
+    }),
     // Session-switch commands mirror the native Sessions menu (Cmd 1..0). They are gated on the
     // session count so only reachable slots appear in the palette.
     ...Array.from({ length: 10 }, (_, i) => ({
@@ -1414,6 +1419,12 @@
   }
 
   function handleCommandKey(event: KeyboardEvent) {
+    const commandId = commandIdForShortcut(event);
+    if (commandId) {
+      event.preventDefault();
+      void executeCommand(commandId);
+      return;
+    }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
       void executeCommand("palette.open");

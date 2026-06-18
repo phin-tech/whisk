@@ -28,6 +28,40 @@ func TestCommandsIncludeAllSessionSlots(t *testing.T) {
 	}
 }
 
+func TestCommandsIncludeITermSplitShortcuts(t *testing.T) {
+	commands := Commands()
+	byID := make(map[string]Command, len(commands))
+	for _, cmd := range commands {
+		byID[cmd.ID] = cmd
+	}
+
+	cases := map[string]struct {
+		label    string
+		shortcut string
+	}{
+		CommandSplitPaneVertical:   {"Split Pane Vertically", "CmdOrCtrl+D"},
+		CommandSplitPaneHorizontal: {"Split Pane Horizontally", "CmdOrCtrl+Shift+D"},
+	}
+	for id, want := range cases {
+		cmd, ok := byID[id]
+		if !ok {
+			t.Fatalf("registry missing split command %q", id)
+		}
+		if cmd.Label != want.label {
+			t.Fatalf("%s label = %q, want %q", id, cmd.Label, want.label)
+		}
+		if cmd.Category != CategorySessions {
+			t.Fatalf("%s category = %q, want %q", id, cmd.Category, CategorySessions)
+		}
+		if cmd.Default != want.shortcut {
+			t.Fatalf("%s shortcut = %q, want %q", id, cmd.Default, want.shortcut)
+		}
+		if !cmd.Editable {
+			t.Fatalf("%s should be editable", id)
+		}
+	}
+}
+
 func TestDefaultSessionAcceleratorWrapsTenthToZero(t *testing.T) {
 	cases := map[int]string{
 		0: "CmdOrCtrl+1",

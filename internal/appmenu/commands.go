@@ -21,8 +21,10 @@ const (
 // Command ids. The session ids are positional: SelectSessionID(0) addresses the first session in
 // the session bar, SelectSessionID(9) the tenth.
 const (
-	CommandOpenPreferences = "open-preferences"
-	selectSessionPrefix    = "select-session-"
+	CommandOpenPreferences     = "open-preferences"
+	CommandSplitPaneVertical   = "split-pane-vertical"
+	CommandSplitPaneHorizontal = "split-pane-horizontal"
+	selectSessionPrefix        = "select-session-"
 )
 
 // SessionSlots is the number of session-switch shortcuts (Cmd+1..Cmd+9, Cmd+0).
@@ -74,7 +76,7 @@ func defaultSessionAccelerator(i int) string {
 // Commands returns the full registry in display order: the editable app commands first, then the
 // read-only standard macOS items surfaced for reference in the panel.
 func Commands() []Command {
-	commands := make([]Command, 0, 2+SessionSlots+8)
+	commands := make([]Command, 0, 3+SessionSlots+9)
 	commands = append(commands, Command{
 		ID:       CommandOpenPreferences,
 		Label:    "Open Preferences",
@@ -82,6 +84,22 @@ func Commands() []Command {
 		Default:  "CmdOrCtrl+,",
 		Editable: true,
 	})
+	commands = append(commands,
+		Command{
+			ID:       CommandSplitPaneVertical,
+			Label:    "Split Pane Vertically",
+			Category: CategorySessions,
+			Default:  "CmdOrCtrl+D",
+			Editable: true,
+		},
+		Command{
+			ID:       CommandSplitPaneHorizontal,
+			Label:    "Split Pane Horizontally",
+			Category: CategorySessions,
+			Default:  "CmdOrCtrl+Shift+D",
+			Editable: true,
+		},
+	)
 	for i := 0; i < SessionSlots; i++ {
 		commands = append(commands, Command{
 			ID:       SelectSessionID(i),
