@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -34,6 +36,46 @@ func TestSeedPluginsLiveOutsideThisRepo(t *testing.T) {
 		} else if !os.IsNotExist(err) {
 			t.Fatalf("stat seed plugin: %v", err)
 		}
+	}
+}
+
+func TestSigningScriptRejectsUnexpectedMacOSExecutablesBeforeNotary(t *testing.T) {
+	tmp := t.TempDir()
+	app := filepath.Join(tmp, "Whisk.app")
+	macos := filepath.Join(app, "Contents", "MacOS")
+	bin := filepath.Join(tmp, "bin")
+	if err := os.MkdirAll(macos, 0o755); err != nil {
+		t.Fatalf("mkdir app: %v", err)
+	}
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	for _, name := range []string{"whisk-app", "whisk", "whisk.disabled-kill-loop"} {
+		path := filepath.Join(macos, name)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatalf("write executable: %v", err)
+		}
+	}
+	for _, name := range []string{"codesign", "xcrun", "ditto", "spctl"} {
+		path := filepath.Join(bin, name)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\necho unexpected $0 >&2\nexit 99\n"), 0o755); err != nil {
+			t.Fatalf("write fake tool: %v", err)
+		}
+	}
+
+	out, err := runShellScript(t, map[string]string{
+		"PATH":             bin + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"SIGN_IDENTITY":    "Developer ID Application: Test",
+		"KEYCHAIN_PROFILE": "notary-profile",
+	}, "scripts/sign-notarize-macos-app.sh", app)
+	if err == nil {
+		t.Fatalf("signing script succeeded, output:\n%s", out)
+	}
+	if !strings.Contains(out, "unexpected executable in app bundle") || !strings.Contains(out, "whisk.disabled-kill-loop") {
+		t.Fatalf("output did not explain unexpected executable:\n%s", out)
+	}
+	if strings.Contains(out, "unexpected "+filepath.Join(bin, "xcrun")) {
+		t.Fatalf("script reached notary tool before rejecting bundle:\n%s", out)
 	}
 }
 
@@ -123,4 +165,15 @@ func requireTaskLineAbsent(t *testing.T, block string, unwanted string) {
 	if strings.Contains(block, unwanted) {
 		t.Fatalf("dev:app task should not contain %q\nblock:\n%s", unwanted, block)
 	}
+}
+
+func runShellScript(t *testing.T, env map[string]string, args ...string) (string, error) {
+	t.Helper()
+	cmd := exec.Command("sh", args...)
+	cmd.Env = os.Environ()
+	for key, value := range env {
+		cmd.Env = append(cmd.Env, key+"="+value)
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }

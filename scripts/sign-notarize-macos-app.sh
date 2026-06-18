@@ -26,6 +26,17 @@ assert_embedded_certificates() {
   rm -rf "${cert_dir}"
 }
 
+unexpected_executable="$(
+  find "${APP_PATH}/Contents/MacOS" -type f -perm +111 \
+    ! -name "whisk-app" \
+    ! -name "whisk" \
+    -print -quit
+)"
+if [ -n "${unexpected_executable}" ]; then
+  echo "unexpected executable in app bundle: ${unexpected_executable}" >&2
+  exit 1
+fi
+
 codesign_args=(--force --options runtime --timestamp)
 if [ -n "${ENTITLEMENTS:-}" ]; then
   codesign_args+=(--entitlements "${ENTITLEMENTS}")
