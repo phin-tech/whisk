@@ -3,11 +3,11 @@ Version=1.0
 Name=Whisk
 Comment=Terminal multiplexer and agent manager
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/Whisk %u
+Exec=/usr/local/bin/whisk-app %u
 Terminal=false
 Type=Application
-Icon=Whisk
+Icon=whisk-app
 Categories=Utility;
-StartupWMClass=Whisk
+StartupWMClass=whisk-app
 
  
