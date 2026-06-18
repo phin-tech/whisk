@@ -153,7 +153,7 @@ func (r *Runtime) daemonOnboardingItem(state onboarding.State) onboarding.Item {
 		ID:               "daemon:version",
 		Kind:             onboarding.KindDaemon,
 		Label:            "Daemon version",
-		Description:      "Records the whiskd API and build version used for onboarding so Whisk can notice later drift.",
+		Description:      "Records the whiskd API and build version used for onboarding. Updating or restarting the daemon kills active sessions.",
 		Target:           "whiskd",
 		Status:           status,
 		InstalledVersion: versionLabel(state.DaemonAPIVersion, state.DaemonGitSHA),
