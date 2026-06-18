@@ -315,6 +315,7 @@ type AgentHookIntegrationRequest struct {
 
 type PluginStatus struct {
 	ID                         string                      `json:"id"`
+	Registry                   string                      `json:"registry,omitempty"`
 	Name                       string                      `json:"name"`
 	Version                    string                      `json:"version"`
 	Dir                        string                      `json:"dir"`
@@ -351,6 +352,25 @@ type PluginTemplateField struct {
 type RunPluginProjectAttachmentTemplateRequest struct {
 	ProjectID string            `json:"projectId"`
 	Values    map[string]string `json:"values,omitempty"`
+}
+
+// RegistryPlugin is one installable plugin advertised by a configured plugin
+// registry, annotated with local install and trust state.
+type RegistryPlugin struct {
+	Registry    string `json:"registry"`
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	SourceType  string `json:"sourceType"`
+	Installed   bool   `json:"installed"`
+	Trusted     bool   `json:"trusted"`
+}
+
+// InstallRegistryPluginRequest installs a plugin id from a registry. Registry
+// may be empty when exactly one registry is configured.
+type InstallRegistryPluginRequest struct {
+	Registry string `json:"registry,omitempty"`
+	ID       string `json:"id"`
 }
 
 type AgentHookLogStatus struct {

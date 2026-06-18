@@ -15,11 +15,15 @@ import (
 
 func runPlugin(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk plugin <list|rescan|trust|untrust|attach>")
+		return fmt.Errorf("usage: whisk plugin <list|registry|install|rescan|trust|untrust|attach>")
 	}
 	switch args[0] {
 	case "list":
 		return runPluginList(args[1:])
+	case "registry":
+		return runPluginRegistry(args[1:])
+	case "install":
+		return runPluginInstall(args[1:])
 	case "rescan":
 		return runPluginRescan(args[1:])
 	case "trust":
@@ -29,8 +33,69 @@ func runPlugin(args []string) error {
 	case "attach":
 		return runPluginAttach(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk plugin <list|rescan|trust|untrust|attach>")
+		return fmt.Errorf("usage: whisk plugin <list|registry|install|rescan|trust|untrust|attach>")
 	}
+}
+
+func runPluginRegistry(args []string) error {
+	flags := flag.NewFlagSet("plugin registry", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: whisk plugin registry [-json] [-url http://127.0.0.1:8787]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	plugins, err := client.NewHTTP(*baseURL, nil).ListRegistryPlugins(ctx)
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(plugins)
+	}
+	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	defer writer.Flush()
+	fmt.Fprintln(writer, "REGISTRY\tID\tINSTALLED\tTRUSTED\tSOURCE\tNAME")
+	for _, plugin := range plugins {
+		fmt.Fprintf(writer, "%s\t%s\t%v\t%v\t%s\t%s\n", plugin.Registry, plugin.ID, plugin.Installed, plugin.Trusted, plugin.SourceType, plugin.Name)
+	}
+	return nil
+}
+
+func runPluginInstall(args []string) error {
+	flags := flag.NewFlagSet("plugin install", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	registry := flags.String("registry", "", "registry to install from (defaults to the only configured registry)")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return fmt.Errorf("usage: whisk plugin install <plugin-id>[@registry] [-registry name] [-json] [-url http://127.0.0.1:8787]")
+	}
+	// Accept "<id>@<registry>" shorthand in addition to the -registry flag.
+	id := flags.Arg(0)
+	reg := *registry
+	if at := strings.LastIndex(id, "@"); at > 0 {
+		reg = id[at+1:]
+		id = id[:at]
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	status, err := client.NewHTTP(*baseURL, nil).InstallPlugin(ctx, reg, id)
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(status)
+	}
+	fmt.Printf("%s\tinstalled\ttrusted=%v\t%s\n", status.ID, status.Trusted, status.Dir)
+	return nil
 }
 
 func runPluginList(args []string) error {

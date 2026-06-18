@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "id": "github",
+      "name": "GitHub Issues",
+      "description": "Attach GitHub issues to projects and resolve them as external context.",
+      "source": {
+        "type": "path",
+        "path": "plugins/github-issues"
+      }
+    }
+  ]
+}

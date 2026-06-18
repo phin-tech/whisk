@@ -12,7 +12,7 @@
   import TerminalIcon from "@lucide/svelte/icons/terminal";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import X from "@lucide/svelte/icons/x";
-  import type { AgentHookIntegration, AgentHookLogStatus, PluginStatus } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { AgentHookIntegration, AgentHookLogStatus, PluginStatus, RegistryPlugin } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { agentHookIntegrationFor } from "./agentHooksView";
   import DaemonSettings from "./DaemonSettings.svelte";
   import KeybindingsPanel from "./KeybindingsPanel.svelte";
@@ -37,6 +37,18 @@
   export let onRefreshAgentHookIntegrations: () => void;
   export let onRefreshPlugins: () => void;
   export let onSetPluginTrusted: (pluginId: string, trusted: boolean) => void;
+  export let registryPlugins: RegistryPlugin[] = [];
+  export let installingPluginId = "";
+  export let onRefreshRegistry: () => void;
+  export let onInstallPlugin: (registry: string, pluginId: string) => void;
+
+  // Group available plugins by their registry namespace for display.
+  $: registryGroups = Object.entries(
+    registryPlugins.reduce<Record<string, RegistryPlugin[]>>((groups, plugin) => {
+      (groups[plugin.registry] ??= []).push(plugin);
+      return groups;
+    }, {}),
+  );
   export let onCheckAgentHookIntegration: (provider: string) => void;
   export let onInstallAgentHookIntegration: (provider: string) => void;
   export let onRemoveAgentHookIntegration: (provider: string) => void;
@@ -393,6 +405,68 @@
               {/each}
             {/if}
           </div>
+
+          <div class="mt-6 flex items-center justify-between gap-3 pb-3">
+            <div>
+              <div class="text-[13px]">Available plugins</div>
+              <div class="mt-0.5 text-[11px] text-text-muted">
+                Installable from the configured plugin registries. Installed plugins start untrusted.
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label="Refresh registries"
+              class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+              on:click={onRefreshRegistry}
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+
+          {#if registryPlugins.length === 0}
+            <div class="border-y border-hairline py-3 text-[12px] text-text-muted">No registry plugins available.</div>
+          {:else}
+            {#each registryGroups as [registry, entries] (registry)}
+              <div class="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">{registry}</div>
+              <div class="divide-y divide-hairline border-y border-hairline">
+                {#each entries as entry (entry.id)}
+                  <div class="grid gap-3 py-3 md:grid-cols-[minmax(180px,240px)_1fr_auto] md:items-start">
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <Plug size={14} class="shrink-0 text-text-muted" />
+                        <span class="truncate text-[13px] font-medium text-text-primary">
+                          {entry.name || entry.id}
+                        </span>
+                      </div>
+                      <span class="mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider {entry.installed ? 'border-green/35 bg-green/10 text-green' : 'border-border bg-bg-deep text-text-muted'}">
+                        {entry.installed ? (entry.trusted ? "installed · trusted" : "installed") : "available"}
+                      </span>
+                    </div>
+
+                    <div class="min-w-0 space-y-1 text-[11px] text-text-muted">
+                      <div class="truncate">
+                        ID <span class="font-mono text-text-secondary">{entry.id}</span>
+                        {entry.sourceType ? ` · ${entry.sourceType}` : ""}
+                      </div>
+                      {#if entry.description}
+                        <div class="truncate text-text-secondary">{entry.description}</div>
+                      {/if}
+                    </div>
+
+                    <button
+                      type="button"
+                      class="inline-flex h-7 items-center gap-1.5 rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:opacity-50"
+                      disabled={entry.installed || installingPluginId === `${entry.registry}/${entry.id}`}
+                      on:click={() => onInstallPlugin(entry.registry, entry.id)}
+                    >
+                      <Download size={12} />
+                      {installingPluginId === `${entry.registry}/${entry.id}` ? "Installing…" : entry.installed ? "Installed" : "Install"}
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {/each}
+          {/if}
         {:else if selected === "integrations"}
           <div class="flex items-center justify-between gap-3 pb-3">
             <div>

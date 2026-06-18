@@ -284,3 +284,40 @@ func TestStoreSaveReturnsRenameError(t *testing.T) {
 		t.Fatalf("expected save error")
 	}
 }
+
+func TestNormalizePluginRegistriesDropsBlanksAndKeepsOrder(t *testing.T) {
+	settings, err := appsettings.Normalize(appsettings.Settings{
+		PluginRegistries: []appsettings.PluginRegistryConfig{
+			{Name: "phin-tech", Source: "phin-tech/whisk-plugins"},
+			{Name: "  ", Source: "ignored"},
+			{Name: "acme", Source: "git@github.com:acme/whisk-plugins.git", Transport: "git"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if len(settings.PluginRegistries) != 2 {
+		t.Fatalf("registries = %#v", settings.PluginRegistries)
+	}
+	if settings.PluginRegistries[0].Name != "phin-tech" || settings.PluginRegistries[1].Name != "acme" {
+		t.Fatalf("order not preserved: %#v", settings.PluginRegistries)
+	}
+}
+
+func TestNormalizePluginRegistriesRejectsDuplicateAndBadTransport(t *testing.T) {
+	if _, err := appsettings.Normalize(appsettings.Settings{PluginRegistries: []appsettings.PluginRegistryConfig{
+		{Name: "a", Source: "x/y"}, {Name: "a", Source: "z/w"},
+	}}); err == nil {
+		t.Fatal("duplicate name = nil error")
+	}
+	if _, err := appsettings.Normalize(appsettings.Settings{PluginRegistries: []appsettings.PluginRegistryConfig{
+		{Name: "a", Source: "x/y", Transport: "svn"},
+	}}); err == nil {
+		t.Fatal("bad transport = nil error")
+	}
+	if _, err := appsettings.Normalize(appsettings.Settings{PluginRegistries: []appsettings.PluginRegistryConfig{
+		{Name: "a/b", Source: "x/y"},
+	}}); err == nil {
+		t.Fatal("name with slash = nil error")
+	}
+}

@@ -51,6 +51,7 @@ from .gate_config import GateConfig
 from .gate_report import GateReport
 from .history_event import HistoryEvent
 from .http_forward import HTTPForward
+from .install_registry_plugin_request import InstallRegistryPluginRequest
 from .item import Item
 from .kill_pty_request import KillPTYRequest
 from .launch_execution_request import LaunchExecutionRequest
@@ -83,6 +84,7 @@ from .prompt_template import PromptTemplate
 from .pty_info import PTYInfo
 from .question import Question
 from .queue_execution_request import QueueExecutionRequest
+from .registry_plugin import RegistryPlugin
 from .remove_worktree_request import RemoveWorktreeRequest
 from .report_status_request import ReportStatusRequest
 from .report_status_response import ReportStatusResponse
@@ -188,6 +190,7 @@ __all__ = (
     "GateReport",
     "HistoryEvent",
     "HTTPForward",
+    "InstallRegistryPluginRequest",
     "Item",
     "KillPTYRequest",
     "LaunchExecutionRequest",
@@ -218,6 +221,7 @@ __all__ = (
     "PTYInfo",
     "Question",
     "QueueExecutionRequest",
+    "RegistryPlugin",
     "RemoveWorktreeRequest",
     "ReportStatusRequest",
     "ReportStatusResponse",

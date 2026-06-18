@@ -64,6 +64,7 @@ type Manager struct {
 	dirs      map[string]string
 	trusted   map[string]bool
 	resolvers map[string]app.ProjectContextResolver
+	installer *Installer
 }
 
 func NewManager(envDirs []string, settings SettingsStore) (*Manager, error) {
@@ -72,6 +73,37 @@ func NewManager(envDirs []string, settings SettingsStore) (*Manager, error) {
 		return nil, err
 	}
 	return manager, nil
+}
+
+// buildInstaller resolves the configured registries (settings list, else
+// WHISK_PLUGIN_REGISTRY, else a built-in default) into an Installer that
+// installs into the shared config plugin directory. It returns nil if the
+// environment can't be resolved; the registry endpoints then report that
+// installation is unavailable rather than crashing the daemon.
+func buildInstaller(settings appsettings.Settings) *Installer {
+	configDir, err := configPluginDir()
+	if err != nil {
+		return nil
+	}
+	registries, err := resolveRegistries(settings.PluginRegistries, os.Getenv("WHISK_PLUGIN_REGISTRY"), registryCacheDir())
+	if err != nil {
+		return nil
+	}
+	lockPath := filepath.Join(filepath.Dir(configDir), "plugins.lock.json")
+	return NewInstaller(registries, configDir, lockPath)
+}
+
+// registryCacheDir is where git-transport registries keep their shallow clones.
+func registryCacheDir() string {
+	base := os.Getenv("XDG_CACHE_HOME")
+	if base == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return filepath.Join(os.TempDir(), "whisk", "registries")
+		}
+		base = filepath.Join(home, ".cache")
+	}
+	return filepath.Join(base, "whisk", "registries")
 }
 
 func (m *Manager) ListPlugins(context.Context) ([]app.PluginStatus, error) {
@@ -234,37 +266,39 @@ func (m *Manager) rescanLocked(ctx context.Context) error {
 	for _, id := range settings.TrustedPlugins {
 		trusted[id] = true
 	}
-	dirs, err := PluginDirs(m.envDirs)
+	discovered, err := discoverPlugins(m.envDirs)
 	if err != nil {
 		return err
 	}
-	statuses := make([]app.PluginStatus, 0, len(dirs))
+	statuses := make([]app.PluginStatus, 0, len(discovered))
 	manifests := map[string]Manifest{}
 	manifestDirs := map[string]string{}
 	resolvers := map[string]app.ProjectContextResolver{}
-	for _, dir := range dirs {
-		manifest, err := ReadManifest(dir)
+	for _, found := range discovered {
+		manifest, err := ReadManifest(found.Dir)
 		if err != nil {
 			statuses = append(statuses, app.PluginStatus{
-				ID:           filepath.Base(dir),
-				Dir:          dir,
-				ManifestPath: filepath.Join(dir, "plugin.json"),
+				ID:           qualifiedID(found.Registry, filepath.Base(found.Dir)),
+				Registry:     found.Registry,
+				Dir:          found.Dir,
+				ManifestPath: filepath.Join(found.Dir, "plugin.json"),
 				Valid:        false,
 				Error:        err.Error(),
 			})
 			continue
 		}
-		status := statusFromManifest(dir, manifest, trusted[manifest.ID])
+		id := qualifiedID(found.Registry, manifest.ID)
+		status := statusFromManifest(found.Registry, found.Dir, manifest, trusted[id])
 		statuses = append(statuses, status)
-		manifests[manifest.ID] = manifest
-		manifestDirs[manifest.ID] = dir
-		if trusted[manifest.ID] {
+		manifests[id] = manifest
+		manifestDirs[id] = found.Dir
+		if trusted[id] {
 			for _, resolver := range manifest.Resolvers {
 				provider := strings.TrimSpace(resolver.Provider)
 				if provider == "" || strings.TrimSpace(resolver.Command) == "" {
 					continue
 				}
-				resolvers[provider] = CommandResolver{PluginID: manifest.ID, Dir: dir, Command: resolver.Command}
+				resolvers[provider] = CommandResolver{PluginID: id, Dir: found.Dir, Command: resolver.Command}
 			}
 		}
 	}
@@ -274,7 +308,18 @@ func (m *Manager) rescanLocked(ctx context.Context) error {
 	m.dirs = manifestDirs
 	m.trusted = trusted
 	m.resolvers = resolvers
+	m.installer = buildInstaller(settings)
 	return nil
+}
+
+// qualifiedID namespaces an installed plugin's id by its registry. Flat plugins
+// (manually placed or from WHISK_PLUGIN_DIRS) have no registry and keep their
+// bare id for backward compatibility.
+func qualifiedID(registry, id string) string {
+	if registry == "" {
+		return id
+	}
+	return registry + "/" + id
 }
 
 func (m *Manager) statusFor(id string) (app.PluginStatus, error) {
@@ -286,7 +331,7 @@ func (m *Manager) statusFor(id string) (app.PluginStatus, error) {
 	return app.PluginStatus{}, fmt.Errorf("plugin %s not found", id)
 }
 
-func statusFromManifest(dir string, manifest Manifest, trusted bool) app.PluginStatus {
+func statusFromManifest(registry, dir string, manifest Manifest, trusted bool) app.PluginStatus {
 	resolvers := make([]app.PluginResolver, 0, len(manifest.Resolvers))
 	for _, resolver := range manifest.Resolvers {
 		if strings.TrimSpace(resolver.Provider) == "" {
@@ -308,7 +353,8 @@ func statusFromManifest(dir string, manifest Manifest, trusted bool) app.PluginS
 		})
 	}
 	return app.PluginStatus{
-		ID:                         manifest.ID,
+		ID:                         qualifiedID(registry, manifest.ID),
+		Registry:                   registry,
 		Name:                       manifest.Name,
 		Version:                    manifest.Version,
 		Dir:                        dir,
@@ -320,10 +366,21 @@ func statusFromManifest(dir string, manifest Manifest, trusted bool) app.PluginS
 	}
 }
 
-func PluginDirs(envDirs []string) ([]string, error) {
+// discoveredPlugin is a plugin directory found on disk, with the registry
+// namespace it was installed under (empty for flat/manual plugins).
+type discoveredPlugin struct {
+	Dir      string
+	Registry string
+}
+
+// discoverPlugins finds plugin directories. WHISK_PLUGIN_DIRS entries are flat
+// plugins. Inside the config plugin dir, a child holding a plugin.json is a flat
+// plugin (manually placed); a child without one is treated as a registry
+// namespace whose own children are namespaced plugins.
+func discoverPlugins(envDirs []string) ([]discoveredPlugin, error) {
 	seen := map[string]bool{}
-	var out []string
-	add := func(dir string) {
+	var out []discoveredPlugin
+	add := func(dir, registry string) {
 		dir = strings.TrimSpace(dir)
 		if dir == "" {
 			return
@@ -333,10 +390,10 @@ func PluginDirs(envDirs []string) ([]string, error) {
 			return
 		}
 		seen[clean] = true
-		out = append(out, clean)
+		out = append(out, discoveredPlugin{Dir: clean, Registry: registry})
 	}
 	for _, dir := range envDirs {
-		add(dir)
+		add(dir, "")
 	}
 	configDir, err := configPluginDir()
 	if err != nil {
@@ -350,11 +407,31 @@ func PluginDirs(envDirs []string) ([]string, error) {
 		return nil, err
 	}
 	for _, entry := range entries {
-		if entry.IsDir() {
-			add(filepath.Join(configDir, entry.Name()))
+		if !entry.IsDir() {
+			continue
+		}
+		child := filepath.Join(configDir, entry.Name())
+		if hasManifest(child) {
+			add(child, "") // flat, manually-placed plugin
+			continue
+		}
+		// Registry namespace: scan one level deeper for installed plugins.
+		grandchildren, err := os.ReadDir(child)
+		if err != nil {
+			continue
+		}
+		for _, grandchild := range grandchildren {
+			if grandchild.IsDir() && hasManifest(filepath.Join(child, grandchild.Name())) {
+				add(filepath.Join(child, grandchild.Name()), entry.Name())
+			}
 		}
 	}
 	return out, nil
+}
+
+func hasManifest(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "plugin.json"))
+	return err == nil
 }
 
 func configPluginDir() (string, error) {

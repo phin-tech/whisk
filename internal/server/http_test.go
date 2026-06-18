@@ -154,6 +154,14 @@ func TestHTTPServerPluginRoutes(t *testing.T) {
 	if len(listed) != 1 || listed[0].ID != "github" {
 		t.Fatalf("plugins = %#v", listed)
 	}
+	registry := getJSON[[]protocol.RegistryPlugin](t, handler, "/v1/plugin-registry", http.StatusOK)
+	if len(registry) != 1 || registry[0].ID != "github" || registry[0].Registry != "phin-tech" || registry[0].SourceType != "path" {
+		t.Fatalf("registry = %#v", registry)
+	}
+	installed := postJSON[protocol.PluginStatus](t, handler, "/v1/plugin-registry/install", protocol.InstallRegistryPluginRequest{Registry: "phin-tech", ID: "github"}, http.StatusCreated)
+	if installed.ID != "github" || installed.Registry != "phin-tech" || installed.Trusted {
+		t.Fatalf("installed = %#v", installed)
+	}
 	trusted := postJSON[protocol.PluginStatus](t, handler, "/v1/plugins/github/trust", struct{}{}, http.StatusOK)
 	if !trusted.Trusted {
 		t.Fatalf("trusted = %#v", trusted)
@@ -1151,6 +1159,16 @@ func (f *pluginRegistryFake) TrustPlugin(_ context.Context, id string) (app.Plug
 
 func (f *pluginRegistryFake) UntrustPlugin(_ context.Context, id string) (app.PluginStatus, error) {
 	status := app.PluginStatus{ID: id, Name: "GitHub", Valid: true}
+	f.statuses = []app.PluginStatus{status}
+	return status, nil
+}
+
+func (f *pluginRegistryFake) ListRegistryPlugins(context.Context) ([]app.RegistryPlugin, error) {
+	return []app.RegistryPlugin{{Registry: "phin-tech", ID: "github", Name: "GitHub Issues", SourceType: "path"}}, nil
+}
+
+func (f *pluginRegistryFake) InstallPlugin(_ context.Context, registry, id string) (app.PluginStatus, error) {
+	status := app.PluginStatus{ID: id, Registry: registry, Name: "GitHub Issues", Valid: true}
 	f.statuses = []app.PluginStatus{status}
 	return status, nil
 }

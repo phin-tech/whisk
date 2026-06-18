@@ -25,6 +25,44 @@ func (s *HTTPServer) rescanPlugins(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, protocolPluginStatuses(plugins))
 }
 
+func (s *HTTPServer) listRegistryPlugins(w http.ResponseWriter, r *http.Request) {
+	plugins, err := s.runtime.ListRegistryPlugins(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, protocolRegistryPlugins(plugins))
+}
+
+func (s *HTTPServer) installRegistryPlugin(w http.ResponseWriter, r *http.Request) {
+	var req protocol.InstallRegistryPluginRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	status, err := s.runtime.InstallPlugin(r.Context(), req.Registry, req.ID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, protocolPluginStatus(status))
+}
+
+func protocolRegistryPlugins(plugins []app.RegistryPlugin) []protocol.RegistryPlugin {
+	out := make([]protocol.RegistryPlugin, 0, len(plugins))
+	for _, plugin := range plugins {
+		out = append(out, protocol.RegistryPlugin{
+			Registry:    plugin.Registry,
+			ID:          plugin.ID,
+			Name:        plugin.Name,
+			Description: plugin.Description,
+			SourceType:  plugin.SourceType,
+			Installed:   plugin.Installed,
+			Trusted:     plugin.Trusted,
+		})
+	}
+	return out
+}
+
 func (s *HTTPServer) trustPlugin(w http.ResponseWriter, r *http.Request) {
 	status, err := s.runtime.TrustPlugin(r.Context(), pathValue(r, "pluginID", ""))
 	if err != nil {
@@ -97,6 +135,7 @@ func protocolPluginStatus(status app.PluginStatus) protocol.PluginStatus {
 	}
 	return protocol.PluginStatus{
 		ID:                         status.ID,
+		Registry:                   status.Registry,
 		Name:                       status.Name,
 		Version:                    status.Version,
 		Dir:                        status.Dir,

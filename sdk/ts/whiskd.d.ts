@@ -406,6 +406,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/plugin-registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List installable plugins from the configured registries */
+        get: operations["listRegistryPlugins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plugin-registry/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Install a plugin from a configured registry (untrusted) */
+        post: operations["installRegistryPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/plugins": {
         parameters: {
             query?: never;
@@ -1702,6 +1736,10 @@ export interface components {
             type: string;
             worktreePath?: string;
         };
+        InstallRegistryPluginRequest: {
+            id: string;
+            registry?: string;
+        };
         Item: {
             description?: string;
             detail?: string;
@@ -1812,6 +1850,7 @@ export interface components {
             manifestPath: string;
             name: string;
             projectAttachmentTemplates?: components["schemas"]["ProjectAttachmentTemplate"][];
+            registry?: string;
             resolvers?: components["schemas"]["PluginResolver"][];
             trusted: boolean;
             valid: boolean;
@@ -1920,6 +1959,15 @@ export interface components {
         QueueExecutionRequest: {
             actor?: string;
             workItemId: string;
+        };
+        RegistryPlugin: {
+            description?: string;
+            id: string;
+            installed: boolean;
+            name?: string;
+            registry: string;
+            sourceType: string;
+            trusted: boolean;
         };
         RemoveWorktreeRequest: {
             alsoBranch: boolean;
@@ -3034,6 +3082,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnboardingStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listRegistryPlugins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryPlugin"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    installRegistryPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallRegistryPluginRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStatus"];
                 };
             };
             /** @description error */

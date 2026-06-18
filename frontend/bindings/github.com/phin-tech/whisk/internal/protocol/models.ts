@@ -1458,6 +1458,7 @@ export class PluginResolver {
 
 export class PluginStatus {
     "id": string;
+    "registry"?: string;
     "name": string;
     "version": string;
     "dir": string;
@@ -1499,14 +1500,14 @@ export class PluginStatus {
      * Creates a new PluginStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): PluginStatus {
-        const $$createField8_0 = $$createType12;
-        const $$createField9_0 = $$createType14;
+        const $$createField9_0 = $$createType12;
+        const $$createField10_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("resolvers" in $$parsedSource) {
-            $$parsedSource["resolvers"] = $$createField8_0($$parsedSource["resolvers"]);
+            $$parsedSource["resolvers"] = $$createField9_0($$parsedSource["resolvers"]);
         }
         if ("projectAttachmentTemplates" in $$parsedSource) {
-            $$parsedSource["projectAttachmentTemplates"] = $$createField9_0($$parsedSource["projectAttachmentTemplates"]);
+            $$parsedSource["projectAttachmentTemplates"] = $$createField10_0($$parsedSource["projectAttachmentTemplates"]);
         }
         return new PluginStatus($$parsedSource as Partial<PluginStatus>);
     }
@@ -1731,6 +1732,49 @@ export class QueueExecutionRequest {
     static createFrom($$source: any = {}): QueueExecutionRequest {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new QueueExecutionRequest($$parsedSource as Partial<QueueExecutionRequest>);
+    }
+}
+
+/**
+ * RegistryPlugin is one installable plugin advertised by a configured plugin
+ * registry, annotated with local install and trust state.
+ */
+export class RegistryPlugin {
+    "registry": string;
+    "id": string;
+    "name"?: string;
+    "description"?: string;
+    "sourceType": string;
+    "installed": boolean;
+    "trusted": boolean;
+
+    /** Creates a new RegistryPlugin instance. */
+    constructor($$source: Partial<RegistryPlugin> = {}) {
+        if (!("registry" in $$source)) {
+            this["registry"] = "";
+        }
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("sourceType" in $$source)) {
+            this["sourceType"] = "";
+        }
+        if (!("installed" in $$source)) {
+            this["installed"] = false;
+        }
+        if (!("trusted" in $$source)) {
+            this["trusted"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RegistryPlugin instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RegistryPlugin {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RegistryPlugin($$parsedSource as Partial<RegistryPlugin>);
     }
 }
 

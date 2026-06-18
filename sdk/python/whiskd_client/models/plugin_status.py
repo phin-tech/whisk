@@ -29,6 +29,7 @@ class PluginStatus:
         version (str):
         error (str | Unset):
         project_attachment_templates (list[ProjectAttachmentTemplate] | Unset):
+        registry (str | Unset):
         resolvers (list[PluginResolver] | Unset):
     """
 
@@ -41,6 +42,7 @@ class PluginStatus:
     version: str
     error: str | Unset = UNSET
     project_attachment_templates: list[ProjectAttachmentTemplate] | Unset = UNSET
+    registry: str | Unset = UNSET
     resolvers: list[PluginResolver] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -72,6 +74,8 @@ class PluginStatus:
                 )
                 project_attachment_templates.append(project_attachment_templates_item)
 
+        registry = self.registry
+
         resolvers: list[dict[str, Any]] | Unset = UNSET
         if not isinstance(self.resolvers, Unset):
             resolvers = []
@@ -96,6 +100,8 @@ class PluginStatus:
             field_dict["error"] = error
         if project_attachment_templates is not UNSET:
             field_dict["projectAttachmentTemplates"] = project_attachment_templates
+        if registry is not UNSET:
+            field_dict["registry"] = registry
         if resolvers is not UNSET:
             field_dict["resolvers"] = resolvers
 
@@ -134,6 +140,8 @@ class PluginStatus:
 
                 project_attachment_templates.append(project_attachment_templates_item)
 
+        registry = d.pop("registry", UNSET)
+
         _resolvers = d.pop("resolvers", UNSET)
         resolvers: list[PluginResolver] | Unset = UNSET
         if _resolvers is not UNSET:
@@ -153,6 +161,7 @@ class PluginStatus:
             version=version,
             error=error,
             project_attachment_templates=project_attachment_templates,
+            registry=registry,
             resolvers=resolvers,
         )
 
