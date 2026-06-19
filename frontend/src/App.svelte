@@ -67,12 +67,14 @@
     LoadAppSettings,
     LaunchExecution,
     LaunchWorkItemRun,
+    LogPTYTrace,
     MarkAgentBridgeEventRead,
     MarkStatusEventRead,
     MoveWorkItem,
     NextEvent,
     Output,
     OpenAgentHookLog,
+    PTYTraceEnabled,
     QueueExecution,
     RemoveAgentHookIntegration,
     RescanPlugins,
@@ -112,7 +114,9 @@
   import {
     nextPTYStreamOffset,
     ptyAttachWebSocketURL,
+    ptyInputTraceLine,
     type PTYStreamFrame,
+    writePTYInputOverSocket,
   } from "./ptyStream";
   import { commandIdForShortcut, sessionSplitCommands } from "./sessionCommands";
   import { activeWindow, closePaneRequest, firstPaneId, killPTYRequest, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
@@ -183,6 +187,7 @@
   let offsets: Record<string, number> = {};
   let daemonAddress = "";
   let ptyStreams: Record<string, WebSocket> = {};
+  let ptyTraceEnabled = false;
   let outputReconcileTimer: number | undefined;
   let workReconcileTimer: number | undefined;
   let stopCommandEvents: (() => void) | undefined;
@@ -584,6 +589,15 @@
         error = backendError(err);
       });
     }
+  }
+
+  async function writePTYInput(ptyId: string, data: string) {
+    const socket = ptyStreams[ptyId];
+    if (writePTYInputOverSocket(socket, ptyId, data)) {
+      if (ptyTraceEnabled) void LogPTYTrace(ptyInputTraceLine("frontend.websocket", ptyId, data, performance.now()));
+      return;
+    }
+    if (ptyTraceEnabled) void LogPTYTrace(ptyInputTraceLine("frontend.missing-websocket", ptyId, data, performance.now()));
   }
 
   function openNewSession() {
@@ -1552,6 +1566,13 @@
     stopCommandEvents = Events.On("command:run", (event) => {
       void executeCommand(String(event.data));
     });
+    PTYTraceEnabled()
+      .then((enabled) => {
+        ptyTraceEnabled = enabled;
+      })
+      .catch(() => {
+        ptyTraceEnabled = false;
+      });
     loadSettings()
       .then(() => {
         settingsLoaded = true;
@@ -1751,6 +1772,7 @@
               {terminalCursorBlink}
               onFocus={(paneId) => (activePaneId = paneId)}
               onInput={(ptyId) => refreshOutput(ptyId).catch((err) => (error = backendError(err)))}
+              onWriteInput={writePTYInput}
               onClose={(paneId) => void closePane(paneId)}
               onKillPTY={(paneId) => void killPanePTY(paneId)}
               canClose={(paneId) =>

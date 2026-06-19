@@ -188,6 +188,7 @@ type OutputSnapshot struct {
 type PTYStreamFrame struct {
 	Type         string `json:"type"`
 	PtyID        string `json:"ptyId"`
+	Data         string `json:"data,omitempty"`
 	Offset       uint64 `json:"offset,omitempty"`
 	OutputBase64 string `json:"outputBase64,omitempty"`
 	Code         *int   `json:"code,omitempty"`

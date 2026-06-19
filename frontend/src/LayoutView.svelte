@@ -10,6 +10,7 @@
   export let terminalCursorBlink = true;
   export let onFocus: (paneId: string) => void;
   export let onInput: (ptyId: string) => void;
+  export let onWriteInput: (ptyId: string, data: string) => Promise<void>;
   export let onClose: (paneId: string) => void;
   export let onKillPTY: (paneId: string) => void;
   export let canClose: (paneId: string) => boolean;
@@ -27,6 +28,7 @@
         cursorBlink={terminalCursorBlink}
         onFocus={() => onFocus(pane.id)}
         onInput={onInput}
+        onWriteInput={onWriteInput}
         onClose={() => onClose(pane.id)}
         onKillPTY={() => onKillPTY(pane.id)}
         canClose={canClose(pane.id)}
@@ -51,6 +53,7 @@
         {terminalCursorBlink}
         onFocus={onFocus}
         onInput={onInput}
+        onWriteInput={onWriteInput}
         onClose={onClose}
         onKillPTY={onKillPTY}
         canClose={canClose}

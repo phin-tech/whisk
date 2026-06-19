@@ -8,7 +8,8 @@
   import { Terminal } from "@xterm/xterm";
   import "@xterm/xterm/css/xterm.css";
   import type { Pane } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import { ResizePTY, WritePTY } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
+  import { ResizePTY } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
+  import { terminalInputRefreshDelays, terminalInputShouldRefreshOutput } from "./ptyStream";
 
   export let pane: Pane;
   export let outputChunks: string[] = [];
@@ -17,6 +18,7 @@
   export let cursorBlink = true;
   export let onFocus: () => void;
   export let onInput: (ptyId: string) => void;
+  export let onWriteInput: (ptyId: string, data: string) => Promise<void>;
   export let onClose: () => void;
   export let onKillPTY: () => void;
   export let canClose = false;
@@ -118,11 +120,12 @@
     terminal.onData((data) => {
       const ptyId = pane.currentPtyId;
       if (!ptyId) return;
-      WritePTY({ ptyId, data })
+      onWriteInput(ptyId, data)
         .then(() => {
-          onInput(ptyId);
-          window.setTimeout(() => onInput(ptyId), 50);
-          window.setTimeout(() => onInput(ptyId), 200);
+          if (terminalInputShouldRefreshOutput()) onInput(ptyId);
+          for (const delay of terminalInputRefreshDelays()) {
+            window.setTimeout(() => onInput(ptyId), delay);
+          }
         })
         .catch(console.error);
     });

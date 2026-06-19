@@ -370,6 +370,14 @@ func TestHTTPServerAttachesPTYWebSocketOutputStream(t *testing.T) {
 	if live.Type != "output" || live.PtyID != created.MainPtyID || live.Offset != 5 || live.OutputBase64 != "IQ==" {
 		t.Fatalf("live frame = %#v", live)
 	}
+
+	if err := conn.Write(ctx, websocket.MessageText, []byte(`{"type":"input","ptyId":"`+created.MainPtyID+`","data":"?"}`)); err != nil {
+		t.Fatalf("write websocket input: %v", err)
+	}
+	inputEcho := readPTYStreamFrame(t, ctx, conn)
+	if inputEcho.Type != "output" || inputEcho.PtyID != created.MainPtyID || inputEcho.Offset != 6 || inputEcho.OutputBase64 != "Pw==" {
+		t.Fatalf("input echo frame = %#v", inputEcho)
+	}
 }
 
 func readPTYStreamFrame(t *testing.T, ctx context.Context, conn *websocket.Conn) protocol.PTYStreamFrame {

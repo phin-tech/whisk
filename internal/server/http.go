@@ -17,6 +17,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/protocol"
+	"github.com/phin-tech/whisk/internal/ptytrace"
 )
 
 func NewHTTP(runtime *app.Runtime) http.Handler {
@@ -785,6 +786,7 @@ func (s *HTTPServer) writePTY(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.PtyID = pathValue(r, "ptyID", req.PtyID)
+	writePTYInputTrace("daemon.http", req.PtyID, len(req.Data))
 	if err := s.runtime.WritePTY(r.Context(), req.PtyID, []byte(req.Data)); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -845,7 +847,8 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
 
-	ctx := conn.CloseRead(r.Context())
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 	attach, err := s.runtime.AttachPTY(ctx, app.AttachPTYRequest{
 		PtyID:            ptyID,
 		ReplayFromOffset: fromOffset,
@@ -855,6 +858,7 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer attach.Close()
+	go s.readPTYStreamInput(ctx, cancel, conn, ptyID)
 
 	if len(attach.ReplayBytes) > 0 {
 		if err := writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
@@ -890,6 +894,41 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func (s *HTTPServer) readPTYStreamInput(ctx context.Context, cancel context.CancelFunc, conn *websocket.Conn, ptyID string) {
+	defer cancel()
+	for {
+		typ, data, err := conn.Read(ctx)
+		if err != nil {
+			return
+		}
+		if typ != websocket.MessageText {
+			return
+		}
+		var frame protocol.PTYStreamFrame
+		if err := json.Unmarshal(data, &frame); err != nil {
+			return
+		}
+		if frame.Type != "input" {
+			continue
+		}
+		if frame.PtyID != "" && frame.PtyID != ptyID {
+			return
+		}
+		writePTYInputTrace("daemon.websocket", ptyID, len(frame.Data))
+		if err := s.runtime.WritePTY(ctx, ptyID, []byte(frame.Data)); err != nil {
+			return
+		}
+	}
+}
+
+func ptyInputTraceLine(channel string, ptyID string, bytes int, at time.Time) string {
+	return ptytrace.Line(channel, ptyID, bytes, at)
+}
+
+func writePTYInputTrace(channel string, ptyID string, bytes int) {
+	ptytrace.Write(ptyInputTraceLine(channel, ptyID, bytes, time.Now()))
 }
 
 func writePTYStreamFrame(ctx context.Context, conn *websocket.Conn, frame protocol.PTYStreamFrame) error {

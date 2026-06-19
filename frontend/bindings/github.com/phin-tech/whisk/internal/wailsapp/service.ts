@@ -359,6 +359,10 @@ export function LoadKeybindings(): $CancellablePromise<appmenu$0.KeybindingsView
     });
 }
 
+export function LogPTYTrace(line: string): $CancellablePromise<void> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.LogPTYTrace", line);
+}
+
 export function MarkAgentBridgeEventRead(req: protocol$0.MarkAgentBridgeEventReadRequest): $CancellablePromise<protocol$0.AgentBridgeEvent> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.MarkAgentBridgeEventRead", req).then(($result: any) => {
         return $$createType21($result);
@@ -399,6 +403,10 @@ export function Output(req: protocol$0.OutputRequest): $CancellablePromise<proto
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.Output", req).then(($result: any) => {
         return $$createType51($result);
     });
+}
+
+export function PTYTraceEnabled(): $CancellablePromise<boolean> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.PTYTraceEnabled");
 }
 
 export function ProjectContext(projectID: string): $CancellablePromise<protocol$0.ProjectContext> {

@@ -11,6 +11,7 @@ import (
 	"github.com/phin-tech/whisk/internal/daemon"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/protocol"
+	"github.com/phin-tech/whisk/internal/ptytrace"
 )
 
 // daemonControlTimeout bounds start/stop/restart operations so a frontend action can't hang the
@@ -280,6 +281,14 @@ func (s *Service) ClosePane(ctx context.Context, req protocol.ClosePaneRequest) 
 
 func (s *Service) WritePTY(ctx context.Context, req protocol.WritePTYRequest) error {
 	return s.client.WritePTY(ctx, req)
+}
+
+func (s *Service) PTYTraceEnabled() bool {
+	return ptytrace.Enabled()
+}
+
+func (s *Service) LogPTYTrace(line string) {
+	ptytrace.Write(line)
 }
 
 func (s *Service) ResizePTY(ctx context.Context, req protocol.ResizePTYRequest) error {
