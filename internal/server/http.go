@@ -64,6 +64,7 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/write", server.writePTY)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/resize", server.resizePTY)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/kill", server.killPTY)
+	mux.HandleFunc("DELETE /v1/ptys/{ptyID}", server.deletePTY)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/bookmarks", server.addPTYBookmark)
 	mux.HandleFunc("GET /v1/ptys/{ptyID}/bookmarks", server.listPTYBookmarks)
 	mux.HandleFunc("DELETE /v1/pty-bookmarks/{bookmarkID}", server.removePTYBookmark)
@@ -528,6 +529,16 @@ func (s *HTTPServer) killPTY(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toProtocolPTYInfo(killed))
+}
+
+func (s *HTTPServer) deletePTY(w http.ResponseWriter, r *http.Request) {
+	var req protocol.DeletePTYRequest
+	req.PTYID = pathValue(r, "ptyID", req.PTYID)
+	if err := s.runtime.DeletePTY(r.Context(), app.DeletePTYRequest{PTYID: req.PTYID}); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func toProtocolPTYInfo(pty app.PTYInfo) protocol.PTYInfo {

@@ -843,6 +843,27 @@ export class CreatedWorktree {
     }
 }
 
+export class DeletePTYRequest {
+    "ptyId": string;
+
+    /** Creates a new DeletePTYRequest instance. */
+    constructor($$source: Partial<DeletePTYRequest> = {}) {
+        if (!("ptyId" in $$source)) {
+            this["ptyId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DeletePTYRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DeletePTYRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DeletePTYRequest($$parsedSource as Partial<DeletePTYRequest>);
+    }
+}
+
 export class DeleteProjectAttachmentRequest {
     "projectId": string;
 

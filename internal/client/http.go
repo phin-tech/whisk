@@ -278,6 +278,11 @@ func (c *HTTPClient) KillPTY(ctx context.Context, req protocol.KillPTYRequest) (
 	return result, err
 }
 
+func (c *HTTPClient) DeletePTY(ctx context.Context, req protocol.DeletePTYRequest) error {
+	path := "/v1/ptys/" + url.PathEscape(req.PTYID)
+	return c.delete(ctx, path)
+}
+
 func (c *HTTPClient) AddPTYBookmark(ctx context.Context, req protocol.AddPTYBookmarkRequest) (protocol.PTYBookmark, error) {
 	var result protocol.PTYBookmark
 	path := "/v1/ptys/" + url.PathEscape(req.PTYID) + "/bookmarks"

@@ -95,6 +95,7 @@ type PTYBackend interface {
 	Write(ctx context.Context, ptyID string, data []byte) error
 	Resize(ctx context.Context, ptyID string, size PTYSize) error
 	Kill(ctx context.Context, ptyID string) (PTYRecord, error)
+	Delete(ctx context.Context, ptyID string) error
 	Attach(ctx context.Context, req AttachPTYRequest) (*PTYAttach, error)
 	Output(ctx context.Context, ptyID string, fromOffset uint64) (PTYOutputSnapshot, error)
 	List(ctx context.Context) ([]PTYRecord, error)
@@ -388,6 +389,10 @@ type RestartedPanePTY struct {
 }
 
 type KillPTYRequest struct {
+	PTYID string
+}
+
+type DeletePTYRequest struct {
 	PTYID string
 }
 
@@ -1024,6 +1029,24 @@ func (r *Runtime) KillPTY(ctx context.Context, req KillPTYRequest) (PTYInfo, err
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: req.PTYID})
 	return r.ptyInfoForRecord(record), nil
+}
+
+func (r *Runtime) DeletePTY(ctx context.Context, req DeletePTYRequest) error {
+	record, err := r.findPTYRecord(ctx, req.PTYID)
+	if err != nil {
+		return err
+	}
+	if record.Running {
+		return fmt.Errorf("cannot delete running pty %s", req.PTYID)
+	}
+	if err := r.ptys.Delete(ctx, req.PTYID); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	delete(r.ptyMeta, req.PTYID)
+	r.mu.Unlock()
+	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: req.PTYID})
+	return nil
 }
 
 func (r *Runtime) AddPTYBookmark(ctx context.Context, req AddPTYBookmarkRequest) (ptybookmark.Bookmark, error) {

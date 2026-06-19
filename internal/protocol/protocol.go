@@ -149,6 +149,10 @@ type KillPTYRequest struct {
 	PTYID string `json:"ptyId"`
 }
 
+type DeletePTYRequest struct {
+	PTYID string `json:"ptyId"`
+}
+
 type AddPTYBookmarkRequest struct {
 	PTYID  string `json:"ptyId"`
 	Offset uint64 `json:"offset"`

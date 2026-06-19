@@ -586,6 +586,40 @@ func TestRuntimeKillPTYMarksStatusAndAllowsPaneRestart(t *testing.T) {
 	}
 }
 
+func TestRuntimeDeleteKilledPTYRemovesItFromInventory(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	ctx := context.Background()
+	rootDir := t.TempDir()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend()})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    rootDir,
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := runtime.KillPTY(ctx, app.KillPTYRequest{PTYID: created.MainPtyID}); err != nil {
+		t.Fatalf("kill pty: %v", err)
+	}
+
+	if err := runtime.DeletePTY(ctx, app.DeletePTYRequest{PTYID: created.MainPtyID}); err != nil {
+		t.Fatalf("delete killed pty: %v", err)
+	}
+
+	ptys, err := runtime.ListPTYs(ctx)
+	if err != nil {
+		t.Fatalf("list ptys: %v", err)
+	}
+	for _, pty := range ptys {
+		if pty.ID == created.MainPtyID {
+			t.Fatalf("deleted pty still listed: %#v", pty)
+		}
+	}
+}
+
 func TestRuntimeRestartPanePTYRejectsRunningCurrentPTY(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	ctx := context.Background()

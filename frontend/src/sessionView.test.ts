@@ -159,6 +159,7 @@ describe("ptyRowsFromInventory", () => {
         detail: "/repo / 80x24",
         running: true,
         status: "running",
+        canDelete: false,
       },
       {
         id: "pty_02",
@@ -167,6 +168,7 @@ describe("ptyRowsFromInventory", () => {
         detail: "/repo / 80x24",
         running: false,
         status: "killed",
+        canDelete: true,
       },
     ]);
   });

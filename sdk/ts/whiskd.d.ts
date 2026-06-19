@@ -685,6 +685,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ptys/{ptyID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deletePTY"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ptys/{ptyID}/bookmarks": {
         parameters: {
             query?: never;
@@ -3652,6 +3668,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PTYInfo"][];
                 };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deletePTY: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ptyID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description error */
             default: {

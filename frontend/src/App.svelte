@@ -42,6 +42,7 @@
     CreateWorkItem,
     CreateWorktree,
     DaemonStatus as LoadDaemonStatus,
+    DeletePTY,
     DeleteProjectAttachment,
     DeleteWorkItem,
     CheckAgentHookIntegration,
@@ -1477,6 +1478,17 @@
     }
   }
 
+  async function deletePTY(ptyId: string) {
+    if (!window.confirm(`Delete PTY ${ptyId}?`)) return;
+    error = "";
+    try {
+      await DeletePTY({ ptyId });
+      await refreshPTYs();
+    } catch (err) {
+      error = `Delete PTY failed: ${backendError(err)}`;
+    }
+  }
+
   async function setSessionProject(sessionId: string, projectId: string) {
     error = "";
     loadingSession = true;
@@ -1666,6 +1678,7 @@
         onSetSessionProject={(sessionId, projectId) => void setSessionProject(sessionId, projectId)}
         onRefreshPtys={() => void refreshPTYs()}
         onKillPTY={(ptyId) => void killPTY(ptyId)}
+        onDeletePTY={(ptyId) => void deletePTY(ptyId)}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
@@ -1686,24 +1699,6 @@
           <div class="truncate font-mono text-[10px] text-text-muted">
             {activeMain === "work" || activeMain === "projects" ? (activeProjectId || "No project selected") : (activePaneId || "No pane selected")}
           </div>
-        </div>
-        <div class="flex items-center gap-1">
-          <button
-            type="button"
-            class="rounded border border-border-subtle bg-bg-surface/60 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-            disabled={!activeSession || activeMain !== "session"}
-            on:click={() => split("horizontal")}
-          >
-            Split right
-          </button>
-          <button
-            type="button"
-            class="rounded border border-border-subtle bg-bg-surface/60 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-            disabled={!activeSession || activeMain !== "session"}
-            on:click={() => split("vertical")}
-          >
-            Split down
-          </button>
         </div>
       </header>
 
@@ -1905,6 +1900,7 @@
         onSetSessionProject={(sessionId, projectId) => void setSessionProject(sessionId, projectId)}
         onRefreshPtys={() => void refreshPTYs()}
         onKillPTY={(ptyId) => void killPTY(ptyId)}
+        onDeletePTY={(ptyId) => void deletePTY(ptyId)}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}

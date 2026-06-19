@@ -299,6 +299,10 @@ func (s *Service) KillPTY(ctx context.Context, req protocol.KillPTYRequest) (pro
 	return s.client.KillPTY(ctx, req)
 }
 
+func (s *Service) DeletePTY(ctx context.Context, req protocol.DeletePTYRequest) error {
+	return s.client.DeletePTY(ctx, req)
+}
+
 func (s *Service) AddPTYBookmark(ctx context.Context, req protocol.AddPTYBookmarkRequest) (protocol.PTYBookmark, error) {
 	return s.client.AddPTYBookmark(ctx, req)
 }

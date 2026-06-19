@@ -195,6 +195,17 @@ tasks:
     cmds:
       - WHISK_BIN="{{.TASKFILE_DIR}}/{{.BIN_DIR}}/whisk" uv run --project tests/integration pytest tests/integration
 
+  dev:local-install:
+    desc: Builds and installs the macOS app into /Applications
+    platforms: [darwin]
+    deps:
+      - task: darwin:package
+    vars:
+      INSTALL_DIR: '{{.INSTALL_DIR | default "/Applications"}}'
+    cmds:
+      - mkdir -p "{{.INSTALL_DIR}}"
+      - ditto "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.INSTALL_DIR}}/{{.APP_NAME}}.app"
+
   dev:daemon:
     desc: Runs the whisk daemon in the foreground
     summary: Runs the whisk daemon in the foreground

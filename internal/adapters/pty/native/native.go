@@ -155,6 +155,20 @@ func (b *Backend) Kill(_ context.Context, ptyID string) (app.PTYRecord, error) {
 	return record, nil
 }
 
+func (b *Backend) Delete(_ context.Context, ptyID string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	p, ok := b.ptys[ptyID]
+	if !ok {
+		return fmt.Errorf("pty %s not found", ptyID)
+	}
+	if p.record.Running {
+		return fmt.Errorf("cannot delete running pty %s", ptyID)
+	}
+	delete(b.ptys, ptyID)
+	return nil
+}
+
 func (b *Backend) Attach(ctx context.Context, req app.AttachPTYRequest) (*app.PTYAttach, error) {
 	ch := make(chan app.PTYEvent, 64)
 	b.mu.Lock()

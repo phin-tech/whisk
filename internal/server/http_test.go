@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1067,6 +1068,20 @@ func (b *fakePTYBackend) Kill(_ context.Context, ptyID string) (app.PTYRecord, e
 	record.Running = false
 	b.records[ptyID] = record
 	return record, nil
+}
+
+func (b *fakePTYBackend) Delete(_ context.Context, ptyID string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	record, ok := b.records[ptyID]
+	if !ok {
+		return errNotFound(ptyID)
+	}
+	if record.Running {
+		return fmt.Errorf("cannot delete running pty %s", ptyID)
+	}
+	delete(b.records, ptyID)
+	return nil
 }
 
 func (b *fakePTYBackend) Attach(ctx context.Context, req app.AttachPTYRequest) (*app.PTYAttach, error) {

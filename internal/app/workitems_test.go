@@ -1540,6 +1540,18 @@ func (b *memoryPTYBackend) Kill(_ context.Context, ptyID string) (app.PTYRecord,
 	return record, nil
 }
 
+func (b *memoryPTYBackend) Delete(_ context.Context, ptyID string) error {
+	record, ok := b.records[ptyID]
+	if !ok {
+		return fmt.Errorf("pty %s not found", ptyID)
+	}
+	if record.Running {
+		return fmt.Errorf("cannot delete running pty %s", ptyID)
+	}
+	delete(b.records, ptyID)
+	return nil
+}
+
 func (b *memoryPTYBackend) Attach(context.Context, app.AttachPTYRequest) (*app.PTYAttach, error) {
 	return nil, fmt.Errorf("not implemented")
 }

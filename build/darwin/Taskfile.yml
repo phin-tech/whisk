@@ -166,6 +166,9 @@ tasks:
         if [ -f "{{.BIN_DIR}}/whisk" ]; then
           cp "{{.BIN_DIR}}/whisk" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/whisk"
         fi
+      - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/skills/whisk"
+      - cp "skills/whisk/SKILL.md" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/skills/whisk/SKILL.md"
+      - cp "skills/whisk/README.md" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/skills/whisk/README.md"
       - cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents"
       - task: '{{if eq OS "darwin"}}codesign:adhoc{{else}}codesign:skip{{end}}'
 

@@ -17,21 +17,19 @@
   }) => void;
 
   let name = "";
-  let rootDir = "";
-  let workingDir = "";
+  let directory = "";
   let command = "";
   let initialPty = true;
   let localError = "";
   let previousVisible = false;
 
-  $: canCreate = rootDir.trim().length > 0 && workingDir.trim().length > 0 && !loading;
+  $: canCreate = directory.trim().length > 0 && !loading;
   $: if (visible && !previousVisible) reset();
   $: previousVisible = visible;
 
   function reset() {
     name = "";
-    rootDir = initialRootDir;
-    workingDir = initialWorkingDir || initialRootDir;
+    directory = initialWorkingDir || initialRootDir;
     command = "";
     initialPty = true;
     localError = "";
@@ -40,48 +38,29 @@
   function submit() {
     if (!canCreate) return;
     localError = "";
+    const selectedDir = directory.trim();
     oncreate({
       name: name.trim(),
-      rootDir: rootDir.trim(),
-      workingDir: workingDir.trim(),
+      rootDir: initialRootDir.trim() || selectedDir,
+      workingDir: selectedDir,
       initialPty: initialPty ? { cols: 0, rows: 0, command: command.trim() } : null,
     });
   }
 
-  async function chooseRootDir() {
+  async function chooseDirectory() {
     localError = "";
     try {
       const selected = await Dialogs.OpenFile({
-        Title: "Root directory",
+        Title: "Directory",
         ButtonText: "Choose",
-        Directory: rootDir || undefined,
+        Directory: directory || undefined,
         CanChooseDirectories: true,
         CanChooseFiles: false,
         CanCreateDirectories: true,
         AllowsMultipleSelection: false,
       });
       if (typeof selected === "string" && selected.length > 0) {
-        rootDir = selected;
-      }
-    } catch (err) {
-      localError = err instanceof Error ? err.message : String(err);
-    }
-  }
-
-  async function chooseWorkingDir() {
-    localError = "";
-    try {
-      const selected = await Dialogs.OpenFile({
-        Title: "Working directory",
-        ButtonText: "Choose",
-        Directory: workingDir || rootDir || undefined,
-        CanChooseDirectories: true,
-        CanChooseFiles: false,
-        CanCreateDirectories: true,
-        AllowsMultipleSelection: false,
-      });
-      if (typeof selected === "string" && selected.length > 0) {
-        workingDir = selected;
+        directory = selected;
       }
     } catch (err) {
       localError = err instanceof Error ? err.message : String(err);
@@ -141,48 +120,23 @@
 
         <label class="block">
           <span class="mb-1 block text-[11px] font-semibold uppercase tracking-widest text-text-muted">
-            Root directory
+            Directory
           </span>
           <div class="flex gap-2">
             <input
               class="h-9 min-w-0 flex-1 rounded border border-border bg-bg-deep px-2.5 font-mono text-[12px] text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent-dim"
               type="text"
-              bind:value={rootDir}
+              bind:value={directory}
               placeholder="/path/to/project"
               disabled={loading}
             />
             <button
               type="button"
-              aria-label="Choose root directory"
-              title="Choose root directory"
+              aria-label="Choose directory"
+              title="Choose directory"
               class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
               disabled={loading}
-              on:click={chooseRootDir}
-            >
-              <FolderOpen size={15} />
-            </button>
-          </div>
-        </label>
-
-        <label class="block">
-          <span class="mb-1 block text-[11px] font-semibold uppercase tracking-widest text-text-muted">
-            Working directory
-          </span>
-          <div class="flex gap-2">
-            <input
-              class="h-9 min-w-0 flex-1 rounded border border-border bg-bg-deep px-2.5 font-mono text-[12px] text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent-dim"
-              type="text"
-              bind:value={workingDir}
-              placeholder="/path/to/start"
-              disabled={loading}
-            />
-            <button
-              type="button"
-              aria-label="Choose working directory"
-              title="Choose working directory"
-              class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-              disabled={loading}
-              on:click={chooseWorkingDir}
+              on:click={chooseDirectory}
             >
               <FolderOpen size={15} />
             </button>

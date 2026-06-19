@@ -534,6 +534,7 @@ type runtimeClientFake struct {
 	writeReq           protocol.WritePTYRequest
 	resizeReq          protocol.ResizePTYRequest
 	killReq            protocol.KillPTYRequest
+	deletePTYReq       protocol.DeletePTYRequest
 	addBookmarkReq     protocol.AddPTYBookmarkRequest
 	listBookmarksPTYID string
 	removeBookmarkReq  protocol.RemovePTYBookmarkRequest
@@ -661,6 +662,11 @@ func (f *runtimeClientFake) ResizePTY(_ context.Context, req protocol.ResizePTYR
 func (f *runtimeClientFake) KillPTY(_ context.Context, req protocol.KillPTYRequest) (protocol.PTYInfo, error) {
 	f.killReq = req
 	return protocol.PTYInfo{ID: req.PTYID, Status: "killed"}, nil
+}
+
+func (f *runtimeClientFake) DeletePTY(_ context.Context, req protocol.DeletePTYRequest) error {
+	f.deletePTYReq = req
+	return nil
 }
 
 func (f *runtimeClientFake) AddPTYBookmark(_ context.Context, req protocol.AddPTYBookmarkRequest) (protocol.PTYBookmark, error) {

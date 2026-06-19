@@ -30,6 +30,7 @@ export {
     CreateWorktreeRequest,
     CreatedSession,
     CreatedWorktree,
+    DeletePTYRequest,
     DeleteProjectAttachmentRequest,
     DeleteWorkItemRequest,
     DetachPanePTYRequest,

@@ -145,6 +145,7 @@ export function ptyRowsFromInventory(ptys: PtyInfoLike[]) {
     detail: `${pty.workingDir || "."} / ${pty.cols}x${pty.rows}`,
     running: pty.running,
     status: pty.status || (pty.running ? "running" : "exited"),
+    canDelete: !pty.running,
   }));
 }
 

@@ -1742,6 +1742,39 @@
         }
       }
     },
+    "/v1/ptys/{ptyID}": {
+      "delete": {
+        "operationId": "deletePTY",
+        "tags": [
+          "ptys"
+        ],
+        "parameters": [
+          {
+            "name": "ptyID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/ptys/{ptyID}/bookmarks": {
       "get": {
         "operationId": "listPTYBookmarks",

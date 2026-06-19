@@ -1,6 +1,7 @@
 <script lang="ts">
   import CircleStop from "@lucide/svelte/icons/circle-stop";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
   import type { PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { ptyRowsFromInventory } from "./sessionView";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
@@ -10,6 +11,7 @@
   export let onclose: () => void;
   export let onRefresh: () => void;
   export let onKill: (ptyId: string) => void;
+  export let onDelete: (ptyId: string) => void;
 
   $: rows = ptyRowsFromInventory(ptys);
 </script>
@@ -56,16 +58,27 @@
               <span class="shrink-0 text-[10px] uppercase text-text-muted">
                 {row.status}
               </span>
-              <button
-                type="button"
-                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-red/40 hover:bg-red/10 hover:text-red focus:outline-none focus:ring-1 focus:ring-red disabled:cursor-not-allowed disabled:opacity-35"
-                disabled={!row.running}
-                aria-label={`Kill PTY ${row.id}`}
-                title={row.running ? `Kill PTY ${row.id}` : "PTY is not running"}
-                on:click={() => onKill(row.id)}
-              >
-                <CircleStop size={13} />
-              </button>
+              {#if row.canDelete}
+                <button
+                  type="button"
+                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-red/40 hover:bg-red/10 hover:text-red focus:outline-none focus:ring-1 focus:ring-red"
+                  aria-label={`Delete PTY ${row.id}`}
+                  title={`Delete PTY ${row.id}`}
+                  on:click={() => onDelete(row.id)}
+                >
+                  <Trash2 size={13} />
+                </button>
+              {:else}
+                <button
+                  type="button"
+                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-red/40 hover:bg-red/10 hover:text-red focus:outline-none focus:ring-1 focus:ring-red"
+                  aria-label={`Kill PTY ${row.id}`}
+                  title={`Kill PTY ${row.id}`}
+                  on:click={() => onKill(row.id)}
+                >
+                  <CircleStop size={13} />
+                </button>
+              {/if}
             </div>
             <div class="mt-1 grid gap-0.5 text-[10px] text-text-muted">
               <div class="truncate">{row.subtitle}</div>
