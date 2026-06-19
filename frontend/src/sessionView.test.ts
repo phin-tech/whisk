@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   closePaneRequest,
+  isStalePTYError,
   killPTYRequest,
   paneIds,
+  ptyHistoryRows,
   ptyRowsFromInventory,
   runtimeRefreshTargets,
   sessionGroups,
@@ -174,6 +176,32 @@ describe("ptyRowsFromInventory", () => {
   });
 });
 
+describe("ptyHistoryRows", () => {
+  it("summarizes persisted PTYs for the sidebar", () => {
+    expect(
+      ptyHistoryRows([
+        {
+          ptyId: "pty_01",
+          sessionId: "sess_01",
+          paneId: "pane_01",
+          workingDir: "/repo",
+          createdAt: "2026-06-19T12:00:00Z",
+          exitCode: 0,
+        },
+      ]),
+    ).toEqual([
+      {
+        id: "pty_01",
+        title: "pty_01",
+        subtitle: "sess_01 / pane_01",
+        detail: "/repo",
+        createdAt: "2026-06-19T12:00:00Z",
+        exitCode: 0,
+      },
+    ]);
+  });
+});
+
 describe("sessionGroups", () => {
   const sessions = [
     { id: "sess_01", name: "api", projectId: "proj_01", rootDir: "/repo/api", windows: {}, panes: {} },
@@ -261,5 +289,13 @@ describe("runtimeRefreshTargets", () => {
       agentBridgeApprovals: false,
       agentHookEvents: true,
     });
+  });
+});
+
+describe("isStalePTYError", () => {
+  it("detects stale missing PTY errors after daemon restart", () => {
+    expect(isStalePTYError(new Error(`{"message":"pty whisk_000959 not found","cause":{},"kind":"RuntimeError"}`))).toBe(true);
+    expect(isStalePTYError(new Error("pty pty_01 not found"))).toBe(true);
+    expect(isStalePTYError(new Error("permission denied"))).toBe(false);
   });
 });

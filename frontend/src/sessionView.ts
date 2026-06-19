@@ -54,6 +54,15 @@ type RuntimeEventLike = {
   offset?: number;
 };
 
+type PtyHistorySummaryLike = {
+  ptyId: string;
+  sessionId?: string;
+  paneId?: string;
+  workingDir?: string;
+  createdAt?: string;
+  exitCode?: number | null;
+};
+
 export type ClosePaneRequestLike = {
   sessionId: string;
   windowId: string;
@@ -149,6 +158,17 @@ export function ptyRowsFromInventory(ptys: PtyInfoLike[]) {
   }));
 }
 
+export function ptyHistoryRows(history: PtyHistorySummaryLike[]) {
+  return history.map((item) => ({
+    id: item.ptyId,
+    title: item.ptyId,
+    subtitle: `${item.sessionId || "unowned"} / ${item.paneId || "detached"}`,
+    detail: item.workingDir || ".",
+    createdAt: item.createdAt || "",
+    exitCode: item.exitCode ?? null,
+  }));
+}
+
 export function sessionGroups<T extends SessionLike>(
   sessions: T[],
   projects: ProjectLike[],
@@ -188,4 +208,15 @@ export function runtimeRefreshTargets(event: RuntimeEventLike) {
 		agentBridgeApprovals: event.type === "agent_bridge_approvals.changed",
 		agentHookEvents: event.type === "agent_hook_events.changed",
 	};
+}
+
+export function isStalePTYError(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/\bpty\s+\S+\s+not found\b/.test(message)) return true;
+  try {
+    const parsed = JSON.parse(message) as { message?: unknown };
+    return typeof parsed.message === "string" && /\bpty\s+\S+\s+not found\b/.test(parsed.message);
+  } catch {
+    return false;
+  }
 }

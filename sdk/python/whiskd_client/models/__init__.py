@@ -81,6 +81,8 @@ from .project_preferences_default_phase_agents import (
 )
 from .project_workflow import ProjectWorkflow
 from .prompt_template import PromptTemplate
+from .pty_history import PTYHistory
+from .pty_history_summary import PTYHistorySummary
 from .pty_info import PTYInfo
 from .question import Question
 from .queue_execution_request import QueueExecutionRequest
@@ -218,6 +220,8 @@ __all__ = (
     "ProjectPreferencesDefaultPhaseAgents",
     "ProjectWorkflow",
     "PromptTemplate",
+    "PTYHistory",
+    "PTYHistorySummary",
     "PTYInfo",
     "Question",
     "QueueExecutionRequest",

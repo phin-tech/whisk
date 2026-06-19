@@ -29,6 +29,7 @@ type APIQueryParam struct {
 var (
 	apiSessionList              = []session.Session(nil)
 	apiPTYList                  = []PTYInfo(nil)
+	apiPTYHistoryList           = []PTYHistorySummary(nil)
 	apiBookmarkList             = []ptybookmark.Bookmark(nil)
 	apiWorktreeList             = []Worktree(nil)
 	apiForwardList              = []HTTPForward(nil)
@@ -89,6 +90,8 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/sessions/{sessionID}/windows/{windowID}/panes/{paneID}/close", OperationID: "closePane", Tag: "sessions", Request: ClosePaneRequest{}, Response: session.Session{}},
 
 	{Method: "GET", Path: "/v1/ptys", OperationID: "listPTYs", Tag: "ptys", Response: apiPTYList},
+	{Method: "GET", Path: "/v1/pty-history", OperationID: "listPTYHistory", Tag: "ptys", Summary: "List persisted PTY transcripts", Response: apiPTYHistoryList},
+	{Method: "GET", Path: "/v1/pty-history/{ptyID}", OperationID: "readPTYHistory", Tag: "ptys", Summary: "Read one persisted PTY transcript", Response: PTYHistory{}},
 	{Method: "POST", Path: "/v1/ptys/{ptyID}/write", OperationID: "writePTY", Tag: "ptys", Request: WritePTYRequest{}, Status: 204},
 	{Method: "POST", Path: "/v1/ptys/{ptyID}/resize", OperationID: "resizePTY", Tag: "ptys", Request: ResizePTYRequest{}, Status: 204},
 	{Method: "POST", Path: "/v1/ptys/{ptyID}/kill", OperationID: "killPTY", Tag: "ptys", Request: KillPTYRequest{}, Response: PTYInfo{}},

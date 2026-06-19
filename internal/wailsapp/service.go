@@ -323,6 +323,14 @@ func (s *Service) ListPTYs(ctx context.Context) ([]protocol.PTYInfo, error) {
 	return s.client.ListPTYs(ctx)
 }
 
+func (s *Service) ListPTYHistory(ctx context.Context) ([]protocol.PTYHistorySummary, error) {
+	return s.client.ListPTYHistory(ctx)
+}
+
+func (s *Service) ReadPTYHistory(ctx context.Context, ptyID string) (protocol.PTYHistory, error) {
+	return s.client.ReadPTYHistory(ctx, ptyID)
+}
+
 func (s *Service) NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error) {
 	return s.client.NextEvent(ctx, req)
 }

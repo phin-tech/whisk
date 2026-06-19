@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "18",
+    "version": "19",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -1695,6 +1695,81 @@
         "responses": {
           "204": {
             "description": "no content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/pty-history": {
+      "get": {
+        "operationId": "listPTYHistory",
+        "summary": "List persisted PTY transcripts",
+        "tags": [
+          "ptys"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PTYHistorySummary"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/pty-history/{ptyID}": {
+      "get": {
+        "operationId": "readPTYHistory",
+        "summary": "Read one persisted PTY transcript",
+        "tags": [
+          "ptys"
+        ],
+        "parameters": [
+          {
+            "name": "ptyID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PTYHistory"
+                }
+              }
+            },
+            "description": "success"
           },
           "default": {
             "content": {
@@ -5523,6 +5598,84 @@
           "offset",
           "output",
           "outputBase64"
+        ],
+        "type": "object"
+      },
+      "PTYHistory": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "exitCode": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "output": {
+            "type": "string"
+          },
+          "paneId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "string"
+          },
+          "workingDir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ptyId",
+          "sessionId",
+          "windowId",
+          "paneId",
+          "workingDir",
+          "createdAt",
+          "output"
+        ],
+        "type": "object"
+      },
+      "PTYHistorySummary": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "exitCode": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "paneId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "string"
+          },
+          "workingDir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ptyId",
+          "sessionId",
+          "windowId",
+          "paneId",
+          "workingDir",
+          "createdAt"
         ],
         "type": "object"
       },

@@ -52,6 +52,8 @@ type RuntimeClient interface {
 	ResizePTY(ctx context.Context, req protocol.ResizePTYRequest) error
 	Output(ctx context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error)
 	ListPTYs(ctx context.Context) ([]protocol.PTYInfo, error)
+	ListPTYHistory(ctx context.Context) ([]protocol.PTYHistorySummary, error)
+	ReadPTYHistory(ctx context.Context, ptyID string) (protocol.PTYHistory, error)
 	NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error)
 	DetectWorktrunk(ctx context.Context, req protocol.DetectWorktrunkRequest) (protocol.WorktrunkStatus, error)
 	ListWorktrees(ctx context.Context, req protocol.ListWorktreesRequest) ([]protocol.Worktree, error)

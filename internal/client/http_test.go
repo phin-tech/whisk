@@ -13,6 +13,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
+	"github.com/phin-tech/whisk/internal/adapters/transcriptstore"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
@@ -23,7 +24,25 @@ import (
 func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 
-	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend(), EventSink: newFakeEventBus()})
+	transcripts, err := transcriptstore.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new transcript store: %v", err)
+	}
+	if err := transcripts.RegisterPTY(context.Background(), app.PTYTranscriptMeta{
+		PTYID:      "pty_history",
+		SessionID:  "sess_history",
+		WindowID:   "win_history",
+		PaneID:     "pane_history",
+		WorkingDir: "/repo",
+		Cols:       80,
+		Rows:       24,
+	}); err != nil {
+		t.Fatalf("register transcript: %v", err)
+	}
+	if err := transcripts.AppendPTYOutput(context.Background(), app.PTYTranscriptOutput{PTYID: "pty_history", Bytes: []byte("client saved output")}); err != nil {
+		t.Fatalf("append transcript: %v", err)
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend(), EventSink: newFakeEventBus(), TranscriptStore: transcripts})
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 
 	httpServer := httptest.NewServer(server.NewHTTP(runtime))
@@ -92,6 +111,14 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	}
 	if len(ptys) != 1 || ptys[0].ID != created.MainPtyID || ptys[0].SessionID != created.Session.ID {
 		t.Fatalf("ptys = %#v", ptys)
+	}
+	history, err := daemon.ListPTYHistory(ctx)
+	if err != nil || len(history) == 0 {
+		t.Fatalf("pty history = %#v, err = %v", history, err)
+	}
+	selectedHistory, err := daemon.ReadPTYHistory(ctx, "pty_history")
+	if err != nil || selectedHistory.Output != "client saved output" || selectedHistory.SessionID != "sess_history" {
+		t.Fatalf("selected pty history = %#v, err = %v", selectedHistory, err)
 	}
 	sessionRoot := t.TempDir()
 	sessionWorkingDir := t.TempDir()

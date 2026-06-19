@@ -9,7 +9,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 18
+const DaemonAPIVersion = 19
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -212,6 +212,27 @@ type PTYInfo struct {
 	PaneID         string `json:"paneId"`
 	OriginWindowID string `json:"originWindowId"`
 	OriginPaneID   string `json:"originPaneId"`
+}
+
+type PTYHistorySummary struct {
+	PTYID      string    `json:"ptyId"`
+	SessionID  string    `json:"sessionId"`
+	WindowID   string    `json:"windowId"`
+	PaneID     string    `json:"paneId"`
+	WorkingDir string    `json:"workingDir"`
+	CreatedAt  time.Time `json:"createdAt"`
+	ExitCode   *int      `json:"exitCode,omitempty"`
+}
+
+type PTYHistory struct {
+	PTYID      string    `json:"ptyId"`
+	SessionID  string    `json:"sessionId"`
+	WindowID   string    `json:"windowId"`
+	PaneID     string    `json:"paneId"`
+	WorkingDir string    `json:"workingDir"`
+	CreatedAt  time.Time `json:"createdAt"`
+	ExitCode   *int      `json:"exitCode,omitempty"`
+	Output     string    `json:"output"`
 }
 
 type NextEventRequest struct {

@@ -1,11 +1,13 @@
 package transcriptstore
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/phin-tech/whisk/internal/app"
@@ -127,6 +129,52 @@ func (s *FileStore) MarkPTYExit(ctx context.Context, event app.PTYTranscriptExit
 	})
 }
 
+func (s *FileStore) ListPTYHistory(_ context.Context) ([]app.PTYHistorySummary, error) {
+	metas, err := filepath.Glob(filepath.Join(s.ptyDir(), "*.json"))
+	if err != nil {
+		return nil, err
+	}
+	exits, err := s.exitCodes()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]app.PTYHistorySummary, 0, len(metas))
+	for _, path := range metas {
+		meta, err := readPTYMeta(path)
+		if err != nil {
+			return nil, err
+		}
+		summary := ptyHistorySummary(meta)
+		summary.ExitCode = exits[summary.PTYID]
+		out = append(out, summary)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt.After(out[j].CreatedAt)
+	})
+	return out, nil
+}
+
+func (s *FileStore) ReadPTYHistory(_ context.Context, ptyID string) (app.PTYHistory, error) {
+	if ptyID == "" {
+		return app.PTYHistory{}, fmt.Errorf("pty id required")
+	}
+	meta, err := readPTYMeta(s.metaPath(ptyID))
+	if err != nil {
+		return app.PTYHistory{}, err
+	}
+	raw, err := os.ReadFile(s.rawPath(ptyID))
+	if err != nil && !os.IsNotExist(err) {
+		return app.PTYHistory{}, err
+	}
+	exits, err := s.exitCodes()
+	if err != nil {
+		return app.PTYHistory{}, err
+	}
+	summary := ptyHistorySummary(meta)
+	summary.ExitCode = exits[ptyID]
+	return app.PTYHistory{PTYHistorySummary: summary, Output: string(raw)}, nil
+}
+
 func (s *FileStore) appendEvent(_ context.Context, event eventFileRecord) error {
 	file, err := os.OpenFile(filepath.Join(s.root, "events.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -141,6 +189,55 @@ func (s *FileStore) appendEvent(_ context.Context, event eventFileRecord) error 
 		return err
 	}
 	return nil
+}
+
+func readPTYMeta(path string) (ptyMetaFile, error) {
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return ptyMetaFile{}, err
+	}
+	var meta ptyMetaFile
+	if err := json.Unmarshal(bytes, &meta); err != nil {
+		return ptyMetaFile{}, err
+	}
+	return meta, nil
+}
+
+func ptyHistorySummary(meta ptyMetaFile) app.PTYHistorySummary {
+	return app.PTYHistorySummary{
+		PTYID:      meta.PTYID,
+		SessionID:  meta.SessionID,
+		WindowID:   meta.WindowID,
+		PaneID:     meta.PaneID,
+		WorkingDir: meta.WorkingDir,
+		CreatedAt:  meta.CreatedAt,
+	}
+}
+
+func (s *FileStore) exitCodes() (map[string]*int, error) {
+	out := map[string]*int{}
+	file, err := os.Open(filepath.Join(s.root, "events.jsonl"))
+	if os.IsNotExist(err) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var event eventFileRecord
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			return nil, err
+		}
+		if event.Type == "pty.exit" && event.PTYID != "" {
+			out[event.PTYID] = event.Code
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func appendRawAtOffset(path string, offset uint64, bytes []byte) (uint64, int, error) {

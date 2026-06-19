@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { agentHookDebugRows, agentHookIntegrationFor, upsertAgentHookIntegration } from "./agentHooksView";
+import {
+  agentHookDebugDetailRows,
+  agentHookDebugRows,
+  agentHookIntegrationFor,
+  agentHookNotificationRows,
+  upsertAgentHookIntegration,
+} from "./agentHooksView";
 
 describe("agent hook integration view state", () => {
   it("uses the clicked provider when an action response omits provider", () => {
@@ -89,6 +95,72 @@ describe("agent hook integration view state", () => {
         meta: "unowned / no pty",
         createdAt: "2026-06-11T12:01:00Z",
       },
+    ]);
+  });
+
+  it("keeps provider notification prompts in the notification surface", () => {
+    expect(
+      agentHookNotificationRows([
+        {
+          id: "task",
+          provider: "codex",
+          eventName: "Notification",
+          message: "What would you like to work on?",
+          notificationType: "task",
+          sessionId: "sess_01",
+          ptyId: "pty_01",
+          status: "pending",
+          createdAt: "2026-06-11T12:03:00Z",
+        },
+        {
+          id: "tool",
+          provider: "codex",
+          eventName: "PostToolUse",
+          toolName: "Bash",
+          status: "pending",
+          createdAt: "2026-06-11T12:04:00Z",
+        },
+      ]),
+    ).toEqual([
+      {
+        id: "task",
+        provider: "codex",
+        title: "Agent notification",
+        message: "What would you like to work on?",
+        meta: "sess_01 / pty_01",
+        createdAt: "2026-06-11T12:03:00Z",
+      },
+    ]);
+  });
+
+  it("builds debug hook event details including cwd from raw payload", () => {
+    expect(
+      agentHookDebugDetailRows({
+        id: "hook",
+        provider: "codex",
+        eventName: "PostToolUse",
+        toolName: "Bash",
+        sessionId: "sess_01",
+        ptyId: "pty_01",
+        result: "logged",
+        status: "pending",
+        createdAt: "2026-06-11T12:04:00Z",
+        raw: {
+          cwd: "/repo/tavern-keeper",
+          tool_input: { command: "npm test" },
+        },
+      }),
+    ).toEqual([
+      { label: "Agent", value: "codex" },
+      { label: "Event", value: "PostToolUse" },
+      { label: "Tool", value: "Bash" },
+      { label: "Session", value: "sess_01" },
+      { label: "PTY", value: "pty_01" },
+      { label: "CWD", value: "/repo/tavern-keeper" },
+      { label: "Result", value: "logged" },
+      { label: "Status", value: "pending" },
+      { label: "Created", value: "2026-06-11T12:04:00Z" },
+      { label: "Raw", value: "{\"cwd\":\"/repo/tavern-keeper\",\"tool_input\":{\"command\":\"npm test\"}}" },
     ]);
   });
 });

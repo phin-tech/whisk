@@ -88,6 +88,55 @@ func TestFileStoreWritesMetadataRawOutputAndEvents(t *testing.T) {
 	}
 }
 
+func TestFileStoreReadsPTYHistory(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	store, err := transcriptstore.NewFileStore(root)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	code := 0
+	if err := store.RegisterPTY(ctx, app.PTYTranscriptMeta{
+		PTYID:      "pty_01",
+		SessionID:  "sess_01",
+		WindowID:   "win_01",
+		PaneID:     "pane_01",
+		WorkingDir: "/repo",
+		Cols:       80,
+		Rows:       24,
+	}); err != nil {
+		t.Fatalf("register pty: %v", err)
+	}
+	if err := store.AppendPTYOutput(ctx, app.PTYTranscriptOutput{PTYID: "pty_01", Offset: 0, Bytes: []byte("hello history")}); err != nil {
+		t.Fatalf("append output: %v", err)
+	}
+	if err := store.MarkPTYExit(ctx, app.PTYTranscriptExit{PTYID: "pty_01", Code: &code}); err != nil {
+		t.Fatalf("mark exit: %v", err)
+	}
+
+	history, err := store.ReadPTYHistory(ctx, "pty_01")
+	if err != nil {
+		t.Fatalf("read history: %v", err)
+	}
+	if history.PTYID != "pty_01" ||
+		history.SessionID != "sess_01" ||
+		history.WorkingDir != "/repo" ||
+		history.Output != "hello history" ||
+		history.ExitCode == nil ||
+		*history.ExitCode != 0 {
+		t.Fatalf("history = %#v", history)
+	}
+
+	listed, err := store.ListPTYHistory(ctx)
+	if err != nil {
+		t.Fatalf("list history: %v", err)
+	}
+	if len(listed) != 1 || listed[0].PTYID != "pty_01" || listed[0].WorkingDir != "/repo" {
+		t.Fatalf("listed = %#v", listed)
+	}
+}
+
 func TestFileStoreRejectsOutputGaps(t *testing.T) {
 	store, err := transcriptstore.NewFileStore(t.TempDir())
 	if err != nil {

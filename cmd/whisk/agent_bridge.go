@@ -53,6 +53,7 @@ func runAgentBridgeHook(args []string, stdin io.Reader, stdout io.Writer) error 
 	if req.PTYID == "" {
 		req.PTYID = os.Getenv("WHISK_PTY_ID")
 	}
+	addWhiskHookMetadata(req.RawPayload, req.Provider)
 	daemon := client.NewHTTP(*baseURL, nil)
 	if *bridgeID == "" || req.Token == "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -71,6 +72,35 @@ func runAgentBridgeHook(args []string, stdin io.Reader, stdout io.Writer) error 
 		return nil
 	}
 	return json.NewEncoder(stdout).Encode(response.Output)
+}
+
+func addWhiskHookMetadata(payload map[string]any, provider string) {
+	if payload == nil {
+		return
+	}
+	meta := map[string]any{}
+	if cwd, err := os.Getwd(); err == nil && cwd != "" {
+		meta["cwd"] = cwd
+	}
+	addEnvMetadata(meta, "sessionId", "WHISK_SESSION_ID")
+	addEnvMetadata(meta, "ptyId", "WHISK_PTY_ID")
+	addEnvMetadata(meta, "projectId", "WHISK_PROJECT_ID")
+	addEnvMetadata(meta, "projectRoot", "WHISK_PROJECT_ROOT")
+	addEnvMetadata(meta, "workItemId", "WHISK_WORK_ITEM_ID")
+	addEnvMetadata(meta, "runId", "WHISK_RUN_ID")
+	addEnvMetadata(meta, "actor", "WHISK_ACTOR")
+	if provider != "" {
+		meta["provider"] = provider
+	}
+	if len(meta) > 0 {
+		payload["whisk"] = meta
+	}
+}
+
+func addEnvMetadata(meta map[string]any, key string, env string) {
+	if value := os.Getenv(env); value != "" {
+		meta[key] = value
+	}
 }
 
 func readHookPayload(stdin io.Reader) (map[string]any, error) {

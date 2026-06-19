@@ -116,3 +116,49 @@ func TestRunAgentBridgeHookRecordsPassiveEventWithoutBridgeCredentials(t *testin
 		t.Fatalf("request = %#v", got)
 	}
 }
+
+func TestRunAgentBridgeHookAddsWhiskMetadataToRawPayload(t *testing.T) {
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	t.Setenv("WHISK_SESSION_ID", "sess_01")
+	t.Setenv("WHISK_PTY_ID", "pty_01")
+	t.Setenv("WHISK_PROJECT_ID", "proj_01")
+	t.Setenv("WHISK_PROJECT_ROOT", "/repo")
+	t.Setenv("WHISK_WORK_ITEM_ID", "wi_01")
+	t.Setenv("WHISK_RUN_ID", "run_01")
+	t.Setenv("WHISK_ACTOR", "agent")
+
+	var got protocol.AgentBridgeHookRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/agent-hook-events" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.AgentBridgeEvent{ID: "event_01", Provider: got.Provider, EventName: got.EventName})
+	}))
+	defer server.Close()
+
+	stdin := strings.NewReader(`{"hook_event_name":"PostToolUse","tool_name":"Bash"}`)
+	var stdout bytes.Buffer
+	if err := runAgentBridgeHook([]string{"-url", server.URL, "-provider", "codex"}, stdin, &stdout); err != nil {
+		t.Fatalf("hook: %v", err)
+	}
+
+	meta, ok := got.RawPayload["whisk"].(map[string]any)
+	if !ok {
+		t.Fatalf("whisk metadata missing: %#v", got.RawPayload)
+	}
+	if meta["cwd"] != cwd ||
+		meta["sessionId"] != "sess_01" ||
+		meta["ptyId"] != "pty_01" ||
+		meta["projectId"] != "proj_01" ||
+		meta["projectRoot"] != "/repo" ||
+		meta["workItemId"] != "wi_01" ||
+		meta["runId"] != "run_01" ||
+		meta["actor"] != "agent" {
+		t.Fatalf("whisk metadata = %#v", meta)
+	}
+}

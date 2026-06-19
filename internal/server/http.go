@@ -61,6 +61,8 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("POST /v1/sessions/{sessionID}/panes/{paneID}/detach-pty", server.detachPanePTY)
 	mux.HandleFunc("POST /v1/sessions/{sessionID}/windows/{windowID}/panes/{paneID}/close", server.closePane)
 	mux.HandleFunc("GET /v1/ptys", server.listPTYs)
+	mux.HandleFunc("GET /v1/pty-history", server.listPTYHistory)
+	mux.HandleFunc("GET /v1/pty-history/{ptyID}", server.readPTYHistory)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/write", server.writePTY)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/resize", server.resizePTY)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/kill", server.killPTY)
@@ -558,6 +560,31 @@ func toProtocolPTYInfo(pty app.PTYInfo) protocol.PTYInfo {
 	}
 }
 
+func toProtocolPTYHistorySummary(history app.PTYHistorySummary) protocol.PTYHistorySummary {
+	return protocol.PTYHistorySummary{
+		PTYID:      history.PTYID,
+		SessionID:  history.SessionID,
+		WindowID:   history.WindowID,
+		PaneID:     history.PaneID,
+		WorkingDir: history.WorkingDir,
+		CreatedAt:  history.CreatedAt,
+		ExitCode:   history.ExitCode,
+	}
+}
+
+func toProtocolPTYHistory(history app.PTYHistory) protocol.PTYHistory {
+	return protocol.PTYHistory{
+		PTYID:      history.PTYID,
+		SessionID:  history.SessionID,
+		WindowID:   history.WindowID,
+		PaneID:     history.PaneID,
+		WorkingDir: history.WorkingDir,
+		CreatedAt:  history.CreatedAt,
+		ExitCode:   history.ExitCode,
+		Output:     history.Output,
+	}
+}
+
 func (s *HTTPServer) setSessionRootDir(w http.ResponseWriter, r *http.Request) {
 	var req protocol.SetSessionRootDirRequest
 	if !decodeJSON(w, r, &req) {
@@ -764,6 +791,28 @@ func (s *HTTPServer) listPTYs(w http.ResponseWriter, r *http.Request) {
 		out = append(out, toProtocolPTYInfo(pty))
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *HTTPServer) listPTYHistory(w http.ResponseWriter, r *http.Request) {
+	history, err := s.runtime.ListPTYHistory(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	out := make([]protocol.PTYHistorySummary, 0, len(history))
+	for _, item := range history {
+		out = append(out, toProtocolPTYHistorySummary(item))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *HTTPServer) readPTYHistory(w http.ResponseWriter, r *http.Request) {
+	history, err := s.runtime.ReadPTYHistory(r.Context(), r.PathValue("ptyID"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolPTYHistory(history))
 }
 
 func toAppStartPTYOptions(options *protocol.StartPTYOptions) *app.StartPTYOptions {

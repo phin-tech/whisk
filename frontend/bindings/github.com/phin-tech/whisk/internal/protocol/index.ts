@@ -56,6 +56,8 @@ export {
     OutputRequest,
     OutputSnapshot,
     PTYBookmark,
+    PTYHistory,
+    PTYHistorySummary,
     PTYInfo,
     PluginResolver,
     PluginStatus,

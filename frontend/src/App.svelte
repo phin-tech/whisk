@@ -9,6 +9,8 @@
     AgentHookLogStatus,
     Project,
     ProjectDetail,
+    PTYHistory,
+    PTYHistorySummary,
     PTYInfo,
     RuntimeEvent,
     StatusEvent,
@@ -56,6 +58,7 @@
     ListAgentHookIntegrations,
     ListArtifacts,
     ListGateReports,
+    ListPTYHistory,
     ListPTYs,
     ProjectDetail as LoadProjectDetail,
     ListProjects,
@@ -80,6 +83,7 @@
     RemoveAgentHookIntegration,
     RescanPlugins,
     ResolveAgentBridgeApproval,
+    ReadPTYHistory,
     RunPluginProjectAttachmentTemplate,
     SaveAppSettings,
     SetAgentHookLogSettings,
@@ -108,7 +112,7 @@
   import SettingsView from "./SettingsView.svelte";
   import SidebarDock from "./SidebarDock.svelte";
   import WorkBoard from "./WorkBoard.svelte";
-  import { upsertAgentHookIntegration as upsertAgentHookIntegrationView } from "./agentHooksView";
+  import { isAgentHookNotification, upsertAgentHookIntegration as upsertAgentHookIntegrationView } from "./agentHooksView";
   import type { Command } from "./commands";
   import { runCommand } from "./commands";
   import { notificationSurfaceCount, targetForStatusEvent } from "./notificationsView";
@@ -120,7 +124,7 @@
     writePTYInputOverSocket,
   } from "./ptyStream";
   import { commandIdForShortcut, sessionSplitCommands } from "./sessionCommands";
-  import { activeWindow, closePaneRequest, firstPaneId, killPTYRequest, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
+  import { activeWindow, closePaneRequest, firstPaneId, isStalePTYError, killPTYRequest, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
     normalizeStartupView,
     startupTarget,
@@ -135,6 +139,8 @@
 
   let sessions: Session[] = [];
   let ptys: PTYInfo[] = [];
+  let ptyHistory: PTYHistorySummary[] = [];
+  let selectedPTYHistory: PTYHistory | null = null;
   let projects: Project[] = [];
   let projectDetail: ProjectDetail | null = null;
   let workItems: WorkItem[] = [];
@@ -182,6 +188,7 @@
   let error = "";
   let loadingSession = false;
   let loadingPtys = false;
+  let loadingPTYHistory = false;
   let loadingWork = false;
   let loadingStatusEvents = false;
   let outputChunks: Record<string, string[]> = {};
@@ -220,7 +227,7 @@
     {
       id: "notifications.clear",
       title: "Clear Notifications",
-      enabled: () => statusEvents.length > 0,
+      enabled: () => statusEvents.length > 0 || agentBridgeEvents.some(isAgentHookNotification),
       run: clearNotifications,
     },
     {
@@ -369,10 +376,25 @@
 
   async function refreshPTYs() {
     loadingPtys = true;
+    loadingPTYHistory = true;
     try {
-      ptys = await ListPTYs();
+      const [nextPtys, nextHistory] = await Promise.all([ListPTYs(), ListPTYHistory()]);
+      ptys = nextPtys;
+      ptyHistory = nextHistory;
+      if (selectedPTYHistory && !nextHistory.some((item) => item.ptyId === selectedPTYHistory?.ptyId)) {
+        selectedPTYHistory = null;
+      }
     } finally {
       loadingPtys = false;
+      loadingPTYHistory = false;
+    }
+  }
+
+  async function selectPTYHistory(ptyId: string) {
+    try {
+      selectedPTYHistory = await ReadPTYHistory(ptyId);
+    } catch (err) {
+      error = `Load PTY history failed: ${backendError(err)}`;
     }
   }
 
@@ -474,10 +496,14 @@
   }
 
   async function clearNotifications() {
-    if (statusEvents.length === 0) return;
+    const hookNotifications = agentBridgeEvents.filter(isAgentHookNotification);
+    if (statusEvents.length === 0 && hookNotifications.length === 0) return;
     loadingStatusEvents = true;
     try {
-      await Promise.all(statusEvents.map((event) => MarkStatusEventRead({ id: event.id })));
+      await Promise.all([
+        ...statusEvents.map((event) => MarkStatusEventRead({ id: event.id })),
+        ...hookNotifications.map((event) => MarkAgentBridgeEventRead({ id: event.id })),
+      ]);
       await refreshStatusEvents();
     } catch (err) {
       error = `Clear notifications failed: ${backendError(err)}`;
@@ -500,7 +526,12 @@
   }
 
   async function refreshVisibleOutput() {
-    await Promise.all(visiblePTYIds.map((ptyId) => refreshOutput(ptyId)));
+    await Promise.all(visiblePTYIds.map((ptyId) => refreshOutput(ptyId).catch(handleOutputError)));
+  }
+
+  function handleOutputError(err: unknown) {
+    if (isStalePTYError(err)) return;
+    throw err;
   }
 
   async function refreshOutput(ptyId: string) {
@@ -577,9 +608,13 @@
         ptyStreams = remaining;
       }
       if (!stopped && visiblePTYIds.includes(ptyId)) {
-        refreshOutput(ptyId).catch((err) => (error = backendError(err)));
+        refreshOutput(ptyId).catch((err) => {
+          if (!isStalePTYError(err)) error = backendError(err);
+        });
         window.setTimeout(() => {
-          openPTYStream(ptyId).catch((err) => (error = backendError(err)));
+          openPTYStream(ptyId).catch((err) => {
+            if (!isStalePTYError(err)) error = backendError(err);
+          });
         }, 500);
       }
     };
@@ -1657,10 +1692,13 @@
         activePanel={activeSidebar}
         {sessions}
         {ptys}
+        {ptyHistory}
+        {selectedPTYHistory}
         {projects}
         {workItems}
           {statusEvents}
           {agentBridgeApprovals}
+          {agentBridgeEvents}
         {activeSessionId}
         {activeProjectId}
         bind:workFilterQuery
@@ -1668,6 +1706,7 @@
         bind:workFilterRunState
         {loadingSession}
         {loadingPtys}
+        {loadingPTYHistory}
         {loadingWork}
         {loadingStatusEvents}
         {railSide}
@@ -1679,6 +1718,7 @@
         onRefreshPtys={() => void refreshPTYs()}
         onKillPTY={(ptyId) => void killPTY(ptyId)}
         onDeletePTY={(ptyId) => void deletePTY(ptyId)}
+        onSelectPTYHistory={(ptyId) => void selectPTYHistory(ptyId)}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
@@ -1775,7 +1815,9 @@
               {terminalFontSize}
               {terminalCursorBlink}
               onFocus={(paneId) => (activePaneId = paneId)}
-              onInput={(ptyId) => refreshOutput(ptyId).catch((err) => (error = backendError(err)))}
+              onInput={(ptyId) => refreshOutput(ptyId).catch((err) => {
+                if (!isStalePTYError(err)) error = backendError(err);
+              })}
               onWriteInput={writePTYInput}
               onClose={(paneId) => void closePane(paneId)}
               onKillPTY={(paneId) => void killPanePTY(paneId)}
@@ -1879,10 +1921,13 @@
         activePanel={activeSidebar}
         {sessions}
         {ptys}
+        {ptyHistory}
+        {selectedPTYHistory}
         {projects}
         {workItems}
         {statusEvents}
         {agentBridgeApprovals}
+        {agentBridgeEvents}
         {activeSessionId}
         {activeProjectId}
         bind:workFilterQuery
@@ -1890,6 +1935,7 @@
         bind:workFilterRunState
         {loadingSession}
         {loadingPtys}
+        {loadingPTYHistory}
         {loadingWork}
         {loadingStatusEvents}
         {railSide}
@@ -1901,6 +1947,7 @@
         onRefreshPtys={() => void refreshPTYs()}
         onKillPTY={(ptyId) => void killPTY(ptyId)}
         onDeletePTY={(ptyId) => void deletePTY(ptyId)}
+        onSelectPTYHistory={(ptyId) => void selectPTYHistory(ptyId)}
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}

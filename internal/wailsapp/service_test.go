@@ -22,7 +22,13 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		split:  protocol.SplitPaneResult{Session: session.Session{ID: "sess_02"}, PaneID: "pane_02", PtyID: "pty_02"},
 		output: protocol.OutputSnapshot{PtyID: "pty_01", Offset: 12, Output: "hello"},
 		ptys:   []protocol.PTYInfo{{ID: "pty_01", SessionID: "sess_01", PaneID: "pane_01"}},
-		event:  protocol.RuntimeEvent{Type: "pty.changed", PtyID: "pty_01"},
+		ptyHistory: []protocol.PTYHistorySummary{{
+			PTYID:      "pty_01",
+			SessionID:  "sess_01",
+			WorkingDir: "/repo",
+		}},
+		selectedPTYHistory: protocol.PTYHistory{PTYID: "pty_01", Output: "hello history"},
+		event:              protocol.RuntimeEvent{Type: "pty.changed", PtyID: "pty_01"},
 		worktrunk: protocol.WorktrunkStatus{
 			Available:   true,
 			ConfigFound: true,
@@ -131,6 +137,14 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	ptys, err := service.ListPTYs(ctx)
 	if err != nil || ptys[0].ID != "pty_01" {
 		t.Fatalf("ptys = %#v, err = %v", ptys, err)
+	}
+	history, err := service.ListPTYHistory(ctx)
+	if err != nil || history[0].PTYID != "pty_01" {
+		t.Fatalf("pty history = %#v, err = %v", history, err)
+	}
+	selectedHistory, err := service.ReadPTYHistory(ctx, "pty_01")
+	if err != nil || selectedHistory.Output != "hello history" || fake.readPTYHistoryID != "pty_01" {
+		t.Fatalf("selected pty history = %#v, id = %q, err = %v", selectedHistory, fake.readPTYHistoryID, err)
 	}
 	event, err := service.NextEvent(ctx, protocol.NextEventRequest{TimeoutMs: 25})
 	if err != nil || event.Type != "pty.changed" || fake.nextEventReq.TimeoutMs != 25 {
@@ -498,27 +512,29 @@ func (f *appSettingsStoreFake) Save(_ context.Context, settings appsettings.Sett
 }
 
 type runtimeClientFake struct {
-	sessions          []session.Session
-	created           protocol.CreatedSession
-	split             protocol.SplitPaneResult
-	output            protocol.OutputSnapshot
-	ptys              []protocol.PTYInfo
-	event             protocol.RuntimeEvent
-	worktrunk         protocol.WorktrunkStatus
-	worktrees         []protocol.Worktree
-	createdWorktree   protocol.CreatedWorktree
-	projects          []protocol.Project
-	projectDetail     protocol.ProjectDetail
-	workflowTemplates []protocol.WorkflowTemplate
-	promptTemplates   []protocol.PromptTemplate
-	workItems         []protocol.WorkItem
-	runs              []protocol.WorkItemRun
-	httpForwards      []protocol.HTTPForward
-	agentApprovals    []protocol.AgentBridgeApproval
-	agentEvents       []protocol.AgentBridgeEvent
-	agentIntegrations []protocol.AgentHookIntegration
-	agentHookLog      protocol.AgentHookLogStatus
-	clearResponse     protocol.ClearDaemonResponse
+	sessions           []session.Session
+	created            protocol.CreatedSession
+	split              protocol.SplitPaneResult
+	output             protocol.OutputSnapshot
+	ptys               []protocol.PTYInfo
+	ptyHistory         []protocol.PTYHistorySummary
+	selectedPTYHistory protocol.PTYHistory
+	event              protocol.RuntimeEvent
+	worktrunk          protocol.WorktrunkStatus
+	worktrees          []protocol.Worktree
+	createdWorktree    protocol.CreatedWorktree
+	projects           []protocol.Project
+	projectDetail      protocol.ProjectDetail
+	workflowTemplates  []protocol.WorkflowTemplate
+	promptTemplates    []protocol.PromptTemplate
+	workItems          []protocol.WorkItem
+	runs               []protocol.WorkItemRun
+	httpForwards       []protocol.HTTPForward
+	agentApprovals     []protocol.AgentBridgeApproval
+	agentEvents        []protocol.AgentBridgeEvent
+	agentIntegrations  []protocol.AgentHookIntegration
+	agentHookLog       protocol.AgentHookLogStatus
+	clearResponse      protocol.ClearDaemonResponse
 
 	clearCalled        bool
 	createReq          protocol.CreateSessionRequest
@@ -539,6 +555,7 @@ type runtimeClientFake struct {
 	listBookmarksPTYID string
 	removeBookmarkReq  protocol.RemovePTYBookmarkRequest
 	outputReq          protocol.OutputRequest
+	readPTYHistoryID   string
 	nextEventReq       protocol.NextEventRequest
 
 	detectWorktrunkReq       protocol.DetectWorktrunkRequest
@@ -691,6 +708,15 @@ func (f *runtimeClientFake) Output(_ context.Context, req protocol.OutputRequest
 
 func (f *runtimeClientFake) ListPTYs(context.Context) ([]protocol.PTYInfo, error) {
 	return f.ptys, nil
+}
+
+func (f *runtimeClientFake) ListPTYHistory(context.Context) ([]protocol.PTYHistorySummary, error) {
+	return f.ptyHistory, nil
+}
+
+func (f *runtimeClientFake) ReadPTYHistory(_ context.Context, ptyID string) (protocol.PTYHistory, error) {
+	f.readPTYHistoryID = ptyID
+	return f.selectedPTYHistory, nil
 }
 
 func (f *runtimeClientFake) NextEvent(_ context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error) {

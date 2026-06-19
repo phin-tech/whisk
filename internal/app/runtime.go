@@ -250,6 +250,8 @@ type TranscriptStore interface {
 	RegisterPTY(ctx context.Context, meta PTYTranscriptMeta) error
 	AppendPTYOutput(ctx context.Context, event PTYTranscriptOutput) error
 	MarkPTYExit(ctx context.Context, event PTYTranscriptExit) error
+	ListPTYHistory(ctx context.Context) ([]PTYHistorySummary, error)
+	ReadPTYHistory(ctx context.Context, ptyID string) (PTYHistory, error)
 }
 
 type BookmarkStore interface {
@@ -281,6 +283,21 @@ type PTYTranscriptOutput struct {
 type PTYTranscriptExit struct {
 	PTYID string
 	Code  *int
+}
+
+type PTYHistorySummary struct {
+	PTYID      string
+	SessionID  string
+	WindowID   string
+	PaneID     string
+	WorkingDir string
+	CreatedAt  time.Time
+	ExitCode   *int
+}
+
+type PTYHistory struct {
+	PTYHistorySummary
+	Output string
 }
 
 type CreateSessionRequest struct {
@@ -1305,6 +1322,20 @@ func (r *Runtime) AttachPTY(ctx context.Context, req AttachPTYRequest) (*PTYAtta
 
 func (r *Runtime) PTYOutput(ctx context.Context, ptyID string, fromOffset uint64) (PTYOutputSnapshot, error) {
 	return r.ptys.Output(ctx, ptyID, fromOffset)
+}
+
+func (r *Runtime) ListPTYHistory(ctx context.Context) ([]PTYHistorySummary, error) {
+	if r.transcriptStore == nil {
+		return nil, nil
+	}
+	return r.transcriptStore.ListPTYHistory(ctx)
+}
+
+func (r *Runtime) ReadPTYHistory(ctx context.Context, ptyID string) (PTYHistory, error) {
+	if r.transcriptStore == nil {
+		return PTYHistory{}, fmt.Errorf("transcript store unavailable")
+	}
+	return r.transcriptStore.ReadPTYHistory(ctx, ptyID)
 }
 
 func (r *Runtime) NextEvent(ctx context.Context) (RuntimeEvent, error) {

@@ -9,13 +9,15 @@
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import X from "@lucide/svelte/icons/x";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import type { AgentBridgeApproval, StatusEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { AgentBridgeApproval, AgentBridgeEvent, StatusEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import { agentHookNotificationRows } from "./agentHooksView";
   import { notificationDetailRows, notificationRows } from "./notificationsView";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
 
   export let sessions: Session[] = [];
   export let statusEvents: StatusEvent[] = [];
   export let agentBridgeApprovals: AgentBridgeApproval[] = [];
+  export let agentBridgeEvents: AgentBridgeEvent[] = [];
   export let loading = false;
   export let onclose: () => void;
   export let onRefresh: () => void;
@@ -26,7 +28,8 @@
   let expandedIds = new Set<string>();
 
   $: rows = notificationRows(statusEvents);
-  $: hasRows = rows.length > 0 || agentBridgeApprovals.length > 0;
+  $: hookRows = agentHookNotificationRows(agentBridgeEvents);
+  $: hasRows = rows.length > 0 || agentBridgeApprovals.length > 0 || hookRows.length > 0;
 
   function iconForTone(tone: string) {
     if (tone === "done") return CheckCircle2;
@@ -121,6 +124,27 @@
                     <Ban size={13} />
                     Deny
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        {/each}
+        {#each hookRows as hook (hook.id)}
+          <div class="rounded border border-accent-dim/40 bg-accent-dim/10 px-2.5 py-2 text-text-primary">
+            <div class="flex min-w-0 items-start gap-2">
+              <CircleHelp size={14} class="mt-0.5 shrink-0 text-accent" />
+              <div class="min-w-0 flex-1">
+                <div class="flex min-w-0 items-center justify-between gap-2">
+                  <div class="truncate text-[12px] font-semibold">{hook.title}</div>
+                  <div class="shrink-0 rounded border border-border-subtle px-1.5 py-0.5 text-[10px] uppercase text-text-muted">
+                    {hook.provider || "unknown"}
+                  </div>
+                </div>
+                <div class="mt-1 line-clamp-3 text-[12px] leading-4 text-text-secondary">
+                  {hook.message}
+                </div>
+                <div class="mt-1 truncate font-mono text-[10px] text-text-muted">
+                  {hook.meta}
                 </div>
               </div>
             </div>

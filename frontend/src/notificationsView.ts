@@ -16,6 +16,11 @@ type StatusEventLike = {
   readAt?: unknown;
 };
 
+type AgentHookEventLike = {
+  id?: string;
+  eventName?: string;
+};
+
 type LayoutNodeLike = {
   kind: string;
   paneId?: string;
@@ -37,9 +42,9 @@ export function notificationBadgeCount(events: StatusEventLike[]) {
 export function notificationSurfaceCount(
   events: StatusEventLike[],
   approvals: unknown[],
-  _agentHookEvents: unknown[],
+  agentHookEvents: AgentHookEventLike[],
 ) {
-  return notificationBadgeCount(events) + approvals.length;
+  return notificationBadgeCount(events) + approvals.length + agentHookEvents.filter((event) => event.eventName === "Notification").length;
 }
 
 export function notificationRows(events: StatusEventLike[]) {

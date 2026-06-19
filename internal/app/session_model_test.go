@@ -994,6 +994,42 @@ func (s *memoryTranscriptStore) MarkPTYExit(_ context.Context, event app.PTYTran
 	return nil
 }
 
+func (s *memoryTranscriptStore) ListPTYHistory(context.Context) ([]app.PTYHistorySummary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]app.PTYHistorySummary, 0, len(s.registered))
+	for _, meta := range s.registered {
+		out = append(out, app.PTYHistorySummary{
+			PTYID:      meta.PTYID,
+			SessionID:  meta.SessionID,
+			WindowID:   meta.WindowID,
+			PaneID:     meta.PaneID,
+			WorkingDir: meta.WorkingDir,
+		})
+	}
+	return out, nil
+}
+
+func (s *memoryTranscriptStore) ReadPTYHistory(_ context.Context, ptyID string) (app.PTYHistory, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, meta := range s.registered {
+		if meta.PTYID == ptyID {
+			return app.PTYHistory{
+				PTYHistorySummary: app.PTYHistorySummary{
+					PTYID:      meta.PTYID,
+					SessionID:  meta.SessionID,
+					WindowID:   meta.WindowID,
+					PaneID:     meta.PaneID,
+					WorkingDir: meta.WorkingDir,
+				},
+				Output: string(s.outputs[ptyID]),
+			}, nil
+		}
+	}
+	return app.PTYHistory{}, nil
+}
+
 func (s *memoryTranscriptStore) outputString(ptyID string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -32,14 +32,17 @@ describe("notificationsView", () => {
     ).toBe(1);
   });
 
-  it("excludes debug agent hook events from the notification surface count", () => {
+  it("counts useful hook notifications without counting debug hook events", () => {
     expect(
       notificationSurfaceCount(
         [{ id: "question", kind: "question", requiresAttention: true }],
         [{ id: "approval" }],
-        [{ id: "hook", status: "pending" }],
+        [
+          { id: "task", eventName: "Notification" },
+          { id: "hook", eventName: "PostToolUse" },
+        ],
       ),
-    ).toBe(2);
+    ).toBe(3);
   });
 
   it("formats rows with attention first and newest within each group", () => {

@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import type { AgentBridgeApproval, Project, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
-  import type { PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { AgentBridgeApproval, AgentBridgeEvent, Project, PTYHistory, PTYHistorySummary, PTYInfo, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import NotificationsPanel from "./NotificationsPanel.svelte";
   import ProjectsPanel from "./ProjectsPanel.svelte";
   import PtysPanel from "./PtysPanel.svelte";
@@ -12,10 +11,13 @@
   export let activePanel: "sessions" | "ptys" | "work" | "projects" | "notifications" | null = "sessions";
   export let sessions: Session[] = [];
   export let ptys: PTYInfo[] = [];
+  export let ptyHistory: PTYHistorySummary[] = [];
+  export let selectedPTYHistory: PTYHistory | null = null;
   export let projects: Project[] = [];
   export let workItems: WorkItem[] = [];
   export let statusEvents: StatusEvent[] = [];
   export let agentBridgeApprovals: AgentBridgeApproval[] = [];
+  export let agentBridgeEvents: AgentBridgeEvent[] = [];
   export let activeSessionId = "";
   export let activeProjectId = "";
   export let workFilterQuery = "";
@@ -23,6 +25,7 @@
   export let workFilterRunState = "";
   export let loadingSession = false;
   export let loadingPtys = false;
+  export let loadingPTYHistory = false;
   export let loadingWork = false;
   export let loadingStatusEvents = false;
   export let railSide: "left" | "right" = "right";
@@ -34,6 +37,7 @@
   export let onRefreshPtys: () => void;
   export let onKillPTY: (ptyId: string) => void;
   export let onDeletePTY: (ptyId: string) => void;
+  export let onSelectPTYHistory: (ptyId: string) => void;
   export let onRefreshStatusEvents: () => void;
   export let onClearNotifications: () => void;
   export let onSelectStatusEvent: (event: StatusEvent) => void;
@@ -129,6 +133,7 @@
             {sessions}
             {statusEvents}
             {agentBridgeApprovals}
+            {agentBridgeEvents}
             loading={loadingStatusEvents}
             onclose={onClose}
             onRefresh={onRefreshStatusEvents}
@@ -161,7 +166,18 @@
             {onSelectProject}
           />
         {:else if activePanel === "ptys"}
-          <PtysPanel ptys={ptys} loading={loadingPtys} onclose={onClose} onRefresh={onRefreshPtys} onKill={onKillPTY} onDelete={onDeletePTY} />
+          <PtysPanel
+            {ptys}
+            {ptyHistory}
+            {selectedPTYHistory}
+            loading={loadingPtys}
+            loadingHistory={loadingPTYHistory}
+            onclose={onClose}
+            onRefresh={onRefreshPtys}
+            onKill={onKillPTY}
+            onDelete={onDeletePTY}
+            onSelectHistory={onSelectPTYHistory}
+          />
         {/if}
       {/if}
     </div>

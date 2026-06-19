@@ -1,5 +1,6 @@
 <script lang="ts">
   import Check from "@lucide/svelte/icons/check";
+  import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import Copy from "@lucide/svelte/icons/copy";
   import Download from "@lucide/svelte/icons/download";
   import ExternalLink from "@lucide/svelte/icons/external-link";
@@ -13,7 +14,7 @@
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import X from "@lucide/svelte/icons/x";
   import type { AgentBridgeEvent, AgentHookIntegration, AgentHookLogStatus, PluginStatus, RegistryPlugin } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
-  import { agentHookDebugRows, agentHookIntegrationFor } from "./agentHooksView";
+  import { agentHookDebugDetailRows, agentHookDebugRows, agentHookIntegrationFor } from "./agentHooksView";
   import DaemonSettings from "./DaemonSettings.svelte";
   import KeybindingsPanel from "./KeybindingsPanel.svelte";
 
@@ -65,6 +66,7 @@
   type Category = "general" | "sessions" | "terminal" | "shortcuts" | "daemon" | "plugins" | "integrations";
 
   let selected: Category = "general";
+  let expandedHookEventIds = new Set<string>();
 
   const categories = [
     { id: "general" as const, label: "General", icon: Settings },
@@ -77,6 +79,7 @@
   ];
 
   $: hookEventRows = agentHookDebugRows(agentBridgeEvents);
+  $: hookEventsById = new Map(agentBridgeEvents.map((event) => [event.id, event]));
 
   const providers = [
     { id: "claude", label: "Claude Code" },
@@ -88,6 +91,21 @@
       event.preventDefault();
       onclose();
     }
+  }
+
+  function hookEventById(id: string) {
+    return hookEventsById.get(id);
+  }
+
+  function isHookEventExpanded(id: string) {
+    return expandedHookEventIds.has(id);
+  }
+
+  function toggleHookEventExpanded(id: string) {
+    const next = new Set(expandedHookEventIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expandedHookEventIds = next;
   }
 
   function integrationFor(provider: string): AgentHookIntegration {
@@ -695,24 +713,53 @@
               {:else}
                 <div class="mt-3 divide-y divide-hairline border-y border-hairline">
                   {#each hookEventRows as event (event.id)}
-                    <div class="grid gap-2 py-2 md:grid-cols-[92px_1fr]">
-                      <div class="min-w-0">
-                        <div class="truncate text-[11px] font-semibold uppercase text-text-muted">
-                          {event.provider || "unknown"}
+                    {@const rawEvent = hookEventById(event.id)}
+                    {@const expanded = isHookEventExpanded(event.id)}
+                    <div class="py-2">
+                      <div class="grid gap-2 md:grid-cols-[20px_92px_1fr]">
+                        <button
+                          type="button"
+                          class="inline-flex h-5 w-5 items-center justify-center rounded text-text-muted transition-colors hover:bg-white/5 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+                          aria-label={expanded ? "Collapse hook event details" : "Expand hook event details"}
+                          aria-expanded={expanded}
+                          on:click={() => toggleHookEventExpanded(event.id)}
+                        >
+                          <ChevronRight size={13} class="transition-transform {expanded ? 'rotate-90' : ''}" />
+                        </button>
+                        <div class="min-w-0">
+                          <div class="truncate text-[11px] font-semibold uppercase text-text-muted">
+                            {event.provider || "unknown"}
+                          </div>
+                          <div class="truncate font-mono text-[10px] text-text-muted">
+                            {event.createdAt}
+                          </div>
                         </div>
-                        <div class="truncate font-mono text-[10px] text-text-muted">
-                          {event.createdAt}
-                        </div>
+                        <button
+                          type="button"
+                          class="min-w-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+                          on:dblclick={() => toggleHookEventExpanded(event.id)}
+                        >
+                          <div class="truncate text-[12px] text-text-primary">{event.title}</div>
+                          <div class="mt-0.5 truncate text-[11px] text-text-secondary">
+                            {event.message}
+                          </div>
+                          <div class="mt-0.5 truncate font-mono text-[10px] text-text-muted">
+                            {event.meta}
+                          </div>
+                        </button>
                       </div>
-                      <div class="min-w-0">
-                        <div class="truncate text-[12px] text-text-primary">{event.title}</div>
-                        <div class="mt-0.5 truncate text-[11px] text-text-secondary">
-                          {event.message}
+                      {#if expanded && rawEvent}
+                        <div class="mt-2 border-t border-hairline pt-2 md:ml-[112px]">
+                          <div class="grid grid-cols-[84px_1fr] gap-x-2 gap-y-1">
+                            {#each agentHookDebugDetailRows(rawEvent) as detail}
+                              <div class="truncate text-[10px] uppercase text-text-muted">{detail.label}</div>
+                              <div class="min-w-0 break-all font-mono text-[11px] text-text-secondary">
+                                {detail.value}
+                              </div>
+                            {/each}
+                          </div>
                         </div>
-                        <div class="mt-0.5 truncate font-mono text-[10px] text-text-muted">
-                          {event.meta}
-                        </div>
-                      </div>
+                      {/if}
                     </div>
                   {/each}
                 </div>

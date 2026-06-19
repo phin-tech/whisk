@@ -340,6 +340,19 @@ func (c *HTTPClient) ListPTYs(ctx context.Context) ([]protocol.PTYInfo, error) {
 	return ptys, err
 }
 
+func (c *HTTPClient) ListPTYHistory(ctx context.Context) ([]protocol.PTYHistorySummary, error) {
+	var history []protocol.PTYHistorySummary
+	err := c.get(ctx, "/v1/pty-history", nil, &history)
+	return history, err
+}
+
+func (c *HTTPClient) ReadPTYHistory(ctx context.Context, ptyID string) (protocol.PTYHistory, error) {
+	var history protocol.PTYHistory
+	path := "/v1/pty-history/" + url.PathEscape(ptyID)
+	err := c.get(ctx, path, nil, &history)
+	return history, err
+}
+
 func (c *HTTPClient) NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error) {
 	query := url.Values{}
 	if req.TimeoutMs > 0 {

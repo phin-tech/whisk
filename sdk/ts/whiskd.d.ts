@@ -669,6 +669,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/pty-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List persisted PTY transcripts */
+        get: operations["listPTYHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pty-history/{ptyID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one persisted PTY transcript */
+        get: operations["readPTYHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ptys": {
         parameters: {
             query?: never;
@@ -1831,6 +1865,29 @@ export interface components {
             output: string;
             outputBase64: string;
             ptyId: string;
+        };
+        PTYHistory: {
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            exitCode?: number | null;
+            output: string;
+            paneId: string;
+            ptyId: string;
+            sessionId: string;
+            windowId: string;
+            workingDir: string;
+        };
+        PTYHistorySummary: {
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            exitCode?: number | null;
+            paneId: string;
+            ptyId: string;
+            sessionId: string;
+            windowId: string;
+            workingDir: string;
         };
         PTYInfo: {
             /** Format: int64 */
@@ -3639,6 +3696,66 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listPTYHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PTYHistorySummary"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    readPTYHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ptyID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PTYHistory"];
+                };
             };
             /** @description error */
             default: {

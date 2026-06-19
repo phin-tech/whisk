@@ -19,6 +19,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
+	"github.com/phin-tech/whisk/internal/adapters/transcriptstore"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/protocol"
@@ -28,7 +29,25 @@ import (
 func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	backend := newFakePTYBackend()
 	eventBus := newFakeEventBus()
-	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: eventBus})
+	transcripts, err := transcriptstore.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new transcript store: %v", err)
+	}
+	if err := transcripts.RegisterPTY(context.Background(), app.PTYTranscriptMeta{
+		PTYID:      "pty_history",
+		SessionID:  "sess_history",
+		WindowID:   "win_history",
+		PaneID:     "pane_history",
+		WorkingDir: "/repo",
+		Cols:       80,
+		Rows:       24,
+	}); err != nil {
+		t.Fatalf("register transcript: %v", err)
+	}
+	if err := transcripts.AppendPTYOutput(context.Background(), app.PTYTranscriptOutput{PTYID: "pty_history", Bytes: []byte("saved output")}); err != nil {
+		t.Fatalf("append transcript: %v", err)
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: eventBus, TranscriptStore: transcripts})
 	handler := server.NewHTTP(runtime)
 
 	health := getJSON[map[string]bool](t, handler, "/v1/health", http.StatusOK)
@@ -124,6 +143,14 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	}
 	if byID[created.MainPtyID].SessionID != created.Session.ID || byID[created.MainPtyID].WindowID != created.WindowID || byID[created.MainPtyID].PaneID != created.PaneID {
 		t.Fatalf("main pty = %#v", byID[created.MainPtyID])
+	}
+	history := getJSON[[]protocol.PTYHistorySummary](t, handler, "/v1/pty-history", http.StatusOK)
+	if len(history) != 3 || history[0].WorkingDir == "" {
+		t.Fatalf("pty history = %#v", history)
+	}
+	selectedHistory := getJSON[protocol.PTYHistory](t, handler, "/v1/pty-history/pty_history", http.StatusOK)
+	if selectedHistory.Output != "saved output" || selectedHistory.SessionID != "sess_history" {
+		t.Fatalf("selected pty history = %#v", selectedHistory)
 	}
 
 	event := getJSON[protocol.RuntimeEvent](t, handler, "/v1/events/next?timeoutMs=10", http.StatusOK)

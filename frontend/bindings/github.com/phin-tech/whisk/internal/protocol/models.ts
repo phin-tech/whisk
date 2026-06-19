@@ -1389,6 +1389,94 @@ export class OutputSnapshot {
 export const PTYBookmark = ptybookmark$0.Bookmark;
 export type PTYBookmark = ptybookmark$0.Bookmark;
 
+export class PTYHistory {
+    "ptyId": string;
+    "sessionId": string;
+    "windowId": string;
+    "paneId": string;
+    "workingDir": string;
+    "createdAt": time$0.Time;
+    "exitCode"?: number | null;
+    "output": string;
+
+    /** Creates a new PTYHistory instance. */
+    constructor($$source: Partial<PTYHistory> = {}) {
+        if (!("ptyId" in $$source)) {
+            this["ptyId"] = "";
+        }
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("windowId" in $$source)) {
+            this["windowId"] = "";
+        }
+        if (!("paneId" in $$source)) {
+            this["paneId"] = "";
+        }
+        if (!("workingDir" in $$source)) {
+            this["workingDir"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+        if (!("output" in $$source)) {
+            this["output"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PTYHistory instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PTYHistory {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PTYHistory($$parsedSource as Partial<PTYHistory>);
+    }
+}
+
+export class PTYHistorySummary {
+    "ptyId": string;
+    "sessionId": string;
+    "windowId": string;
+    "paneId": string;
+    "workingDir": string;
+    "createdAt": time$0.Time;
+    "exitCode"?: number | null;
+
+    /** Creates a new PTYHistorySummary instance. */
+    constructor($$source: Partial<PTYHistorySummary> = {}) {
+        if (!("ptyId" in $$source)) {
+            this["ptyId"] = "";
+        }
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("windowId" in $$source)) {
+            this["windowId"] = "";
+        }
+        if (!("paneId" in $$source)) {
+            this["paneId"] = "";
+        }
+        if (!("workingDir" in $$source)) {
+            this["workingDir"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PTYHistorySummary instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PTYHistorySummary {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PTYHistorySummary($$parsedSource as Partial<PTYHistorySummary>);
+    }
+}
+
 export class PTYInfo {
     "id": string;
     "workingDir": string;
