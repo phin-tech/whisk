@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import type { AgentBridgeApproval, AgentBridgeEvent, Project, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { AgentBridgeApproval, Project, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import type { PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import NotificationsPanel from "./NotificationsPanel.svelte";
   import ProjectsPanel from "./ProjectsPanel.svelte";
@@ -16,7 +16,6 @@
   export let workItems: WorkItem[] = [];
   export let statusEvents: StatusEvent[] = [];
   export let agentBridgeApprovals: AgentBridgeApproval[] = [];
-  export let agentBridgeEvents: AgentBridgeEvent[] = [];
   export let activeSessionId = "";
   export let activeProjectId = "";
   export let workFilterQuery = "";
@@ -126,9 +125,9 @@
       {:else}
         {#if activePanel === "notifications"}
           <NotificationsPanel
+            {sessions}
             {statusEvents}
             {agentBridgeApprovals}
-            {agentBridgeEvents}
             loading={loadingStatusEvents}
             onclose={onClose}
             onRefresh={onRefreshStatusEvents}

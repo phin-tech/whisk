@@ -110,7 +110,7 @@
   import { upsertAgentHookIntegration as upsertAgentHookIntegrationView } from "./agentHooksView";
   import type { Command } from "./commands";
   import { runCommand } from "./commands";
-  import { notificationBadgeCount, targetForStatusEvent } from "./notificationsView";
+  import { notificationSurfaceCount, targetForStatusEvent } from "./notificationsView";
   import {
     nextPTYStreamOffset,
     ptyAttachWebSocketURL,
@@ -201,7 +201,7 @@
   $: activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   $: activeSessionWindow = activeWindow(activeSession, activePaneId);
   $: visiblePTYIds = visiblePtyIds(sessions, activeSessionId, activePaneId);
-  $: notificationCount = notificationBadgeCount(statusEvents) + agentBridgeApprovals.length + agentBridgeEvents.length;
+  $: notificationCount = notificationSurfaceCount(statusEvents, agentBridgeApprovals, agentBridgeEvents);
   $: projectAttachmentTemplates = plugins.flatMap((plugin) =>
     plugin.trusted && plugin.valid
       ? (plugin.projectAttachmentTemplates ?? []).map((template) => ({ ...template, pluginId: plugin.id }))
@@ -219,7 +219,7 @@
     {
       id: "notifications.clear",
       title: "Clear Notifications",
-      enabled: () => statusEvents.length > 0 || agentBridgeEvents.length > 0,
+      enabled: () => statusEvents.length > 0,
       run: clearNotifications,
     },
     {
@@ -473,16 +473,26 @@
   }
 
   async function clearNotifications() {
-    if (statusEvents.length === 0 && agentBridgeEvents.length === 0) return;
+    if (statusEvents.length === 0) return;
     loadingStatusEvents = true;
     try {
-      await Promise.all([
-        ...statusEvents.map((event) => MarkStatusEventRead({ id: event.id })),
-        ...agentBridgeEvents.map((event) => MarkAgentBridgeEventRead({ id: event.id })),
-      ]);
+      await Promise.all(statusEvents.map((event) => MarkStatusEventRead({ id: event.id })));
       await refreshStatusEvents();
     } catch (err) {
       error = `Clear notifications failed: ${backendError(err)}`;
+    } finally {
+      loadingStatusEvents = false;
+    }
+  }
+
+  async function clearAgentHookEvents() {
+    if (agentBridgeEvents.length === 0) return;
+    loadingStatusEvents = true;
+    try {
+      await Promise.all(agentBridgeEvents.map((event) => MarkAgentBridgeEventRead({ id: event.id })));
+      await refreshStatusEvents();
+    } catch (err) {
+      error = `Clear hook events failed: ${backendError(err)}`;
     } finally {
       loadingStatusEvents = false;
     }
@@ -1639,7 +1649,6 @@
         {workItems}
           {statusEvents}
           {agentBridgeApprovals}
-          {agentBridgeEvents}
         {activeSessionId}
         {activeProjectId}
         bind:workFilterQuery
@@ -1833,6 +1842,7 @@
           {registryPlugins}
           {installingPluginId}
           {agentHookLogStatus}
+          {agentBridgeEvents}
           {agentHookAction}
           {agentHookNotice}
           onclose={() => (settingsOpen = false)}
@@ -1852,8 +1862,10 @@
           onHookLogEnabled={(enabled) => void setHookLogEnabled(enabled)}
           onClearHookLogAfterSession={(enabled) => void setClearHookLogAfterSession(enabled)}
           onClearAgentHookLog={() => void clearAgentHookLog()}
+          onClearAgentHookEvents={() => void clearAgentHookEvents()}
           onOpenAgentHookLog={() => void openAgentHookLog()}
           onCopyAgentHookLogPath={(path) => void copyAgentHookLogPath(path)}
+          onRefreshAgentHookEvents={() => void refreshStatusEvents()}
           onRunOnboarding={openOnboarding}
         />
 
@@ -1876,7 +1888,6 @@
         {workItems}
         {statusEvents}
         {agentBridgeApprovals}
-        {agentBridgeEvents}
         {activeSessionId}
         {activeProjectId}
         bind:workFilterQuery

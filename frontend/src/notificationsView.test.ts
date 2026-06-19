@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  notificationDetailRows,
   notificationBadgeCount,
   notificationRows,
+  notificationSurfaceCount,
   targetForStatusEvent,
 } from "./notificationsView";
 
@@ -28,6 +30,16 @@ describe("notificationsView", () => {
         { id: "c", kind: "done", requiresAttention: false },
       ]),
     ).toBe(1);
+  });
+
+  it("excludes debug agent hook events from the notification surface count", () => {
+    expect(
+      notificationSurfaceCount(
+        [{ id: "question", kind: "question", requiresAttention: true }],
+        [{ id: "approval" }],
+        [{ id: "hook", status: "pending" }],
+      ),
+    ).toBe(2);
   });
 
   it("formats rows with attention first and newest within each group", () => {
@@ -79,6 +91,39 @@ describe("notificationsView", () => {
         meta: "No terminal",
         tone: "done",
       },
+    ]);
+  });
+
+  it("builds notification details from status event and session context", () => {
+    expect(
+      notificationDetailRows(
+        {
+          id: "status_01",
+          scope: "run",
+          kind: "question",
+          message: "Need API key",
+          actor: "codex",
+          projectId: "proj_01",
+          workItemId: "wi_01",
+          runId: "run_01",
+          sessionId: "sess_01",
+          ptyId: "pty_01",
+          requiresAttention: true,
+          createdAt: "2026-06-11T12:01:00Z",
+        },
+        sessions,
+      ),
+    ).toEqual([
+      { label: "Agent", value: "codex" },
+      { label: "Session", value: "sess_01" },
+      { label: "PTY", value: "pty_01" },
+      { label: "CWD", value: "/repo" },
+      { label: "Project", value: "proj_01" },
+      { label: "Work item", value: "wi_01" },
+      { label: "Run", value: "run_01" },
+      { label: "Kind", value: "question" },
+      { label: "Scope", value: "run" },
+      { label: "Created", value: "2026-06-11T12:01:00Z" },
     ]);
   });
 

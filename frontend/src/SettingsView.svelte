@@ -12,8 +12,8 @@
   import TerminalIcon from "@lucide/svelte/icons/terminal";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import X from "@lucide/svelte/icons/x";
-  import type { AgentHookIntegration, AgentHookLogStatus, PluginStatus, RegistryPlugin } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
-  import { agentHookIntegrationFor } from "./agentHooksView";
+  import type { AgentBridgeEvent, AgentHookIntegration, AgentHookLogStatus, PluginStatus, RegistryPlugin } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import { agentHookDebugRows, agentHookIntegrationFor } from "./agentHooksView";
   import DaemonSettings from "./DaemonSettings.svelte";
   import KeybindingsPanel from "./KeybindingsPanel.svelte";
 
@@ -26,6 +26,7 @@
   export let agentHookIntegrations: AgentHookIntegration[] = [];
   export let plugins: PluginStatus[] = [];
   export let agentHookLogStatus: AgentHookLogStatus | null = null;
+  export let agentBridgeEvents: AgentBridgeEvent[] = [];
   export let agentHookAction = "";
   export let agentHookNotice = "";
   export let onclose: () => void;
@@ -55,8 +56,10 @@
   export let onHookLogEnabled: (enabled: boolean) => void;
   export let onClearHookLogAfterSession: (enabled: boolean) => void;
   export let onClearAgentHookLog: () => void;
+  export let onClearAgentHookEvents: () => void;
   export let onOpenAgentHookLog: () => void;
   export let onCopyAgentHookLogPath: (path: string) => void;
+  export let onRefreshAgentHookEvents: () => void;
   export let onRunOnboarding: () => void;
 
   type Category = "general" | "sessions" | "terminal" | "shortcuts" | "daemon" | "plugins" | "integrations";
@@ -72,6 +75,8 @@
     { id: "plugins" as const, label: "Plugins", icon: Plug },
     { id: "integrations" as const, label: "Integrations", icon: Plug },
   ];
+
+  $: hookEventRows = agentHookDebugRows(agentBridgeEvents);
 
   const providers = [
     { id: "claude", label: "Claude Code" },
@@ -651,6 +656,67 @@
                     : 'left-0.5 bg-text-secondary'}"
                 ></div>
               </button>
+            </div>
+
+            <div class="mt-4 border-t border-hairline pt-3">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-[12px] font-medium text-text-primary">Recent hook events</div>
+                  <div class="mt-0.5 text-[11px] text-text-muted">
+                    Passive provider hook events.
+                  </div>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label="Refresh hook events"
+                    class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+                    disabled={agentHookAction !== ""}
+                    on:click={onRefreshAgentHookEvents}
+                  >
+                    <RefreshCw size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Clear hook events"
+                    class="inline-flex h-7 w-7 items-center justify-center rounded border border-red/30 bg-red/10 text-red transition-colors hover:border-red disabled:cursor-wait disabled:opacity-60"
+                    disabled={hookEventRows.length === 0 || agentHookAction !== ""}
+                    on:click={onClearAgentHookEvents}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {#if hookEventRows.length === 0}
+                <div class="mt-3 rounded border border-border-subtle bg-bg-surface/25 px-2.5 py-2 text-[11px] text-text-muted">
+                  No pending hook events.
+                </div>
+              {:else}
+                <div class="mt-3 divide-y divide-hairline border-y border-hairline">
+                  {#each hookEventRows as event (event.id)}
+                    <div class="grid gap-2 py-2 md:grid-cols-[92px_1fr]">
+                      <div class="min-w-0">
+                        <div class="truncate text-[11px] font-semibold uppercase text-text-muted">
+                          {event.provider || "unknown"}
+                        </div>
+                        <div class="truncate font-mono text-[10px] text-text-muted">
+                          {event.createdAt}
+                        </div>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="truncate text-[12px] text-text-primary">{event.title}</div>
+                        <div class="mt-0.5 truncate text-[11px] text-text-secondary">
+                          {event.message}
+                        </div>
+                        <div class="mt-0.5 truncate font-mono text-[10px] text-text-muted">
+                          {event.meta}
+                        </div>
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
             </div>
           </div>
         {/if}

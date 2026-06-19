@@ -2,11 +2,15 @@ import { firstPaneId } from "./sessionView";
 
 type StatusEventLike = {
   id: string;
+  scope?: string;
   kind: string;
   message?: string;
+  actor?: string;
+  projectId?: string;
   sessionId?: string;
   ptyId?: string;
   workItemId?: string;
+  runId?: string;
   requiresAttention?: boolean;
   createdAt?: string | null;
   readAt?: unknown;
@@ -21,12 +25,21 @@ type LayoutNodeLike = {
 
 type SessionLike = {
   id: string;
+  rootDir?: string;
   windows: { [_ in string]?: { id: string; layout: LayoutNodeLike } };
   panes: { [_ in string]?: { id?: string; currentPtyId?: string | null } };
 };
 
 export function notificationBadgeCount(events: StatusEventLike[]) {
   return events.filter((event) => event.requiresAttention && !event.readAt).length;
+}
+
+export function notificationSurfaceCount(
+  events: StatusEventLike[],
+  approvals: unknown[],
+  _agentHookEvents: unknown[],
+) {
+  return notificationBadgeCount(events) + approvals.length;
 }
 
 export function notificationRows(events: StatusEventLike[]) {
@@ -46,13 +59,25 @@ export function notificationRows(events: StatusEventLike[]) {
     }));
 }
 
+export function notificationDetailRows(event: StatusEventLike, sessions: SessionLike[]) {
+  const session = sessionForEvent(event, sessions);
+  return [
+    detail("Agent", event.actor),
+    detail("Session", event.sessionId),
+    detail("PTY", event.ptyId),
+    detail("CWD", session?.rootDir),
+    detail("Project", event.projectId),
+    detail("Work item", event.workItemId),
+    detail("Run", event.runId),
+    detail("Kind", event.kind),
+    detail("Scope", event.scope),
+    detail("Created", event.createdAt),
+  ].filter((row): row is { label: string; value: string } => row !== null);
+}
+
 export function targetForStatusEvent(event: StatusEventLike, sessions: SessionLike[]) {
   if (event.sessionId || event.ptyId) {
-    const session =
-      sessions.find((candidate) => candidate.id === event.sessionId) ??
-      sessions.find((candidate) =>
-        Object.values(candidate.panes).some((pane) => pane?.currentPtyId === event.ptyId),
-      );
+    const session = sessionForEvent(event, sessions);
     if (session) {
       const paneId =
         Object.entries(session.panes).find(([, pane]) => pane?.currentPtyId === event.ptyId)?.[0] ??
@@ -62,6 +87,20 @@ export function targetForStatusEvent(event: StatusEventLike, sessions: SessionLi
   }
   if (event.workItemId) return { main: "work" as const, sessionId: "", paneId: "" };
   return { main: "session" as const, sessionId: event.sessionId || "", paneId: "" };
+}
+
+function sessionForEvent(event: StatusEventLike, sessions: SessionLike[]) {
+  return (
+    sessions.find((candidate) => candidate.id === event.sessionId) ??
+    sessions.find((candidate) =>
+      Object.values(candidate.panes).some((pane) => pane?.currentPtyId === event.ptyId),
+    )
+  );
+}
+
+function detail(label: string, value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  return { label, value: String(value) };
 }
 
 function labelForKind(kind: string) {
