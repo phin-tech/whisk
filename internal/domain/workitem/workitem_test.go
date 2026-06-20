@@ -584,6 +584,111 @@ func TestListsAreDeterministic(t *testing.T) {
 	}
 }
 
+func TestWorkflowRecordListsFilterAndSort(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 12, 10, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", "proj_01")
+	other := mustWorkItem(t, state, "wi_02", "proj_01")
+
+	run, err := state.StartRun(StartRun{
+		ID:           "run_01",
+		HistoryID:    "hist_run_01",
+		RunHistoryID: "run_hist_01",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	otherRun, err := state.StartRun(StartRun{
+		ID:           "run_02",
+		HistoryID:    "hist_run_02",
+		RunHistoryID: "run_hist_02",
+		WorkItemID:   other.ID,
+		Actor:        "agent",
+		Now:          now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("start other run: %v", err)
+	}
+	if _, err := state.AskQuestion(AskQuestion{
+		ID:         "question_01",
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Prompt:     "Which branch?",
+		Actor:      "agent",
+		Now:        now.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("ask question: %v", err)
+	}
+	if _, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "artifact_01",
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Body:       "Plan",
+		Actor:      "agent",
+		Now:        now.Add(3 * time.Minute),
+	}); err != nil {
+		t.Fatalf("submit draft: %v", err)
+	}
+	if _, err := state.ReportStatus(ReportStatus{
+		ID:           "status_01",
+		RunHistoryID: "run_hist_status_01",
+		Kind:         StatusKindQuestion,
+		ProjectID:    "proj_01",
+		WorkItemID:   item.ID,
+		RunID:        run.ID,
+		Message:      "Need input",
+		Actor:        "agent",
+		Now:          now.Add(5 * time.Minute),
+	}); err != nil {
+		t.Fatalf("report status: %v", err)
+	}
+	if _, err := state.ReportStatus(ReportStatus{
+		ID:           "status_02",
+		RunHistoryID: "run_hist_status_02",
+		Kind:         StatusKindBlocked,
+		ProjectID:    "proj_01",
+		WorkItemID:   other.ID,
+		RunID:        otherRun.ID,
+		Message:      "Working",
+		Actor:        "agent",
+		Now:          now.Add(6 * time.Minute),
+	}); err != nil {
+		t.Fatalf("report other status: %v", err)
+	}
+
+	if runs := state.ListRuns(""); len(runs) != 2 || runs[0].ID != run.ID || runs[1].ID != otherRun.ID {
+		t.Fatalf("all runs = %#v", runs)
+	}
+	if runs := state.ListRuns(item.ID); len(runs) != 1 || runs[0].ID != run.ID {
+		t.Fatalf("filtered runs = %#v", runs)
+	}
+	if artifacts := state.ListArtifacts(item.ID); len(artifacts) != 1 || artifacts[0].ID != "artifact_01" {
+		t.Fatalf("artifacts = %#v", artifacts)
+	}
+	if artifacts := state.ListArtifacts(other.ID); len(artifacts) != 0 {
+		t.Fatalf("other artifacts = %#v", artifacts)
+	}
+	if questions := state.ListQuestions(item.ID); len(questions) != 1 || questions[0].ID != "question_01" {
+		t.Fatalf("questions = %#v", questions)
+	}
+	if gates := state.ListGateReports(item.ID); len(gates) != 0 {
+		t.Fatalf("gates = %#v", gates)
+	}
+	if events := state.ListWorkflowEvents(item.ID); len(events) == 0 {
+		t.Fatalf("events = %#v", events)
+	}
+	if events := state.ListStatusEvents(ListStatusEvents{ProjectID: "proj_01", UnreadOnly: true}); len(events) != 2 || events[0].ID != "status_01" || events[1].ID != "status_02" {
+		t.Fatalf("unread status events = %#v", events)
+	}
+	if events := state.ListStatusEvents(ListStatusEvents{WorkItemID: other.ID, RunID: otherRun.ID}); len(events) != 1 || events[0].ID != "status_02" {
+		t.Fatalf("other status events = %#v", events)
+	}
+}
+
 func TestSnapshotRoundTripValidatesReferences(t *testing.T) {
 	state := NewState()
 	mustProject(t, state, "proj_01", "One")

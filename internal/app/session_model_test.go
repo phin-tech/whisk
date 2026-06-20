@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -683,7 +684,8 @@ func TestRuntimeCreateProjectSessionUsesWorkingDirAndProjectRootEnv(t *testing.T
 	rootDir := t.TempDir()
 	workingDir := t.TempDir()
 	ptyBackend := newMemoryPTYBackend()
-	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: ptyBackend})
+	sessionStore := &memorySessionStore{}
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: ptyBackend, SessionStore: sessionStore})
 
 	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: rootDir})
 	if err != nil {
@@ -711,6 +713,24 @@ func TestRuntimeCreateProjectSessionUsesWorkingDirAndProjectRootEnv(t *testing.T
 	}
 	if got := ptyBackend.spawns[0].Env["WHISK_PROJECT_ROOT"]; got != rootDir {
 		t.Fatalf("WHISK_PROJECT_ROOT = %q, want %q", got, rootDir)
+	}
+
+	empty, err := runtime.CreateSession(ctx, app.CreateSessionRequest{Name: "Bind project", RootDir: rootDir})
+	if err != nil {
+		t.Fatalf("create empty session: %v", err)
+	}
+	updated, err := runtime.SetSessionProject(ctx, app.SetSessionProjectRequest{SessionID: empty.Session.ID, ProjectID: project.ID})
+	if err != nil {
+		t.Fatalf("set session project: %v", err)
+	}
+	if updated.ProjectID != project.ID {
+		t.Fatalf("project id = %q, want %q", updated.ProjectID, project.ID)
+	}
+	if _, err := runtime.SetSessionProject(ctx, app.SetSessionProjectRequest{SessionID: empty.Session.ID, ProjectID: "missing"}); err == nil {
+		t.Fatalf("expected missing project error")
+	}
+	if len(sessionStore.saved) == 0 || sessionStore.saved[len(sessionStore.saved)-1][1].ProjectID != project.ID {
+		t.Fatalf("saved sessions = %#v", sessionStore.saved)
 	}
 }
 
@@ -837,6 +857,14 @@ func TestRuntimeCapturesPTYTranscriptOutput(t *testing.T) {
 			t.Fatalf("timed out waiting for transcript output; got %q", transcripts.outputString(created.MainPtyID))
 		}
 	}
+	history, err := runtime.ListPTYHistory(ctx)
+	if err != nil || len(history) != 1 || history[0].PTYID != created.MainPtyID {
+		t.Fatalf("history = %#v, err = %v", history, err)
+	}
+	selected, err := runtime.ReadPTYHistory(ctx, created.MainPtyID)
+	if err != nil || selected.PTYID != created.MainPtyID || !strings.Contains(selected.Output, "transcript-ok") {
+		t.Fatalf("selected history = %#v, err = %v", selected, err)
+	}
 }
 
 func TestRuntimeAddsListsPersistsAndRemovesPTYBookmarks(t *testing.T) {
@@ -905,9 +933,92 @@ func TestRuntimeLoadsPersistedPTYBookmarks(t *testing.T) {
 	}
 }
 
+func TestRuntimeSessionAndBookmarkPersistenceErrorsBubble(t *testing.T) {
+	ctx := context.Background()
+	saveErr := fmt.Errorf("save failed")
+	expectSaveErr := func(t *testing.T, err error) {
+		t.Helper()
+		if err == nil || !strings.Contains(err.Error(), saveErr.Error()) {
+			t.Fatalf("err = %v, want %v", err, saveErr)
+		}
+	}
+	withSession := func(t *testing.T) (*app.Runtime, *memorySessionStore, app.CreatedSession) {
+		t.Helper()
+		store := &memorySessionStore{}
+		runtime := app.NewRuntime(app.RuntimeConfig{SessionStore: store, PTYBackend: newMemoryPTYBackend()})
+		created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{Name: "Persist", RootDir: t.TempDir()})
+		if err != nil {
+			t.Fatalf("create session: %v", err)
+		}
+		store.saveErr = saveErr
+		return runtime, store, created
+	}
+
+	t.Run("create session", func(t *testing.T) {
+		store := &memorySessionStore{saveErr: saveErr}
+		runtime := app.NewRuntime(app.RuntimeConfig{SessionStore: store})
+		_, err := runtime.CreateSession(ctx, app.CreateSessionRequest{Name: "Persist", RootDir: t.TempDir()})
+		expectSaveErr(t, err)
+	})
+	t.Run("split pane", func(t *testing.T) {
+		runtime, _, created := withSession(t)
+		_, err := runtime.SplitPane(ctx, app.SplitPaneRequest{SessionID: created.Session.ID, WindowID: created.WindowID, TargetPaneID: created.PaneID, Direction: session.SplitHorizontal})
+		expectSaveErr(t, err)
+	})
+	t.Run("set root and working dir", func(t *testing.T) {
+		runtime, _, created := withSession(t)
+		_, err := runtime.SetSessionRootDir(ctx, app.SetSessionRootDirRequest{SessionID: created.Session.ID, RootDir: t.TempDir()})
+		expectSaveErr(t, err)
+		_, err = runtime.SetPaneWorkingDir(ctx, app.SetPaneWorkingDirRequest{SessionID: created.Session.ID, PaneID: created.PaneID, WorkingDir: t.TempDir()})
+		expectSaveErr(t, err)
+	})
+	t.Run("start pty", func(t *testing.T) {
+		runtime, store, created := withSession(t)
+		_, err := runtime.StartPanePTY(ctx, app.StartPanePTYRequest{SessionID: created.Session.ID, PaneID: created.PaneID, Options: app.StartPTYOptions{Cols: 80, Rows: 24}})
+		expectSaveErr(t, err)
+		store.saveErr = nil
+	})
+	t.Run("detach and close pty", func(t *testing.T) {
+		runtime, store, created := withSession(t)
+		store.saveErr = nil
+		started, err := runtime.StartPanePTY(ctx, app.StartPanePTYRequest{SessionID: created.Session.ID, PaneID: created.PaneID, Options: app.StartPTYOptions{Cols: 80, Rows: 24}})
+		if err != nil {
+			t.Fatalf("start pty: %v", err)
+		}
+		store.saveErr = saveErr
+		_, err = runtime.DetachPanePTY(ctx, app.DetachPanePTYRequest{SessionID: created.Session.ID, PaneID: created.PaneID})
+		expectSaveErr(t, err)
+		if _, err := runtime.KillPTY(ctx, app.KillPTYRequest{PTYID: started.PTYID}); err != nil {
+			t.Fatalf("kill pty: %v", err)
+		}
+		_, err = runtime.CloseSession(ctx, app.CloseSessionRequest{SessionID: created.Session.ID})
+		expectSaveErr(t, err)
+	})
+	t.Run("bookmarks", func(t *testing.T) {
+		bookmarkStore := &memoryBookmarkStore{saveErr: saveErr}
+		ptyBackend := newMemoryPTYBackend()
+		runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: ptyBackend, BookmarkStore: bookmarkStore})
+		created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{Name: "Bookmarks", RootDir: t.TempDir(), InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24}})
+		if err != nil {
+			t.Fatalf("create session: %v", err)
+		}
+		_, err = runtime.AddPTYBookmark(ctx, app.AddPTYBookmarkRequest{PTYID: created.MainPtyID, Offset: 1})
+		expectSaveErr(t, err)
+		bookmarkStore.saveErr = nil
+		bookmark, err := runtime.AddPTYBookmark(ctx, app.AddPTYBookmarkRequest{PTYID: created.MainPtyID, Offset: 1})
+		if err != nil {
+			t.Fatalf("add bookmark: %v", err)
+		}
+		bookmarkStore.saveErr = saveErr
+		err = runtime.RemovePTYBookmark(ctx, app.RemovePTYBookmarkRequest{BookmarkID: bookmark.ID})
+		expectSaveErr(t, err)
+	})
+}
+
 type memorySessionStore struct {
-	loaded []session.Session
-	saved  [][]session.Session
+	loaded  []session.Session
+	saved   [][]session.Session
+	saveErr error
 }
 
 func (s *memorySessionStore) LoadSessions(context.Context) ([]session.Session, error) {
@@ -915,6 +1026,9 @@ func (s *memorySessionStore) LoadSessions(context.Context) ([]session.Session, e
 }
 
 func (s *memorySessionStore) SaveSessions(_ context.Context, sessions []session.Session) error {
+	if s.saveErr != nil {
+		return s.saveErr
+	}
 	s.saved = append(s.saved, cloneTestSessions(sessions))
 	return nil
 }
@@ -950,8 +1064,9 @@ func cloneTestPanes(in map[string]session.Pane) map[string]session.Pane {
 }
 
 type memoryBookmarkStore struct {
-	loaded []ptybookmark.Bookmark
-	saved  [][]ptybookmark.Bookmark
+	loaded  []ptybookmark.Bookmark
+	saved   [][]ptybookmark.Bookmark
+	saveErr error
 }
 
 func (s *memoryBookmarkStore) LoadBookmarks(context.Context) ([]ptybookmark.Bookmark, error) {
@@ -959,6 +1074,9 @@ func (s *memoryBookmarkStore) LoadBookmarks(context.Context) ([]ptybookmark.Book
 }
 
 func (s *memoryBookmarkStore) SaveBookmarks(_ context.Context, bookmarks []ptybookmark.Bookmark) error {
+	if s.saveErr != nil {
+		return s.saveErr
+	}
 	s.saved = append(s.saved, append([]ptybookmark.Bookmark(nil), bookmarks...))
 	return nil
 }

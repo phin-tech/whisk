@@ -39,6 +39,44 @@ func TestSeedPluginsLiveOutsideThisRepo(t *testing.T) {
 	}
 }
 
+func TestDeletedScaffoldingStaysDeleted(t *testing.T) {
+	for _, path := range []string{
+		"build/android",
+		"build/ios",
+		"internal/adapters/ghcli",
+		"internal/adapters/gitcli",
+		"internal/adapters/hooks",
+		"internal/adapters/processrunner",
+		"internal/adapters/workitemstore/json.go",
+		"internal/adapters/workitemstore/json_test.go",
+	} {
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("delete stale scaffolding: %s still exists", path)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+	}
+}
+
+func TestRootTaskfileOmitsDeletedScaffolding(t *testing.T) {
+	taskfile, err := os.ReadFile("Taskfile.yml")
+	if err != nil {
+		t.Fatalf("read Taskfile.yml: %v", err)
+	}
+	for _, unwanted := range []string{
+		"ios: ./build/ios/Taskfile.yml",
+		"android: ./build/android/Taskfile.yml",
+		"./internal/adapters/ghcli",
+		"./internal/adapters/gitcli",
+		"./internal/adapters/hooks",
+		"./internal/adapters/processrunner",
+	} {
+		if strings.Contains(string(taskfile), unwanted) {
+			t.Fatalf("Taskfile.yml should not contain %q", unwanted)
+		}
+	}
+}
+
 func TestSigningScriptRejectsUnexpectedMacOSExecutablesBeforeNotary(t *testing.T) {
 	tmp := t.TempDir()
 	app := filepath.Join(tmp, "Whisk.app")

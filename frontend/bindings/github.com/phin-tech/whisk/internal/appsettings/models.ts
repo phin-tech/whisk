@@ -64,7 +64,7 @@ export class Settings {
      * the app stop the daemon it started on quit.
      */
     "keepDaemonAlive": boolean;
-    "hookLogEnabled"?: boolean | null;
+    "hookLogEnabled": boolean;
     "clearHookLogAfterSession"?: boolean;
 
     /**
@@ -90,6 +90,9 @@ export class Settings {
         }
         if (!("keepDaemonAlive" in $$source)) {
             this["keepDaemonAlive"] = false;
+        }
+        if (!("hookLogEnabled" in $$source)) {
+            this["hookLogEnabled"] = false;
         }
 
         Object.assign(this, $$source);

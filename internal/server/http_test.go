@@ -194,6 +194,14 @@ func TestHTTPServerPluginRoutes(t *testing.T) {
 	if !trusted.Trusted {
 		t.Fatalf("trusted = %#v", trusted)
 	}
+	rescanned := postJSON[[]protocol.PluginStatus](t, handler, "/v1/plugins/rescan", struct{}{}, http.StatusOK)
+	if len(rescanned) != 1 || rescanned[0].ID != "github" {
+		t.Fatalf("rescanned = %#v", rescanned)
+	}
+	untrusted := postJSON[protocol.PluginStatus](t, handler, "/v1/plugins/github/untrust", struct{}{}, http.StatusOK)
+	if untrusted.Trusted {
+		t.Fatalf("untrusted = %#v", untrusted)
+	}
 	project := postJSON[protocol.Project](t, handler, "/v1/projects", protocol.CreateProjectRequest{
 		Name:    "App",
 		RootDir: t.TempDir(),
@@ -653,6 +661,47 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	projects := getJSON[[]protocol.Project](t, handler, "/v1/projects", http.StatusOK)
 	if len(projects) != 1 || projects[0].ID != project.ID {
 		t.Fatalf("projects = %#v", projects)
+	}
+	updatedName := "Renamed App"
+	updatedSlug := "renamed-app"
+	updatedProject := postJSON[protocol.Project](t, handler, "/v1/projects/"+project.ID+"/update", protocol.UpdateProjectRequest{
+		Name: &updatedName,
+		Slug: &updatedSlug,
+	}, http.StatusOK)
+	if updatedProject.Name != updatedName || updatedProject.Slug != updatedSlug {
+		t.Fatalf("updated project = %#v", updatedProject)
+	}
+	noteProject := postJSON[protocol.Project](t, handler, "/v1/projects/"+project.ID+"/attachments", protocol.AddProjectAttachmentRequest{
+		Kind:             workitem.AttachmentKindNote,
+		Title:            "Decision",
+		Note:             "Keep it small.",
+		IncludeInContext: true,
+	}, http.StatusCreated)
+	if len(noteProject.Attachments) != 1 || noteProject.Attachments[0].Title != "Decision" {
+		t.Fatalf("note project = %#v", noteProject)
+	}
+	noteAttachmentID := noteProject.Attachments[0].ID
+	updatedTitle := "Tiny decision"
+	updatedNote := "Still keep it small."
+	updatedAttachmentProject := postJSON[protocol.Project](t, handler, "/v1/project-attachments/"+noteAttachmentID+"/update", protocol.UpdateProjectAttachmentRequest{
+		ProjectID: project.ID,
+		Title:     &updatedTitle,
+		Note:      &updatedNote,
+	}, http.StatusOK)
+	if updatedAttachmentProject.Attachments[0].Title != updatedTitle || updatedAttachmentProject.Attachments[0].Note != updatedNote {
+		t.Fatalf("updated attachment project = %#v", updatedAttachmentProject)
+	}
+	projectContext := getJSON[protocol.ProjectContext](t, handler, "/v1/projects/"+project.ID+"/context", http.StatusOK)
+	if len(projectContext.Items) != 1 || projectContext.Items[0].Content != updatedNote {
+		t.Fatalf("project context = %#v", projectContext)
+	}
+	detail := getJSON[protocol.ProjectDetail](t, handler, "/v1/projects/"+project.ID+"/detail", http.StatusOK)
+	if detail.Project.ID != project.ID || len(detail.WorkItems) != 0 {
+		t.Fatalf("detail = %#v", detail)
+	}
+	deletedAttachmentProject := postJSON[protocol.Project](t, handler, "/v1/project-attachments/"+noteAttachmentID+"/delete", protocol.DeleteProjectAttachmentRequest{ProjectID: project.ID}, http.StatusOK)
+	if len(deletedAttachmentProject.Attachments) != 0 {
+		t.Fatalf("deleted attachment project = %#v", deletedAttachmentProject)
 	}
 	if templates := getJSON[[]protocol.WorkflowTemplate](t, handler, "/v1/workflow-templates", http.StatusOK); len(templates) == 0 {
 		t.Fatalf("workflow templates = %#v", templates)

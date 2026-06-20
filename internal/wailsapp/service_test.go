@@ -119,6 +119,9 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || killed.ID != "pty_01" || fake.killReq.PTYID != "pty_01" {
 		t.Fatalf("kill = %#v, req = %#v, err = %v", killed, fake.killReq, err)
 	}
+	if err := service.DeletePTY(ctx, protocol.DeletePTYRequest{PTYID: "pty_01"}); err != nil || fake.deletePTYReq.PTYID != "pty_01" {
+		t.Fatalf("delete pty req = %#v, err = %v", fake.deletePTYReq, err)
+	}
 	bookmark, err := service.AddPTYBookmark(ctx, protocol.AddPTYBookmarkRequest{PTYID: "pty_01", Offset: 12, Kind: "prompt"})
 	if err != nil || bookmark.PTYID != "pty_01" || fake.addBookmarkReq.Offset != 12 {
 		t.Fatalf("add bookmark = %#v, req = %#v, err = %v", bookmark, fake.addBookmarkReq, err)
@@ -189,6 +192,23 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	detail, err := service.ProjectDetail(ctx, "proj_01")
 	if err != nil || detail.Project.ID != "proj_01" || fake.projectDetailID != "proj_01" {
 		t.Fatalf("project detail = %#v, id = %q, err = %v", detail, fake.projectDetailID, err)
+	}
+	project, err = service.AddProjectAttachment(ctx, protocol.AddProjectAttachmentRequest{ProjectID: "proj_01", Kind: "note", Title: "Context", Note: "Read this", IncludeInContext: true})
+	if err != nil || len(project.Attachments) != 1 || fake.addProjectAttachmentReq.Note != "Read this" {
+		t.Fatalf("add project attachment = %#v, req = %#v, err = %v", project, fake.addProjectAttachmentReq, err)
+	}
+	attachmentTitle := "Updated context"
+	project, err = service.UpdateProjectAttachment(ctx, "att_01", protocol.UpdateProjectAttachmentRequest{Title: &attachmentTitle})
+	if err != nil || fake.updateProjectAttachmentID != "att_01" || fake.updateProjectAttachmentReq.Title == nil || *fake.updateProjectAttachmentReq.Title != attachmentTitle {
+		t.Fatalf("update project attachment = %#v, id = %q, req = %#v, err = %v", project, fake.updateProjectAttachmentID, fake.updateProjectAttachmentReq, err)
+	}
+	contextBundle, err := service.ProjectContext(ctx, "proj_01")
+	if err != nil || contextBundle.ProjectID != "proj_01" || fake.projectContextID != "proj_01" {
+		t.Fatalf("project context = %#v, id = %q, err = %v", contextBundle, fake.projectContextID, err)
+	}
+	project, err = service.DeleteProjectAttachment(ctx, "att_01", protocol.DeleteProjectAttachmentRequest{ProjectID: "proj_01"})
+	if err != nil || len(project.Attachments) != 0 || fake.deleteProjectAttachmentID != "att_01" {
+		t.Fatalf("delete project attachment = %#v, id = %q, err = %v", project, fake.deleteProjectAttachmentID, err)
 	}
 	templates, err := service.ListWorkflowTemplates(ctx)
 	if err != nil || len(templates) != 1 || templates[0].ID != "default" {
@@ -359,6 +379,34 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	removedIntegration, err := service.RemoveAgentHookIntegration(ctx, protocol.AgentHookIntegrationRequest{Provider: "codex"})
 	if err != nil || removedIntegration.Provider != "codex" || fake.removeAgentHookReq.Provider != "codex" {
 		t.Fatalf("remove agent hook integration = %#v, req = %#v, err = %v", removedIntegration, fake.removeAgentHookReq, err)
+	}
+	plugins, err := service.ListPlugins(ctx)
+	if err != nil || len(plugins) != 1 || plugins[0].ID != "github" {
+		t.Fatalf("list plugins = %#v, err = %v", plugins, err)
+	}
+	plugins, err = service.RescanPlugins(ctx)
+	if err != nil || len(plugins) != 1 || !fake.rescanPluginsCalled {
+		t.Fatalf("rescan plugins = %#v, called = %v, err = %v", plugins, fake.rescanPluginsCalled, err)
+	}
+	plugin, err := service.TrustPlugin(ctx, "github")
+	if err != nil || !plugin.Trusted || fake.trustPluginID != "github" {
+		t.Fatalf("trust plugin = %#v, id = %q, err = %v", plugin, fake.trustPluginID, err)
+	}
+	plugin, err = service.UntrustPlugin(ctx, "github")
+	if err != nil || plugin.Trusted || fake.untrustPluginID != "github" {
+		t.Fatalf("untrust plugin = %#v, id = %q, err = %v", plugin, fake.untrustPluginID, err)
+	}
+	registryPlugins, err := service.ListRegistryPlugins(ctx)
+	if err != nil || len(registryPlugins) != 1 || registryPlugins[0].Registry != "phin-tech" {
+		t.Fatalf("registry plugins = %#v, err = %v", registryPlugins, err)
+	}
+	plugin, err = service.InstallPlugin(ctx, "phin-tech", "github")
+	if err != nil || fake.installPluginRegistry != "phin-tech" || fake.installPluginID != "github" {
+		t.Fatalf("install plugin = %#v, registry = %q, id = %q, err = %v", plugin, fake.installPluginRegistry, fake.installPluginID, err)
+	}
+	project, err = service.RunPluginProjectAttachmentTemplate(ctx, "github", "issue", protocol.RunPluginProjectAttachmentTemplateRequest{ProjectID: "proj_01", Values: map[string]string{"issue": "1"}})
+	if err != nil || len(project.Attachments) != 1 || fake.runPluginTemplateID != "issue" {
+		t.Fatalf("run plugin template = %#v, template = %q, err = %v", project, fake.runPluginTemplateID, err)
 	}
 	httpForwards, err := service.ListHTTPForwards(ctx)
 	if err != nil || len(httpForwards) != 1 || httpForwards[0].ID != "fwd_01" {
@@ -558,44 +606,55 @@ type runtimeClientFake struct {
 	readPTYHistoryID   string
 	nextEventReq       protocol.NextEventRequest
 
-	detectWorktrunkReq       protocol.DetectWorktrunkRequest
-	listWorktreesReq         protocol.ListWorktreesRequest
-	createWorktreeReq        protocol.CreateWorktreeRequest
-	removeWorktreeReq        protocol.RemoveWorktreeRequest
-	createProjectReq         protocol.CreateProjectRequest
-	updateProjectID          string
-	updateProjectReq         protocol.UpdateProjectRequest
-	projectDetailID          string
-	listWorkItemsProjectID   string
-	createWorkItemReq        protocol.CreateWorkItemRequest
-	moveWorkItemReq          protocol.MoveWorkItemRequest
-	bindWorkItemReq          protocol.BindWorkItemWorktreeRequest
-	addWorkItemAttachmentReq protocol.AddWorkItemAttachmentRequest
-	deleteWorkItemReq        protocol.DeleteWorkItemRequest
-	listRunsWorkItemID       string
-	startRunReq              protocol.StartWorkItemRunRequest
-	cancelRunReq             protocol.CancelWorkItemRunRequest
-	reportStatusReq          protocol.ReportStatusRequest
-	listStatusEventsReq      protocol.ListStatusEventsRequest
-	markStatusReadReq        protocol.MarkStatusEventReadRequest
-	agentBridgeHookID        string
-	agentBridgeHookReq       protocol.AgentBridgeHookRequest
-	recordAgentHookReq       protocol.AgentBridgeHookRequest
-	listAgentApprovalsReq    protocol.ListAgentBridgeApprovalsRequest
-	listAgentEventsReq       protocol.ListAgentBridgeEventsRequest
-	markAgentEventReadReq    protocol.MarkAgentBridgeEventReadRequest
-	resolveAgentApprovalID   string
-	resolveAgentApprovalReq  protocol.ResolveAgentBridgeApprovalRequest
-	checkAgentHookReq        protocol.AgentHookIntegrationRequest
-	installAgentHookReq      protocol.AgentHookIntegrationRequest
-	removeAgentHookReq       protocol.AgentHookIntegrationRequest
-	setAgentHookLogReq       protocol.SetAgentHookLogSettingsRequest
-	clearAgentHookLogCalled  bool
-	openAgentHookLogCalled   bool
-	onboardingApplyReq       protocol.OnboardingApplyRequest
-	onboardingStatus         protocol.OnboardingStatus
-	createForwardReq         protocol.CreateHTTPForwardRequest
-	deleteForwardID          string
+	detectWorktrunkReq         protocol.DetectWorktrunkRequest
+	listWorktreesReq           protocol.ListWorktreesRequest
+	createWorktreeReq          protocol.CreateWorktreeRequest
+	removeWorktreeReq          protocol.RemoveWorktreeRequest
+	createProjectReq           protocol.CreateProjectRequest
+	updateProjectID            string
+	updateProjectReq           protocol.UpdateProjectRequest
+	projectDetailID            string
+	addProjectAttachmentReq    protocol.AddProjectAttachmentRequest
+	updateProjectAttachmentID  string
+	updateProjectAttachmentReq protocol.UpdateProjectAttachmentRequest
+	deleteProjectAttachmentID  string
+	projectContextID           string
+	listWorkItemsProjectID     string
+	createWorkItemReq          protocol.CreateWorkItemRequest
+	moveWorkItemReq            protocol.MoveWorkItemRequest
+	bindWorkItemReq            protocol.BindWorkItemWorktreeRequest
+	addWorkItemAttachmentReq   protocol.AddWorkItemAttachmentRequest
+	deleteWorkItemReq          protocol.DeleteWorkItemRequest
+	listRunsWorkItemID         string
+	startRunReq                protocol.StartWorkItemRunRequest
+	cancelRunReq               protocol.CancelWorkItemRunRequest
+	reportStatusReq            protocol.ReportStatusRequest
+	listStatusEventsReq        protocol.ListStatusEventsRequest
+	markStatusReadReq          protocol.MarkStatusEventReadRequest
+	agentBridgeHookID          string
+	agentBridgeHookReq         protocol.AgentBridgeHookRequest
+	recordAgentHookReq         protocol.AgentBridgeHookRequest
+	listAgentApprovalsReq      protocol.ListAgentBridgeApprovalsRequest
+	listAgentEventsReq         protocol.ListAgentBridgeEventsRequest
+	markAgentEventReadReq      protocol.MarkAgentBridgeEventReadRequest
+	resolveAgentApprovalID     string
+	resolveAgentApprovalReq    protocol.ResolveAgentBridgeApprovalRequest
+	checkAgentHookReq          protocol.AgentHookIntegrationRequest
+	installAgentHookReq        protocol.AgentHookIntegrationRequest
+	removeAgentHookReq         protocol.AgentHookIntegrationRequest
+	setAgentHookLogReq         protocol.SetAgentHookLogSettingsRequest
+	clearAgentHookLogCalled    bool
+	openAgentHookLogCalled     bool
+	rescanPluginsCalled        bool
+	trustPluginID              string
+	untrustPluginID            string
+	installPluginRegistry      string
+	installPluginID            string
+	runPluginTemplateID        string
+	onboardingApplyReq         protocol.OnboardingApplyRequest
+	onboardingStatus           protocol.OnboardingStatus
+	createForwardReq           protocol.CreateHTTPForwardRequest
+	deleteForwardID            string
 }
 
 func (f *runtimeClientFake) ClearDaemon(context.Context, protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error) {
@@ -772,29 +831,32 @@ func (f *runtimeClientFake) GetProjectDetail(_ context.Context, projectID string
 }
 
 func (f *runtimeClientFake) AddProjectAttachment(_ context.Context, req protocol.AddProjectAttachmentRequest) (protocol.Project, error) {
+	f.addProjectAttachmentReq = req
 	project := f.projectDetail.Project
 	project.Attachments = append(project.Attachments, protocol.Attachment{ID: "att_01", Kind: req.Kind, Title: req.Title, Path: req.Path, URL: req.URL, Note: req.Note, Provider: req.Provider, Target: req.Target, IncludeInContext: req.IncludeInContext})
 	return project, nil
 }
 
-func (f *runtimeClientFake) UpdateProjectAttachment(_ context.Context, _ string, req protocol.UpdateProjectAttachmentRequest) (protocol.Project, error) {
+func (f *runtimeClientFake) UpdateProjectAttachment(_ context.Context, attachmentID string, req protocol.UpdateProjectAttachmentRequest) (protocol.Project, error) {
+	f.updateProjectAttachmentID = attachmentID
+	f.updateProjectAttachmentReq = req
 	project := f.projectDetail.Project
-	if len(project.Attachments) == 0 {
-		return project, nil
-	}
+	project.Attachments = append(project.Attachments, protocol.Attachment{ID: attachmentID})
 	if req.Title != nil {
 		project.Attachments[0].Title = *req.Title
 	}
 	return project, nil
 }
 
-func (f *runtimeClientFake) DeleteProjectAttachment(context.Context, string, protocol.DeleteProjectAttachmentRequest) (protocol.Project, error) {
+func (f *runtimeClientFake) DeleteProjectAttachment(_ context.Context, attachmentID string, _ protocol.DeleteProjectAttachmentRequest) (protocol.Project, error) {
+	f.deleteProjectAttachmentID = attachmentID
 	project := f.projectDetail.Project
 	project.Attachments = nil
 	return project, nil
 }
 
-func (f *runtimeClientFake) GetProjectContext(context.Context, string) (protocol.ProjectContext, error) {
+func (f *runtimeClientFake) GetProjectContext(_ context.Context, projectID string) (protocol.ProjectContext, error) {
+	f.projectContextID = projectID
 	return protocol.ProjectContext{ProjectID: f.projectDetail.Project.ID}, nil
 }
 
@@ -1016,15 +1078,18 @@ func (f *runtimeClientFake) ListPlugins(context.Context) ([]protocol.PluginStatu
 }
 
 func (f *runtimeClientFake) RescanPlugins(context.Context) ([]protocol.PluginStatus, error) {
+	f.rescanPluginsCalled = true
 	return []protocol.PluginStatus{{ID: "github", Name: "GitHub", Trusted: true, Valid: true}}, nil
 }
 
-func (f *runtimeClientFake) TrustPlugin(context.Context, string) (protocol.PluginStatus, error) {
-	return protocol.PluginStatus{ID: "github", Trusted: true, Valid: true}, nil
+func (f *runtimeClientFake) TrustPlugin(_ context.Context, id string) (protocol.PluginStatus, error) {
+	f.trustPluginID = id
+	return protocol.PluginStatus{ID: id, Trusted: true, Valid: true}, nil
 }
 
-func (f *runtimeClientFake) UntrustPlugin(context.Context, string) (protocol.PluginStatus, error) {
-	return protocol.PluginStatus{ID: "github", Trusted: false, Valid: true}, nil
+func (f *runtimeClientFake) UntrustPlugin(_ context.Context, id string) (protocol.PluginStatus, error) {
+	f.untrustPluginID = id
+	return protocol.PluginStatus{ID: id, Trusted: false, Valid: true}, nil
 }
 
 func (f *runtimeClientFake) ListRegistryPlugins(context.Context) ([]protocol.RegistryPlugin, error) {
@@ -1032,10 +1097,13 @@ func (f *runtimeClientFake) ListRegistryPlugins(context.Context) ([]protocol.Reg
 }
 
 func (f *runtimeClientFake) InstallPlugin(_ context.Context, registry, id string) (protocol.PluginStatus, error) {
+	f.installPluginRegistry = registry
+	f.installPluginID = id
 	return protocol.PluginStatus{ID: id, Registry: registry, Valid: true}, nil
 }
 
-func (f *runtimeClientFake) RunPluginProjectAttachmentTemplate(context.Context, string, string, protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error) {
+func (f *runtimeClientFake) RunPluginProjectAttachmentTemplate(_ context.Context, _ string, templateID string, _ protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error) {
+	f.runPluginTemplateID = templateID
 	return protocol.Project{ID: "proj_01", Attachments: []protocol.Attachment{{ID: "att_01", Kind: "external", Provider: "github"}}}, nil
 }
 

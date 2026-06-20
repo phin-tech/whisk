@@ -18,8 +18,8 @@ func TestDefaultSettingsOpenToSessions(t *testing.T) {
 	if !settings.KeepDaemonAlive {
 		t.Fatalf("keep daemon alive = false, want true by default")
 	}
-	if settings.HookLogEnabled == nil || !*settings.HookLogEnabled {
-		t.Fatalf("hook log enabled = %#v", settings.HookLogEnabled)
+	if !settings.HookLogEnabled {
+		t.Fatalf("hook log enabled = false, want true by default")
 	}
 }
 
@@ -157,7 +157,7 @@ func TestNewDefaultStoreUsesDefaultPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read default file: %v", err)
 	}
-	if string(bytes) != "{\n  \"startupView\": \"kanban\",\n  \"keepDaemonAlive\": false,\n  \"hookLogEnabled\": true\n}\n" {
+	if string(bytes) != "{\n  \"startupView\": \"kanban\",\n  \"keepDaemonAlive\": false,\n  \"hookLogEnabled\": false\n}\n" {
 		t.Fatalf("file = %q", string(bytes))
 	}
 }
@@ -175,8 +175,8 @@ func TestStoreLoadMissingFileReturnsDefaults(t *testing.T) {
 	if !got.KeepDaemonAlive {
 		t.Fatalf("keep daemon alive = false")
 	}
-	if got.HookLogEnabled == nil || !*got.HookLogEnabled {
-		t.Fatalf("hook log enabled = %#v", got.HookLogEnabled)
+	if !got.HookLogEnabled {
+		t.Fatalf("hook log enabled = false")
 	}
 }
 
@@ -236,7 +236,7 @@ func TestStoreSavesAndLoadsSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
-	if string(bytes) != "{\n  \"startupView\": \"kanban\",\n  \"keepDaemonAlive\": false,\n  \"hookLogEnabled\": true\n}\n" {
+	if string(bytes) != "{\n  \"startupView\": \"kanban\",\n  \"keepDaemonAlive\": false,\n  \"hookLogEnabled\": false\n}\n" {
 		t.Fatalf("file = %q", string(bytes))
 	}
 }

@@ -1470,8 +1470,102 @@ func TestRuntimeWorkItemActionsRejectInvalidRequests(t *testing.T) {
 	}
 }
 
+func TestRuntimeWorkItemPersistenceErrorsBubble(t *testing.T) {
+	ctx := context.Background()
+	saveErr := fmt.Errorf("save failed")
+	withRuntime := func(t *testing.T) (*app.Runtime, *memoryWorkItemStore, workitem.Project, workitem.WorkItem) {
+		t.Helper()
+		store := &memoryWorkItemStore{}
+		runtime := app.NewRuntime(app.RuntimeConfig{WorkItemStore: store})
+		project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+		if err != nil {
+			t.Fatalf("create project: %v", err)
+		}
+		item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Task", Actor: "human"})
+		if err != nil {
+			t.Fatalf("create work item: %v", err)
+		}
+		store.saveErr = saveErr
+		return runtime, store, project, item
+	}
+	expectSaveErr := func(t *testing.T, err error) {
+		t.Helper()
+		if err == nil || !strings.Contains(err.Error(), saveErr.Error()) {
+			t.Fatalf("err = %v, want %v", err, saveErr)
+		}
+	}
+
+	t.Run("create project", func(t *testing.T) {
+		runtime := app.NewRuntime(app.RuntimeConfig{WorkItemStore: &memoryWorkItemStore{saveErr: saveErr}})
+		_, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+		expectSaveErr(t, err)
+	})
+	t.Run("update project", func(t *testing.T) {
+		runtime, _, project, _ := withRuntime(t)
+		name := "New name"
+		_, err := runtime.UpdateProject(ctx, app.UpdateProjectRequest{ID: project.ID, Name: &name})
+		expectSaveErr(t, err)
+	})
+	t.Run("project attachments", func(t *testing.T) {
+		runtime, store, project, _ := withRuntime(t)
+		_, err := runtime.AddProjectAttachment(ctx, app.AddProjectAttachmentRequest{ProjectID: project.ID, Kind: workitem.AttachmentKindNote, Note: "note"})
+		expectSaveErr(t, err)
+		store.saveErr = nil
+		project, err = runtime.AddProjectAttachment(ctx, app.AddProjectAttachmentRequest{ProjectID: project.ID, Kind: workitem.AttachmentKindNote, Note: "note"})
+		if err != nil {
+			t.Fatalf("add project attachment: %v", err)
+		}
+		store.saveErr = saveErr
+		title := "Updated"
+		_, err = runtime.UpdateProjectAttachment(ctx, app.UpdateProjectAttachmentRequest{ID: project.Attachments[0].ID, ProjectID: project.ID, Title: &title})
+		expectSaveErr(t, err)
+		_, err = runtime.DeleteProjectAttachment(ctx, app.DeleteProjectAttachmentRequest{ID: project.Attachments[0].ID, ProjectID: project.ID})
+		expectSaveErr(t, err)
+	})
+	t.Run("work item mutations", func(t *testing.T) {
+		runtime, _, _, item := withRuntime(t)
+		_, err := runtime.MoveWorkItem(ctx, app.MoveWorkItemRequest{ID: item.ID, StageID: workitem.StagePlanning, Actor: "human"})
+		expectSaveErr(t, err)
+		_, err = runtime.BindWorkItemWorktree(ctx, app.BindWorkItemWorktreeRequest{ID: item.ID, Branch: "feature", WorktreePath: t.TempDir(), Actor: "human"})
+		expectSaveErr(t, err)
+		_, err = runtime.AddWorkItemAttachment(ctx, app.AddWorkItemAttachmentRequest{WorkItemID: item.ID, Kind: workitem.AttachmentKindFile, Path: "docs/spec.md", Actor: "human"})
+		expectSaveErr(t, err)
+	})
+	t.Run("run lifecycle", func(t *testing.T) {
+		runtime, store, _, item := withRuntime(t)
+		_, err := runtime.StartWorkItemRun(ctx, app.StartWorkItemRunRequest{WorkItemID: item.ID, Preset: workitem.RunPresetWriter, PromptTemplateID: workitem.PromptTemplateImplement, Actor: "agent"})
+		expectSaveErr(t, err)
+		store.saveErr = nil
+		run, err := runtime.StartWorkItemRun(ctx, app.StartWorkItemRunRequest{WorkItemID: item.ID, Preset: workitem.RunPresetWriter, PromptTemplateID: workitem.PromptTemplateImplement, Actor: "agent"})
+		if err != nil {
+			t.Fatalf("start run: %v", err)
+		}
+		store.saveErr = saveErr
+		_, err = runtime.AskQuestion(ctx, app.AskQuestionRequest{WorkItemID: item.ID, RunID: run.ID, Prompt: "Which?", Actor: "agent"})
+		expectSaveErr(t, err)
+		_, err = runtime.ReportStatus(ctx, app.ReportStatusRequest{Kind: workitem.StatusKindBlocked, Message: "blocked", WorkItemID: item.ID, RunID: run.ID, Actor: "agent"})
+		expectSaveErr(t, err)
+		_, err = runtime.CancelWorkItemRun(ctx, app.CancelWorkItemRunRequest{ID: run.ID, Actor: "human"})
+		expectSaveErr(t, err)
+	})
+	t.Run("planning", func(t *testing.T) {
+		runtime, store, _, item := withRuntime(t)
+		_, err := runtime.StartPlanning(ctx, app.StartPlanningRequest{WorkItemID: item.ID, Actor: "agent"})
+		expectSaveErr(t, err)
+		store.saveErr = nil
+		planning, err := runtime.StartPlanning(ctx, app.StartPlanningRequest{WorkItemID: item.ID, Actor: "agent"})
+		if err != nil {
+			t.Fatalf("start planning: %v", err)
+		}
+		store.saveErr = saveErr
+		_, err = runtime.SubmitDraftPlan(ctx, app.SubmitDraftPlanRequest{WorkItemID: item.ID, RunID: planning.ID, Body: "plan", Actor: "agent"})
+		expectSaveErr(t, err)
+	})
+}
+
 type memoryWorkItemStore struct {
-	saved workitem.Snapshot
+	saved   workitem.Snapshot
+	saveErr error
 }
 
 func (s *memoryWorkItemStore) LoadWorkItems(context.Context) (workitem.Snapshot, error) {
@@ -1479,6 +1573,9 @@ func (s *memoryWorkItemStore) LoadWorkItems(context.Context) (workitem.Snapshot,
 }
 
 func (s *memoryWorkItemStore) SaveWorkItems(_ context.Context, snapshot workitem.Snapshot) error {
+	if s.saveErr != nil {
+		return s.saveErr
+	}
 	s.saved = snapshot
 	return nil
 }
@@ -1633,14 +1730,42 @@ func TestRuntimeProjectContextResolvesIncludedAttachments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	if _, err := runtime.AddProjectAttachment(ctx, app.AddProjectAttachmentRequest{ProjectID: project.ID, Kind: workitem.AttachmentKindNote, Title: "Note", Note: "Remember this.", IncludeInContext: true}); err != nil {
+	renamed := "Renamed"
+	slug := "renamed"
+	project, err = runtime.UpdateProject(ctx, app.UpdateProjectRequest{ID: project.ID, Name: &renamed, Slug: &slug})
+	if err != nil {
+		t.Fatalf("update project: %v", err)
+	}
+	if project.Name != renamed || project.Slug != slug {
+		t.Fatalf("updated project = %#v", project)
+	}
+	noteProject, err := runtime.AddProjectAttachment(ctx, app.AddProjectAttachmentRequest{ProjectID: project.ID, Kind: workitem.AttachmentKindNote, Title: "Note", Note: "Remember this.", IncludeInContext: true})
+	if err != nil {
 		t.Fatalf("add note: %v", err)
+	}
+	noteAttachmentID := noteProject.Attachments[0].ID
+	updatedTitle := "Updated note"
+	updatedNote := "Remember less."
+	if _, err := runtime.UpdateProjectAttachment(ctx, app.UpdateProjectAttachmentRequest{ID: noteAttachmentID, ProjectID: project.ID, Title: &updatedTitle, Note: &updatedNote}); err != nil {
+		t.Fatalf("update note: %v", err)
 	}
 	if _, err := runtime.AddProjectAttachment(ctx, app.AddProjectAttachmentRequest{ProjectID: project.ID, Kind: workitem.AttachmentKindExternal, Provider: "github", Target: "owner/repo#1", IncludeInContext: true}); err != nil {
 		t.Fatalf("add external: %v", err)
 	}
-	if _, err := runtime.AddProjectAttachment(ctx, app.AddProjectAttachmentRequest{ProjectID: project.ID, Kind: workitem.AttachmentKindURL, URL: "https://example.test"}); err != nil {
+	urlProject, err := runtime.AddProjectAttachment(ctx, app.AddProjectAttachmentRequest{ProjectID: project.ID, Kind: workitem.AttachmentKindURL, URL: "https://example.test"})
+	if err != nil {
 		t.Fatalf("add skipped url: %v", err)
+	}
+	urlAttachmentID := urlProject.Attachments[len(urlProject.Attachments)-1].ID
+	if _, err := runtime.DeleteProjectAttachment(ctx, app.DeleteProjectAttachmentRequest{ID: urlAttachmentID, ProjectID: project.ID}); err != nil {
+		t.Fatalf("delete url: %v", err)
+	}
+	detail, err := runtime.GetProjectDetail(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("project detail: %v", err)
+	}
+	if detail.Project.ID != project.ID || detail.Project.Name != renamed {
+		t.Fatalf("detail = %#v", detail)
 	}
 
 	contextBundle, err := runtime.ProjectContext(ctx, project.ID)
@@ -1650,7 +1775,7 @@ func TestRuntimeProjectContextResolvesIncludedAttachments(t *testing.T) {
 	if len(contextBundle.Items) != 2 {
 		t.Fatalf("context = %#v", contextBundle)
 	}
-	if contextBundle.Items[0].Delivery != "inline" || contextBundle.Items[0].Content != "Remember this." {
+	if contextBundle.Items[0].Delivery != "inline" || contextBundle.Items[0].Content != updatedNote {
 		t.Fatalf("note context = %#v", contextBundle.Items[0])
 	}
 	if contextBundle.Items[1].Delivery != "inline" || contextBundle.Items[1].Content != "resolved issue" {
@@ -1662,4 +1787,144 @@ type staticProjectContextResolver struct{}
 
 func (staticProjectContextResolver) ResolveProjectAttachment(context.Context, app.ResolveProjectAttachmentRequest) (app.ResolvedProjectAttachment, error) {
 	return app.ResolvedProjectAttachment{Title: "GitHub issue", Delivery: "inline", ContentType: "text/markdown", Content: "resolved issue", SourceURL: "https://github.com/owner/repo/issues/1"}, nil
+}
+
+func TestRuntimePluginRegistryMethods(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	plugins := &memoryPluginRegistry{
+		status: app.PluginStatus{
+			ID:      "github",
+			Name:    "GitHub",
+			Version: "1.0.0",
+			Valid:   true,
+			Resolvers: []app.PluginResolver{{
+				Provider: "github",
+				Kinds:    []string{workitem.AttachmentKindExternal},
+			}},
+			ProjectAttachmentTemplates: []app.ProjectAttachmentTemplate{{
+				ID:       "github.issue",
+				Label:    "GitHub issue",
+				Provider: "github",
+				Kind:     workitem.AttachmentKindExternal,
+			}},
+		},
+		registry: app.RegistryPlugin{Registry: "phin-tech", ID: "github", Name: "GitHub", SourceType: "path"},
+		resolver: staticProjectContextResolver{},
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: plugins})
+
+	listed, err := runtime.ListPlugins(ctx)
+	if err != nil || len(listed) != 1 || listed[0].ID != "github" {
+		t.Fatalf("list plugins = %#v, err = %v", listed, err)
+	}
+	rescanned, err := runtime.RescanPlugins(ctx)
+	if err != nil || len(rescanned) != 1 || !plugins.rescanned {
+		t.Fatalf("rescan plugins = %#v, rescanned=%v, err = %v", rescanned, plugins.rescanned, err)
+	}
+	trusted, err := runtime.TrustPlugin(ctx, "github")
+	if err != nil || !trusted.Trusted || plugins.trustedID != "github" {
+		t.Fatalf("trust plugin = %#v, trustedID=%q, err = %v", trusted, plugins.trustedID, err)
+	}
+	untrusted, err := runtime.UntrustPlugin(ctx, "github")
+	if err != nil || untrusted.Trusted || plugins.untrustedID != "github" {
+		t.Fatalf("untrust plugin = %#v, untrustedID=%q, err = %v", untrusted, plugins.untrustedID, err)
+	}
+	available, err := runtime.ListRegistryPlugins(ctx)
+	if err != nil || len(available) != 1 || available[0].Registry != "phin-tech" {
+		t.Fatalf("registry plugins = %#v, err = %v", available, err)
+	}
+	installed, err := runtime.InstallPlugin(ctx, "phin-tech", "github")
+	if err != nil || installed.Registry != "phin-tech" || plugins.installedID != "github" {
+		t.Fatalf("install plugin = %#v, installedID=%q, err = %v", installed, plugins.installedID, err)
+	}
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: root})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	withAttachment, err := runtime.RunPluginProjectAttachmentTemplate(ctx, app.RunPluginProjectAttachmentTemplateRequest{
+		PluginID:   "github",
+		TemplateID: "github.issue",
+		ProjectID:  project.ID,
+		Values:     map[string]string{"repo": "owner/repo", "issue": "1"},
+	})
+	if err != nil {
+		t.Fatalf("run plugin template: %v", err)
+	}
+	if len(withAttachment.Attachments) != 1 || withAttachment.Attachments[0].Provider != "github" {
+		t.Fatalf("with attachment = %#v", withAttachment)
+	}
+	contextBundle, err := runtime.ProjectContext(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("project context: %v", err)
+	}
+	if len(contextBundle.Items) != 1 || contextBundle.Items[0].Content != "resolved issue" {
+		t.Fatalf("context = %#v", contextBundle)
+	}
+}
+
+type memoryPluginRegistry struct {
+	status      app.PluginStatus
+	registry    app.RegistryPlugin
+	resolver    app.ProjectContextResolver
+	rescanned   bool
+	trustedID   string
+	untrustedID string
+	installedID string
+}
+
+func (r *memoryPluginRegistry) ListPlugins(context.Context) ([]app.PluginStatus, error) {
+	return []app.PluginStatus{r.status}, nil
+}
+
+func (r *memoryPluginRegistry) RescanPlugins(context.Context) ([]app.PluginStatus, error) {
+	r.rescanned = true
+	return []app.PluginStatus{r.status}, nil
+}
+
+func (r *memoryPluginRegistry) TrustPlugin(_ context.Context, id string) (app.PluginStatus, error) {
+	r.trustedID = id
+	status := r.status
+	status.ID = id
+	status.Trusted = true
+	return status, nil
+}
+
+func (r *memoryPluginRegistry) UntrustPlugin(_ context.Context, id string) (app.PluginStatus, error) {
+	r.untrustedID = id
+	status := r.status
+	status.ID = id
+	status.Trusted = false
+	return status, nil
+}
+
+func (r *memoryPluginRegistry) ListRegistryPlugins(context.Context) ([]app.RegistryPlugin, error) {
+	return []app.RegistryPlugin{r.registry}, nil
+}
+
+func (r *memoryPluginRegistry) InstallPlugin(_ context.Context, registry, id string) (app.PluginStatus, error) {
+	r.installedID = id
+	status := r.status
+	status.ID = id
+	status.Registry = registry
+	return status, nil
+}
+
+func (r *memoryPluginRegistry) RunProjectAttachmentTemplate(_ context.Context, req app.RunPluginProjectAttachmentTemplateRequest) (app.AddProjectAttachmentRequest, error) {
+	return app.AddProjectAttachmentRequest{
+		ProjectID:        req.ProjectID,
+		Kind:             workitem.AttachmentKindExternal,
+		Provider:         "github",
+		Target:           req.Values["repo"] + "#" + req.Values["issue"],
+		Title:            "Issue",
+		IncludeInContext: true,
+	}, nil
+}
+
+func (r *memoryPluginRegistry) ResolveProjectAttachmentProvider(provider string) app.ProjectContextResolver {
+	if provider == "github" {
+		return r.resolver
+	}
+	return nil
 }
