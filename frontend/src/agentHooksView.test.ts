@@ -4,8 +4,26 @@ import {
   agentHookDebugRows,
   agentHookIntegrationFor,
   agentHookNotificationRows,
+  agentHookNotificationClickTarget,
   upsertAgentHookIntegration,
 } from "./agentHooksView";
+
+const sessions = [
+  {
+    id: "sess_01",
+    rootDir: "/repo",
+    windows: {
+      win_01: {
+        id: "win_01",
+        layout: { kind: "split", children: [{ kind: "leaf", paneId: "pane_01" }, { kind: "leaf", paneId: "pane_02" }] },
+      },
+    },
+    panes: {
+      pane_01: { id: "pane_01", currentPtyId: "pty_01" },
+      pane_02: { id: "pane_02", currentPtyId: "pty_02" },
+    },
+  },
+];
 
 describe("agent hook integration view state", () => {
   it("uses the clicked provider when an action response omits provider", () => {
@@ -166,6 +184,29 @@ describe("agent hook integration view state", () => {
         createdAt: "2026-06-20T12:12:51Z",
       },
     ]);
+  });
+
+  it("targets the exact triggering pane and exposes the event to mark read", () => {
+    expect(
+      agentHookNotificationClickTarget(
+        {
+          id: "hook_01",
+          provider: "codex",
+          eventName: "Notification",
+          message: "Need input",
+          sessionId: "sess_01",
+          ptyId: "pty_02",
+          status: "pending",
+          createdAt: "2026-06-20T12:12:51Z",
+        },
+        sessions,
+      ),
+    ).toEqual({
+      main: "session",
+      sessionId: "sess_01",
+      paneId: "pane_02",
+      readEventId: "hook_01",
+    });
   });
 
   it("uses daemon-normalized hook metadata when available", () => {

@@ -23,6 +23,7 @@
   export let onRefresh: () => void;
   export let onClearNotifications: () => void;
   export let onSelectStatusEvent: (event: StatusEvent) => void;
+  export let onSelectAgentBridgeEvent: (event: AgentBridgeEvent) => void;
   export let onResolveAgentBridgeApproval: (id: string, action: "allow" | "deny") => void;
 
   let expandedIds = new Set<string>();
@@ -132,7 +133,14 @@
         {/each}
         {#each hookRows as hook (hook.id)}
           <div class="rounded border border-accent-dim/40 bg-accent-dim/10 px-2.5 py-2 text-text-primary">
-            <div class="flex min-w-0 items-start gap-2">
+            <button
+              type="button"
+              class="flex min-w-0 items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+              on:click={() => {
+                const event = agentBridgeEvents.find((candidate) => candidate.id === hook.id);
+                if (event) onSelectAgentBridgeEvent(event);
+              }}
+            >
               <CircleHelp size={14} class="mt-0.5 shrink-0 text-accent" />
               <div class="min-w-0 flex-1">
                 <div class="flex min-w-0 items-center justify-between gap-2">
@@ -148,7 +156,7 @@
                   {hook.meta}
                 </div>
               </div>
-            </div>
+            </button>
           </div>
         {/each}
         {#each rows as row (row.id)}

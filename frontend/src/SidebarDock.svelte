@@ -41,6 +41,7 @@
   export let onRefreshStatusEvents: () => void;
   export let onClearNotifications: () => void;
   export let onSelectStatusEvent: (event: StatusEvent) => void;
+  export let onSelectAgentBridgeEvent: (event: AgentBridgeEvent) => void;
   export let onResolveAgentBridgeApproval: (id: string, action: "allow" | "deny") => void;
   export let onRefreshWork: () => void;
   export let onNewProject: () => void;
@@ -139,6 +140,7 @@
             onRefresh={onRefreshStatusEvents}
             {onClearNotifications}
             {onSelectStatusEvent}
+            {onSelectAgentBridgeEvent}
             {onResolveAgentBridgeApproval}
           />
         {:else if activePanel === "work"}

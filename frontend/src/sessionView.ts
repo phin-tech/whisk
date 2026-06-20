@@ -73,6 +73,10 @@ export type KillPTYRequestLike = {
   ptyId: string;
 };
 
+export type ClosePaneTargetLike =
+  | { kind: "pane"; request: ClosePaneRequestLike; ptyId: string }
+  | { kind: "session"; sessionId: string; ptyId: string };
+
 export function paneIds(node: LayoutNodeLike | undefined): string[] {
   if (!node) return [];
   if (node.kind === "leaf") return node.paneId ? [node.paneId] : [];
@@ -140,6 +144,20 @@ export function closePaneRequest(
   if (!session || !window || !pane || windowPaneIds.length <= 1) return null;
   if (!windowPaneIds.includes(paneId)) return null;
   return { sessionId: session.id, windowId, paneId };
+}
+
+export function closePaneTarget(
+  session: SessionLike | null | undefined,
+  windowId: string,
+  paneId: string,
+): ClosePaneTargetLike | null {
+  const window = session?.windows[windowId];
+  const pane = session?.panes[paneId];
+  const windowPaneIds = paneIds(window?.layout);
+  if (!session || !window || !pane || !windowPaneIds.includes(paneId)) return null;
+  const ptyId = pane.currentPtyId ?? "";
+  if (windowPaneIds.length <= 1) return { kind: "session", sessionId: session.id, ptyId };
+  return { kind: "pane", request: { sessionId: session.id, windowId, paneId }, ptyId };
 }
 
 export function killPTYRequest(pane: PaneLike | null | undefined): KillPTYRequestLike | null {

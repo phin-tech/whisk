@@ -1,4 +1,17 @@
 import type { AgentBridgeEvent, AgentHookIntegration } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+import { firstPaneId } from "./sessionView";
+
+type SessionLike = {
+  id: string;
+  windows: { [_ in string]?: { id: string; layout: LayoutNodeLike } };
+  panes: { [_ in string]?: { id?: string; currentPtyId?: string | null } };
+};
+
+type LayoutNodeLike = {
+  kind: string;
+  paneId?: string;
+  children?: LayoutNodeLike[];
+};
 
 export function normalizeAgentHookIntegration(
   integration: AgentHookIntegration,
@@ -67,6 +80,20 @@ export function agentHookNotificationRows(events: AgentBridgeEvent[]) {
 
 export function isAgentHookNotification(event: AgentBridgeEvent) {
   return event.eventName === "Notification" || isAgentQuestion(event);
+}
+
+export function agentHookNotificationClickTarget(event: AgentBridgeEvent, sessions: SessionLike[]) {
+  const meta = whiskMetadata(event);
+  const sessionId = event.sessionId || meta.sessionId;
+  const ptyId = event.ptyId || meta.ptyId;
+  const session =
+    sessions.find((candidate) => candidate.id === sessionId) ??
+    sessions.find((candidate) => Object.values(candidate.panes).some((pane) => pane?.currentPtyId === ptyId));
+  if (!session) return { main: "session" as const, sessionId, paneId: "", readEventId: event.id };
+  const paneId =
+    Object.entries(session.panes).find(([, pane]) => pane?.currentPtyId === ptyId)?.[0] ??
+    firstPaneId(session);
+  return { main: "session" as const, sessionId: session.id, paneId, readEventId: event.id };
 }
 
 export function agentHookDebugDetailRows(event: AgentBridgeEvent) {

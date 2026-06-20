@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  closePaneTarget,
   closePaneRequest,
   isStalePTYError,
   killPTYRequest,
@@ -114,6 +115,20 @@ describe("closePaneRequest", () => {
       windowId: "win_01",
       paneId: "pane_01",
     });
+  });
+
+  it("targets session close for the last pane in a window", () => {
+    expect(
+      closePaneTarget(
+        {
+          id: "sess_02",
+          windows: { win_01: { id: "win_01", layout: { kind: "leaf", paneId: "pane_01" } } },
+          panes: { pane_01: { id: "pane_01", currentPtyId: "pty_01" } },
+        },
+        "win_01",
+        "pane_01",
+      ),
+    ).toEqual({ kind: "session", sessionId: "sess_02", ptyId: "pty_01" });
   });
 });
 

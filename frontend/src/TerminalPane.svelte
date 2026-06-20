@@ -137,6 +137,7 @@
   });
 
   $: if (terminal) replayOutputChunks(pane.currentPtyId ?? "", outputChunks);
+  $: if (focused && terminal) terminal.focus();
 </script>
 
 <div

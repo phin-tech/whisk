@@ -104,6 +104,7 @@
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
   import CommandPalette from "./CommandPalette.svelte";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
   import LayoutView from "./LayoutView.svelte";
   import NewProjectDialog from "./NewProjectDialog.svelte";
   import NewSessionDialog from "./NewSessionDialog.svelte";
@@ -112,7 +113,7 @@
   import SettingsView from "./SettingsView.svelte";
   import SidebarDock from "./SidebarDock.svelte";
   import WorkBoard from "./WorkBoard.svelte";
-  import { isAgentHookNotification, upsertAgentHookIntegration as upsertAgentHookIntegrationView } from "./agentHooksView";
+  import { agentHookNotificationClickTarget, isAgentHookNotification, upsertAgentHookIntegration as upsertAgentHookIntegrationView } from "./agentHooksView";
   import type { Command } from "./commands";
   import { runCommand } from "./commands";
   import { notificationSurfaceCount, targetForStatusEvent } from "./notificationsView";
@@ -124,7 +125,7 @@
     writePTYInputOverSocket,
   } from "./ptyStream";
   import { commandIdForShortcut, sessionSplitCommands } from "./sessionCommands";
-  import { activeWindow, closePaneRequest, firstPaneId, isStalePTYError, killPTYRequest, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
+  import { activeWindow, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
     normalizeStartupView,
     startupTarget,
@@ -182,6 +183,11 @@
   let startupView: StartupView = "sessions";
   let terminalFontSize = 13;
   let terminalCursorBlink = true;
+  let closePanePromptDisabled = false;
+  let closePaneDialogOpen = false;
+  let closeDialogTitle = "";
+  let closeDialogMessage = "";
+  let pendingClosePaneTarget: ReturnType<typeof closePaneTarget> = null;
   let keepDaemonAlive = true;
   let hookLogEnabled = true;
   let clearHookLogAfterSession = false;
@@ -253,7 +259,11 @@
     },
     ...sessionSplitCommands({
       canSplit: Boolean(activeSession && activePaneId),
+      canClose: Boolean(closePaneTarget(activeSession, activeSessionWindow?.id ?? "", activePaneId)),
+      canCloseSession: Boolean(activeSession),
       split,
+      close: () => closePane(activePaneId),
+      closeSession: closeActiveSession,
     }),
     // Session-switch commands mirror the native Sessions menu (Cmd 1..0). They are gated on the
     // session count so only reachable slots appear in the palette.
@@ -291,11 +301,15 @@
         railSide: RailSide;
         terminalFontSize: number;
         terminalCursorBlink: boolean;
+        closePanePromptDisabled: boolean;
       }>;
       if (parsed.railSide === "left" || parsed.railSide === "right") railSide = parsed.railSide;
       if (typeof parsed.terminalFontSize === "number") terminalFontSize = parsed.terminalFontSize;
       if (typeof parsed.terminalCursorBlink === "boolean") {
         terminalCursorBlink = parsed.terminalCursorBlink;
+      }
+      if (typeof parsed.closePanePromptDisabled === "boolean") {
+        closePanePromptDisabled = parsed.closePanePromptDisabled;
       }
     } catch {
       return;
@@ -326,7 +340,7 @@
     try {
       localStorage.setItem(
         SETTINGS_KEY,
-        JSON.stringify({ railSide, terminalFontSize, terminalCursorBlink }),
+        JSON.stringify({ railSide, terminalFontSize, terminalCursorBlink, closePanePromptDisabled }),
       );
     } catch {
       return;
@@ -1015,6 +1029,20 @@
     }
   }
 
+  async function selectAgentBridgeEvent(event: AgentBridgeEvent) {
+    const target = agentHookNotificationClickTarget(event, sessions);
+    activeMain = "session";
+    if (target.sessionId) activeSessionId = target.sessionId;
+    if (target.paneId) activePaneId = target.paneId;
+    try {
+      await MarkAgentBridgeEventRead({ id: target.readEventId });
+      await refreshStatusEvents();
+      await refreshVisibleOutput();
+    } catch (err) {
+      error = backendError(err);
+    }
+  }
+
   async function resolveAgentBridgeApproval(approvalId: string, action: "allow" | "deny") {
     error = "";
     loadingStatusEvents = true;
@@ -1457,12 +1485,16 @@
   }
 
   async function closeSession(session: Session) {
+    await closeSessionById(session.id);
+  }
+
+  async function closeSessionById(sessionId: string) {
     error = "";
     loadingSession = true;
     try {
-      sessions = await CloseSession({ sessionId: session.id });
+      sessions = await CloseSession({ sessionId });
       syncActiveProjectDetailSessions();
-      if (activeSessionId === session.id) {
+      if (activeSessionId === sessionId) {
         activeSessionId = sessions[0]?.id ?? "";
         activePaneId = firstPaneId(sessions[0]);
       }
@@ -1477,10 +1509,78 @@
   }
 
   async function closePane(paneId: string) {
-    const req = closePaneRequest(activeSession, activeSessionWindow?.id ?? "", paneId);
-    if (!req) return;
-    const ptyId = activeSession?.panes[paneId]?.currentPtyId;
-    if (ptyId && !window.confirm(`Close pane and kill PTY ${ptyId}?`)) return;
+    const target = closePaneTarget(activeSession, activeSessionWindow?.id ?? "", paneId);
+    if (!target) return;
+    const ptyId = target.ptyId;
+    if (ptyId && !closePanePromptDisabled) {
+      openCloseConfirmation(
+        target,
+        "Close Terminal?",
+        `The terminal still has a running process. If you close the terminal the process will be killed.\n\n${ptyId}`,
+      );
+      return;
+    }
+    await performClosePaneTarget(target);
+  }
+
+  async function closeActiveSession() {
+    if (!activeSession) return;
+    const ptyIds = Object.values(activeSession.panes)
+      .map((pane) => pane?.currentPtyId ?? "")
+      .filter((ptyId) => ptyId !== "");
+    const target = { kind: "session" as const, sessionId: activeSession.id, ptyId: ptyIds[0] ?? "" };
+    if (ptyIds.length > 0 && !closePanePromptDisabled) {
+      openCloseConfirmation(
+        target,
+        "Close Session?",
+        `The session has ${ptyIds.length} running terminal${ptyIds.length === 1 ? "" : "s"}. If you close the session ${ptyIds.length === 1 ? "the process" : "their processes"} will be killed.\n\n${ptyIds.slice(0, 3).join("\n")}${ptyIds.length > 3 ? `\n+${ptyIds.length - 3} more` : ""}`,
+      );
+      return;
+    }
+    await performClosePaneTarget(target);
+  }
+
+  function openCloseConfirmation(
+    target: NonNullable<ReturnType<typeof closePaneTarget>>,
+    title: string,
+    message: string,
+  ) {
+    pendingClosePaneTarget = target;
+    closeDialogTitle = title;
+    closeDialogMessage = message;
+    closePaneDialogOpen = true;
+  }
+
+  async function confirmClosePane(dontAskAgain: boolean) {
+    const target = pendingClosePaneTarget;
+    closePaneDialogOpen = false;
+    pendingClosePaneTarget = null;
+    closeDialogTitle = "";
+    closeDialogMessage = "";
+    if (!target) return;
+    if (dontAskAgain) {
+      closePanePromptDisabled = true;
+      saveSettings();
+    }
+    await performClosePaneTarget(target);
+  }
+
+  function cancelClosePane() {
+    closePaneDialogOpen = false;
+    pendingClosePaneTarget = null;
+    closeDialogTitle = "";
+    closeDialogMessage = "";
+  }
+
+  async function performClosePaneTarget(target: NonNullable<ReturnType<typeof closePaneTarget>>) {
+    if (target.kind === "session") {
+      await closeSessionById(target.sessionId);
+      return;
+    }
+    await performClosePane(target.request);
+  }
+
+  async function performClosePane(req: NonNullable<ReturnType<typeof closePaneRequest>>) {
     error = "";
     loadingSession = true;
     try {
@@ -1722,6 +1822,7 @@
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
+        onSelectAgentBridgeEvent={(event) => void selectAgentBridgeEvent(event)}
         onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
@@ -1822,7 +1923,7 @@
               onClose={(paneId) => void closePane(paneId)}
               onKillPTY={(paneId) => void killPanePTY(paneId)}
               canClose={(paneId) =>
-                Boolean(closePaneRequest(activeSession, activeSessionWindow?.id ?? "", paneId))}
+                Boolean(closePaneTarget(activeSession, activeSessionWindow?.id ?? "", paneId))}
             />
           {/if}
         {:else}
@@ -1865,6 +1966,17 @@
           loading={loadingWork}
           onclose={() => (newProjectOpen = false)}
           oncreate={createProject}
+        />
+
+        <ConfirmDialog
+          visible={closePaneDialogOpen}
+          title={closeDialogTitle}
+          message={closeDialogMessage}
+          cancelLabel="Cancel"
+          confirmLabel="Close"
+          checkboxLabel="Do not ask again"
+          oncancel={cancelClosePane}
+          onconfirm={(checked) => void confirmClosePane(checked)}
         />
 
         <SettingsView
@@ -1951,6 +2063,7 @@
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
+        onSelectAgentBridgeEvent={(event) => void selectAgentBridgeEvent(event)}
         onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
