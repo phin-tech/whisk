@@ -4349,11 +4349,20 @@
           "action": {
             "type": "string"
           },
+          "agent": {
+            "type": "string"
+          },
+          "answerable": {
+            "type": "boolean"
+          },
           "bridgeId": {
             "type": "string"
           },
           "createdAt": {
             "format": "date-time",
+            "type": "string"
+          },
+          "cwd": {
             "type": "string"
           },
           "elicitationId": {
@@ -4365,13 +4374,25 @@
           "id": {
             "type": "string"
           },
+          "kind": {
+            "type": "string"
+          },
           "message": {
             "type": "string"
           },
           "notificationType": {
             "type": "string"
           },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/AgentBridgeEventOption"
+            },
+            "type": "array"
+          },
           "provider": {
+            "type": "string"
+          },
+          "providerSessionId": {
             "type": "string"
           },
           "ptyId": {
@@ -4390,6 +4411,9 @@
           "status": {
             "type": "string"
           },
+          "title": {
+            "type": "string"
+          },
           "toolName": {
             "type": "string"
           }
@@ -4400,6 +4424,21 @@
           "eventName",
           "status",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "AgentBridgeEventOption": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value"
         ],
         "type": "object"
       },

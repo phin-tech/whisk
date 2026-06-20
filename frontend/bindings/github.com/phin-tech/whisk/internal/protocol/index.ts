@@ -7,6 +7,7 @@ export {
     AddWorkItemAttachmentRequest,
     AgentBridgeApproval,
     AgentBridgeEvent,
+    AgentBridgeEventOption,
     AgentBridgeHookDecision,
     AgentHookIntegration,
     AgentHookIntegrationRequest,

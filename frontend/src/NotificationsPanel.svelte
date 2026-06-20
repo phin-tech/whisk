@@ -11,7 +11,7 @@
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import type { AgentBridgeApproval, AgentBridgeEvent, StatusEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { agentHookNotificationRows } from "./agentHooksView";
-  import { notificationDetailRows, notificationRows } from "./notificationsView";
+  import { notificationClearEnabled, notificationDetailRows, notificationRows } from "./notificationsView";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
 
   export let sessions: Session[] = [];
@@ -30,6 +30,7 @@
   $: rows = notificationRows(statusEvents);
   $: hookRows = agentHookNotificationRows(agentBridgeEvents);
   $: hasRows = rows.length > 0 || agentBridgeApprovals.length > 0 || hookRows.length > 0;
+  $: canClear = notificationClearEnabled(statusEvents, agentBridgeEvents);
 
   function iconForTone(tone: string) {
     if (tone === "done") return CheckCircle2;
@@ -59,7 +60,7 @@
       <button
         type="button"
         class="inline-flex h-6 w-6 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-default disabled:opacity-60"
-        disabled={loading || rows.length === 0}
+        disabled={loading || !canClear}
         aria-label="Clear notifications"
         title="Clear notifications"
         on:click={onClearNotifications}

@@ -33,6 +33,7 @@ type AddProjectAttachmentRequest = protocol.AddProjectAttachmentRequest
 type AddWorkItemAttachmentRequest = protocol.AddWorkItemAttachmentRequest
 type AgentBridgeApproval = protocol.AgentBridgeApproval
 type AgentBridgeEvent = protocol.AgentBridgeEvent
+type AgentBridgeEventOption = protocol.AgentBridgeEventOption
 type AgentBridgeHookDecision = protocol.AgentBridgeHookDecision
 type AgentBridgeHookRequest = protocol.AgentBridgeHookRequest
 type AgentBridgeHookResponse = protocol.AgentBridgeHookResponse

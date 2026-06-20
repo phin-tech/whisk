@@ -70,6 +70,7 @@ describe("agent hook integration view state", () => {
         {
           id: "new",
           provider: "codex",
+          title: "Codex prompt",
           eventName: "Notification",
           message: "Task finished",
           sessionId: "sess_01",
@@ -82,7 +83,7 @@ describe("agent hook integration view state", () => {
       {
         id: "new",
         provider: "codex",
-        title: "Notification",
+        title: "Codex prompt",
         message: "Task finished",
         meta: "sess_01 / pty_01",
         createdAt: "2026-06-11T12:03:00Z",
@@ -131,6 +132,60 @@ describe("agent hook integration view state", () => {
         createdAt: "2026-06-11T12:03:00Z",
       },
     ]);
+  });
+
+  it("keeps Claude AskUserQuestion prompts in the notification surface", () => {
+    expect(
+      agentHookNotificationRows([
+        {
+          id: "question",
+          provider: "claude",
+          eventName: "PermissionRequest",
+          toolName: "AskUserQuestion",
+          status: "pending",
+          createdAt: "2026-06-20T12:12:51Z",
+          raw: {
+            tool_input: {
+              questions: [
+                {
+                  question: "What kind of project is Tavern Keeper?",
+                  options: [{ label: "Game" }, { label: "Web app" }],
+                },
+              ],
+            },
+          },
+        },
+      ]),
+    ).toEqual([
+      {
+        id: "question",
+        provider: "claude",
+        title: "Claude question",
+        message: "What kind of project is Tavern Keeper?",
+        meta: "unowned / no pty",
+        createdAt: "2026-06-20T12:12:51Z",
+      },
+    ]);
+  });
+
+  it("uses daemon-normalized hook metadata when available", () => {
+    expect(
+      agentHookDebugDetailRows({
+        id: "hook",
+        provider: "codex",
+        agent: "codex",
+        kind: "prompt",
+        title: "Codex prompt",
+        eventName: "UserPromptSubmit",
+        message: "Implement this.",
+        sessionId: "whisk_session_01",
+        providerSessionId: "codex_session_01",
+        ptyId: "pty_01",
+        cwd: "/repo",
+        status: "pending",
+        createdAt: "2026-06-11T12:04:00Z",
+      }),
+    ).toContainEqual({ label: "Provider session", value: "codex_session_01" });
   });
 
   it("builds debug hook event details including cwd from raw payload", () => {

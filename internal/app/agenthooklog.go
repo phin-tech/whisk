@@ -74,20 +74,32 @@ func (r *Runtime) appendAgentHookLog(event agentbridge.Event) error {
 	if err != nil {
 		return err
 	}
+	normalized := agentbridge.NormalizeEvent(event)
+	options := make([]agenthooklog.EntryOption, 0, len(normalized.Options))
+	for _, option := range normalized.Options {
+		options = append(options, agenthooklog.EntryOption{Label: option.Label, Value: option.Value})
+	}
 	return logger.Append(agenthooklog.Entry{
-		Timestamp:        event.CreatedAt,
-		Provider:         string(event.Provider),
-		EventName:        event.EventName,
-		BridgeID:         event.BridgeID,
-		SessionID:        event.SessionID,
-		PTYID:            event.PTYID,
-		ToolName:         event.ToolName,
-		Message:          event.Message,
-		NotificationType: event.NotificationType,
-		ElicitationID:    event.ElicitationID,
-		Action:           event.Action,
-		Result:           event.Result,
-		Raw:              event.Raw,
+		Timestamp:         event.CreatedAt,
+		Provider:          string(event.Provider),
+		EventName:         event.EventName,
+		Kind:              string(normalized.Kind),
+		Title:             normalized.Title,
+		BridgeID:          event.BridgeID,
+		SessionID:         normalized.SessionID,
+		ProviderSessionID: normalized.ProviderSessionID,
+		PTYID:             normalized.PTYID,
+		CWD:               normalized.CWD,
+		Agent:             normalized.Agent,
+		ToolName:          event.ToolName,
+		Message:           normalized.Message,
+		NotificationType:  event.NotificationType,
+		ElicitationID:     event.ElicitationID,
+		Action:            event.Action,
+		Result:            event.Result,
+		Options:           options,
+		Answerable:        normalized.Answerable,
+		Raw:               event.Raw,
 	})
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   notificationDetailRows,
   notificationBadgeCount,
+  notificationClearEnabled,
   notificationRows,
   notificationSurfaceCount,
   targetForStatusEvent,
@@ -39,10 +40,20 @@ describe("notificationsView", () => {
         [{ id: "approval" }],
         [
           { id: "task", eventName: "Notification" },
+          { id: "question", eventName: "PermissionRequest", toolName: "AskUserQuestion" },
           { id: "hook", eventName: "PostToolUse" },
         ],
       ),
-    ).toBe(3);
+    ).toBe(4);
+  });
+
+  it("enables clear when only hook question notifications are visible", () => {
+    expect(
+      notificationClearEnabled(
+        [],
+        [{ id: "question", eventName: "PermissionRequest", toolName: "AskUserQuestion" }],
+      ),
+    ).toBe(true);
   });
 
   it("formats rows with attention first and newest within each group", () => {

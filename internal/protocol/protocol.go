@@ -290,21 +290,33 @@ type AgentBridgeApproval struct {
 }
 
 type AgentBridgeEvent struct {
-	ID               string         `json:"id"`
-	BridgeID         string         `json:"bridgeId,omitempty"`
-	SessionID        string         `json:"sessionId,omitempty"`
-	PTYID            string         `json:"ptyId,omitempty"`
-	Provider         string         `json:"provider"`
-	EventName        string         `json:"eventName"`
-	ToolName         string         `json:"toolName,omitempty"`
-	Message          string         `json:"message,omitempty"`
-	NotificationType string         `json:"notificationType,omitempty"`
-	ElicitationID    string         `json:"elicitationId,omitempty"`
-	Action           string         `json:"action,omitempty"`
-	Result           string         `json:"result,omitempty"`
-	Status           string         `json:"status"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	Raw              map[string]any `json:"raw,omitempty"`
+	ID                string                   `json:"id"`
+	BridgeID          string                   `json:"bridgeId,omitempty"`
+	Kind              string                   `json:"kind,omitempty"`
+	Title             string                   `json:"title,omitempty"`
+	SessionID         string                   `json:"sessionId,omitempty"`
+	ProviderSessionID string                   `json:"providerSessionId,omitempty"`
+	PTYID             string                   `json:"ptyId,omitempty"`
+	CWD               string                   `json:"cwd,omitempty"`
+	Agent             string                   `json:"agent,omitempty"`
+	Provider          string                   `json:"provider"`
+	EventName         string                   `json:"eventName"`
+	ToolName          string                   `json:"toolName,omitempty"`
+	Message           string                   `json:"message,omitempty"`
+	NotificationType  string                   `json:"notificationType,omitempty"`
+	ElicitationID     string                   `json:"elicitationId,omitempty"`
+	Action            string                   `json:"action,omitempty"`
+	Result            string                   `json:"result,omitempty"`
+	Options           []AgentBridgeEventOption `json:"options,omitempty"`
+	Answerable        bool                     `json:"answerable,omitempty"`
+	Status            string                   `json:"status"`
+	CreatedAt         time.Time                `json:"createdAt"`
+	Raw               map[string]any           `json:"raw,omitempty"`
+}
+
+type AgentBridgeEventOption struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
 }
 
 type ListAgentBridgeEventsRequest struct {

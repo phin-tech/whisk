@@ -7,6 +7,7 @@ from .add_work_item_attachment_request import AddWorkItemAttachmentRequest
 from .agent_bridge_approval import AgentBridgeApproval
 from .agent_bridge_approval_tool_input import AgentBridgeApprovalToolInput
 from .agent_bridge_event import AgentBridgeEvent
+from .agent_bridge_event_option import AgentBridgeEventOption
 from .agent_bridge_event_raw import AgentBridgeEventRaw
 from .agent_bridge_hook_decision import AgentBridgeHookDecision
 from .agent_bridge_hook_request import AgentBridgeHookRequest
@@ -148,6 +149,7 @@ __all__ = (
     "AgentBridgeApproval",
     "AgentBridgeApprovalToolInput",
     "AgentBridgeEvent",
+    "AgentBridgeEventOption",
     "AgentBridgeEventRaw",
     "AgentBridgeHookDecision",
     "AgentBridgeHookRequest",

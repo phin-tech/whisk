@@ -10,6 +10,7 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
+    from ..models.agent_bridge_event_option import AgentBridgeEventOption
     from ..models.agent_bridge_event_raw import AgentBridgeEventRaw
 
 
@@ -26,14 +27,21 @@ class AgentBridgeEvent:
         provider (str):
         status (str):
         action (str | Unset):
+        agent (str | Unset):
+        answerable (bool | Unset):
         bridge_id (str | Unset):
+        cwd (str | Unset):
         elicitation_id (str | Unset):
+        kind (str | Unset):
         message (str | Unset):
         notification_type (str | Unset):
+        options (list[AgentBridgeEventOption] | Unset):
+        provider_session_id (str | Unset):
         pty_id (str | Unset):
         raw (AgentBridgeEventRaw | Unset):
         result (str | Unset):
         session_id (str | Unset):
+        title (str | Unset):
         tool_name (str | Unset):
     """
 
@@ -43,14 +51,21 @@ class AgentBridgeEvent:
     provider: str
     status: str
     action: str | Unset = UNSET
+    agent: str | Unset = UNSET
+    answerable: bool | Unset = UNSET
     bridge_id: str | Unset = UNSET
+    cwd: str | Unset = UNSET
     elicitation_id: str | Unset = UNSET
+    kind: str | Unset = UNSET
     message: str | Unset = UNSET
     notification_type: str | Unset = UNSET
+    options: list[AgentBridgeEventOption] | Unset = UNSET
+    provider_session_id: str | Unset = UNSET
     pty_id: str | Unset = UNSET
     raw: AgentBridgeEventRaw | Unset = UNSET
     result: str | Unset = UNSET
     session_id: str | Unset = UNSET
+    title: str | Unset = UNSET
     tool_name: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -67,13 +82,30 @@ class AgentBridgeEvent:
 
         action = self.action
 
+        agent = self.agent
+
+        answerable = self.answerable
+
         bridge_id = self.bridge_id
 
+        cwd = self.cwd
+
         elicitation_id = self.elicitation_id
+
+        kind = self.kind
 
         message = self.message
 
         notification_type = self.notification_type
+
+        options: list[dict[str, Any]] | Unset = UNSET
+        if not isinstance(self.options, Unset):
+            options = []
+            for options_item_data in self.options:
+                options_item = options_item_data.to_dict()
+                options.append(options_item)
+
+        provider_session_id = self.provider_session_id
 
         pty_id = self.pty_id
 
@@ -84,6 +116,8 @@ class AgentBridgeEvent:
         result = self.result
 
         session_id = self.session_id
+
+        title = self.title
 
         tool_name = self.tool_name
 
@@ -100,14 +134,26 @@ class AgentBridgeEvent:
         )
         if action is not UNSET:
             field_dict["action"] = action
+        if agent is not UNSET:
+            field_dict["agent"] = agent
+        if answerable is not UNSET:
+            field_dict["answerable"] = answerable
         if bridge_id is not UNSET:
             field_dict["bridgeId"] = bridge_id
+        if cwd is not UNSET:
+            field_dict["cwd"] = cwd
         if elicitation_id is not UNSET:
             field_dict["elicitationId"] = elicitation_id
+        if kind is not UNSET:
+            field_dict["kind"] = kind
         if message is not UNSET:
             field_dict["message"] = message
         if notification_type is not UNSET:
             field_dict["notificationType"] = notification_type
+        if options is not UNSET:
+            field_dict["options"] = options
+        if provider_session_id is not UNSET:
+            field_dict["providerSessionId"] = provider_session_id
         if pty_id is not UNSET:
             field_dict["ptyId"] = pty_id
         if raw is not UNSET:
@@ -116,6 +162,8 @@ class AgentBridgeEvent:
             field_dict["result"] = result
         if session_id is not UNSET:
             field_dict["sessionId"] = session_id
+        if title is not UNSET:
+            field_dict["title"] = title
         if tool_name is not UNSET:
             field_dict["toolName"] = tool_name
 
@@ -123,6 +171,7 @@ class AgentBridgeEvent:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.agent_bridge_event_option import AgentBridgeEventOption
         from ..models.agent_bridge_event_raw import AgentBridgeEventRaw
 
         d = dict(src_dict)
@@ -138,13 +187,32 @@ class AgentBridgeEvent:
 
         action = d.pop("action", UNSET)
 
+        agent = d.pop("agent", UNSET)
+
+        answerable = d.pop("answerable", UNSET)
+
         bridge_id = d.pop("bridgeId", UNSET)
 
+        cwd = d.pop("cwd", UNSET)
+
         elicitation_id = d.pop("elicitationId", UNSET)
+
+        kind = d.pop("kind", UNSET)
 
         message = d.pop("message", UNSET)
 
         notification_type = d.pop("notificationType", UNSET)
+
+        _options = d.pop("options", UNSET)
+        options: list[AgentBridgeEventOption] | Unset = UNSET
+        if _options is not UNSET:
+            options = []
+            for options_item_data in _options:
+                options_item = AgentBridgeEventOption.from_dict(options_item_data)
+
+                options.append(options_item)
+
+        provider_session_id = d.pop("providerSessionId", UNSET)
 
         pty_id = d.pop("ptyId", UNSET)
 
@@ -159,6 +227,8 @@ class AgentBridgeEvent:
 
         session_id = d.pop("sessionId", UNSET)
 
+        title = d.pop("title", UNSET)
+
         tool_name = d.pop("toolName", UNSET)
 
         agent_bridge_event = cls(
@@ -168,14 +238,21 @@ class AgentBridgeEvent:
             provider=provider,
             status=status,
             action=action,
+            agent=agent,
+            answerable=answerable,
             bridge_id=bridge_id,
+            cwd=cwd,
             elicitation_id=elicitation_id,
+            kind=kind,
             message=message,
             notification_type=notification_type,
+            options=options,
+            provider_session_id=provider_session_id,
             pty_id=pty_id,
             raw=raw,
             result=result,
             session_id=session_id,
+            title=title,
             tool_name=tool_name,
         )
 

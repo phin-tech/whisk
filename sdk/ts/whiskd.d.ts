@@ -1495,15 +1495,21 @@ export interface components {
         };
         AgentBridgeEvent: {
             action?: string;
+            agent?: string;
+            answerable?: boolean;
             bridgeId?: string;
             /** Format: date-time */
             createdAt: string;
+            cwd?: string;
             elicitationId?: string;
             eventName: string;
             id: string;
+            kind?: string;
             message?: string;
             notificationType?: string;
+            options?: components["schemas"]["AgentBridgeEventOption"][];
             provider: string;
+            providerSessionId?: string;
             ptyId?: string;
             raw?: {
                 [key: string]: unknown;
@@ -1511,7 +1517,12 @@ export interface components {
             result?: string;
             sessionId?: string;
             status: string;
+            title?: string;
             toolName?: string;
+        };
+        AgentBridgeEventOption: {
+            label: string;
+            value: string;
         };
         AgentBridgeHookDecision: {
             action?: string;

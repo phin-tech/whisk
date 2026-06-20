@@ -1,7 +1,9 @@
 package app_test
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -65,6 +67,56 @@ func TestRuntimeAgentHookLogSettings(t *testing.T) {
 	cleared, err := runtime.ClearAgentHookLog(ctx)
 	if err != nil || cleared.SizeBytes != 0 {
 		t.Fatalf("clear hook log = %#v, err = %v", cleared, err)
+	}
+}
+
+func TestRuntimeAgentHookLogWritesNormalizedQuestions(t *testing.T) {
+	tmp := t.TempDir()
+	logPath := filepath.Join(tmp, "agent-hooks", "hooks.jsonl")
+	logPaths := agenthooklog.Paths{ConfigRoot: tmp, LogPath: logPath}
+	runtime := app.NewRuntime(app.RuntimeConfig{AgentHookLogPaths: &logPaths})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	if _, err := runtime.RecordAgentHookEvent(context.Background(), app.AgentBridgeHookRequest{
+		Provider:  "claude",
+		EventName: "PermissionRequest",
+		ToolName:  "AskUserQuestion",
+		RawPayload: map[string]any{
+			"tool_input": map[string]any{
+				"questions": []any{
+					map[string]any{
+						"question": "What would you like to work on today?",
+						"options": []any{
+							map[string]any{"label": "Fix a bug"},
+							map[string]any{"label": "Build a feature"},
+						},
+					},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("record event: %v", err)
+	}
+
+	file, err := os.Open(logPath)
+	if err != nil {
+		t.Fatalf("open log: %v", err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	if !scanner.Scan() {
+		t.Fatalf("missing log line")
+	}
+	var line map[string]any
+	if err := json.Unmarshal(scanner.Bytes(), &line); err != nil {
+		t.Fatalf("parse log line: %v", err)
+	}
+	options, _ := line["options"].([]any)
+	if line["kind"] != "question" ||
+		line["title"] != "Claude question" ||
+		line["message"] != "What would you like to work on today?" ||
+		len(options) != 2 {
+		t.Fatalf("log line = %#v", line)
 	}
 }
 

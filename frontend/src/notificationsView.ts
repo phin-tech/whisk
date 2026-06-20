@@ -18,7 +18,9 @@ type StatusEventLike = {
 
 type AgentHookEventLike = {
   id?: string;
+  kind?: string;
   eventName?: string;
+  toolName?: string;
 };
 
 type LayoutNodeLike = {
@@ -44,7 +46,18 @@ export function notificationSurfaceCount(
   approvals: unknown[],
   agentHookEvents: AgentHookEventLike[],
 ) {
-  return notificationBadgeCount(events) + approvals.length + agentHookEvents.filter((event) => event.eventName === "Notification").length;
+  return notificationBadgeCount(events) + approvals.length + agentHookEvents.filter(isAgentHookNotification).length;
+}
+
+export function notificationClearEnabled(
+  events: StatusEventLike[],
+  agentHookEvents: AgentHookEventLike[],
+) {
+  return events.length > 0 || agentHookEvents.some(isAgentHookNotification);
+}
+
+function isAgentHookNotification(event: AgentHookEventLike) {
+  return event.eventName === "Notification" || event.kind === "question" || event.toolName === "AskUserQuestion";
 }
 
 export function notificationRows(events: StatusEventLike[]) {

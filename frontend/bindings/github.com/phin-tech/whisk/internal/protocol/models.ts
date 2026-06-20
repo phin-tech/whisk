@@ -184,8 +184,13 @@ export class AgentBridgeApproval {
 export class AgentBridgeEvent {
     "id": string;
     "bridgeId"?: string;
+    "kind"?: string;
+    "title"?: string;
     "sessionId"?: string;
+    "providerSessionId"?: string;
     "ptyId"?: string;
+    "cwd"?: string;
+    "agent"?: string;
     "provider": string;
     "eventName": string;
     "toolName"?: string;
@@ -194,6 +199,8 @@ export class AgentBridgeEvent {
     "elicitationId"?: string;
     "action"?: string;
     "result"?: string;
+    "options"?: AgentBridgeEventOption[];
+    "answerable"?: boolean;
     "status": string;
     "createdAt": time$0.Time;
     "raw"?: { [_ in string]?: any };
@@ -223,12 +230,41 @@ export class AgentBridgeEvent {
      * Creates a new AgentBridgeEvent instance from a string or object.
      */
     static createFrom($$source: any = {}): AgentBridgeEvent {
-        const $$createField14_0 = $$createType2;
+        const $$createField17_0 = $$createType5;
+        const $$createField21_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("options" in $$parsedSource) {
+            $$parsedSource["options"] = $$createField17_0($$parsedSource["options"]);
+        }
         if ("raw" in $$parsedSource) {
-            $$parsedSource["raw"] = $$createField14_0($$parsedSource["raw"]);
+            $$parsedSource["raw"] = $$createField21_0($$parsedSource["raw"]);
         }
         return new AgentBridgeEvent($$parsedSource as Partial<AgentBridgeEvent>);
+    }
+}
+
+export class AgentBridgeEventOption {
+    "label": string;
+    "value": string;
+
+    /** Creates a new AgentBridgeEventOption instance. */
+    constructor($$source: Partial<AgentBridgeEventOption> = {}) {
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("value" in $$source)) {
+            this["value"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AgentBridgeEventOption instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AgentBridgeEventOption {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AgentBridgeEventOption($$parsedSource as Partial<AgentBridgeEventOption>);
     }
 }
 
@@ -688,7 +724,7 @@ export class CreateProjectRequest {
      * Creates a new CreateProjectRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): CreateProjectRequest {
-        const $$createField5_0 = $$createType4;
+        const $$createField5_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("preferences" in $$parsedSource) {
             $$parsedSource["preferences"] = $$createField5_0($$parsedSource["preferences"]);
@@ -720,7 +756,7 @@ export class CreateSessionRequest {
      * Creates a new CreateSessionRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): CreateSessionRequest {
-        const $$createField4_0 = $$createType6;
+        const $$createField4_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("initialPty" in $$parsedSource) {
             $$parsedSource["initialPty"] = $$createField4_0($$parsedSource["initialPty"]);
@@ -813,7 +849,7 @@ export class CreatedSession {
      * Creates a new CreatedSession instance from a string or object.
      */
     static createFrom($$source: any = {}): CreatedSession {
-        const $$createField0_0 = $$createType7;
+        const $$createField0_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -952,7 +988,7 @@ export class DetachedPanePTY {
      * Creates a new DetachedPanePTY instance from a string or object.
      */
     static createFrom($$source: any = {}): DetachedPanePTY {
-        const $$createField0_0 = $$createType7;
+        const $$createField0_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -1279,7 +1315,7 @@ export class OnboardingApplyRequest {
      * Creates a new OnboardingApplyRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): OnboardingApplyRequest {
-        const $$createField0_0 = $$createType8;
+        const $$createField0_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("itemIds" in $$parsedSource) {
             $$parsedSource["itemIds"] = $$createField0_0($$parsedSource["itemIds"]);
@@ -1319,7 +1355,7 @@ export class OnboardingStatus {
      * Creates a new OnboardingStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): OnboardingStatus {
-        const $$createField0_0 = $$createType10;
+        const $$createField0_0 = $$createType12;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
@@ -1556,7 +1592,7 @@ export class PluginResolver {
      * Creates a new PluginResolver instance from a string or object.
      */
     static createFrom($$source: any = {}): PluginResolver {
-        const $$createField1_0 = $$createType8;
+        const $$createField1_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("kinds" in $$parsedSource) {
             $$parsedSource["kinds"] = $$createField1_0($$parsedSource["kinds"]);
@@ -1609,8 +1645,8 @@ export class PluginStatus {
      * Creates a new PluginStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): PluginStatus {
-        const $$createField9_0 = $$createType12;
-        const $$createField10_0 = $$createType14;
+        const $$createField9_0 = $$createType14;
+        const $$createField10_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("resolvers" in $$parsedSource) {
             $$parsedSource["resolvers"] = $$createField9_0($$parsedSource["resolvers"]);
@@ -1649,7 +1685,7 @@ export class PluginTemplateField {
      * Creates a new PluginTemplateField instance from a string or object.
      */
     static createFrom($$source: any = {}): PluginTemplateField {
-        const $$createField5_0 = $$createType8;
+        const $$createField5_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField5_0($$parsedSource["options"]);
@@ -1690,7 +1726,7 @@ export class ProjectAttachmentTemplate {
      * Creates a new ProjectAttachmentTemplate instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectAttachmentTemplate {
-        const $$createField4_0 = $$createType16;
+        const $$createField4_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("fields" in $$parsedSource) {
             $$parsedSource["fields"] = $$createField4_0($$parsedSource["fields"]);
@@ -1719,7 +1755,7 @@ export class ProjectContext {
      * Creates a new ProjectContext instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectContext {
-        const $$createField1_0 = $$createType18;
+        const $$createField1_0 = $$createType20;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField1_0($$parsedSource["items"]);
@@ -1792,10 +1828,10 @@ export class ProjectDetail {
      * Creates a new ProjectDetail instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectDetail {
-        const $$createField0_0 = $$createType19;
-        const $$createField1_0 = $$createType21;
-        const $$createField2_0 = $$createType22;
-        const $$createField3_0 = $$createType24;
+        const $$createField0_0 = $$createType21;
+        const $$createField1_0 = $$createType23;
+        const $$createField2_0 = $$createType24;
+        const $$createField3_0 = $$createType26;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("project" in $$parsedSource) {
             $$parsedSource["project"] = $$createField0_0($$parsedSource["project"]);
@@ -1990,9 +2026,9 @@ export class ReportStatusResponse {
      * Creates a new ReportStatusResponse instance from a string or object.
      */
     static createFrom($$source: any = {}): ReportStatusResponse {
-        const $$createField0_0 = $$createType25;
-        const $$createField1_0 = $$createType26;
-        const $$createField2_0 = $$createType27;
+        const $$createField0_0 = $$createType27;
+        const $$createField1_0 = $$createType28;
+        const $$createField2_0 = $$createType29;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("event" in $$parsedSource) {
             $$parsedSource["event"] = $$createField0_0($$parsedSource["event"]);
@@ -2082,7 +2118,7 @@ export class RestartPanePTYRequest {
      * Creates a new RestartPanePTYRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): RestartPanePTYRequest {
-        const $$createField2_0 = $$createType5;
+        const $$createField2_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField2_0($$parsedSource["options"]);
@@ -2115,7 +2151,7 @@ export class RestartedPanePTY {
      * Creates a new RestartedPanePTY instance from a string or object.
      */
     static createFrom($$source: any = {}): RestartedPanePTY {
-        const $$createField0_0 = $$createType7;
+        const $$createField0_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -2141,7 +2177,7 @@ export class RunPluginProjectAttachmentTemplateRequest {
      * Creates a new RunPluginProjectAttachmentTemplateRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): RunPluginProjectAttachmentTemplateRequest {
-        const $$createField1_0 = $$createType28;
+        const $$createField1_0 = $$createType30;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("values" in $$parsedSource) {
             $$parsedSource["values"] = $$createField1_0($$parsedSource["values"]);
@@ -2297,7 +2333,7 @@ export class SplitPaneRequest {
      * Creates a new SplitPaneRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): SplitPaneRequest {
-        const $$createField4_0 = $$createType6;
+        const $$createField4_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("initialPty" in $$parsedSource) {
             $$parsedSource["initialPty"] = $$createField4_0($$parsedSource["initialPty"]);
@@ -2328,7 +2364,7 @@ export class SplitPaneResult {
      * Creates a new SplitPaneResult instance from a string or object.
      */
     static createFrom($$source: any = {}): SplitPaneResult {
-        const $$createField0_0 = $$createType7;
+        const $$createField0_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -2440,9 +2476,9 @@ export class StartPTYOptions {
      * Creates a new StartPTYOptions instance from a string or object.
      */
     static createFrom($$source: any = {}): StartPTYOptions {
-        const $$createField3_0 = $$createType28;
-        const $$createField4_0 = $$createType8;
-        const $$createField6_0 = $$createType30;
+        const $$createField3_0 = $$createType30;
+        const $$createField4_0 = $$createType10;
+        const $$createField6_0 = $$createType32;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("env" in $$parsedSource) {
             $$parsedSource["env"] = $$createField3_0($$parsedSource["env"]);
@@ -2481,7 +2517,7 @@ export class StartPanePTYRequest {
      * Creates a new StartPanePTYRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): StartPanePTYRequest {
-        const $$createField2_0 = $$createType5;
+        const $$createField2_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField2_0($$parsedSource["options"]);
@@ -2570,7 +2606,7 @@ export class StartedHTTPForward {
      * Creates a new StartedHTTPForward instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedHTTPForward {
-        const $$createField2_0 = $$createType31;
+        const $$createField2_0 = $$createType33;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("forward" in $$parsedSource) {
             $$parsedSource["forward"] = $$createField2_0($$parsedSource["forward"]);
@@ -2599,7 +2635,7 @@ export class StartedPanePTY {
      * Creates a new StartedPanePTY instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedPanePTY {
-        const $$createField0_0 = $$createType7;
+        const $$createField0_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -2825,7 +2861,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType32;
+        const $$createField2_0 = $$createType34;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -2864,32 +2900,34 @@ const $$createType0 = workitem$0.MetadataValue.createFrom;
 const $$createType1 = $Create.Map($Create.Any, $$createType0);
 const $$createType2 = $Create.Map($Create.Any, $Create.Any);
 const $$createType3 = AgentBridgeHookDecision.createFrom;
-const $$createType4 = workitem$0.ProjectPreferences.createFrom;
-const $$createType5 = StartPTYOptions.createFrom;
-const $$createType6 = $Create.Nullable($$createType5);
-const $$createType7 = session$0.Session.createFrom;
-const $$createType8 = $Create.Array($Create.Any);
-const $$createType9 = onboarding$0.Item.createFrom;
-const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = PluginResolver.createFrom;
+const $$createType4 = AgentBridgeEventOption.createFrom;
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = workitem$0.ProjectPreferences.createFrom;
+const $$createType7 = StartPTYOptions.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);
+const $$createType9 = session$0.Session.createFrom;
+const $$createType10 = $Create.Array($Create.Any);
+const $$createType11 = onboarding$0.Item.createFrom;
 const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = ProjectAttachmentTemplate.createFrom;
+const $$createType13 = PluginResolver.createFrom;
 const $$createType14 = $Create.Array($$createType13);
-const $$createType15 = PluginTemplateField.createFrom;
+const $$createType15 = ProjectAttachmentTemplate.createFrom;
 const $$createType16 = $Create.Array($$createType15);
-const $$createType17 = ProjectContextItem.createFrom;
+const $$createType17 = PluginTemplateField.createFrom;
 const $$createType18 = $Create.Array($$createType17);
-const $$createType19 = workitem$0.Project.createFrom;
-const $$createType20 = workitem$0.WorkItem.createFrom;
-const $$createType21 = $Create.Array($$createType20);
-const $$createType22 = $Create.Array($$createType7);
-const $$createType23 = workitem$0.WorkItemRun.createFrom;
-const $$createType24 = $Create.Array($$createType23);
-const $$createType25 = workitem$0.StatusEvent.createFrom;
-const $$createType26 = $Create.Nullable($$createType23);
-const $$createType27 = $Create.Nullable($$createType20);
-const $$createType28 = $Create.Map($Create.Any, $Create.Any);
-const $$createType29 = StartPTYAgentBridgeOptions.createFrom;
-const $$createType30 = $Create.Nullable($$createType29);
-const $$createType31 = HTTPForward.createFrom;
-const $$createType32 = WorktrunkBinary.createFrom;
+const $$createType19 = ProjectContextItem.createFrom;
+const $$createType20 = $Create.Array($$createType19);
+const $$createType21 = workitem$0.Project.createFrom;
+const $$createType22 = workitem$0.WorkItem.createFrom;
+const $$createType23 = $Create.Array($$createType22);
+const $$createType24 = $Create.Array($$createType9);
+const $$createType25 = workitem$0.WorkItemRun.createFrom;
+const $$createType26 = $Create.Array($$createType25);
+const $$createType27 = workitem$0.StatusEvent.createFrom;
+const $$createType28 = $Create.Nullable($$createType25);
+const $$createType29 = $Create.Nullable($$createType22);
+const $$createType30 = $Create.Map($Create.Any, $Create.Any);
+const $$createType31 = StartPTYAgentBridgeOptions.createFrom;
+const $$createType32 = $Create.Nullable($$createType31);
+const $$createType33 = HTTPForward.createFrom;
+const $$createType34 = WorktrunkBinary.createFrom;

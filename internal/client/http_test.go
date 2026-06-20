@@ -392,6 +392,47 @@ func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 	}
 }
 
+func TestHTTPClientReturnsNormalizedAgentHookEventMetadata(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{EventSink: newFakeEventBus()})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	event, err := daemon.RecordAgentHookEvent(ctx, protocol.AgentBridgeHookRequest{
+		Provider:  "codex",
+		EventName: "UserPromptSubmit",
+		Message:   "Implement the feature.",
+		RawPayload: map[string]any{
+			"session_id": "codex_session_01",
+			"whisk": map[string]any{
+				"sessionId": "whisk_session_01",
+				"ptyId":     "pty_01",
+				"cwd":       "/repo",
+				"agent":     "codex",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("record agent hook event: %v", err)
+	}
+
+	if event.Kind != "prompt" ||
+		event.Title != "Codex prompt" ||
+		event.ProviderSessionID != "codex_session_01" ||
+		event.SessionID != "whisk_session_01" ||
+		event.PTYID != "pty_01" ||
+		event.CWD != "/repo" ||
+		event.Agent != "codex" ||
+		event.Answerable {
+		t.Fatalf("normalized agent hook event = %#v", event)
+	}
+}
+
 func TestHTTPClientAgentHookIntegrations(t *testing.T) {
 	paths := clientTestAgentHookPaths(t)
 	runtime := app.NewRuntime(app.RuntimeConfig{AgentHookPaths: &paths})

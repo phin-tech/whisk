@@ -408,22 +408,34 @@ func toProtocolAgentBridgeApproval(approval agentbridge.Approval) protocol.Agent
 }
 
 func toProtocolAgentBridgeEvent(event agentbridge.Event) protocol.AgentBridgeEvent {
+	normalized := agentbridge.NormalizeEvent(event)
+	options := make([]protocol.AgentBridgeEventOption, 0, len(normalized.Options))
+	for _, option := range normalized.Options {
+		options = append(options, protocol.AgentBridgeEventOption{Label: option.Label, Value: option.Value})
+	}
 	return protocol.AgentBridgeEvent{
-		ID:               event.ID,
-		BridgeID:         event.BridgeID,
-		SessionID:        event.SessionID,
-		PTYID:            event.PTYID,
-		Provider:         string(event.Provider),
-		EventName:        event.EventName,
-		ToolName:         event.ToolName,
-		Message:          event.Message,
-		NotificationType: event.NotificationType,
-		ElicitationID:    event.ElicitationID,
-		Action:           event.Action,
-		Result:           event.Result,
-		Status:           string(event.Status),
-		CreatedAt:        event.CreatedAt,
-		Raw:              event.Raw,
+		ID:                event.ID,
+		BridgeID:          event.BridgeID,
+		Kind:              string(normalized.Kind),
+		Title:             normalized.Title,
+		SessionID:         normalized.SessionID,
+		ProviderSessionID: normalized.ProviderSessionID,
+		PTYID:             normalized.PTYID,
+		CWD:               normalized.CWD,
+		Agent:             normalized.Agent,
+		Provider:          string(event.Provider),
+		EventName:         event.EventName,
+		ToolName:          event.ToolName,
+		Message:           event.Message,
+		NotificationType:  event.NotificationType,
+		ElicitationID:     event.ElicitationID,
+		Action:            event.Action,
+		Result:            event.Result,
+		Options:           options,
+		Answerable:        normalized.Answerable,
+		Status:            string(event.Status),
+		CreatedAt:         event.CreatedAt,
+		Raw:               event.Raw,
 	}
 }
 
