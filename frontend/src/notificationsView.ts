@@ -23,6 +23,11 @@ type AgentHookEventLike = {
   toolName?: string;
 };
 
+type AgentPromptLike = {
+  id?: string;
+  status?: string;
+};
+
 type LayoutNodeLike = {
   kind: string;
   paneId?: string;
@@ -43,10 +48,10 @@ export function notificationBadgeCount(events: StatusEventLike[]) {
 
 export function notificationSurfaceCount(
   events: StatusEventLike[],
-  approvals: unknown[],
+  prompts: AgentPromptLike[],
   agentHookEvents: AgentHookEventLike[],
 ) {
-  return notificationBadgeCount(events) + approvals.length + agentHookEvents.filter(isAgentHookNotification).length;
+  return notificationBadgeCount(events) + prompts.filter((prompt) => prompt.status === "pending").length + agentHookEvents.filter(isAgentHookNotification).length;
 }
 
 export function notificationClearEnabled(

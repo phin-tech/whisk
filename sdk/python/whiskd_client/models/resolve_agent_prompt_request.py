@@ -6,71 +6,43 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..types import UNSET, Unset
-
-T = TypeVar("T", bound="CompatibilityResponse")
+T = TypeVar("T", bound="ResolveAgentPromptRequest")
 
 
 @_attrs_define
-class CompatibilityResponse:
+class ResolveAgentPromptRequest:
     """
     Attributes:
-        api_version (int):
-        git_sha (str):
-        dirty (bool | Unset):
-        version (str | Unset):
+        answer (str):
     """
 
-    api_version: int
-    git_sha: str
-    dirty: bool | Unset = UNSET
-    version: str | Unset = UNSET
+    answer: str
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        api_version = self.api_version
-
-        git_sha = self.git_sha
-
-        dirty = self.dirty
-
-        version = self.version
+        answer = self.answer
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
-                "apiVersion": api_version,
-                "gitSha": git_sha,
+                "answer": answer,
             }
         )
-        if dirty is not UNSET:
-            field_dict["dirty"] = dirty
-        if version is not UNSET:
-            field_dict["version"] = version
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        api_version = d.pop("apiVersion")
+        answer = d.pop("answer")
 
-        git_sha = d.pop("gitSha")
-
-        dirty = d.pop("dirty", UNSET)
-
-        version = d.pop("version", UNSET)
-
-        compatibility_response = cls(
-            api_version=api_version,
-            git_sha=git_sha,
-            dirty=dirty,
-            version=version,
+        resolve_agent_prompt_request = cls(
+            answer=answer,
         )
 
-        compatibility_response.additional_properties = d
-        return compatibility_response
+        resolve_agent_prompt_request.additional_properties = d
+        return resolve_agent_prompt_request
 
     @property
     def additional_keys(self) -> list[str]:

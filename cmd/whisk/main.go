@@ -44,7 +44,7 @@ func defaultRunDeps() runDeps {
 
 func runWithDeps(args []string, deps runDeps) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|workflow|question|gate|status|agent-bridge|plugin|onboarding>")
+		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|workflow|question|prompt|gate|status|agent-bridge|plugin|onboarding>")
 	}
 	switch args[0] {
 	case "daemon":
@@ -63,6 +63,8 @@ func runWithDeps(args []string, deps runDeps) error {
 		return runWorkflow(args[1:])
 	case "question":
 		return runQuestion(args[1:])
+	case "prompt":
+		return runPrompt(args[1:])
 	case "gate":
 		return runGate(args[1:])
 	case "status":
@@ -74,7 +76,7 @@ func runWithDeps(args []string, deps runDeps) error {
 	case "onboarding":
 		return runOnboarding(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|workflow|question|gate|status|agent-bridge|plugin|onboarding>")
+		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|workflow|question|prompt|gate|status|agent-bridge|plugin|onboarding>")
 	}
 }
 

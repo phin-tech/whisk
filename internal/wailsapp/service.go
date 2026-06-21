@@ -138,6 +138,8 @@ type DaemonStatus struct {
 	// APIVersion and GitSHA come from the daemon's compatibility endpoint when it is reachable.
 	APIVersion int    `json:"apiVersion"`
 	GitSHA     string `json:"gitSha"`
+	Version    string `json:"version"`
+	Dirty      bool   `json:"dirty"`
 	// Error holds a human-readable reason when the daemon is unreachable or incompatible.
 	Error string `json:"error"`
 }
@@ -165,6 +167,8 @@ func (s *Service) daemonStatus(ctx context.Context, httpClient *client.HTTPClien
 	}
 	status.APIVersion = compat.APIVersion
 	status.GitSHA = compat.GitSHA
+	status.Version = compat.Version
+	status.Dirty = compat.Dirty
 	return status
 }
 
@@ -513,6 +517,14 @@ func (s *Service) ListAgentBridgeApprovals(ctx context.Context, req protocol.Lis
 
 func (s *Service) ResolveAgentBridgeApproval(ctx context.Context, id string, req protocol.ResolveAgentBridgeApprovalRequest) (protocol.AgentBridgeApproval, error) {
 	return s.client.ResolveAgentBridgeApproval(ctx, id, req)
+}
+
+func (s *Service) ListAgentPrompts(ctx context.Context, req protocol.ListAgentPromptsRequest) ([]protocol.AgentPrompt, error) {
+	return s.client.ListAgentPrompts(ctx, req)
+}
+
+func (s *Service) ResolveAgentPrompt(ctx context.Context, id string, req protocol.ResolveAgentPromptRequest) (protocol.AgentPrompt, error) {
+	return s.client.ResolveAgentPrompt(ctx, id, req)
 }
 
 func (s *Service) ListAgentBridgeEvents(ctx context.Context, req protocol.ListAgentBridgeEventsRequest) ([]protocol.AgentBridgeEvent, error) {

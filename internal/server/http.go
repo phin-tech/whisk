@@ -32,6 +32,8 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("POST /v1/agent-hook-events", server.recordAgentHookEvent)
 	mux.HandleFunc("GET /v1/agent-bridge-approvals", server.listAgentBridgeApprovals)
 	mux.HandleFunc("POST /v1/agent-bridge-approvals/{approvalID}/resolve", server.resolveAgentBridgeApproval)
+	mux.HandleFunc("GET /v1/agent-prompts", server.listAgentPrompts)
+	mux.HandleFunc("POST /v1/agent-prompts/{promptID}/resolve", server.resolveAgentPrompt)
 	mux.HandleFunc("GET /v1/agent-bridge-events", server.listAgentBridgeEvents)
 	mux.HandleFunc("POST /v1/agent-bridge-events/{eventID}/read", server.markAgentBridgeEventRead)
 	mux.HandleFunc("GET /v1/agent-hook-integrations", server.listAgentHookIntegrations)
@@ -262,6 +264,37 @@ func (s *HTTPServer) resolveAgentBridgeApproval(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, toProtocolAgentBridgeApproval(approval))
 }
 
+func (s *HTTPServer) listAgentPrompts(w http.ResponseWriter, r *http.Request) {
+	prompts, err := s.runtime.ListAgentPrompts(r.Context(), app.ListAgentPromptsRequest{
+		Status: r.URL.Query().Get("status"),
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	out := make([]protocol.AgentPrompt, 0, len(prompts))
+	for _, prompt := range prompts {
+		out = append(out, toProtocolAgentPrompt(prompt))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *HTTPServer) resolveAgentPrompt(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ResolveAgentPromptRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	prompt, err := s.runtime.ResolveAgentPrompt(r.Context(), app.ResolveAgentPromptRequest{
+		ID:     pathValue(r, "promptID", ""),
+		Answer: req.Answer,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toProtocolAgentPrompt(prompt))
+}
+
 func (s *HTTPServer) listAgentBridgeEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := s.runtime.ListAgentBridgeEvents(r.Context(), app.ListAgentBridgeEventsRequest{
 		Status: r.URL.Query().Get("status"),
@@ -436,6 +469,33 @@ func toProtocolAgentBridgeEvent(event agentbridge.Event) protocol.AgentBridgeEve
 		Status:            string(event.Status),
 		CreatedAt:         event.CreatedAt,
 		Raw:               event.Raw,
+	}
+}
+
+func toProtocolAgentPrompt(prompt agentbridge.Prompt) protocol.AgentPrompt {
+	options := make([]protocol.AgentBridgeEventOption, 0, len(prompt.Options))
+	for _, option := range prompt.Options {
+		options = append(options, protocol.AgentBridgeEventOption{Label: option.Label, Value: option.Value})
+	}
+	return protocol.AgentPrompt{
+		ID:            prompt.ID,
+		BridgeID:      prompt.BridgeID,
+		SessionID:     prompt.SessionID,
+		PTYID:         prompt.PTYID,
+		RunID:         prompt.RunID,
+		Provider:      string(prompt.Provider),
+		Kind:          string(prompt.Kind),
+		EventName:     prompt.EventName,
+		ToolName:      prompt.ToolName,
+		ToolInput:     prompt.ToolInput,
+		Message:       prompt.Message,
+		CWD:           prompt.CWD,
+		ElicitationID: prompt.ElicitationID,
+		Options:       options,
+		Status:        string(prompt.Status),
+		Answer:        prompt.Answer,
+		CreatedAt:     prompt.CreatedAt,
+		ResolvedAt:    prompt.ResolvedAt,
 	}
 }
 
@@ -722,9 +782,12 @@ func (s *HTTPServer) health(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *HTTPServer) compatibility(w http.ResponseWriter, _ *http.Request) {
+	build := buildinfo.Current()
 	writeJSON(w, http.StatusOK, protocol.CompatibilityResponse{
 		APIVersion: protocol.DaemonAPIVersion,
-		GitSHA:     buildinfo.GitSHA(),
+		GitSHA:     build.GitSHA,
+		Version:    build.Version,
+		Dirty:      build.Dirty,
 	})
 }
 

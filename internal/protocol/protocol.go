@@ -14,6 +14,8 @@ const DaemonAPIVersion = 19
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
 	GitSHA     string `json:"gitSha"`
+	Version    string `json:"version,omitempty"`
+	Dirty      bool   `json:"dirty,omitempty"`
 }
 
 type OnboardingItem = onboarding.Item
@@ -319,7 +321,32 @@ type AgentBridgeEventOption struct {
 	Value string `json:"value"`
 }
 
+type AgentPrompt struct {
+	ID            string                   `json:"id"`
+	BridgeID      string                   `json:"bridgeId,omitempty"`
+	SessionID     string                   `json:"sessionId,omitempty"`
+	PTYID         string                   `json:"ptyId,omitempty"`
+	RunID         string                   `json:"runId,omitempty"`
+	Provider      string                   `json:"provider"`
+	Kind          string                   `json:"kind"`
+	EventName     string                   `json:"eventName"`
+	ToolName      string                   `json:"toolName,omitempty"`
+	ToolInput     map[string]any           `json:"toolInput,omitempty"`
+	Message       string                   `json:"message"`
+	CWD           string                   `json:"cwd,omitempty"`
+	ElicitationID string                   `json:"elicitationId,omitempty"`
+	Options       []AgentBridgeEventOption `json:"options,omitempty"`
+	Status        string                   `json:"status"`
+	Answer        string                   `json:"answer,omitempty"`
+	CreatedAt     time.Time                `json:"createdAt"`
+	ResolvedAt    *time.Time               `json:"resolvedAt,omitempty"`
+}
+
 type ListAgentBridgeEventsRequest struct {
+	Status string `json:"status,omitempty"`
+}
+
+type ListAgentPromptsRequest struct {
 	Status string `json:"status,omitempty"`
 }
 
@@ -334,6 +361,10 @@ type ListAgentBridgeApprovalsRequest struct {
 type ResolveAgentBridgeApprovalRequest struct {
 	Action string `json:"action"`
 	Reason string `json:"reason,omitempty"`
+}
+
+type ResolveAgentPromptRequest struct {
+	Answer string `json:"answer"`
 }
 
 type AgentHookIntegration struct {

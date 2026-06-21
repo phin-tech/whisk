@@ -18,6 +18,8 @@ from .agent_bridge_hook_response_output import AgentBridgeHookResponseOutput
 from .agent_hook_integration import AgentHookIntegration
 from .agent_hook_integration_request import AgentHookIntegrationRequest
 from .agent_hook_log_status import AgentHookLogStatus
+from .agent_prompt import AgentPrompt
+from .agent_prompt_tool_input import AgentPromptToolInput
 from .answer_question_request import AnswerQuestionRequest
 from .approve_done_request import ApproveDoneRequest
 from .approve_plan_request import ApprovePlanRequest
@@ -93,6 +95,7 @@ from .report_status_request import ReportStatusRequest
 from .report_status_response import ReportStatusResponse
 from .resize_pty_request import ResizePTYRequest
 from .resolve_agent_bridge_approval_request import ResolveAgentBridgeApprovalRequest
+from .resolve_agent_prompt_request import ResolveAgentPromptRequest
 from .restart_pane_pty_request import RestartPanePTYRequest
 from .restarted_pane_pty import RestartedPanePTY
 from .run_event import RunEvent
@@ -160,6 +163,8 @@ __all__ = (
     "AgentHookIntegration",
     "AgentHookIntegrationRequest",
     "AgentHookLogStatus",
+    "AgentPrompt",
+    "AgentPromptToolInput",
     "AnswerQuestionRequest",
     "ApproveDoneRequest",
     "ApprovePlanRequest",
@@ -233,6 +238,7 @@ __all__ = (
     "ReportStatusResponse",
     "ResizePTYRequest",
     "ResolveAgentBridgeApprovalRequest",
+    "ResolveAgentPromptRequest",
     "RestartedPanePTY",
     "RestartPanePTYRequest",
     "RunEvent",

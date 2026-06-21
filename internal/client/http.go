@@ -100,6 +100,23 @@ func (c *HTTPClient) ResolveAgentBridgeApproval(ctx context.Context, id string, 
 	return approval, err
 }
 
+func (c *HTTPClient) ListAgentPrompts(ctx context.Context, req protocol.ListAgentPromptsRequest) ([]protocol.AgentPrompt, error) {
+	query := url.Values{}
+	if req.Status != "" {
+		query.Set("status", req.Status)
+	}
+	var prompts []protocol.AgentPrompt
+	err := c.get(ctx, "/v1/agent-prompts", query, &prompts)
+	return prompts, err
+}
+
+func (c *HTTPClient) ResolveAgentPrompt(ctx context.Context, id string, req protocol.ResolveAgentPromptRequest) (protocol.AgentPrompt, error) {
+	var prompt protocol.AgentPrompt
+	path := "/v1/agent-prompts/" + url.PathEscape(id) + "/resolve"
+	err := c.post(ctx, path, req, &prompt)
+	return prompt, err
+}
+
 func (c *HTTPClient) ListAgentBridgeEvents(ctx context.Context, req protocol.ListAgentBridgeEventsRequest) ([]protocol.AgentBridgeEvent, error) {
 	query := url.Values{}
 	if req.Status != "" {

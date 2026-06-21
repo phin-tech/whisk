@@ -120,6 +120,126 @@ func TestBridgeStateValidatesHookTokenAndTracksPendingQuestion(t *testing.T) {
 	}
 }
 
+func TestBridgeStateTracksPromptLifecycle(t *testing.T) {
+	now := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+	state, err := agentbridge.NewState(agentbridge.Bridge{
+		ID:        "bridge_01",
+		SessionID: "sess_01",
+		PTYID:     "pty_01",
+		Provider:  agentbridge.ProviderClaude,
+		TokenHash: agentbridge.HashHookToken("secret-token"),
+	})
+	if err != nil {
+		t.Fatalf("new state: %v", err)
+	}
+
+	pendingState, prompt, err := state.RecordPendingPrompt(agentbridge.RecordPendingPrompt{
+		ID:            "prompt_01",
+		BridgeID:      "bridge_01",
+		Kind:          agentbridge.PromptKindQuestion,
+		EventName:     "Elicitation",
+		Message:       "Pick one",
+		ElicitationID: "ask_01",
+		Options:       []agentbridge.PromptOption{{Label: "One", Value: "one"}},
+		Now:           now,
+	})
+	if err != nil {
+		t.Fatalf("record prompt: %v", err)
+	}
+	if prompt.Status != agentbridge.PromptPending ||
+		prompt.SessionID != "sess_01" ||
+		prompt.PTYID != "pty_01" ||
+		prompt.Message != "Pick one" ||
+		len(prompt.Options) != 1 {
+		t.Fatalf("prompt = %#v", prompt)
+	}
+
+	resolvedState, resolved, err := pendingState.ResolvePrompt(agentbridge.ResolvePrompt{
+		ID:     "prompt_01",
+		Answer: "one",
+		Now:    now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("resolve prompt: %v", err)
+	}
+	if resolved.Status != agentbridge.PromptResolved || resolved.Answer != "one" || resolved.ResolvedAt == nil {
+		t.Fatalf("resolved prompt = %#v", resolved)
+	}
+	if pending := resolvedState.ListPrompts(agentbridge.ListPrompts{Status: agentbridge.PromptPending}); len(pending) != 0 {
+		t.Fatalf("pending prompts = %#v", pending)
+	}
+	if _, _, err := resolvedState.ResolvePrompt(agentbridge.ResolvePrompt{ID: "prompt_01", Answer: "one"}); err == nil {
+		t.Fatalf("expected already resolved prompt error")
+	}
+}
+
+func TestResolvePromptRejectsUnknownOption(t *testing.T) {
+	state, err := agentbridge.NewState(agentbridge.Bridge{
+		ID:        "bridge_01",
+		SessionID: "sess_01",
+		PTYID:     "pty_01",
+		Provider:  agentbridge.ProviderClaude,
+		TokenHash: agentbridge.HashHookToken("secret-token"),
+	})
+	if err != nil {
+		t.Fatalf("new state: %v", err)
+	}
+	pendingState, _, err := state.RecordPendingPrompt(agentbridge.RecordPendingPrompt{
+		ID:        "prompt_01",
+		BridgeID:  "bridge_01",
+		Kind:      agentbridge.PromptKindQuestion,
+		EventName: "Elicitation",
+		Message:   "Pick one",
+		Options:   []agentbridge.PromptOption{{Label: "One", Value: "one"}},
+	})
+	if err != nil {
+		t.Fatalf("record prompt: %v", err)
+	}
+	if _, _, err := pendingState.ResolvePrompt(agentbridge.ResolvePrompt{ID: "prompt_01", Answer: "two"}); err == nil {
+		t.Fatalf("expected invalid option error")
+	}
+}
+
+func TestPromptAnswerToProviderOutput(t *testing.T) {
+	out, ok := agentbridge.PromptAnswerToProviderOutput(agentbridge.ProviderClaude, "Elicitation", "ask_01", "one")
+	if !ok {
+		t.Fatalf("expected elicitation answer output")
+	}
+	hookSpecific, ok := out["hookSpecificOutput"].(map[string]any)
+	if !ok {
+		t.Fatalf("output = %#v", out)
+	}
+	if hookSpecific["hookEventName"] != "Elicitation" ||
+		hookSpecific["elicitationId"] != "ask_01" ||
+		hookSpecific["decision"] != "one" {
+		t.Fatalf("hookSpecificOutput = %#v", hookSpecific)
+	}
+
+	out, ok = agentbridge.PromptAnswerToProviderOutput(agentbridge.ProviderClaude, "PreToolUse", "", "Uranus", map[string]any{
+		"questions": []any{
+			map[string]any{
+				"question": "Which planet rotates on its side?",
+				"options":  []any{map[string]any{"label": "Uranus"}},
+			},
+		},
+	})
+	if !ok {
+		t.Fatalf("expected AskUserQuestion output")
+	}
+	hookSpecific, ok = out["hookSpecificOutput"].(map[string]any)
+	if !ok || hookSpecific["hookEventName"] != "PreToolUse" || hookSpecific["permissionDecision"] != "allow" {
+		t.Fatalf("AskUserQuestion hookSpecificOutput = %#v", hookSpecific)
+	}
+	updatedInput, ok := hookSpecific["updatedInput"].(map[string]any)
+	if !ok {
+		t.Fatalf("updatedInput = %#v", hookSpecific["updatedInput"])
+	}
+	answers, ok := updatedInput["answers"].(map[string]any)
+	if !ok || answers["Which planet rotates on its side?"] != "Uranus" {
+		t.Fatalf("answers = %#v", updatedInput["answers"])
+	}
+}
+
 func TestBridgeStateTracksApprovalLifecycle(t *testing.T) {
 	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
 	state, err := agentbridge.NewState(agentbridge.Bridge{

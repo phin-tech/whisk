@@ -25,7 +25,7 @@ func daemonHealthCompatServer(t *testing.T, apiVersion int, withCompat bool) *ht
 	if withCompat {
 		mux.HandleFunc("/v1/compat", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprintf(w, `{"apiVersion":%d,"gitSha":"abc1234def"}`, apiVersion)
+			_, _ = fmt.Fprintf(w, `{"apiVersion":%d,"gitSha":"abc1234def","version":"dev","dirty":true}`, apiVersion)
 		})
 	}
 	srv := httptest.NewServer(mux)
@@ -77,6 +77,9 @@ func TestDaemonStatusReportsRunningDaemon(t *testing.T) {
 	}
 	if status.APIVersion != protocol.DaemonAPIVersion || status.GitSHA == "" {
 		t.Fatalf("compat fields not populated: %#v", status)
+	}
+	if status.Version != "dev" || !status.Dirty {
+		t.Fatalf("build fields not populated: %#v", status)
 	}
 	if status.Address != srv.URL || status.Error != "" {
 		t.Fatalf("status = %#v", status)

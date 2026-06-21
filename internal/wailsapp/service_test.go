@@ -579,6 +579,7 @@ type runtimeClientFake struct {
 	runs               []protocol.WorkItemRun
 	httpForwards       []protocol.HTTPForward
 	agentApprovals     []protocol.AgentBridgeApproval
+	agentPrompts       []protocol.AgentPrompt
 	agentEvents        []protocol.AgentBridgeEvent
 	agentIntegrations  []protocol.AgentHookIntegration
 	agentHookLog       protocol.AgentHookLogStatus
@@ -635,10 +636,13 @@ type runtimeClientFake struct {
 	agentBridgeHookReq         protocol.AgentBridgeHookRequest
 	recordAgentHookReq         protocol.AgentBridgeHookRequest
 	listAgentApprovalsReq      protocol.ListAgentBridgeApprovalsRequest
+	listAgentPromptsReq        protocol.ListAgentPromptsRequest
 	listAgentEventsReq         protocol.ListAgentBridgeEventsRequest
 	markAgentEventReadReq      protocol.MarkAgentBridgeEventReadRequest
 	resolveAgentApprovalID     string
 	resolveAgentApprovalReq    protocol.ResolveAgentBridgeApprovalRequest
+	resolveAgentPromptID       string
+	resolveAgentPromptReq      protocol.ResolveAgentPromptRequest
 	checkAgentHookReq          protocol.AgentHookIntegrationRequest
 	installAgentHookReq        protocol.AgentHookIntegrationRequest
 	removeAgentHookReq         protocol.AgentHookIntegrationRequest
@@ -1016,6 +1020,17 @@ func (f *runtimeClientFake) ResolveAgentBridgeApproval(_ context.Context, id str
 	f.resolveAgentApprovalID = id
 	f.resolveAgentApprovalReq = req
 	return protocol.AgentBridgeApproval{ID: id, Status: "resolved", Decision: protocol.AgentBridgeHookDecision{Action: req.Action, Reason: req.Reason}}, nil
+}
+
+func (f *runtimeClientFake) ListAgentPrompts(_ context.Context, req protocol.ListAgentPromptsRequest) ([]protocol.AgentPrompt, error) {
+	f.listAgentPromptsReq = req
+	return f.agentPrompts, nil
+}
+
+func (f *runtimeClientFake) ResolveAgentPrompt(_ context.Context, id string, req protocol.ResolveAgentPromptRequest) (protocol.AgentPrompt, error) {
+	f.resolveAgentPromptID = id
+	f.resolveAgentPromptReq = req
+	return protocol.AgentPrompt{ID: id, Status: "resolved", Answer: req.Answer}, nil
 }
 
 func (f *runtimeClientFake) ListAgentBridgeEvents(_ context.Context, req protocol.ListAgentBridgeEventsRequest) ([]protocol.AgentBridgeEvent, error) {

@@ -66,8 +66,46 @@ func TestNormalizeEventMapsClaudeQuestionOptions(t *testing.T) {
 	}
 }
 
+func TestClaudeElicitationFixtureNormalizesToAnswerablePrompt(t *testing.T) {
+	event := agentbridge.Event{
+		Provider:      agentbridge.ProviderClaude,
+		EventName:     "Elicitation",
+		ElicitationID: "ask_01",
+		Raw: map[string]any{
+			"tool_input": map[string]any{
+				"questions": []any{
+					map[string]any{
+						"question": "Pick a route",
+						"options": []any{
+							map[string]any{"label": "Fast", "value": "fast"},
+							map[string]any{"label": "Safe", "value": "safe"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	normalized := agentbridge.NormalizeEvent(event)
+	if normalized.Kind != agentbridge.EventKindQuestion ||
+		!normalized.Answerable ||
+		normalized.Message != "Pick a route" ||
+		len(normalized.Options) != 2 ||
+		normalized.Options[1].Value != "safe" {
+		t.Fatalf("normalized elicitation = %#v", normalized)
+	}
+	out, ok := agentbridge.PromptAnswerToProviderOutput(agentbridge.ProviderClaude, "Elicitation", "ask_01", "safe")
+	if !ok {
+		t.Fatalf("expected provider output")
+	}
+	hookSpecific, ok := out["hookSpecificOutput"].(map[string]any)
+	if !ok || hookSpecific["decision"] != "safe" || hookSpecific["elicitationId"] != "ask_01" {
+		t.Fatalf("provider output = %#v", out)
+	}
+}
+
 func TestNormalizeEventMapsClaudeAskUserQuestionToolInput(t *testing.T) {
-	normalized := agentbridge.NormalizeEvent(agentbridge.Event{
+	event := agentbridge.Event{
 		Provider:  agentbridge.ProviderClaude,
 		EventName: "PermissionRequest",
 		ToolName:  "AskUserQuestion",
@@ -84,7 +122,8 @@ func TestNormalizeEventMapsClaudeAskUserQuestionToolInput(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	normalized := agentbridge.NormalizeEvent(event)
 
 	if normalized.Kind != agentbridge.EventKindQuestion ||
 		normalized.Title != "Claude question" ||
@@ -96,5 +135,11 @@ func TestNormalizeEventMapsClaudeAskUserQuestionToolInput(t *testing.T) {
 		normalized.Options[1].Value != "Build a feature" ||
 		normalized.Answerable {
 		t.Fatalf("normalized AskUserQuestion = %#v", normalized)
+	}
+
+	event.EventName = "PreToolUse"
+	normalized = agentbridge.NormalizeEvent(event)
+	if !normalized.Answerable {
+		t.Fatalf("PreToolUse AskUserQuestion should be answerable: %#v", normalized)
 	}
 }

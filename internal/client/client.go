@@ -15,6 +15,8 @@ type RuntimeClient interface {
 	RecordAgentHookEvent(ctx context.Context, req protocol.AgentBridgeHookRequest) (protocol.AgentBridgeEvent, error)
 	ListAgentBridgeApprovals(ctx context.Context, req protocol.ListAgentBridgeApprovalsRequest) ([]protocol.AgentBridgeApproval, error)
 	ResolveAgentBridgeApproval(ctx context.Context, id string, req protocol.ResolveAgentBridgeApprovalRequest) (protocol.AgentBridgeApproval, error)
+	ListAgentPrompts(ctx context.Context, req protocol.ListAgentPromptsRequest) ([]protocol.AgentPrompt, error)
+	ResolveAgentPrompt(ctx context.Context, id string, req protocol.ResolveAgentPromptRequest) (protocol.AgentPrompt, error)
 	ListAgentBridgeEvents(ctx context.Context, req protocol.ListAgentBridgeEventsRequest) ([]protocol.AgentBridgeEvent, error)
 	MarkAgentBridgeEventRead(ctx context.Context, req protocol.MarkAgentBridgeEventReadRequest) (protocol.AgentBridgeEvent, error)
 	ListAgentHookIntegrations(ctx context.Context) ([]protocol.AgentHookIntegration, error)

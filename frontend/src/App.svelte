@@ -5,6 +5,7 @@
   import type {
     AgentBridgeApproval,
     AgentBridgeEvent,
+    AgentPrompt,
     AgentHookIntegration,
     AgentHookLogStatus,
     Project,
@@ -55,6 +56,7 @@
     KillPTY,
     ListAgentBridgeApprovals,
     ListAgentBridgeEvents,
+    ListAgentPrompts,
     ListAgentHookIntegrations,
     ListArtifacts,
     ListGateReports,
@@ -83,6 +85,7 @@
     RemoveAgentHookIntegration,
     RescanPlugins,
     ResolveAgentBridgeApproval,
+    ResolveAgentPrompt,
     ReadPTYHistory,
     RunPluginProjectAttachmentTemplate,
     SaveAppSettings,
@@ -152,6 +155,7 @@
   let workflowEvents: WorkflowEvent[] = [];
   let statusEvents: StatusEvent[] = [];
   let agentBridgeApprovals: AgentBridgeApproval[] = [];
+  let agentPrompts: AgentPrompt[] = [];
   let agentBridgeEvents: AgentBridgeEvent[] = [];
   let plugins: PluginStatus[] = [];
   let registryPlugins: RegistryPlugin[] = [];
@@ -215,7 +219,7 @@
   $: activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   $: activeSessionWindow = activeWindow(activeSession, activePaneId);
   $: visiblePTYIds = visiblePtyIds(sessions, activeSessionId, activePaneId);
-  $: notificationCount = notificationSurfaceCount(statusEvents, agentBridgeApprovals, agentBridgeEvents);
+  $: notificationCount = notificationSurfaceCount(statusEvents, agentPrompts, agentBridgeEvents);
   $: projectAttachmentTemplates = plugins.flatMap((plugin) =>
     plugin.trusted && plugin.valid
       ? (plugin.projectAttachmentTemplates ?? []).map((template) => ({ ...template, pluginId: plugin.id }))
@@ -496,13 +500,14 @@
   async function refreshStatusEvents() {
     loadingStatusEvents = true;
     try {
-      const [nextStatusEvents, nextApprovals, nextBridgeEvents] = await Promise.all([
+      const [nextStatusEvents, nextPrompts, nextBridgeEvents] = await Promise.all([
         ListStatusEvents({ unreadOnly: true }),
-        ListAgentBridgeApprovals({ status: "pending" }),
+        ListAgentPrompts({ status: "pending" }),
         ListAgentBridgeEvents({ status: "pending" }),
       ]);
       statusEvents = nextStatusEvents;
-      agentBridgeApprovals = nextApprovals;
+      agentPrompts = nextPrompts;
+      agentBridgeApprovals = [];
       agentBridgeEvents = nextBridgeEvents;
     } finally {
       loadingStatusEvents = false;
@@ -1043,6 +1048,20 @@
     }
   }
 
+  function paneIdForPty(session: Session | undefined, ptyId: string) {
+    if (!session || !ptyId) return "";
+    return Object.entries(session.panes).find(([, pane]) => pane?.currentPtyId === ptyId)?.[0] ?? "";
+  }
+
+  async function selectAgentPrompt(prompt: AgentPrompt) {
+    activeMain = "session";
+    if (prompt.sessionId) activeSessionId = prompt.sessionId;
+    const session = sessions.find((candidate) => candidate.id === prompt.sessionId);
+    const paneId = paneIdForPty(session, prompt.ptyId || "");
+    if (paneId) activePaneId = paneId;
+    await refreshVisibleOutput();
+  }
+
   async function resolveAgentBridgeApproval(approvalId: string, action: "allow" | "deny") {
     error = "";
     loadingStatusEvents = true;
@@ -1051,6 +1070,19 @@
       await refreshStatusEvents();
     } catch (err) {
       error = `Resolve approval failed: ${backendError(err)}`;
+    } finally {
+      loadingStatusEvents = false;
+    }
+  }
+
+  async function resolveAgentPrompt(promptId: string, answer: string) {
+    error = "";
+    loadingStatusEvents = true;
+    try {
+      await ResolveAgentPrompt(promptId, { answer });
+      await refreshStatusEvents();
+    } catch (err) {
+      error = `Resolve prompt failed: ${backendError(err)}`;
     } finally {
       loadingStatusEvents = false;
     }
@@ -1796,9 +1828,10 @@
         {selectedPTYHistory}
         {projects}
         {workItems}
-          {statusEvents}
-          {agentBridgeApprovals}
-          {agentBridgeEvents}
+        {statusEvents}
+        {agentBridgeApprovals}
+        {agentPrompts}
+        {agentBridgeEvents}
         {activeSessionId}
         {activeProjectId}
         bind:workFilterQuery
@@ -1822,8 +1855,10 @@
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
+        onSelectAgentPrompt={(prompt) => void selectAgentPrompt(prompt)}
         onSelectAgentBridgeEvent={(event) => void selectAgentBridgeEvent(event)}
         onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
+        onResolveAgentPrompt={(id, answer) => void resolveAgentPrompt(id, answer)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
         onSelectProject={activeSidebar === "projects" ? selectProjectDetail : selectProject}
@@ -2039,6 +2074,7 @@
         {workItems}
         {statusEvents}
         {agentBridgeApprovals}
+        {agentPrompts}
         {agentBridgeEvents}
         {activeSessionId}
         {activeProjectId}
@@ -2063,8 +2099,10 @@
         onRefreshStatusEvents={() => void refreshStatusEvents()}
         onClearNotifications={() => void executeCommand("notifications.clear")}
         onSelectStatusEvent={(event) => void selectStatusEvent(event)}
+        onSelectAgentPrompt={(prompt) => void selectAgentPrompt(prompt)}
         onSelectAgentBridgeEvent={(event) => void selectAgentBridgeEvent(event)}
         onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
+        onResolveAgentPrompt={(id, answer) => void resolveAgentPrompt(id, answer)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
         onSelectProject={activeSidebar === "projects" ? selectProjectDetail : selectProject}

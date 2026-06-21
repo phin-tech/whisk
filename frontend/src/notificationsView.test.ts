@@ -37,7 +37,7 @@ describe("notificationsView", () => {
     expect(
       notificationSurfaceCount(
         [{ id: "question", kind: "question", requiresAttention: true }],
-        [{ id: "approval" }],
+        [{ id: "approval", status: "pending" }],
         [
           { id: "task", eventName: "Notification" },
           { id: "question", eventName: "PermissionRequest", toolName: "AskUserQuestion" },

@@ -62,8 +62,7 @@ func runAgentBridgeHook(args []string, stdin io.Reader, stdout io.Writer) error 
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx := context.Background()
 	response, err := daemon.AgentBridgeHook(ctx, *bridgeID, req)
 	if err != nil {
 		return nil

@@ -9,7 +9,7 @@
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import X from "@lucide/svelte/icons/x";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import type { AgentBridgeApproval, AgentBridgeEvent, StatusEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { AgentBridgeApproval, AgentBridgeEvent, AgentPrompt, StatusEvent } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { agentHookNotificationRows } from "./agentHooksView";
   import { notificationClearEnabled, notificationDetailRows, notificationRows } from "./notificationsView";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
@@ -17,20 +17,23 @@
   export let sessions: Session[] = [];
   export let statusEvents: StatusEvent[] = [];
   export let agentBridgeApprovals: AgentBridgeApproval[] = [];
+  export let agentPrompts: AgentPrompt[] = [];
   export let agentBridgeEvents: AgentBridgeEvent[] = [];
   export let loading = false;
   export let onclose: () => void;
   export let onRefresh: () => void;
   export let onClearNotifications: () => void;
   export let onSelectStatusEvent: (event: StatusEvent) => void;
+  export let onSelectAgentPrompt: (prompt: AgentPrompt) => void;
   export let onSelectAgentBridgeEvent: (event: AgentBridgeEvent) => void;
   export let onResolveAgentBridgeApproval: (id: string, action: "allow" | "deny") => void;
+  export let onResolveAgentPrompt: (id: string, answer: string) => void;
 
   let expandedIds = new Set<string>();
 
   $: rows = notificationRows(statusEvents);
   $: hookRows = agentHookNotificationRows(agentBridgeEvents, sessions);
-  $: hasRows = rows.length > 0 || agentBridgeApprovals.length > 0 || hookRows.length > 0;
+  $: hasRows = rows.length > 0 || agentPrompts.length > 0 || agentBridgeApprovals.length > 0 || hookRows.length > 0;
   $: canClear = notificationClearEnabled(statusEvents, agentBridgeEvents);
 
   function iconForTone(tone: string) {
@@ -88,6 +91,63 @@
       </div>
     {:else}
       <div class="space-y-1">
+        {#each agentPrompts as prompt (prompt.id)}
+          <div
+            class="rounded border border-accent-dim/50 bg-accent-dim/10 px-2.5 py-2 text-text-primary"
+          >
+            <div class="flex min-w-0 items-start gap-2">
+              {#if prompt.kind === "approval"}
+                <ShieldQuestion size={14} class="mt-0.5 shrink-0 text-accent" />
+              {:else}
+                <CircleHelp size={14} class="mt-0.5 shrink-0 text-accent" />
+              {/if}
+              <div class="min-w-0 flex-1">
+                <button
+                  type="button"
+                  class="w-full min-w-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+                  on:click={() => onSelectAgentPrompt(prompt)}
+                >
+                  <div class="flex min-w-0 items-center justify-between gap-2">
+                    <div class="truncate text-[12px] font-semibold">
+                      {prompt.kind === "approval" ? "Agent approval" : "Agent question"}
+                    </div>
+                    <div class="max-w-[72px] shrink-0 truncate rounded border border-border-subtle px-1.5 py-0.5 text-[10px] uppercase text-text-muted">
+                      {prompt.provider || "unknown"}
+                    </div>
+                  </div>
+                  <div class="mt-1 line-clamp-3 text-[12px] leading-4 text-text-secondary">
+                    {prompt.message}
+                  </div>
+                  <div class="mt-1 min-w-0 break-all font-mono text-[10px] leading-4 text-text-muted">
+                    {prompt.cwd || `${prompt.sessionId || "unowned"} / ${prompt.ptyId || "no pty"}`}
+                  </div>
+                </button>
+                <div class="mt-2 grid grid-cols-2 gap-1">
+                  {#each prompt.options || [] as option}
+                    <button
+                      type="button"
+                      class="inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded border text-[12px] font-semibold text-text-primary transition-colors disabled:cursor-default disabled:opacity-60 {option.value ===
+                      'allow'
+                        ? 'border-green/30 bg-green/10 hover:border-green/60 hover:bg-green/15'
+                        : option.value === 'deny'
+                          ? 'border-red/30 bg-red/10 hover:border-red/60 hover:bg-red/15'
+                          : 'border-accent-dim/50 bg-accent-dim/15 hover:border-accent hover:bg-accent-dim/20'}"
+                      disabled={loading}
+                      on:click|stopPropagation={() => onResolveAgentPrompt(prompt.id, option.value)}
+                    >
+                      {#if option.value === "allow"}
+                        <CheckCircle2 size={13} />
+                      {:else if option.value === "deny"}
+                        <Ban size={13} />
+                      {/if}
+                      <span class="truncate">{option.label}</span>
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            </div>
+          </div>
+        {/each}
         {#each agentBridgeApprovals as approval (approval.id)}
           <div
             class="rounded border border-accent-dim/50 bg-accent-dim/10 px-2.5 py-2 text-text-primary"

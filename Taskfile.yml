@@ -15,6 +15,13 @@ vars:
   DEV_DAEMON_ADDR: '{{.WHISKD_DEV_ADDR | default "127.0.0.1:8877"}}'
   PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
   VITE_PORT: "{{.WAILS_VITE_PORT | default 9245}}"
+  APP_VERSION:
+    sh: scripts/current-version.sh
+  GIT_SHA:
+    sh: git rev-parse HEAD 2>/dev/null || echo unknown
+  GIT_DIRTY:
+    sh: test -n "$(git status --porcelain)" && echo true || echo false
+  BUILDINFO_LDFLAGS: "-X github.com/phin-tech/whisk/internal/buildinfo.version={{.APP_VERSION}} -X github.com/phin-tech/whisk/internal/buildinfo.gitSHA={{.GIT_SHA}} -X github.com/phin-tech/whisk/internal/buildinfo.dirty={{.GIT_DIRTY}}"
 
 includes:
   common: ./build/Taskfile.yml
@@ -154,14 +161,14 @@ tasks:
     summary: Builds the whisk daemon-mode executable
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - go build -o {{.BIN_DIR}}/whisk ./cmd/whisk
+      - go build -ldflags="{{.BUILDINFO_LDFLAGS}}" -o {{.BIN_DIR}}/whisk ./cmd/whisk
 
   build:cli:
     desc: Builds the whisk CLI
     summary: Builds the whisk CLI
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - go build -o {{.BIN_DIR}}/whisk ./cmd/whisk
+      - go build -ldflags="{{.BUILDINFO_LDFLAGS}}" -o {{.BIN_DIR}}/whisk ./cmd/whisk
 
   smoke:agent:
     desc: Runs an isolated CLI smoke test that launches a prompt-capture agent PTY

@@ -136,7 +136,7 @@ func TestBuildDaemonTaskBuildsWhiskDaemonMode(t *testing.T) {
 	}
 	block := taskBlock(string(taskfile), "build:daemon")
 
-	requireTaskLine(t, block, "go build -o {{.BIN_DIR}}/whisk ./cmd/whisk")
+	requireTaskLine(t, block, "go build -ldflags=\"{{.BUILDINFO_LDFLAGS}}\" -o {{.BIN_DIR}}/whisk ./cmd/whisk")
 	requireTaskLineAbsent(t, block, "./cmd/whiskd")
 	requireTaskLineAbsent(t, block, "{{.BIN_DIR}}/whiskd")
 }

@@ -141,7 +141,7 @@ tasks:
     internal: true
     cmds:
       - mkdir -p "{{.BIN_DIR}}"
-      - go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o "{{.BIN_DIR}}/whisk" ./cmd/whisk
+      - go build -tags production -trimpath -buildvcs=false -ldflags="-w -s {{.BUILDINFO_LDFLAGS}}" -o "{{.BIN_DIR}}/whisk" ./cmd/whisk
     env:
       GOOS: darwin
       CGO_ENABLED: 1

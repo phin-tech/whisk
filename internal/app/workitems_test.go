@@ -344,6 +344,135 @@ func TestRuntimeAgentBridgeHookWaitsForApprovalResolution(t *testing.T) {
 	}
 }
 
+func TestRuntimeAgentBridgeHookWaitsForPromptResolution(t *testing.T) {
+	runtime, bridgeID, token := launchAgentBridge(t, time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	resultCh := make(chan app.AgentBridgeHookResponse, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+			BridgeID:      bridgeID,
+			Token:         token,
+			Provider:      "claude",
+			EventName:     "Elicitation",
+			ElicitationID: "ask_01",
+			RawPayload: map[string]any{
+				"tool_input": map[string]any{
+					"questions": []any{
+						map[string]any{
+							"question": "What now?",
+							"options": []any{
+								map[string]any{"label": "Ship it", "value": "ship"},
+							},
+						},
+					},
+				},
+			},
+		})
+		if err != nil {
+			errCh <- err
+			return
+		}
+		resultCh <- resp
+	}()
+
+	prompt := waitForPendingAgentPrompt(t, runtime)
+	if prompt.Kind != agentbridge.PromptKindQuestion || prompt.Message != "What now?" || len(prompt.Options) != 1 {
+		t.Fatalf("prompt = %#v", prompt)
+	}
+	if _, err := runtime.ResolveAgentPrompt(ctx, app.ResolveAgentPromptRequest{
+		ID:     prompt.ID,
+		Answer: "ship",
+	}); err != nil {
+		t.Fatalf("resolve prompt: %v", err)
+	}
+
+	select {
+	case err := <-errCh:
+		t.Fatalf("hook error: %v", err)
+	case resp := <-resultCh:
+		hookSpecific, ok := resp.Output["hookSpecificOutput"].(map[string]any)
+		if !ok || hookSpecific["decision"] != "ship" || hookSpecific["elicitationId"] != "ask_01" {
+			t.Fatalf("response = %#v", resp.Output)
+		}
+		events, err := runtime.ListAgentBridgeEvents(ctx, app.ListAgentBridgeEventsRequest{Status: "pending"})
+		if err != nil || len(events) != 0 {
+			t.Fatalf("pending hook events = %#v, err = %v", events, err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for hook response")
+	}
+}
+
+func TestRuntimeAgentBridgeHookAnswersClaudeAskUserQuestion(t *testing.T) {
+	runtime, bridgeID, token := launchAgentBridge(t, time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	toolInput := map[string]any{
+		"questions": []any{
+			map[string]any{
+				"question": "Which planet rotates on its side?",
+				"options": []any{
+					map[string]any{"label": "Saturn"},
+					map[string]any{"label": "Uranus"},
+				},
+			},
+		},
+	}
+	resultCh := make(chan app.AgentBridgeHookResponse, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+			BridgeID:   bridgeID,
+			Token:      token,
+			Provider:   "claude",
+			EventName:  "PreToolUse",
+			ToolName:   "AskUserQuestion",
+			ToolInput:  toolInput,
+			RawPayload: map[string]any{"tool_input": toolInput},
+		})
+		if err != nil {
+			errCh <- err
+			return
+		}
+		resultCh <- resp
+	}()
+
+	prompt := waitForPendingAgentPrompt(t, runtime)
+	if prompt.Message != "Which planet rotates on its side?" || len(prompt.Options) != 2 {
+		t.Fatalf("prompt = %#v", prompt)
+	}
+	if _, err := runtime.ResolveAgentPrompt(ctx, app.ResolveAgentPromptRequest{
+		ID:     prompt.ID,
+		Answer: "Uranus",
+	}); err != nil {
+		t.Fatalf("resolve prompt: %v", err)
+	}
+
+	select {
+	case err := <-errCh:
+		t.Fatalf("hook error: %v", err)
+	case resp := <-resultCh:
+		hookSpecific, ok := resp.Output["hookSpecificOutput"].(map[string]any)
+		if !ok || hookSpecific["permissionDecision"] != "allow" {
+			t.Fatalf("response = %#v", resp.Output)
+		}
+		updatedInput, ok := hookSpecific["updatedInput"].(map[string]any)
+		if !ok {
+			t.Fatalf("updatedInput = %#v", hookSpecific["updatedInput"])
+		}
+		answers, ok := updatedInput["answers"].(map[string]any)
+		if !ok || answers["Which planet rotates on its side?"] != "Uranus" {
+			t.Fatalf("answers = %#v", updatedInput["answers"])
+		}
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for hook response")
+	}
+}
+
 func hasRuntimeEvent(events []app.RuntimeEvent, eventType app.RuntimeEventType) bool {
 	for _, event := range events {
 		if event.Type == eventType {
@@ -372,6 +501,23 @@ func waitForPendingAgentBridgeApproval(t *testing.T, runtime *app.Runtime) agent
 			}
 		}
 	}
+}
+
+func waitForPendingAgentPrompt(t *testing.T, runtime *app.Runtime) agentbridge.Prompt {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		prompts, err := runtime.ListAgentPrompts(context.Background(), app.ListAgentPromptsRequest{Status: "pending"})
+		if err != nil {
+			t.Fatalf("list prompts: %v", err)
+		}
+		if len(prompts) > 0 {
+			return prompts[0]
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for pending prompt")
+	return agentbridge.Prompt{}
 }
 
 func TestRuntimeLaunchQueuedWorkItemRunLaunchesExistingRun(t *testing.T) {

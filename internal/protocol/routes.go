@@ -45,6 +45,7 @@ var (
 	apiStatusList               = []StatusEvent(nil)
 	apiAgentBridgeApprovalList  = []AgentBridgeApproval(nil)
 	apiAgentBridgeEventList     = []AgentBridgeEvent(nil)
+	apiAgentPromptList          = []AgentPrompt(nil)
 	apiAgentHookIntegrationList = []AgentHookIntegration(nil)
 	apiPluginList               = []PluginStatus(nil)
 	apiRegistryPluginList       = []RegistryPlugin(nil)
@@ -59,6 +60,8 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/agent-hook-events", OperationID: "recordAgentHookEvent", Tag: "agent-bridges", Summary: "Record a passive provider hook event", Request: AgentBridgeHookRequest{}, Response: AgentBridgeEvent{}, Status: 201},
 	{Method: "GET", Path: "/v1/agent-bridge-approvals", OperationID: "listAgentBridgeApprovals", Tag: "agent-bridges", Summary: "List pending or resolved daemon-owned agent bridge approvals", Response: apiAgentBridgeApprovalList, Query: []APIQueryParam{{Name: "status", Type: "string"}}},
 	{Method: "POST", Path: "/v1/agent-bridge-approvals/{approvalID}/resolve", OperationID: "resolveAgentBridgeApproval", Tag: "agent-bridges", Summary: "Resolve a pending daemon-owned agent bridge approval", Request: ResolveAgentBridgeApprovalRequest{}, Response: AgentBridgeApproval{}},
+	{Method: "GET", Path: "/v1/agent-prompts", OperationID: "listAgentPrompts", Tag: "agent-bridges", Summary: "List pending or resolved daemon-owned agent prompts", Response: apiAgentPromptList, Query: []APIQueryParam{{Name: "status", Type: "string"}}},
+	{Method: "POST", Path: "/v1/agent-prompts/{promptID}/resolve", OperationID: "resolveAgentPrompt", Tag: "agent-bridges", Summary: "Resolve a pending daemon-owned agent prompt", Request: ResolveAgentPromptRequest{}, Response: AgentPrompt{}},
 	{Method: "GET", Path: "/v1/agent-bridge-events", OperationID: "listAgentBridgeEvents", Tag: "agent-bridges", Summary: "List passive provider hook events", Response: apiAgentBridgeEventList, Query: []APIQueryParam{{Name: "status", Type: "string"}}},
 	{Method: "POST", Path: "/v1/agent-bridge-events/{eventID}/read", OperationID: "markAgentBridgeEventRead", Tag: "agent-bridges", Summary: "Mark a passive provider hook event read", Request: MarkAgentBridgeEventReadRequest{}, Response: AgentBridgeEvent{}},
 	{Method: "GET", Path: "/v1/agent-hook-integrations", OperationID: "listAgentHookIntegrations", Tag: "agent-bridges", Summary: "List globally installed provider hook integrations", Response: apiAgentHookIntegrationList},

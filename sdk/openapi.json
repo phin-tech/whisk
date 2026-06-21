@@ -584,6 +584,101 @@
         }
       }
     },
+    "/v1/agent-prompts": {
+      "get": {
+        "operationId": "listAgentPrompts",
+        "summary": "List pending or resolved daemon-owned agent prompts",
+        "tags": [
+          "agent-bridges"
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentPrompt"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/agent-prompts/{promptID}/resolve": {
+      "post": {
+        "operationId": "resolveAgentPrompt",
+        "summary": "Resolve a pending daemon-owned agent prompt",
+        "tags": [
+          "agent-bridges"
+        ],
+        "parameters": [
+          {
+            "name": "promptID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveAgentPromptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPrompt"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/artifacts": {
       "get": {
         "operationId": "listArtifacts",
@@ -4588,6 +4683,81 @@
         ],
         "type": "object"
       },
+      "AgentPrompt": {
+        "properties": {
+          "answer": {
+            "type": "string"
+          },
+          "bridgeId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "elicitationId": {
+            "type": "string"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/AgentBridgeEventOption"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "toolInput": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "toolName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "kind",
+          "eventName",
+          "message",
+          "status",
+          "createdAt"
+        ],
+        "type": "object"
+      },
       "AnswerQuestionRequest": {
         "properties": {
           "actor": {
@@ -4920,7 +5090,13 @@
             "format": "int64",
             "type": "integer"
           },
+          "dirty": {
+            "type": "boolean"
+          },
           "gitSha": {
+            "type": "string"
+          },
+          "version": {
             "type": "string"
           }
         },
@@ -6403,6 +6579,17 @@
         },
         "required": [
           "action"
+        ],
+        "type": "object"
+      },
+      "ResolveAgentPromptRequest": {
+        "properties": {
+          "answer": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer"
         ],
         "type": "object"
       },

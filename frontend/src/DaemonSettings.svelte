@@ -64,8 +64,12 @@
   });
 
   $: running = status?.running ?? false;
+  $: buildLabel =
+    status?.running && status.version
+      ? `${status.version}${status.gitSha ? ` · ${status.gitSha.slice(0, 7)}` : ""}${status.dirty ? " dirty" : ""}`
+      : "";
   $: versionLabel = status?.running
-    ? `API v${status.apiVersion}${status.gitSha ? ` · ${status.gitSha.slice(0, 7)}` : ""}`
+    ? `${buildLabel || "unknown build"} · API v${status.apiVersion}`
     : "";
 </script>
 

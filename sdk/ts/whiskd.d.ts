@@ -242,6 +242,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent-prompts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List pending or resolved daemon-owned agent prompts */
+        get: operations["listAgentPrompts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-prompts/{promptID}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a pending daemon-owned agent prompt */
+        post: operations["resolveAgentPrompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/artifacts": {
         parameters: {
             query?: never;
@@ -1573,6 +1607,30 @@ export interface components {
             /** Format: int64 */
             sizeBytes: number;
         };
+        AgentPrompt: {
+            answer?: string;
+            bridgeId?: string;
+            /** Format: date-time */
+            createdAt: string;
+            cwd?: string;
+            elicitationId?: string;
+            eventName: string;
+            id: string;
+            kind: string;
+            message: string;
+            options?: components["schemas"]["AgentBridgeEventOption"][];
+            provider: string;
+            ptyId?: string;
+            /** Format: date-time */
+            resolvedAt?: string | null;
+            runId?: string;
+            sessionId?: string;
+            status: string;
+            toolInput?: {
+                [key: string]: unknown;
+            };
+            toolName?: string;
+        };
         AnswerQuestionRequest: {
             actor?: string;
             answer: string;
@@ -1677,7 +1735,9 @@ export interface components {
         CompatibilityResponse: {
             /** Format: int64 */
             apiVersion: number;
+            dirty?: boolean;
             gitSha: string;
+            version?: string;
         };
         CompleteExecutionRequest: {
             actor?: string;
@@ -2084,6 +2144,9 @@ export interface components {
         ResolveAgentBridgeApprovalRequest: {
             action: string;
             reason?: string;
+        };
+        ResolveAgentPromptRequest: {
+            answer: string;
         };
         RestartPanePTYRequest: {
             options: components["schemas"]["StartPTYOptions"];
@@ -2823,6 +2886,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentHookLogStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listAgentPrompts: {
+        parameters: {
+            query?: {
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPrompt"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    resolveAgentPrompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                promptID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveAgentPromptRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPrompt"];
                 };
             };
             /** @description error */

@@ -61,6 +61,9 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	if compatibility.GitSHA == "" {
 		t.Fatalf("compatibility missing git sha: %#v", compatibility)
 	}
+	if compatibility.Version == "" {
+		t.Fatalf("compatibility missing version: %#v", compatibility)
+	}
 	agentEvent := postJSON[protocol.AgentBridgeEvent](t, handler, "/v1/agent-hook-events", protocol.AgentBridgeHookRequest{
 		Provider:  "claude",
 		EventName: "Notification",

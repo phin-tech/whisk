@@ -62,6 +62,9 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	if compatibility.APIVersion != protocol.DaemonAPIVersion || compatibility.GitSHA == "" {
 		t.Fatalf("compatibility = %#v", compatibility)
 	}
+	if compatibility.Version == "" {
+		t.Fatalf("compatibility missing version: %#v", compatibility)
+	}
 	agentEvent, err := daemon.RecordAgentHookEvent(ctx, protocol.AgentBridgeHookRequest{
 		Provider:  "claude",
 		EventName: "Notification",
@@ -512,11 +515,21 @@ func TestHTTPClientAgentBridgeAndHookLog(t *testing.T) {
 	if len(approvals) != 0 {
 		t.Fatalf("approvals = %#v, want none", approvals)
 	}
+	prompts, err := daemon.ListAgentPrompts(ctx, protocol.ListAgentPromptsRequest{Status: "pending"})
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+	if len(prompts) != 0 {
+		t.Fatalf("prompts = %#v, want none", prompts)
+	}
 
 	// Resolving an unknown approval and hooking an unknown bridge both surface daemon errors,
 	// exercising the client error paths.
 	if _, err := daemon.ResolveAgentBridgeApproval(ctx, "missing", protocol.ResolveAgentBridgeApprovalRequest{Action: "allow"}); err == nil {
 		t.Fatalf("expected error resolving unknown approval")
+	}
+	if _, err := daemon.ResolveAgentPrompt(ctx, "missing", protocol.ResolveAgentPromptRequest{Answer: "ok"}); err == nil {
+		t.Fatalf("expected error resolving unknown prompt")
 	}
 	if _, err := daemon.AgentBridgeHook(ctx, "bridge_missing", protocol.AgentBridgeHookRequest{Token: "nope"}); err == nil {
 		t.Fatalf("expected unauthorized bridge hook error")

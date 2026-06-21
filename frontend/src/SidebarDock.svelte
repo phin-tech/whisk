@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import type { AgentBridgeApproval, AgentBridgeEvent, Project, PTYHistory, PTYHistorySummary, PTYInfo, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { AgentBridgeApproval, AgentBridgeEvent, AgentPrompt, Project, PTYHistory, PTYHistorySummary, PTYInfo, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import NotificationsPanel from "./NotificationsPanel.svelte";
   import ProjectsPanel from "./ProjectsPanel.svelte";
   import PtysPanel from "./PtysPanel.svelte";
@@ -17,6 +17,7 @@
   export let workItems: WorkItem[] = [];
   export let statusEvents: StatusEvent[] = [];
   export let agentBridgeApprovals: AgentBridgeApproval[] = [];
+  export let agentPrompts: AgentPrompt[] = [];
   export let agentBridgeEvents: AgentBridgeEvent[] = [];
   export let activeSessionId = "";
   export let activeProjectId = "";
@@ -41,8 +42,10 @@
   export let onRefreshStatusEvents: () => void;
   export let onClearNotifications: () => void;
   export let onSelectStatusEvent: (event: StatusEvent) => void;
+  export let onSelectAgentPrompt: (prompt: AgentPrompt) => void;
   export let onSelectAgentBridgeEvent: (event: AgentBridgeEvent) => void;
   export let onResolveAgentBridgeApproval: (id: string, action: "allow" | "deny") => void;
+  export let onResolveAgentPrompt: (id: string, answer: string) => void;
   export let onRefreshWork: () => void;
   export let onNewProject: () => void;
   export let onSelectProject: (projectId: string) => void;
@@ -134,14 +137,17 @@
             {sessions}
             {statusEvents}
             {agentBridgeApprovals}
+            {agentPrompts}
             {agentBridgeEvents}
             loading={loadingStatusEvents}
             onclose={onClose}
             onRefresh={onRefreshStatusEvents}
             {onClearNotifications}
             {onSelectStatusEvent}
+            {onSelectAgentPrompt}
             {onSelectAgentBridgeEvent}
             {onResolveAgentBridgeApproval}
+            {onResolveAgentPrompt}
           />
         {:else if activePanel === "work"}
           <WorkItemsPanel

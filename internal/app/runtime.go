@@ -177,6 +177,7 @@ type Runtime struct {
 	workItems                  *workitem.State
 	agentBridges               agentbridge.State
 	agentBridgeApprovalWaiters map[string]chan agentbridge.EvaluationDecision
+	agentPromptWaiters         map[string]chan string
 	agentBridgeApprovalTimeout time.Duration
 	nextID                     int
 	eventSink                  EventSink
@@ -224,6 +225,7 @@ const (
 	EventWorkItemsChanged            RuntimeEventType = "workitems.changed"
 	EventStatusChanged               RuntimeEventType = "status.changed"
 	EventAgentBridgeApprovalsChanged RuntimeEventType = "agent_bridge_approvals.changed"
+	EventAgentPromptsChanged         RuntimeEventType = "agent_prompts.changed"
 	EventAgentHookEventsChanged      RuntimeEventType = "agent_hook_events.changed"
 )
 
@@ -510,6 +512,7 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		workItems:                  workItems,
 		agentBridges:               agentBridges,
 		agentBridgeApprovalWaiters: map[string]chan agentbridge.EvaluationDecision{},
+		agentPromptWaiters:         map[string]chan string{},
 		agentBridgeApprovalTimeout: approvalTimeout,
 		eventSink:                  config.EventSink,
 		watchCtx:                   watchCtx,

@@ -30,6 +30,8 @@ export class DaemonStatus {
      */
     "apiVersion": number;
     "gitSha": string;
+    "version": string;
+    "dirty": boolean;
 
     /**
      * Error holds a human-readable reason when the daemon is unreachable or incompatible.
@@ -52,6 +54,12 @@ export class DaemonStatus {
         }
         if (!("gitSha" in $$source)) {
             this["gitSha"] = "";
+        }
+        if (!("version" in $$source)) {
+            this["version"] = "";
+        }
+        if (!("dirty" in $$source)) {
+            this["dirty"] = false;
         }
         if (!("error" in $$source)) {
             this["error"] = "";

@@ -45,6 +45,22 @@ const (
 	ApprovalTimedOut ApprovalStatus = "timed_out"
 )
 
+type PromptKind string
+
+const (
+	PromptKindQuestion PromptKind = "question"
+	PromptKindApproval PromptKind = "approval"
+)
+
+type PromptStatus string
+
+const (
+	PromptPending  PromptStatus = "pending"
+	PromptResolved PromptStatus = "resolved"
+	PromptTimedOut PromptStatus = "timed_out"
+	PromptCanceled PromptStatus = "cancelled"
+)
+
 type HookPayload struct {
 	Provider   Provider
 	EventName  string
@@ -81,6 +97,32 @@ type Question struct {
 	Prompt   string
 	Answer   string
 	Status   QuestionStatus
+}
+
+type PromptOption struct {
+	Label string
+	Value string
+}
+
+type Prompt struct {
+	ID            string
+	BridgeID      string
+	SessionID     string
+	PTYID         string
+	RunID         string
+	Provider      Provider
+	Kind          PromptKind
+	EventName     string
+	ToolName      string
+	ToolInput     map[string]any
+	Message       string
+	CWD           string
+	ElicitationID string
+	Options       []PromptOption
+	Status        PromptStatus
+	Answer        string
+	CreatedAt     time.Time
+	ResolvedAt    *time.Time
 }
 
 type Approval struct {
@@ -161,6 +203,37 @@ type ResolveQuestion struct {
 	Answer string
 }
 
+type RecordPendingPrompt struct {
+	ID            string
+	BridgeID      string
+	RunID         string
+	Kind          PromptKind
+	EventName     string
+	ToolName      string
+	ToolInput     map[string]any
+	Message       string
+	CWD           string
+	ElicitationID string
+	Options       []PromptOption
+	Now           time.Time
+}
+
+type ResolvePrompt struct {
+	ID     string
+	Answer string
+	Now    time.Time
+}
+
+type TimeoutPrompt struct {
+	ID     string
+	Reason string
+	Now    time.Time
+}
+
+type ListPrompts struct {
+	Status PromptStatus
+}
+
 type RecordPendingApproval struct {
 	ID        string
 	BridgeID  string
@@ -190,6 +263,7 @@ type ListApprovals struct {
 type State struct {
 	bridges   map[string]Bridge
 	questions map[string]Question
+	prompts   map[string]Prompt
 	approvals map[string]Approval
 	events    map[string]Event
 }
@@ -263,6 +337,52 @@ func EvaluationDecisionToProviderOutput(_ Provider, eventName string, decision E
 	}
 }
 
+func PromptAnswerToProviderOutput(_ Provider, eventName string, elicitationID string, answer string, toolInputs ...map[string]any) (map[string]any, bool) {
+	answer = strings.TrimSpace(answer)
+	if answer == "" {
+		return nil, false
+	}
+	if eventName == "PreToolUse" {
+		if len(toolInputs) == 0 {
+			return nil, false
+		}
+		question := firstAskUserQuestion(toolInputs[0])
+		if question == "" {
+			return nil, false
+		}
+		updatedInput := cloneMap(toolInputs[0])
+		updatedInput["answers"] = map[string]any{question: answer}
+		return map[string]any{
+			"hookSpecificOutput": map[string]any{
+				"hookEventName":      eventName,
+				"permissionDecision": "allow",
+				"updatedInput":       updatedInput,
+			},
+		}, true
+	}
+	if eventName != "Elicitation" {
+		return nil, false
+	}
+	output := map[string]any{
+		"hookEventName": eventName,
+		"decision":      answer,
+	}
+	if strings.TrimSpace(elicitationID) != "" {
+		output["elicitationId"] = strings.TrimSpace(elicitationID)
+	}
+	return map[string]any{"hookSpecificOutput": output}, true
+}
+
+func firstAskUserQuestion(toolInput map[string]any) string {
+	values, _ := toolInput["questions"].([]any)
+	if len(values) == 0 {
+		return ""
+	}
+	question, _ := values[0].(map[string]any)
+	value, _ := question["question"].(string)
+	return strings.TrimSpace(value)
+}
+
 func HashHookToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
@@ -272,6 +392,7 @@ func NewState(bridges ...Bridge) (State, error) {
 	state := State{
 		bridges:   map[string]Bridge{},
 		questions: map[string]Question{},
+		prompts:   map[string]Prompt{},
 		approvals: map[string]Approval{},
 		events:    map[string]Event{},
 	}
@@ -436,6 +557,50 @@ func (s State) RecordPendingApproval(req RecordPendingApproval) (State, Approval
 	return next, approval, nil
 }
 
+func (s State) RecordPendingPrompt(req RecordPendingPrompt) (State, Prompt, error) {
+	bridge, ok := s.bridges[req.BridgeID]
+	if !ok {
+		return State{}, Prompt{}, fmt.Errorf("bridge %s not found", req.BridgeID)
+	}
+	if strings.TrimSpace(req.ID) == "" {
+		return State{}, Prompt{}, fmt.Errorf("prompt id required")
+	}
+	if req.Kind == "" {
+		return State{}, Prompt{}, fmt.Errorf("prompt kind required")
+	}
+	if strings.TrimSpace(req.EventName) == "" {
+		return State{}, Prompt{}, fmt.Errorf("prompt event name required")
+	}
+	if strings.TrimSpace(req.Message) == "" {
+		return State{}, Prompt{}, fmt.Errorf("prompt message required")
+	}
+	now := req.Now
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	next := s.clone()
+	prompt := Prompt{
+		ID:            strings.TrimSpace(req.ID),
+		BridgeID:      strings.TrimSpace(req.BridgeID),
+		SessionID:     bridge.SessionID,
+		PTYID:         bridge.PTYID,
+		RunID:         strings.TrimSpace(req.RunID),
+		Provider:      bridge.Provider,
+		Kind:          req.Kind,
+		EventName:     strings.TrimSpace(req.EventName),
+		ToolName:      strings.TrimSpace(req.ToolName),
+		ToolInput:     cloneMap(req.ToolInput),
+		Message:       strings.TrimSpace(req.Message),
+		CWD:           strings.TrimSpace(req.CWD),
+		ElicitationID: strings.TrimSpace(req.ElicitationID),
+		Options:       clonePromptOptions(req.Options),
+		Status:        PromptPending,
+		CreatedAt:     now,
+	}
+	next.prompts[prompt.ID] = prompt
+	return next, prompt, nil
+}
+
 func (s State) ResolveApproval(req ResolveApproval) (State, Approval, error) {
 	approval, ok := s.approvals[req.ID]
 	if !ok {
@@ -496,6 +661,68 @@ func (s State) ListApprovals(filter ListApprovals) []Approval {
 	return out
 }
 
+func (s State) ListPrompts(filter ListPrompts) []Prompt {
+	out := make([]Prompt, 0, len(s.prompts))
+	for _, prompt := range s.prompts {
+		if filter.Status != "" && prompt.Status != filter.Status {
+			continue
+		}
+		out = append(out, clonePrompt(prompt))
+	}
+	return out
+}
+
+func (s State) ResolvePrompt(req ResolvePrompt) (State, Prompt, error) {
+	prompt, ok := s.prompts[req.ID]
+	if !ok {
+		return State{}, Prompt{}, fmt.Errorf("prompt %s not found", req.ID)
+	}
+	if prompt.Status != PromptPending {
+		return State{}, Prompt{}, fmt.Errorf("prompt %s is not pending", req.ID)
+	}
+	answer := strings.TrimSpace(req.Answer)
+	if answer == "" {
+		return State{}, Prompt{}, fmt.Errorf("prompt answer required")
+	}
+	if len(prompt.Options) > 0 && !promptHasOption(prompt, answer) {
+		return State{}, Prompt{}, fmt.Errorf("prompt answer %q is not an option", answer)
+	}
+	now := req.Now
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	next := s.clone()
+	prompt.Status = PromptResolved
+	prompt.Answer = answer
+	prompt.ResolvedAt = &now
+	next.prompts[prompt.ID] = prompt
+	return next, clonePrompt(prompt), nil
+}
+
+func (s State) TimeoutPrompt(req TimeoutPrompt) (State, Prompt, error) {
+	prompt, ok := s.prompts[req.ID]
+	if !ok {
+		return State{}, Prompt{}, fmt.Errorf("prompt %s not found", req.ID)
+	}
+	if prompt.Status != PromptPending {
+		return State{}, Prompt{}, fmt.Errorf("prompt %s is not pending", req.ID)
+	}
+	now := req.Now
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		reason = "Prompt timed out"
+	}
+	next := s.clone()
+	prompt.Status = PromptTimedOut
+	prompt.Answer = reason
+	prompt.ResolvedAt = &now
+	next.prompts[prompt.ID] = prompt
+	return next, clonePrompt(prompt), nil
+}
+
 func (s State) ResolveQuestion(req ResolveQuestion) (State, error) {
 	question, ok := s.questions[req.ID]
 	if !ok {
@@ -521,6 +748,7 @@ func (s State) clone() State {
 	next := State{
 		bridges:   map[string]Bridge{},
 		questions: map[string]Question{},
+		prompts:   map[string]Prompt{},
 		approvals: map[string]Approval{},
 		events:    map[string]Event{},
 	}
@@ -529,6 +757,9 @@ func (s State) clone() State {
 	}
 	for id, question := range s.questions {
 		next.questions[id] = question
+	}
+	for id, prompt := range s.prompts {
+		next.prompts[id] = clonePrompt(prompt)
 	}
 	for id, approval := range s.approvals {
 		next.approvals[id] = cloneApproval(approval)
@@ -554,6 +785,34 @@ func cloneApproval(approval Approval) Approval {
 		approval.ResolvedAt = &resolvedAt
 	}
 	return approval
+}
+
+func clonePrompt(prompt Prompt) Prompt {
+	prompt.ToolInput = cloneMap(prompt.ToolInput)
+	prompt.Options = clonePromptOptions(prompt.Options)
+	if prompt.ResolvedAt != nil {
+		resolvedAt := *prompt.ResolvedAt
+		prompt.ResolvedAt = &resolvedAt
+	}
+	return prompt
+}
+
+func clonePromptOptions(options []PromptOption) []PromptOption {
+	if len(options) == 0 {
+		return nil
+	}
+	out := make([]PromptOption, len(options))
+	copy(out, options)
+	return out
+}
+
+func promptHasOption(prompt Prompt, answer string) bool {
+	for _, option := range prompt.Options {
+		if option.Value == answer {
+			return true
+		}
+	}
+	return false
 }
 
 func cloneEvent(event Event) Event {

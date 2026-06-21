@@ -384,6 +384,70 @@ export class AgentHookLogStatus {
     }
 }
 
+export class AgentPrompt {
+    "id": string;
+    "bridgeId"?: string;
+    "sessionId"?: string;
+    "ptyId"?: string;
+    "runId"?: string;
+    "provider": string;
+    "kind": string;
+    "eventName": string;
+    "toolName"?: string;
+    "toolInput"?: { [_ in string]?: any };
+    "message": string;
+    "cwd"?: string;
+    "elicitationId"?: string;
+    "options"?: AgentBridgeEventOption[];
+    "status": string;
+    "answer"?: string;
+    "createdAt": time$0.Time;
+    "resolvedAt"?: time$0.Time | null;
+
+    /** Creates a new AgentPrompt instance. */
+    constructor($$source: Partial<AgentPrompt> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("eventName" in $$source)) {
+            this["eventName"] = "";
+        }
+        if (!("message" in $$source)) {
+            this["message"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AgentPrompt instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AgentPrompt {
+        const $$createField9_0 = $$createType2;
+        const $$createField13_0 = $$createType5;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("toolInput" in $$parsedSource) {
+            $$parsedSource["toolInput"] = $$createField9_0($$parsedSource["toolInput"]);
+        }
+        if ("options" in $$parsedSource) {
+            $$parsedSource["options"] = $$createField13_0($$parsedSource["options"]);
+        }
+        return new AgentPrompt($$parsedSource as Partial<AgentPrompt>);
+    }
+}
+
 export class AnswerQuestionRequest {
     "id": string;
     "answer": string;
@@ -1160,6 +1224,24 @@ export class ListAgentBridgeEventsRequest {
     static createFrom($$source: any = {}): ListAgentBridgeEventsRequest {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ListAgentBridgeEventsRequest($$parsedSource as Partial<ListAgentBridgeEventsRequest>);
+    }
+}
+
+export class ListAgentPromptsRequest {
+    "status"?: string;
+
+    /** Creates a new ListAgentPromptsRequest instance. */
+    constructor($$source: Partial<ListAgentPromptsRequest> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ListAgentPromptsRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ListAgentPromptsRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ListAgentPromptsRequest($$parsedSource as Partial<ListAgentPromptsRequest>);
     }
 }
 
@@ -2091,6 +2173,27 @@ export class ResolveAgentBridgeApprovalRequest {
     static createFrom($$source: any = {}): ResolveAgentBridgeApprovalRequest {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ResolveAgentBridgeApprovalRequest($$parsedSource as Partial<ResolveAgentBridgeApprovalRequest>);
+    }
+}
+
+export class ResolveAgentPromptRequest {
+    "answer": string;
+
+    /** Creates a new ResolveAgentPromptRequest instance. */
+    constructor($$source: Partial<ResolveAgentPromptRequest> = {}) {
+        if (!("answer" in $$source)) {
+            this["answer"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ResolveAgentPromptRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ResolveAgentPromptRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ResolveAgentPromptRequest($$parsedSource as Partial<ResolveAgentPromptRequest>);
     }
 }
 

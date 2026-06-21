@@ -45,7 +45,8 @@ func NormalizeEvent(event Event) NormalizedEvent {
 		Options:           firstOptions(eventOptions(event.Raw), questionOptions(event.Raw)),
 	}
 	normalized.Title = eventTitle(event.Provider, normalized.Kind)
-	normalized.Answerable = normalized.Kind == EventKindQuestion && event.EventName == "Elicitation"
+	normalized.Answerable = normalized.Kind == EventKindQuestion &&
+		(event.EventName == "Elicitation" || (event.EventName == "PreToolUse" && event.ToolName == "AskUserQuestion"))
 	return normalized
 }
 
