@@ -11,6 +11,7 @@ import {
 const sessions = [
   {
     id: "sess_01",
+    name: "Timberborn",
     rootDir: "/repo",
     windows: {
       win_01: {
@@ -19,8 +20,8 @@ const sessions = [
       },
     },
     panes: {
-      pane_01: { id: "pane_01", currentPtyId: "pty_01" },
-      pane_02: { id: "pane_02", currentPtyId: "pty_02" },
+      pane_01: { id: "pane_01", currentPtyId: "pty_01", workingDir: "/repo" },
+      pane_02: { id: "pane_02", currentPtyId: "pty_02", workingDir: "/repo/worktree" },
     },
   },
 ];
@@ -144,9 +145,121 @@ describe("agent hook integration view state", () => {
       {
         id: "task",
         provider: "codex",
-        title: "Agent notification",
-        message: "What would you like to work on?",
+        title: "What would you like to work on?",
+        message: "Agent notification",
         meta: "sess_01 / pty_01",
+        createdAt: "2026-06-11T12:03:00Z",
+      },
+    ]);
+  });
+
+  it("describes hook notifications with session and pane context instead of raw ids", () => {
+    expect(
+      agentHookNotificationRows(
+        [
+          {
+            id: "task",
+            provider: "claude",
+            title: "Claude approval",
+            eventName: "Notification",
+            message: "What would you like to work on today?",
+            sessionId: "provider-session-uuid",
+            ptyId: "pty_02",
+            status: "pending",
+            createdAt: "2026-06-11T12:03:00Z",
+          },
+        ],
+        sessions,
+      ),
+    ).toEqual([
+      {
+        id: "task",
+        provider: "claude",
+        title: "What would you like to work on today?",
+        message: "Claude approval",
+        meta: "Timberborn / pane_02 / /repo/worktree",
+        createdAt: "2026-06-11T12:03:00Z",
+      },
+    ]);
+  });
+
+  it("dedupes repeated hook notifications and uses the useful message as the title", () => {
+    expect(
+      agentHookNotificationRows(
+        [
+          {
+            id: "older",
+            provider: "claude",
+            title: "Claude approval",
+            eventName: "Notification",
+            message: "What is the capital city of Australia?",
+            sessionId: "provider-session-uuid",
+            ptyId: "pty_02",
+            status: "pending",
+            createdAt: "2026-06-11T12:02:00Z",
+          },
+          {
+            id: "newer",
+            provider: "claude",
+            title: "Claude approval",
+            eventName: "Notification",
+            message: "What is the capital city of Australia?",
+            sessionId: "provider-session-uuid",
+            ptyId: "pty_02",
+            status: "pending",
+            createdAt: "2026-06-11T12:03:00Z",
+          },
+        ],
+        sessions,
+      ),
+    ).toEqual([
+      {
+        id: "newer",
+        provider: "claude",
+        title: "What is the capital city of Australia?",
+        message: "Claude approval",
+        meta: "Timberborn / pane_02 / /repo/worktree",
+        createdAt: "2026-06-11T12:03:00Z",
+      },
+    ]);
+  });
+
+  it("suppresses generic permission notifications when a specific prompt exists", () => {
+    expect(
+      agentHookNotificationRows(
+        [
+          {
+            id: "generic",
+            provider: "claude",
+            title: "Claude notification",
+            eventName: "Notification",
+            message: "Claude needs your permission",
+            sessionId: "provider-session-uuid",
+            ptyId: "pty_02",
+            status: "pending",
+            createdAt: "2026-06-11T12:04:00Z",
+          },
+          {
+            id: "specific",
+            provider: "claude",
+            title: "Claude approval",
+            eventName: "Notification",
+            message: "What is the capital city of Australia?",
+            sessionId: "provider-session-uuid",
+            ptyId: "pty_02",
+            status: "pending",
+            createdAt: "2026-06-11T12:03:00Z",
+          },
+        ],
+        sessions,
+      ),
+    ).toEqual([
+      {
+        id: "specific",
+        provider: "claude",
+        title: "What is the capital city of Australia?",
+        message: "Claude approval",
+        meta: "Timberborn / pane_02 / /repo/worktree",
         createdAt: "2026-06-11T12:03:00Z",
       },
     ]);
@@ -178,8 +291,8 @@ describe("agent hook integration view state", () => {
       {
         id: "question",
         provider: "claude",
-        title: "Claude question",
-        message: "What kind of project is Tavern Keeper?",
+        title: "What kind of project is Tavern Keeper?",
+        message: "Claude question",
         meta: "unowned / no pty",
         createdAt: "2026-06-20T12:12:51Z",
       },

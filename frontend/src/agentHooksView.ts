@@ -3,8 +3,10 @@ import { firstPaneId } from "./sessionView";
 
 type SessionLike = {
   id: string;
+  name?: string;
+  rootDir?: string;
   windows: { [_ in string]?: { id: string; layout: LayoutNodeLike } };
-  panes: { [_ in string]?: { id?: string; currentPtyId?: string | null } };
+  panes: { [_ in string]?: { id?: string; currentPtyId?: string | null; workingDir?: string } };
 };
 
 type LayoutNodeLike = {
@@ -64,18 +66,22 @@ export function agentHookDebugRows(events: AgentBridgeEvent[]) {
     }));
 }
 
-export function agentHookNotificationRows(events: AgentBridgeEvent[]) {
-  return events
+export function agentHookNotificationRows(events: AgentBridgeEvent[], sessions: SessionLike[] = []) {
+  const rows = events
     .filter(isAgentHookNotification)
     .sort((left, right) => timestamp(right.createdAt) - timestamp(left.createdAt))
-    .map((event) => ({
-      id: event.id,
-      provider: event.provider,
-      title: event.title || (isAgentQuestion(event) ? `${providerName(event.provider)} question` : "Agent notification"),
-      message: event.message || questionMessage(event) || event.notificationType || event.toolName || event.eventName,
-      meta: eventMeta(event),
-      createdAt: String(event.createdAt || ""),
-    }));
+    .map((event) => notificationRow(event, sessions));
+  const specificContexts = new Set(rows.filter((row) => !row.generic).map((row) => contextKey(row)));
+  const seen = new Set<string>();
+  return rows
+    .filter((row) => !(row.generic && specificContexts.has(contextKey(row))))
+    .filter((row) => {
+      const key = `${contextKey(row)}\u0000${row.title}\u0000${row.message}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map(({ generic, ...row }) => row);
 }
 
 export function isAgentHookNotification(event: AgentBridgeEvent) {
@@ -85,15 +91,9 @@ export function isAgentHookNotification(event: AgentBridgeEvent) {
 export function agentHookNotificationClickTarget(event: AgentBridgeEvent, sessions: SessionLike[]) {
   const meta = whiskMetadata(event);
   const sessionId = event.sessionId || meta.sessionId;
-  const ptyId = event.ptyId || meta.ptyId;
-  const session =
-    sessions.find((candidate) => candidate.id === sessionId) ??
-    sessions.find((candidate) => Object.values(candidate.panes).some((pane) => pane?.currentPtyId === ptyId));
-  if (!session) return { main: "session" as const, sessionId, paneId: "", readEventId: event.id };
-  const paneId =
-    Object.entries(session.panes).find(([, pane]) => pane?.currentPtyId === ptyId)?.[0] ??
-    firstPaneId(session);
-  return { main: "session" as const, sessionId: session.id, paneId, readEventId: event.id };
+  const target = eventSessionPane(event, sessions);
+  if (!target) return { main: "session" as const, sessionId, paneId: "", readEventId: event.id };
+  return { main: "session" as const, sessionId: target.session.id, paneId: target.paneId, readEventId: event.id };
 }
 
 export function agentHookDebugDetailRows(event: AgentBridgeEvent) {
@@ -118,8 +118,58 @@ export function agentHookDebugDetailRows(event: AgentBridgeEvent) {
   ].filter((row): row is { label: string; value: string } => row !== null);
 }
 
-function eventMeta(event: AgentBridgeEvent) {
-  return `${event.sessionId || "unowned"} / ${event.ptyId || "no pty"}`;
+function eventMeta(event: AgentBridgeEvent, sessions: SessionLike[] = []) {
+  const target = eventSessionPane(event, sessions);
+  if (!target) return `${event.sessionId || "unowned"} / ${event.ptyId || "no pty"}`;
+  return [
+    target.session.name || target.session.id,
+    target.paneId,
+    target.pane?.workingDir || target.session.rootDir,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+}
+
+function notificationRow(event: AgentBridgeEvent, sessions: SessionLike[]) {
+  const message = event.message || questionMessage(event) || event.notificationType || event.toolName || event.eventName;
+  const fallbackTitle = isAgentQuestion(event) ? `${providerName(event.provider)} question` : "Agent notification";
+  const label = event.title || fallbackTitle;
+  const generic = isGenericNotification(message);
+  const title = generic || isGenericLabel(label) ? message : label;
+  return {
+    id: event.id,
+    provider: event.provider,
+    title,
+    message: title === message ? label : message,
+    meta: eventMeta(event, sessions),
+    createdAt: String(event.createdAt || ""),
+    generic,
+  };
+}
+
+function contextKey(row: { provider: string; meta: string }) {
+  return `${row.provider}\u0000${row.meta}`;
+}
+
+function isGenericLabel(value: string) {
+  return /^(agent notification|.+ approval|.+ notification|.+ question)$/i.test(value.trim());
+}
+
+function isGenericNotification(value: string) {
+  return /needs your permission/i.test(value);
+}
+
+function eventSessionPane(event: AgentBridgeEvent, sessions: SessionLike[]) {
+  const meta = whiskMetadata(event);
+  const sessionId = event.sessionId || meta.sessionId;
+  const ptyId = event.ptyId || meta.ptyId;
+  const session =
+    sessions.find((candidate) => candidate.id === sessionId) ??
+    sessions.find((candidate) => Object.values(candidate.panes).some((pane) => pane?.currentPtyId === ptyId));
+  if (!session) return null;
+  const paneEntry = Object.entries(session.panes).find(([, pane]) => pane?.currentPtyId === ptyId);
+  const paneId = paneEntry?.[0] ?? firstPaneId(session);
+  return { session, paneId, pane: paneEntry?.[1] ?? session.panes[paneId] };
 }
 
 function isAgentQuestion(event: AgentBridgeEvent) {

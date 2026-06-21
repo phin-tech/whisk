@@ -29,7 +29,7 @@
   let expandedIds = new Set<string>();
 
   $: rows = notificationRows(statusEvents);
-  $: hookRows = agentHookNotificationRows(agentBridgeEvents);
+  $: hookRows = agentHookNotificationRows(agentBridgeEvents, sessions);
   $: hasRows = rows.length > 0 || agentBridgeApprovals.length > 0 || hookRows.length > 0;
   $: canClear = notificationClearEnabled(statusEvents, agentBridgeEvents);
 
@@ -135,7 +135,7 @@
           <div class="rounded border border-accent-dim/40 bg-accent-dim/10 px-2.5 py-2 text-text-primary">
             <button
               type="button"
-              class="flex min-w-0 items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+              class="flex w-full min-w-0 items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
               on:click={() => {
                 const event = agentBridgeEvents.find((candidate) => candidate.id === hook.id);
                 if (event) onSelectAgentBridgeEvent(event);
@@ -145,14 +145,14 @@
               <div class="min-w-0 flex-1">
                 <div class="flex min-w-0 items-center justify-between gap-2">
                   <div class="truncate text-[12px] font-semibold">{hook.title}</div>
-                  <div class="shrink-0 rounded border border-border-subtle px-1.5 py-0.5 text-[10px] uppercase text-text-muted">
+                  <div class="max-w-[72px] shrink-0 truncate rounded border border-border-subtle px-1.5 py-0.5 text-[10px] uppercase text-text-muted">
                     {hook.provider || "unknown"}
                   </div>
                 </div>
                 <div class="mt-1 line-clamp-3 text-[12px] leading-4 text-text-secondary">
                   {hook.message}
                 </div>
-                <div class="mt-1 truncate font-mono text-[10px] text-text-muted">
+                <div class="mt-1 min-w-0 break-all font-mono text-[10px] leading-4 text-text-muted">
                   {hook.meta}
                 </div>
               </div>
