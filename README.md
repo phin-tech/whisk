@@ -1,5 +1,9 @@
 # Whisk
 
+## Docs
+
+- [Agent Interface](docs/agent-interface.md)
+
 ## Agent Bridge Testing
 
 Whisk has two tests for Claude structured questions.

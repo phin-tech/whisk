@@ -1,0 +1,106 @@
+# Agent Interface
+
+Whisk agents talk to `whiskd`. The app is only a client.
+
+There are two supported agent paths:
+
+- CLI callbacks: agents call `whisk question`, `whisk status`, `whisk workflow`, etc.
+- Provider hooks: Claude Code and Codex call `whisk agent-bridge hook` from their native hook systems.
+
+## Runtime Contract
+
+Daemon-launched agent PTYs get these env vars when available:
+
+| Variable | Purpose |
+| --- | --- |
+| `WHISKD_URL` | daemon base URL |
+| `WHISK_CLI` | exact CLI path to call back into Whisk |
+| `WHISK_SESSION_ID` / `WHISK_PTY_ID` | current daemon-owned terminal |
+| `WHISK_PROJECT_ID` / `WHISK_PROJECT_ROOT` | project context |
+| `WHISK_WORK_ITEM_ID` / `WHISK_RUN_ID` | work item run context |
+| `WHISK_ACTOR` | actor name for audit trail |
+| `WHISK_AGENT_BRIDGE_ID` / `WHISK_AGENT_BRIDGE_TOKEN` | provider hook auth |
+| `WHISK_AGENT_BRIDGE_PROVIDER` | `claude` or `codex` |
+
+Hook callbacks read JSON on stdin and call:
+
+```sh
+whisk agent-bridge hook
+```
+
+If bridge auth is present, Whisk can block the hook while waiting for a human decision or answer. Without bridge auth, Whisk logs the event only.
+
+## Provider Hooks
+
+### Claude Code
+
+Installed in `~/.claude/settings.json`.
+
+| Event | Mode | Whisk use |
+| --- | --- | --- |
+| `PreToolUse` | decision | tool approval; `AskUserQuestion` becomes an answerable prompt |
+| `PermissionRequest` | decision | permission approval |
+| `Elicitation` | decision | answerable structured question |
+| `PostToolUse` | passive | tool result logging |
+| `Notification` | passive | permission and elicitation UI lifecycle logging |
+| `ElicitationResult` | passive | question result logging |
+| `PostToolUseFailure` | passive | tool failure logging |
+| `Stop` / `StopFailure` | passive | run lifecycle logging |
+| `SessionEnd` | passive | session lifecycle logging |
+| `PreCompact` / `PostCompact` | passive | compaction logging |
+
+Answer return shapes:
+
+- `AskUserQuestion`: returns `hookSpecificOutput.permissionDecision = "allow"` plus `updatedInput.answers`.
+- `Elicitation`: returns `hookSpecificOutput.decision` and `elicitationId` when present.
+
+### Codex
+
+Installed in `~/.codex/hooks.json`.
+
+| Event | Mode | Whisk use |
+| --- | --- | --- |
+| `PreToolUse` | decision | tool approval |
+| `PermissionRequest` | decision | permission approval |
+| `PostToolUse` | passive | tool result logging |
+| `SessionStart` | passive | session lifecycle logging |
+| `UserPromptSubmit` | passive | prompt logging |
+| `PreCompact` / `PostCompact` | passive | compaction logging |
+| `SubagentStart` / `SubagentStop` | passive | subagent lifecycle logging |
+| `Stop` | passive | run lifecycle logging |
+
+Codex does not currently expose a Whisk-supported structured question hook. Use CLI callbacks for agent questions.
+
+## CLI Question Path
+
+Agents that do not use provider hooks should call:
+
+```sh
+whisk question ask -prompt "Question?" -json
+```
+
+This records a work-item question. It is separate from provider-native prompts shown by `whisk prompt list`.
+
+## Profiles
+
+| Profile | Provider | Notes |
+| --- | --- | --- |
+| `claude` | Claude Code | native Claude Code, hook-capable |
+| `claude-plan` | Claude Code | native Claude Code plan mode |
+| `claude-openrouter` | Claude Code | Claude Code through OpenRouter auth/model env |
+| `codex` | Codex | native Codex hook-capable |
+| `plain-shell` | shell | no provider hooks |
+| `prompt-capture` | shell | smoke-test profile |
+
+OpenRouter is not a separate hook provider. It uses Claude Code hooks through the `claude-openrouter` profile.
+
+## Tests
+
+```sh
+task test:remote:docker
+task test:agent:claude:ask-user-question
+```
+
+`test:remote:docker` is the deterministic guard. It fakes the Claude binary but uses the real `whisk agent-bridge hook` command and asserts Whisk sends the selected answer back in Claude's expected hook response.
+
+`test:agent:claude:ask-user-question` is live and opt-in. It runs real Claude Code through OpenRouter and confirms a native `AskUserQuestion` prompt reaches Whisk.
