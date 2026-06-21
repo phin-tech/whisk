@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/buildinfo"
 	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/daemon"
 	"github.com/phin-tech/whisk/internal/protocol"
@@ -44,9 +45,11 @@ func defaultRunDeps() runDeps {
 
 func runWithDeps(args []string, deps runDeps) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|workflow|question|prompt|gate|status|agent-bridge|plugin|onboarding>")
+		return fmt.Errorf("usage: whisk <version|daemon|forward|session|project|work-item|run|workflow|question|prompt|gate|status|agent-bridge|plugin|onboarding>")
 	}
 	switch args[0] {
+	case "version":
+		return runVersion(args[1:])
 	case "daemon":
 		return runDaemon(args[1:])
 	case "forward":
@@ -76,8 +79,17 @@ func runWithDeps(args []string, deps runDeps) error {
 	case "onboarding":
 		return runOnboarding(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk <daemon|forward|session|project|work-item|run|workflow|question|prompt|gate|status|agent-bridge|plugin|onboarding>")
+		return fmt.Errorf("usage: whisk <version|daemon|forward|session|project|work-item|run|workflow|question|prompt|gate|status|agent-bridge|plugin|onboarding>")
 	}
+}
+
+func runVersion(args []string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("usage: whisk version")
+	}
+	info := buildinfo.Current()
+	fmt.Printf("whisk %s\n", info.Version)
+	return nil
 }
 
 func runDaemon(args []string) error {

@@ -103,11 +103,23 @@ tasks:
     summary: Packages the application for Linux
     deps:
       - task: build
+      - task: build:cli
     cmds:
       - task: create:appimage
       - task: create:deb
       - task: create:rpm
       - task: create:aur
+
+  build:cli:
+    summary: Builds the whisk CLI/daemon helper for Linux
+    internal: true
+    cmds:
+      - mkdir -p "{{.BIN_DIR}}"
+      - go build -tags production -trimpath -buildvcs=false -ldflags="-w -s {{.BUILDINFO_LDFLAGS}}" -o "{{.BIN_DIR}}/whisk" ./cmd/whisk
+    env:
+      GOOS: linux
+      CGO_ENABLED: 0
+      GOARCH: '{{.ARCH | default ARCH}}'
 
   create:appimage:
     summary: Creates an AppImage
@@ -117,6 +129,7 @@ tasks:
       - task: generate:dotdesktop
     cmds:
       - cp "{{.APP_BINARY}}" "{{.APP_NAME}}"
+      - cp "../../../bin/whisk" "whisk"
       - cp ../../appicon.png "{{.APP_NAME}}.png"
       - wails3 generate appimage -binary "{{.APP_NAME}}" -icon {{.ICON}} -desktopfile {{.DESKTOP_FILE}} -outputdir {{.OUTPUT_DIR}} -builddir {{.ROOT_DIR}}/build/linux/appimage/build
     vars:

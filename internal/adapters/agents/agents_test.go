@@ -24,6 +24,45 @@ func TestClaudePlanLaunchUsesPlanModeAndSystemPrompt(t *testing.T) {
 	}
 }
 
+func TestClaudeOpenRouterLaunchCopiesOpenRouterEnv(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "or-test-key")
+	t.Setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "")
+	t.Setenv("ANTHROPIC_DEFAULT_SONNET_MODEL", "")
+	t.Setenv("ANTHROPIC_DEFAULT_HAIKU_MODEL", "")
+	t.Setenv("CLAUDE_CODE_SUBAGENT_MODEL", "")
+
+	launch, err := BuildLaunch(LaunchRequest{
+		ProfileID:    "claude-openrouter",
+		WorkingDir:   "/repo",
+		SystemPrompt: "Keep it cheap.",
+		Prompt:       "Say ok.",
+	})
+	if err != nil {
+		t.Fatalf("BuildLaunch error: %v", err)
+	}
+	if launch.Command != "claude" || launch.Provider != ProviderClaude {
+		t.Fatalf("launch = %#v", launch)
+	}
+	if !reflect.DeepEqual(launch.Args[:5], []string{"--print", "--max-budget-usd", "0.05", "--allowedTools", "Bash(whisk question ask*)"}) {
+		t.Fatalf("args = %#v", launch.Args)
+	}
+	if launch.Args[len(launch.Args)-1] != "Say ok." || launch.Stdin != "" {
+		t.Fatalf("prompt delivery = args %#v, stdin %q", launch.Args, launch.Stdin)
+	}
+	wantEnv := map[string]string{
+		"ANTHROPIC_BASE_URL":             "https://openrouter.ai/api",
+		"ANTHROPIC_AUTH_TOKEN":           "or-test-key",
+		"ANTHROPIC_API_KEY":              "",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "~anthropic/claude-haiku-latest",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "~anthropic/claude-haiku-latest",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "~anthropic/claude-haiku-latest",
+		"CLAUDE_CODE_SUBAGENT_MODEL":     "~anthropic/claude-haiku-latest",
+	}
+	if !reflect.DeepEqual(launch.Env, wantEnv) {
+		t.Fatalf("env = %#v", launch.Env)
+	}
+}
+
 func TestCodexLaunchUsesInstructionsConfig(t *testing.T) {
 	launch, err := BuildLaunch(LaunchRequest{
 		ProfileID:    "codex",

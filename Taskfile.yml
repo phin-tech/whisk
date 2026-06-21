@@ -179,6 +179,21 @@ tasks:
     cmds:
       - sh scripts/smoke-agent.sh
 
+  test:remote:docker:
+    desc: Runs CLI-only install smoke in a Docker Linux container
+    cmds:
+      - uv run --project tests/integration pytest tests/integration/test_remote_docker.py
+
+  test:remote:agent:openrouter:
+    desc: Runs optional Claude Code/OpenRouter agent smoke in Docker
+    cmds:
+      - sh scripts/test-remote-agent-openrouter.sh
+
+  test:agent:claude:ask-user-question:
+    desc: Runs optional real Claude Code native AskUserQuestion smoke
+    cmds:
+      - sh scripts/test-real-claude-ask-user-question.sh
+
   dev:seed:workitems:
     desc: Resets and reseeds the dev daemon with UAT work items
     summary: |

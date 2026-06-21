@@ -80,6 +80,32 @@ jobs:
         run: scripts/package-notarized-dmg.sh bin/Whisk.app "bin/Whisk-${{ inputs.version }}-macos.dmg"
       - name: Verify release DMG
         run: scripts/verify-macos-artifact.sh "bin/Whisk-${{ inputs.version }}-macos.dmg"
+      - name: Build CLI archives
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.version }}"
+          VERSION="${TAG#v}"
+          GIT_SHA="$(git rev-parse HEAD)"
+          LDFLAGS="-w -s -X github.com/phin-tech/whisk/internal/buildinfo.version=${VERSION} -X github.com/phin-tech/whisk/internal/buildinfo.gitSHA=${GIT_SHA} -X github.com/phin-tech/whisk/internal/buildinfo.dirty=false"
+          : > bin/whisk-cli-sha256.txt
+          go run ./cmd/whisk version
+
+          build_cli() {
+            goos="$1"
+            goarch="$2"
+            archive="$3"
+            out_dir="bin/${archive%.tar.gz}"
+            rm -rf "${out_dir}"
+            mkdir -p "${out_dir}"
+            GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0 go build -tags production -trimpath -buildvcs=false -ldflags="${LDFLAGS}" -o "${out_dir}/whisk" ./cmd/whisk
+            tar -C "${out_dir}" -czf "bin/${archive}" whisk
+            shasum -a 256 "bin/${archive}" >> bin/whisk-cli-sha256.txt
+          }
+
+          build_cli darwin arm64 whisk-aarch64-apple-darwin.tar.gz
+          build_cli darwin amd64 whisk-x86_64-apple-darwin.tar.gz
+          build_cli linux amd64 whisk-x86_64-unknown-linux-gnu.tar.gz
+          build_cli linux arm64 whisk-aarch64-unknown-linux-gnu.tar.gz
       - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -93,9 +119,22 @@ jobs:
             if [[ "$TAG" == *-* ]]; then
               gh release edit "$TAG" --prerelease
             fi
-            gh release upload "$TAG" "bin/Whisk-${TAG}-macos.dmg" --clobber
+            gh release upload "$TAG" \
+              "bin/Whisk-${TAG}-macos.dmg" \
+              "bin/whisk-aarch64-apple-darwin.tar.gz" \
+              "bin/whisk-x86_64-apple-darwin.tar.gz" \
+              "bin/whisk-x86_64-unknown-linux-gnu.tar.gz" \
+              "bin/whisk-aarch64-unknown-linux-gnu.tar.gz" \
+              "bin/whisk-cli-sha256.txt" \
+              --clobber
           else
-            gh release create "$TAG" "bin/Whisk-${TAG}-macos.dmg" \
+            gh release create "$TAG" \
+              "bin/Whisk-${TAG}-macos.dmg" \
+              "bin/whisk-aarch64-apple-darwin.tar.gz" \
+              "bin/whisk-x86_64-apple-darwin.tar.gz" \
+              "bin/whisk-x86_64-unknown-linux-gnu.tar.gz" \
+              "bin/whisk-aarch64-unknown-linux-gnu.tar.gz" \
+              "bin/whisk-cli-sha256.txt" \
               --title "$TAG" \
               --notes "Signed macOS Whisk build." \
               "${RELEASE_FLAGS[@]}"
@@ -106,10 +145,21 @@ jobs:
         run: |
           TAG="${{ inputs.version }}"
           DOWNLOAD_DIR="$(mktemp -d)"
-          gh release download "$TAG" --pattern "Whisk-${TAG}-macos.dmg" --dir "${DOWNLOAD_DIR}" --clobber
+          gh release download "$TAG" --dir "${DOWNLOAD_DIR}" --clobber
           shasum -a 256 "bin/Whisk-${TAG}-macos.dmg" "${DOWNLOAD_DIR}/Whisk-${TAG}-macos.dmg"
+          for archive in \
+            whisk-aarch64-apple-darwin.tar.gz \
+            whisk-x86_64-apple-darwin.tar.gz \
+            whisk-x86_64-unknown-linux-gnu.tar.gz \
+            whisk-aarch64-unknown-linux-gnu.tar.gz
+          do
+            shasum -a 256 "bin/${archive}" "${DOWNLOAD_DIR}/${archive}"
+          done
           scripts/verify-macos-artifact.sh "${DOWNLOAD_DIR}/Whisk-${TAG}-macos.dmg"
       - uses: actions/upload-artifact@v4
         with:
           name: Whisk-${{ inputs.version }}-macos
-          path: bin/Whisk-${{ inputs.version }}-macos.dmg
+          path: |
+            bin/Whisk-${{ inputs.version }}-macos.dmg
+            bin/whisk-*.tar.gz
+            bin/whisk-cli-sha256.txt

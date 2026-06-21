@@ -41,6 +41,8 @@ jobs:
           npm run build
       - name: Test
         run: go test ./...
+      - name: CLI install packaging
+        run: sh scripts/test-cli-install-packaging.sh
       - name: Coverage gate
         run: task coverage:check
       - name: SDK spec drift

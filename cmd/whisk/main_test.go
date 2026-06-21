@@ -97,6 +97,12 @@ func TestRunRejectsUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestRunVersionReportsWhiskVersion(t *testing.T) {
+	if err := run([]string{"version"}); err != nil {
+		t.Fatalf("version: %v", err)
+	}
+}
+
 func TestRunDaemonStatusReportsUnavailableDaemon(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

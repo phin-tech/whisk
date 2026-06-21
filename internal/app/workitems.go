@@ -1093,11 +1093,17 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	if err != nil {
 		return "", "", err
 	}
-	agentEnv := map[string]string{
+	agentEnv := map[string]string{}
+	for key, value := range launch.Env {
+		agentEnv[key] = value
+	}
+	for key, value := range map[string]string{
 		"WHISK_PROJECT_ID":   project.ID,
 		"WHISK_WORK_ITEM_ID": item.ID,
 		"WHISK_RUN_ID":       run.ID,
 		"WHISK_ACTOR":        "agent",
+	} {
+		agentEnv[key] = value
 	}
 	if bridgeLaunch != nil {
 		for key, value := range bridgeLaunch.Env {

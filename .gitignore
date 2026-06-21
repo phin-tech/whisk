@@ -1,6 +1,7 @@
 bin/
 .task/
 .env.signing
+.env.openrouter
 frontend/node_modules/
 frontend/dist/
 tests/integration/.venv/

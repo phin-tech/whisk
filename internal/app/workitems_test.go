@@ -155,6 +155,56 @@ func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 	}
 }
 
+func TestRuntimeStartWorkItemRunPassesAgentProfileEnvToPTY(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "or-runtime-key")
+	ctx := context.Background()
+	root := t.TempDir()
+	store := &memoryWorkItemStore{}
+	ptyBackend := newMemoryPTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: store,
+		PTYBackend:    ptyBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "Remote", RootDir: root})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Remote smoke"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+
+	_, err = runtime.StartWorkItemRun(ctx, app.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		Launch:           true,
+		AgentProfileID:   "claude-openrouter",
+		Actor:            "agent",
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	if len(ptyBackend.spawns) != 1 {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	env := ptyBackend.spawns[0].Env
+	if env["ANTHROPIC_BASE_URL"] != "https://openrouter.ai/api" ||
+		env["ANTHROPIC_AUTH_TOKEN"] != "or-runtime-key" ||
+		env["ANTHROPIC_API_KEY"] != "" ||
+		env["WHISK_RUN_ID"] == "" {
+		t.Fatalf("env = %#v", env)
+	}
+}
+
 func TestRuntimeStartWorkItemRunInjectsAgentBridgeEnvForProviderHooks(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 	ctx := context.Background()
