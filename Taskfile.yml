@@ -74,6 +74,11 @@ tasks:
     cmds:
       - npm run build
 
+  docs:build:
+    desc: Builds the published docs site
+    cmds:
+      - npm run docs:build
+
   bindings:
     cmds:
       - wails3 generate bindings -ts -names -d frontend/bindings ./...

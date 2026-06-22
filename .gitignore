@@ -4,6 +4,8 @@ bin/
 .env.openrouter
 frontend/node_modules/
 frontend/dist/
+node_modules/
+docs/.vitepress/dist/
 tests/integration/.venv/
 tests/integration/__pycache__/
 sdk/tests/python/__pycache__/
