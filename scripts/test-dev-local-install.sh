@@ -9,6 +9,11 @@ printf '%s\n' "$OUT" | grep -Fq 'ditto "bin/Whisk.app" "/tmp/whisk-local-install
   exit 1
 }
 
+printf '%s\n' "$OUT" | grep -Fq 'rm -rf "bin/Whisk.app"' || {
+  printf '%s\n' "$OUT"
+  exit 1
+}
+
 printf '%s\n' "$OUT" | grep -Fq 'cp "skills/whisk/SKILL.md" "bin/Whisk.app/Contents/Resources/skills/whisk/SKILL.md"' || {
   printf '%s\n' "$OUT"
   exit 1
