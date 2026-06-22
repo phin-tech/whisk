@@ -244,9 +244,21 @@ func (r *Runtime) skillSourceDir() string {
 	}
 	exe, err := os.Executable()
 	if err == nil {
-		return filepath.Join(filepath.Dir(exe), "skills", "whisk")
+		for _, dir := range bundledSkillDirs(exe) {
+			if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err == nil {
+				return dir
+			}
+		}
 	}
 	return filepath.Join("skills", "whisk")
+}
+
+func bundledSkillDirs(exe string) []string {
+	macOSDir := filepath.Dir(exe)
+	return []string{
+		filepath.Clean(filepath.Join(macOSDir, "..", "Resources", "skills", "whisk")),
+		filepath.Join(macOSDir, "skills", "whisk"),
+	}
 }
 
 func (r *Runtime) loadOnboardingState() (onboarding.State, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
@@ -50,6 +51,17 @@ func TestApplyOnboardingInstallsSelectedSkillAndRecordsSkips(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, ".codex", "skills", "whisk", "SKILL.md")); err != nil {
 		t.Fatalf("installed skill: %v", err)
+	}
+}
+
+func TestBundledSkillDirsPreferResources(t *testing.T) {
+	got := bundledSkillDirs("/Applications/Whisk.app/Contents/MacOS/whisk-app")
+	want := []string{
+		"/Applications/Whisk.app/Contents/Resources/skills/whisk",
+		"/Applications/Whisk.app/Contents/MacOS/skills/whisk",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("bundledSkillDirs = %#v, want %#v", got, want)
 	}
 }
 
