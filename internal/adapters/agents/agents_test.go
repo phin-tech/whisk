@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -25,6 +26,9 @@ func TestClaudePlanLaunchUsesPlanModeAndSystemPrompt(t *testing.T) {
 }
 
 func TestClaudeOpenRouterLaunchCopiesOpenRouterEnv(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", "/usr/bin")
 	t.Setenv("OPENROUTER_API_KEY", "or-test-key")
 	t.Setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "")
 	t.Setenv("ANTHROPIC_DEFAULT_SONNET_MODEL", "")
@@ -50,6 +54,7 @@ func TestClaudeOpenRouterLaunchCopiesOpenRouterEnv(t *testing.T) {
 		t.Fatalf("prompt delivery = args %#v, stdin %q", launch.Args, launch.Stdin)
 	}
 	wantEnv := map[string]string{
+		"PATH":                           "/opt/homebrew/bin:/usr/local/bin:" + filepath.Join(home, ".local", "bin") + ":" + filepath.Join(home, "bin") + ":/usr/bin",
 		"ANTHROPIC_BASE_URL":             "https://openrouter.ai/api",
 		"ANTHROPIC_AUTH_TOKEN":           "or-test-key",
 		"ANTHROPIC_API_KEY":              "",
@@ -76,6 +81,28 @@ func TestCodexLaunchUsesInstructionsConfig(t *testing.T) {
 	wantArgs := []string{"-c", "instructions=Be terse", "Implement it"}
 	if launch.Command != "codex" || !reflect.DeepEqual(launch.Args, wantArgs) || launch.Stdin != "" {
 		t.Fatalf("launch = %#v", launch)
+	}
+}
+
+func TestCodexLaunchAddsCommonAgentPaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", "/usr/bin")
+
+	launch, err := BuildLaunch(LaunchRequest{ProfileID: "codex"})
+	if err != nil {
+		t.Fatalf("BuildLaunch error: %v", err)
+	}
+
+	want := []string{
+		"/opt/homebrew/bin",
+		"/usr/local/bin",
+		filepath.Join(home, ".local", "bin"),
+		filepath.Join(home, "bin"),
+		"/usr/bin",
+	}
+	if got := filepath.SplitList(launch.Env["PATH"]); !reflect.DeepEqual(got, want) {
+		t.Fatalf("PATH = %#v, want %#v", got, want)
 	}
 }
 
@@ -115,8 +142,50 @@ func TestInlineProfileMergesArgsAndEnv(t *testing.T) {
 	}
 }
 
+func TestCommandLineQuotesArgs(t *testing.T) {
+	got := CommandLine("codex", []string{"-c", "instructions=Don't overbuild.", "say $PATH"})
+	want := "codex -c 'instructions=Don'\\''t overbuild.' 'say $PATH'"
+	if got != want {
+		t.Fatalf("command line = %q, want %q", got, want)
+	}
+}
+
 func TestUnknownProfileFails(t *testing.T) {
 	if _, err := BuildLaunch(LaunchRequest{ProfileID: "missing"}); err == nil {
 		t.Fatalf("expected unknown profile error")
+	}
+}
+
+func TestProfileListReturnsOrderedBuiltinProfilesWithLabels(t *testing.T) {
+	profiles := ProfileList()
+
+	gotIDs := make([]string, len(profiles))
+	for i, p := range profiles {
+		gotIDs[i] = p.ID
+	}
+	wantIDs := []string{"claude", "claude-plan", "claude-openrouter", "codex", "plain-shell", "prompt-capture"}
+	if !reflect.DeepEqual(gotIDs, wantIDs) {
+		t.Fatalf("profile ids = %#v, want %#v", gotIDs, wantIDs)
+	}
+
+	if len(profiles) != len(BuiltinProfiles()) {
+		t.Fatalf("ProfileList covers %d profiles, BuiltinProfiles has %d", len(profiles), len(BuiltinProfiles()))
+	}
+
+	byID := map[string]ProfileInfo{}
+	for _, p := range profiles {
+		if p.Label == "" {
+			t.Fatalf("profile %q missing label", p.ID)
+		}
+		byID[p.ID] = p
+	}
+	if byID["claude"].Label != "Claude Code" || byID["claude"].Provider != ProviderClaude {
+		t.Fatalf("claude profile = %#v", byID["claude"])
+	}
+	if byID["codex"].Provider != ProviderCodex {
+		t.Fatalf("codex profile = %#v", byID["codex"])
+	}
+	if byID["plain-shell"].Provider != ProviderShell {
+		t.Fatalf("plain-shell profile = %#v", byID["plain-shell"])
 	}
 }

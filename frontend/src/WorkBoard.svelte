@@ -18,6 +18,7 @@
   import X from "@lucide/svelte/icons/x";
   import type { WorkflowStage } from "../bindings/github.com/phin-tech/whisk/internal/domain/workitem/models";
   import type {
+    AgentProfile,
     Artifact,
     GateReport,
     Project,
@@ -30,12 +31,14 @@
     adjacentStageTargets,
     canMoveToStage,
     collapsedStageStorageKey,
+    deriveNextStep,
     deriveWorkItemAttention,
     groupWorkItemsByStage,
     parseCollapsedStages,
     selectDetailRun,
     serializeCollapsedStages,
   } from "./workView";
+  import type { NextStepView } from "./workView";
 
   export let projects: Project[] = [];
   export let workItems: WorkItem[] = [];
@@ -44,6 +47,7 @@
   export let questions: Question[] = [];
   export let gateReports: GateReport[] = [];
   export let workflowEvents: WorkflowEvent[] = [];
+  export let agentProfiles: AgentProfile[] = [];
   export let activeProjectId = "";
   export let filterQuery = "";
   export let filterStageId = "";
@@ -60,7 +64,7 @@
   export let onAttachFile: (workItemId: string, path: string) => void;
   export let onDeleteWorkItem: (workItemId: string) => void;
   export let onCancelRun: (runId: string) => void;
-  export let onLaunchRun: (runId: string) => void;
+  export let onLaunchRun: (runId: string, agentProfileId?: string) => void;
   export let onOpenRunTerminal: (run: WorkItemRun) => void;
   export let onStartPlanning: (workItemId: string) => void;
   export let onSubmitPlan: (request: {
@@ -71,7 +75,9 @@
   }) => void;
   export let onApprovePlan: (workItemId: string, artifactId: string) => void;
   export let onQueueExecution: (workItemId: string) => void;
-  export let onLaunchExecution: (workItemId: string) => void;
+  export let onLaunchExecution: (workItemId: string, agentProfileId?: string) => void;
+  export let onSetPhaseAgent: (projectId: string, preset: string, agentProfileId: string) => void;
+  export let onSetInteractiveAgentShell: (projectId: string, enabled: boolean) => void;
   export let onCompleteExecution: (request: {
     workItemId: string;
     runId: string;
@@ -96,6 +102,7 @@
   let questionAnswers: Record<string, string> = {};
   let gateOverrideReasons: Record<string, string> = {};
   let doneReasons: Record<string, string> = {};
+  let agentSelections: Record<string, string> = {};
   let detailItemId = "";
   let createBodyOpen = false;
   let collapsedStageIds = new Set<string>();
@@ -127,6 +134,18 @@
   $: planArtifacts = [...detailArtifacts]
     .filter((artifact) => artifact.kind === "plan")
     .sort((a, b) => timestamp(b.updatedAt || b.createdAt) - timestamp(a.updatedAt || a.createdAt));
+
+  // Agent selection: the preset a launch will run under (current run's preset, else the
+  // execution stage default), and the project's remembered default agent for that preset.
+  $: executionStage = stages.find((stage) => stage.kind === "execution" || stage.id === "execution") ?? null;
+  $: launchPreset = detailCurrentRun?.preset || executionStage?.defaultRunPreset || "writer";
+  $: phaseAgentDefault = activeProject?.preferences?.defaultPhaseAgents?.[launchPreset] ?? "";
+  $: selectedAgentId = agentSelections[launchPreset] ?? phaseAgentDefault;
+
+  // Contextual "what's next" for the open item: a single sentence plus the primary action.
+  $: nextStep = detailItem
+    ? computeNextStep(detailItem, detailCurrentRun, detailLatestRun, approvedPlan, latestDraftPlan)
+    : null;
   $: if (activeProjectId !== collapsedProjectId) {
     collapsedProjectId = activeProjectId;
     collapsedStageIds =
@@ -398,6 +417,75 @@
   function moveNext(item: WorkItem) {
     const { next } = adjacentStageTargets(item, stages);
     if (next) onMoveWorkItem(item.id, next.id);
+  }
+
+  type NextStep = NextStepView & { run: () => void };
+
+  // computeNextStep derives the recommended action (pure logic in deriveNextStep) and wires
+  // the matching handler closure for the detail view's primary button.
+  function computeNextStep(
+    item: WorkItem,
+    currentRun: WorkItemRun | null,
+    latestRun: WorkItemRun | null,
+    approved: Artifact | undefined,
+    draft: Artifact | undefined,
+  ): NextStep {
+    const view = deriveNextStep({
+      stageId: item.stageId,
+      runStatus: currentRun?.status ?? "",
+      hasTerminal: canOpenRunTerminal(currentRun),
+      hasApprovedPlan: Boolean(approved),
+      hasDraftPlan: Boolean(draft),
+      hasLatestRun: Boolean(latestRun),
+    });
+
+    const run = () => {
+      switch (view.kind) {
+        case "open-terminal":
+          if (currentRun) openRunTerminal(currentRun);
+          break;
+        case "launch-run":
+          if (currentRun) onLaunchRun(currentRun.id, selectedAgentId);
+          break;
+        case "launch-execution":
+          onLaunchExecution(item.id, selectedAgentId);
+          break;
+        case "approve-plan":
+          if (draft?.id) onApprovePlan(item.id, draft.id);
+          break;
+        case "start-planning":
+        case "retry-planning":
+          onStartPlanning(item.id);
+          break;
+        case "send-to-review":
+          onCompleteExecution({ workItemId: item.id, runId: latestRun?.id ?? "", message: "ready for review" });
+          break;
+        case "mark-done":
+          approveDone(item);
+          break;
+        default:
+          break;
+      }
+    };
+
+    return { ...view, run };
+  }
+
+  function nextStepToneClass(tone: NextStep["tone"]) {
+    if (tone === "accent") return "border-green/40 bg-green/15 text-green hover:border-green";
+    if (tone === "primary") return "border-amber/45 bg-amber/12 text-amber hover:border-amber";
+    return "border-white/14 bg-white/8 text-text-primary hover:border-accent hover:text-accent";
+  }
+
+  function selectAgent(value: string) {
+    if (!detailItem || !activeProject) return;
+    agentSelections = { ...agentSelections, [launchPreset]: value };
+    onSetPhaseAgent(activeProject.id, launchPreset, value);
+  }
+
+  function setInteractiveAgentShell(enabled: boolean) {
+    if (!activeProject) return;
+    onSetInteractiveAgentShell(activeProject.id, enabled);
   }
 
   function closeDetail() {
@@ -735,6 +823,55 @@
 
       <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-5">
         <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+          {#if nextStep}
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-white/12 bg-[#0d0d10] px-4 py-3 xl:col-span-2">
+              <div class="flex min-w-0 items-center gap-3">
+                <span class="shrink-0 text-[11px] font-semibold uppercase tracking-widest text-text-muted">Next</span>
+                <span class="min-w-0 text-[14px] leading-5 text-text-primary">{nextStep.message}</span>
+              </div>
+              <div class="flex shrink-0 flex-wrap items-center gap-2">
+                {#if nextStep.isLaunch}
+                  <label class="flex items-center gap-1.5 text-[12px] text-text-muted">
+                    <span>Agent</span>
+                    <select
+                      class="h-9 rounded-md border border-white/14 bg-black/30 px-2 text-[13px] text-text-primary outline-none focus:border-accent-dim disabled:opacity-60"
+                      value={selectedAgentId}
+                      disabled={loading}
+                      aria-label="Agent profile"
+                      on:change={(event) => selectAgent(event.currentTarget.value)}
+                    >
+                      <option value="">Default agent</option>
+                      {#each agentProfiles as profile (profile.id)}
+                        <option value={profile.id}>{profile.label}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <label class="flex h-9 items-center gap-2 rounded-md border border-white/14 bg-black/20 px-2 text-[12px] text-text-muted">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 accent-accent"
+                      checked={Boolean(activeProject.preferences?.useInteractiveAgentShell)}
+                      disabled={loading}
+                      aria-label="Use interactive shell for agent runs"
+                      on:change={(event) => setInteractiveAgentShell(event.currentTarget.checked)}
+                    />
+                    <span>Shell</span>
+                  </label>
+                {/if}
+                {#if nextStep.label}
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-4 text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 {nextStepToneClass(nextStep.tone)}"
+                    disabled={loading}
+                    on:click={() => nextStep?.run()}
+                  >
+                    {nextStep.label}
+                  </button>
+                {/if}
+              </div>
+            </div>
+          {/if}
+
           <main class="grid min-w-0 gap-5">
             <section class="grid gap-2">
               <div class="flex items-center justify-between gap-2">
@@ -928,19 +1065,19 @@
               {/if}
             </section>
 
-            <section class="grid gap-3 rounded-md border border-white/12 bg-[#0d0d10] p-3">
-              <div class="flex items-center justify-between gap-2">
-                <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
-                  Current Run
-                </h3>
-                {#if detailPastRuns.length > 0}
-                  <span class="inline-flex items-center gap-1 rounded border border-white/12 bg-white/6 px-2 py-1 text-[12px] text-text-muted">
-                    <History size={13} />
-                    {detailPastRuns.length}
-                  </span>
-                {/if}
-              </div>
-              {#if detailCurrentRun}
+            {#if detailCurrentRun}
+              <section class="grid gap-3 rounded-md border border-white/12 bg-[#0d0d10] p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                    Current Run
+                  </h3>
+                  {#if detailPastRuns.length > 0}
+                    <span class="inline-flex items-center gap-1 rounded border border-white/12 bg-white/6 px-2 py-1 text-[12px] text-text-muted">
+                      <History size={13} />
+                      {detailPastRuns.length}
+                    </span>
+                  {/if}
+                </div>
                 <button
                   type="button"
                   class="grid min-w-0 gap-2 rounded-md border border-white/12 bg-black/25 p-3 text-left transition-colors hover:border-white/24 hover:bg-white/6 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-default"
@@ -964,17 +1101,6 @@
                     {formattedTime(detailCurrentRun.createdAt)}
                   </div>
                 </button>
-                {#if detailCurrentRun.status === "queued"}
-                  <button
-                    type="button"
-                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-blue/35 bg-blue/10 px-3 text-[13px] font-medium text-blue transition-colors hover:border-blue disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={loading}
-                    on:click={() => onLaunchRun(detailCurrentRun.id)}
-                  >
-                    <Play size={13} />
-                    <span>Launch run</span>
-                  </button>
-                {/if}
                 {#if canCancelRun(detailCurrentRun)}
                   <button
                     type="button"
@@ -986,81 +1112,79 @@
                     <span>Cancel run</span>
                   </button>
                 {/if}
-              {:else}
-                <div class="rounded-md border border-white/12 bg-black/25 px-3 py-3 text-[14px] text-text-muted">
-                  No run has been started.
-                </div>
-              {/if}
-            </section>
+              </section>
+            {/if}
 
-            <section class="grid gap-2 rounded-md border border-white/12 bg-[#0d0d10] p-3">
-              <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
-                Workflow
-              </h3>
-              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/8 px-2 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+            <details class="rounded-md border border-white/12 bg-[#0d0d10]">
+              <summary class="cursor-pointer px-3 py-2 text-[13px] font-medium text-text-secondary">
+                More actions
+              </summary>
+              <div class="grid gap-2 border-t border-white/12 p-3">
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/6 px-2 text-[13px] font-medium text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={loading}
+                    on:click={() => onStartPlanning(detailItem.id)}
+                  >
+                    <ClipboardCheck size={14} />
+                    <span>Planning</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/6 px-2 text-[13px] font-medium text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={loading || detailItem.stageId !== "ready" || !approvedPlan || hasActiveRun(detailCurrentRun)}
+                    on:click={() => onQueueExecution(detailItem.id)}
+                  >
+                    <Clock3 size={14} />
+                    <span>Queue execution</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/6 px-2 text-[13px] font-medium text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={loading || detailItem.stageId !== "ready" || !approvedPlan || hasActiveRun(detailCurrentRun)}
+                    on:click={() => onLaunchExecution(detailItem.id, selectedAgentId)}
+                  >
+                    <Play size={14} />
+                    <span>Launch execution</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/6 px-2 text-[13px] font-medium text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={loading || !detailLatestRun}
+                    on:click={() =>
+                      onCompleteExecution({
+                        workItemId: detailItem.id,
+                        runId: detailLatestRun?.id ?? "",
+                        message: "ready for review",
+                      })}
+                  >
+                    <Search size={14} />
+                    <span>Review</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/6 px-2 text-[13px] font-medium text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={loading}
+                    on:click={() => approveDone(detailItem)}
+                  >
+                    <ClipboardCheck size={14} />
+                    <span>Done</span>
+                  </button>
+                </div>
+                <input
+                  class="h-9 rounded-md border border-white/14 bg-black/30 px-3 text-[13px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                  value={doneReasons[detailItem.id] ?? ""}
                   disabled={loading}
-                  on:click={() => onStartPlanning(detailItem.id)}
-                >
-                  <ClipboardCheck size={14} />
-                  <span>Planning</span>
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-blue/35 bg-blue/10 px-2 text-[13px] font-medium text-blue transition-colors hover:border-blue disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={loading || detailItem.stageId !== "ready" || !approvedPlan || hasActiveRun(detailCurrentRun)}
-                  on:click={() => onQueueExecution(detailItem.id)}
-                >
-                  <Clock3 size={14} />
-                  <span>Queue execution</span>
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-green/35 bg-green/10 px-2 text-[13px] font-medium text-green transition-colors hover:border-green disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={loading || detailItem.stageId !== "ready" || !approvedPlan || hasActiveRun(detailCurrentRun)}
-                  on:click={() => onLaunchExecution(detailItem.id)}
-                >
-                  <Play size={14} />
-                  <span>Launch execution</span>
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/8 px-2 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={loading || !detailLatestRun}
-                  on:click={() =>
-                    onCompleteExecution({
-                      workItemId: detailItem.id,
-                      runId: detailLatestRun?.id ?? "",
-                      message: "ready for review",
+                  placeholder="Done approval reason (optional)"
+                  on:input={(event) =>
+                    (doneReasons = {
+                      ...doneReasons,
+                      [detailItem.id]: event.currentTarget.value,
                     })}
-                >
-                  <Search size={14} />
-                  <span>Review</span>
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/14 bg-white/8 px-2 text-[13px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={loading}
-                  on:click={() => approveDone(detailItem)}
-                >
-                  <ClipboardCheck size={14} />
-                  <span>Done</span>
-                </button>
+                />
               </div>
-              <input
-                class="h-10 rounded-md border border-white/14 bg-black/30 px-3 text-[13px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
-                value={doneReasons[detailItem.id] ?? ""}
-                disabled={loading}
-                placeholder="Done approval reason"
-                on:input={(event) =>
-                  (doneReasons = {
-                    ...doneReasons,
-                    [detailItem.id]: event.currentTarget.value,
-                  })}
-              />
-            </section>
+            </details>
 
             <section class="grid gap-3 rounded-md border border-white/12 bg-[#0d0d10] p-3">
               <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
@@ -1146,18 +1270,14 @@
                     </div>
                   {/each}
                 </div>
-              {:else}
-                <div class="rounded-md border border-white/12 bg-black/25 px-3 py-3 text-[14px] text-text-muted">
-                  No attachments.
-                </div>
               {/if}
             </section>
 
-            <section class="grid gap-3 rounded-md border border-white/12 bg-[#0d0d10] p-3">
-              <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
-                Gates
-              </h3>
-              {#if detailGates.length > 0}
+            {#if detailGates.length > 0}
+              <section class="grid gap-3 rounded-md border border-white/12 bg-[#0d0d10] p-3">
+                <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                  Gates
+                </h3>
                 <div class="grid gap-2">
                   {#each detailGates as gate (gate.id)}
                     <div class="grid gap-2 rounded-md border border-white/12 bg-black/25 px-3 py-2">
@@ -1205,12 +1325,8 @@
                     </div>
                   {/each}
                 </div>
-              {:else}
-                <div class="rounded-md border border-white/12 bg-black/25 px-3 py-3 text-[14px] text-text-muted">
-                  No gates.
-                </div>
-              {/if}
-            </section>
+              </section>
+            {/if}
 
             <details class="rounded-md border border-white/12 bg-[#0d0d10]">
               <summary class="cursor-pointer px-3 py-2 text-[13px] font-semibold uppercase tracking-wide text-text-muted">

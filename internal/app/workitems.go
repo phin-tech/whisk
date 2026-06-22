@@ -24,10 +24,12 @@ type CreateProjectRequest struct {
 }
 
 type UpdateProjectRequest struct {
-	ID          string
-	Name        *string
-	Description *string
-	Slug        *string
+	ID                       string
+	Name                     *string
+	Description              *string
+	Slug                     *string
+	UseInteractiveAgentShell *bool
+	DefaultPhaseAgents       map[string]string
 }
 
 type DeleteProjectRequest struct {
@@ -346,11 +348,13 @@ func (r *Runtime) CreateProject(ctx context.Context, req CreateProjectRequest) (
 
 func (r *Runtime) UpdateProject(ctx context.Context, req UpdateProjectRequest) (workitem.Project, error) {
 	project, err := r.workItems.UpdateProject(workitem.UpdateProject{
-		ID:          req.ID,
-		Name:        req.Name,
-		Description: req.Description,
-		Slug:        req.Slug,
-		Now:         time.Now().UTC(),
+		ID:                       req.ID,
+		Name:                     req.Name,
+		Description:              req.Description,
+		Slug:                     req.Slug,
+		UseInteractiveAgentShell: req.UseInteractiveAgentShell,
+		DefaultPhaseAgents:       req.DefaultPhaseAgents,
+		Now:                      time.Now().UTC(),
 	})
 	if err != nil {
 		return workitem.Project{}, err
@@ -1112,10 +1116,7 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	if item.Worktree != nil && item.Worktree.WorktreePath != "" {
 		workingDir = item.Worktree.WorktreePath
 	}
-	profileID := strings.TrimSpace(req.AgentProfileID)
-	if profileID == "" {
-		profileID = defaultAgentProfileForPreset(run.Preset)
-	}
+	profileID := resolveAgentProfileID(req.AgentProfileID, project.Preferences.DefaultPhaseAgents, run.Preset)
 	launch, err := agents.BuildLaunch(agents.LaunchRequest{
 		ProfileID:    profileID,
 		WorkingDir:   workingDir,
@@ -1148,15 +1149,10 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	}
 	name := workItemRunSessionName(item, run)
 	created, err := r.CreateSession(ctx, CreateSessionRequest{
-		Name:      name,
-		RootDir:   launch.WorkingDir,
-		ProjectID: project.ID,
-		InitialPTY: &StartPTYOptions{
-			Command: launch.Command,
-			Args:    launch.Args,
-			Exec:    true,
-			Env:     agentEnv,
-		},
+		Name:       name,
+		RootDir:    launch.WorkingDir,
+		ProjectID:  project.ID,
+		InitialPTY: agentStartPTYOptions(launch, agentEnv, project.Preferences.UseInteractiveAgentShell),
 	})
 	if err != nil {
 		return "", "", err
@@ -1178,6 +1174,13 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 		}
 	}
 	return created.Session.ID, created.MainPtyID, nil
+}
+
+func agentStartPTYOptions(launch agents.Launch, env map[string]string, useInteractiveShell bool) *StartPTYOptions {
+	if useInteractiveShell {
+		return &StartPTYOptions{Command: agents.CommandLine(launch.Command, launch.Args), Env: env}
+	}
+	return &StartPTYOptions{Command: launch.Command, Args: launch.Args, Exec: true, Env: env}
 }
 
 type agentBridgeLaunch struct {
@@ -1291,6 +1294,26 @@ func defaultAgentProfileForPreset(preset string) string {
 	default:
 		return ""
 	}
+}
+
+// resolveAgentProfileID chooses the agent profile to launch with. An explicit
+// request wins; otherwise the project's per-phase default (keyed by run preset)
+// is used; otherwise it falls back to the preset's builtin default.
+func resolveAgentProfileID(explicit string, phaseAgents map[string]string, preset string) string {
+	if id := strings.TrimSpace(explicit); id != "" {
+		return id
+	}
+	if phaseAgents != nil {
+		if id := strings.TrimSpace(phaseAgents[preset]); id != "" {
+			return id
+		}
+	}
+	return defaultAgentProfileForPreset(preset)
+}
+
+// ListAgentProfiles returns the selectable builtin agent profiles as a read model.
+func (r *Runtime) ListAgentProfiles(context.Context) ([]agents.ProfileInfo, error) {
+	return agents.ProfileList(), nil
 }
 
 func (r *Runtime) CancelWorkItemRun(ctx context.Context, req CancelWorkItemRunRequest) (workitem.WorkItemRun, error) {

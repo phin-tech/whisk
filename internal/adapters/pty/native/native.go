@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/creack/pty"
@@ -55,6 +56,10 @@ func (b *Backend) Spawn(_ context.Context, req app.SpawnPTYRequest) (app.PTYReco
 		if command == "" {
 			command = "sh"
 		}
+	}
+	command, err = resolveCommand(command, req.Env)
+	if err != nil {
+		return app.PTYRecord{}, err
 	}
 	cmd := exec.Command(command, args...)
 	cmd.Dir = workingDir
@@ -325,6 +330,27 @@ func resolveWorkingDir(path string) (string, error) {
 		return "", fmt.Errorf("working dir is not a directory: %s", abs)
 	}
 	return abs, nil
+}
+
+func resolveCommand(command string, env map[string]string) (string, error) {
+	if strings.ContainsRune(command, os.PathSeparator) {
+		return command, nil
+	}
+	path, ok := env["PATH"]
+	if !ok {
+		return exec.LookPath(command)
+	}
+	for _, dir := range filepath.SplitList(path) {
+		if dir == "" {
+			dir = "."
+		}
+		candidate := filepath.Join(dir, command)
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("exec: %q: executable file not found in $PATH", command)
 }
 
 type outputBuffer struct {

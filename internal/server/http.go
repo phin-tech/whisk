@@ -95,6 +95,7 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("GET /v1/projects/{projectID}/context", server.getProjectContext)
 	mux.HandleFunc("GET /v1/workflow-templates", server.listWorkflowTemplates)
 	mux.HandleFunc("GET /v1/prompt-templates", server.listPromptTemplates)
+	mux.HandleFunc("GET /v1/agent-profiles", server.listAgentProfiles)
 	mux.HandleFunc("GET /v1/work-items", server.listWorkItems)
 	mux.HandleFunc("POST /v1/work-items", server.createWorkItem)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/move", server.moveWorkItem)

@@ -335,6 +335,7 @@ export class Project {
 export class ProjectPreferences {
     "autoRun": string;
     "autoWorktree": boolean;
+    "useInteractiveAgentShell"?: boolean;
     "defaultPhaseAgents"?: { [_ in string]?: string };
     "gates"?: GateConfig[];
 
@@ -354,14 +355,14 @@ export class ProjectPreferences {
      * Creates a new ProjectPreferences instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectPreferences {
-        const $$createField2_0 = $$createType6;
-        const $$createField3_0 = $$createType8;
+        const $$createField3_0 = $$createType6;
+        const $$createField4_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("defaultPhaseAgents" in $$parsedSource) {
-            $$parsedSource["defaultPhaseAgents"] = $$createField2_0($$parsedSource["defaultPhaseAgents"]);
+            $$parsedSource["defaultPhaseAgents"] = $$createField3_0($$parsedSource["defaultPhaseAgents"]);
         }
         if ("gates" in $$parsedSource) {
-            $$parsedSource["gates"] = $$createField3_0($$parsedSource["gates"]);
+            $$parsedSource["gates"] = $$createField4_0($$parsedSource["gates"]);
         }
         return new ProjectPreferences($$parsedSource as Partial<ProjectPreferences>);
     }

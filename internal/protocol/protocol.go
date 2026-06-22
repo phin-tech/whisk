@@ -469,6 +469,15 @@ type Question = workitem.Question
 type GateReport = workitem.GateReport
 type WorkflowEvent = workitem.WorkflowEvent
 
+// AgentProfile is the selectable, human-facing view of a builtin agent profile
+// exposed to clients so they can choose which agent runs an execution.
+type AgentProfile struct {
+	ID          string `json:"id"`
+	Provider    string `json:"provider"`
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
 type ProjectDetail struct {
 	Project   Project           `json:"project"`
 	WorkItems []WorkItem        `json:"workItems"`
@@ -504,9 +513,14 @@ type CreateProjectRequest struct {
 }
 
 type UpdateProjectRequest struct {
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Slug        *string `json:"slug,omitempty"`
+	Name                     *string `json:"name,omitempty"`
+	Description              *string `json:"description,omitempty"`
+	Slug                     *string `json:"slug,omitempty"`
+	UseInteractiveAgentShell *bool   `json:"useInteractiveAgentShell,omitempty"`
+	// DefaultPhaseAgents patches the per-phase default agent profile map
+	// (keyed by run preset). It is merged into existing preferences; only
+	// the supplied keys are updated.
+	DefaultPhaseAgents map[string]string `json:"defaultPhaseAgents,omitempty"`
 }
 
 type DeleteProjectRequest struct {

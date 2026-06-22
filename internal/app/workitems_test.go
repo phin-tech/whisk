@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -71,6 +72,8 @@ func TestRuntimeWorkItemRunLifecyclePersistsAndPublishes(t *testing.T) {
 }
 
 func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	t.Setenv("PATH", "/usr/bin:/bin")
 	ctx := context.Background()
 	root := t.TempDir()
@@ -133,7 +136,6 @@ func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 	env := ptyBackend.spawns[0].Env
 	if env["WHISKD_URL"] != "http://127.0.0.1:8787" ||
 		env["WHISK_CLI"] != "/usr/local/bin/whisk" ||
-		env["PATH"] != "/usr/local/bin:/usr/bin:/bin" ||
 		env["WHISK_PROJECT_ID"] != project.ID ||
 		env["WHISK_WORK_ITEM_ID"] != item.ID ||
 		env["WHISK_RUN_ID"] != run.ID ||
@@ -141,6 +143,10 @@ func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 		env["WHISK_PTY_ID"] != run.PTYID ||
 		env["WHISK_ACTOR"] != "agent" {
 		t.Fatalf("spawn env = %#v", env)
+	}
+	wantPath := []string{"/usr/local/bin", "/opt/homebrew/bin", filepath.Join(home, ".local", "bin"), filepath.Join(home, "bin"), "/usr/bin", "/bin"}
+	if gotPath := filepath.SplitList(env["PATH"]); !reflect.DeepEqual(gotPath, wantPath) {
+		t.Fatalf("spawn PATH = %#v, want %#v", gotPath, wantPath)
 	}
 	writes := ptyBackend.writes[run.PTYID]
 	if len(writes) != 0 {
@@ -152,6 +158,61 @@ func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 	}
 	if sessions[0].Name != "#1 Execution - Wire agent" {
 		t.Fatalf("session name = %q", sessions[0].Name)
+	}
+}
+
+func TestRuntimeStartWorkItemRunUsesInteractiveAgentShellWhenEnabled(t *testing.T) {
+	t.Setenv("SHELL", "/bin/zsh")
+	ctx := context.Background()
+	root := t.TempDir()
+	store := &memoryWorkItemStore{}
+	ptyBackend := newMemoryPTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: store,
+		PTYBackend:    ptyBackend,
+	})
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{
+		Name:    "App",
+		RootDir: root,
+		Preferences: workitem.ProjectPreferences{
+			UseInteractiveAgentShell: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Wire agent"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	run, err := runtime.StartWorkItemRun(ctx, app.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		Launch:           true,
+		AgentProfileID:   "codex",
+		SystemPrompt:     "Don't overbuild.",
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+
+	if len(ptyBackend.spawns) != 1 {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	spawn := ptyBackend.spawns[0]
+	if spawn.Command != "" || len(spawn.Args) != 0 {
+		t.Fatalf("spawn command/args = %q %#v", spawn.Command, spawn.Args)
+	}
+	writes := ptyBackend.writes[run.PTYID]
+	if len(writes) != 1 || !strings.Contains(string(writes[0]), "codex -c") || !strings.Contains(string(writes[0]), "overbuild.") {
+		t.Fatalf("writes = %#v", writes)
 	}
 }
 

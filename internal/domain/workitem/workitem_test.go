@@ -45,10 +45,11 @@ func TestStateCreatesProjectWithCopiedPreferences(t *testing.T) {
 		Name:    "My App",
 		RootDir: "/repo/my-app",
 		Preferences: ProjectPreferences{
-			AutoRun:            AutoRunAll,
-			AutoWorktree:       true,
-			DefaultPhaseAgents: agents,
-			Gates:              gates,
+			AutoRun:                  AutoRunAll,
+			AutoWorktree:             true,
+			UseInteractiveAgentShell: true,
+			DefaultPhaseAgents:       agents,
+			Gates:                    gates,
 		},
 	})
 	if err != nil {
@@ -58,6 +59,9 @@ func TestStateCreatesProjectWithCopiedPreferences(t *testing.T) {
 	gates[0].Name = "Mutated"
 	if project.Preferences.AutoRun != AutoRunAll || !project.Preferences.AutoWorktree {
 		t.Fatalf("preferences = %#v", project.Preferences)
+	}
+	if !project.Preferences.UseInteractiveAgentShell {
+		t.Fatalf("interactive agent shell preference was not copied: %#v", project.Preferences)
 	}
 	if project.Preferences.DefaultPhaseAgents[StagePlanning] != "codex" || project.Preferences.Gates[0].Name != "Review" {
 		t.Fatalf("preferences were not copied: %#v", project.Preferences)
@@ -89,6 +93,29 @@ func TestStateUpdatesProjectDescription(t *testing.T) {
 	}
 	if updated.Description != "" {
 		t.Fatalf("description = %q", updated.Description)
+	}
+}
+
+func TestStateUpdatesProjectInteractiveAgentShellPreference(t *testing.T) {
+	state := NewState()
+	project := mustProject(t, state, "proj_01", "One")
+	enabled := true
+
+	updated, err := state.UpdateProject(UpdateProject{ID: project.ID, UseInteractiveAgentShell: &enabled})
+	if err != nil {
+		t.Fatalf("enable interactive agent shell: %v", err)
+	}
+	if !updated.Preferences.UseInteractiveAgentShell {
+		t.Fatalf("preferences = %#v", updated.Preferences)
+	}
+
+	enabled = false
+	updated, err = state.UpdateProject(UpdateProject{ID: project.ID, UseInteractiveAgentShell: &enabled})
+	if err != nil {
+		t.Fatalf("disable interactive agent shell: %v", err)
+	}
+	if updated.Preferences.UseInteractiveAgentShell {
+		t.Fatalf("preferences = %#v", updated.Preferences)
 	}
 }
 

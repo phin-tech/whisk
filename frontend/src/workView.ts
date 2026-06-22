@@ -94,6 +94,123 @@ export function selectDetailRun<T extends RunLike>(runs: T[]): T | null {
   return runs[0] ?? null;
 }
 
+export type NextStepKind =
+  | "open-terminal"
+  | "launch-run"
+  | "launch-execution"
+  | "approve-plan"
+  | "start-planning"
+  | "retry-planning"
+  | "send-to-review"
+  | "mark-done"
+  | "none";
+
+export type NextStepView = {
+  kind: NextStepKind;
+  message: string;
+  label: string;
+  tone: "accent" | "primary" | "neutral";
+  isLaunch: boolean;
+};
+
+// deriveNextStep maps an item's stage + current run status + plan state to the single
+// recommended next action, so the detail view can guide the user instead of showing every
+// transition at once. It is pure (no component state) to keep it unit-testable; the caller
+// wires each kind to the matching handler.
+export function deriveNextStep(context: {
+  stageId: string;
+  runStatus: string;
+  hasTerminal: boolean;
+  hasApprovedPlan: boolean;
+  hasDraftPlan: boolean;
+  hasLatestRun: boolean;
+}): NextStepView {
+  const { stageId, runStatus, hasTerminal, hasApprovedPlan, hasDraftPlan, hasLatestRun } = context;
+
+  if (runStatus === "running" || runStatus === "awaiting_input") {
+    return {
+      kind: "open-terminal",
+      message: runStatus === "awaiting_input" ? "The agent is waiting for input." : "A run is in progress.",
+      label: hasTerminal ? "Open terminal" : "",
+      tone: "neutral",
+      isLaunch: false,
+    };
+  }
+  if (runStatus === "queued") {
+    return {
+      kind: "launch-run",
+      message: "A run is queued — pick an agent and launch it.",
+      label: "Launch run",
+      tone: "accent",
+      isLaunch: true,
+    };
+  }
+  if (stageId === "done") {
+    return { kind: "none", message: "This item is done.", label: "", tone: "neutral", isLaunch: false };
+  }
+  if (stageId === "review") {
+    return {
+      kind: "mark-done",
+      message: "Review the work, then mark it done or send feedback below.",
+      label: "Mark done",
+      tone: "accent",
+      isLaunch: false,
+    };
+  }
+  if (hasDraftPlan && !hasApprovedPlan) {
+    return {
+      kind: "approve-plan",
+      message: "A draft plan is ready — review it and approve to continue.",
+      label: "Approve plan",
+      tone: "accent",
+      isLaunch: false,
+    };
+  }
+  if (stageId === "ready" && hasApprovedPlan) {
+    return {
+      kind: "launch-execution",
+      message: "Plan approved. Choose an agent and launch execution.",
+      label: "Launch execution",
+      tone: "accent",
+      isLaunch: true,
+    };
+  }
+  if (runStatus === "failed") {
+    return {
+      kind: "retry-planning",
+      message: "The last run failed. Review the output, then retry planning.",
+      label: "Retry planning",
+      tone: "primary",
+      isLaunch: false,
+    };
+  }
+  if (!hasApprovedPlan && !hasDraftPlan) {
+    return {
+      kind: "start-planning",
+      message: "Start planning to generate a draft plan for review.",
+      label: "Start planning",
+      tone: "accent",
+      isLaunch: false,
+    };
+  }
+  if (hasApprovedPlan && hasLatestRun) {
+    return {
+      kind: "send-to-review",
+      message: "Execution is done — send it to review.",
+      label: "Send to review",
+      tone: "accent",
+      isLaunch: false,
+    };
+  }
+  return {
+    kind: "none",
+    message: "Use the actions below to move this item forward.",
+    label: "",
+    tone: "neutral",
+    isLaunch: false,
+  };
+}
+
 export function deriveWorkItemAttention<T extends WorkItemLike>(
   item: T,
   context: {

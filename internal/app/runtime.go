@@ -1503,7 +1503,7 @@ func (r *Runtime) ptyContextEnv(sessionID string, ptyID string, extra map[string
 			if pathValue == "" {
 				env["PATH"] = cliDir
 			} else {
-				env["PATH"] = cliDir + string(os.PathListSeparator) + pathValue
+				env["PATH"] = joinPathList(cliDir, pathValue)
 			}
 		}
 	}
@@ -1518,6 +1518,20 @@ func (r *Runtime) ptyContextEnv(sessionID string, ptyID string, extra map[string
 		return nil
 	}
 	return env
+}
+
+func joinPathList(first string, rest string) string {
+	paths := append([]string{first}, filepath.SplitList(rest)...)
+	seen := map[string]bool{}
+	out := paths[:0]
+	for _, path := range paths {
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		out = append(out, path)
+	}
+	return strings.Join(out, string(os.PathListSeparator))
 }
 
 func (r *Runtime) projectPTYEnv(projectID string, extra map[string]string) map[string]string {

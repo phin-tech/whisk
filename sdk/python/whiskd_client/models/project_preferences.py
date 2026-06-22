@@ -26,12 +26,14 @@ class ProjectPreferences:
         auto_worktree (bool):
         default_phase_agents (ProjectPreferencesDefaultPhaseAgents | Unset):
         gates (list[GateConfig] | Unset):
+        use_interactive_agent_shell (bool | Unset):
     """
 
     auto_run: str
     auto_worktree: bool
     default_phase_agents: ProjectPreferencesDefaultPhaseAgents | Unset = UNSET
     gates: list[GateConfig] | Unset = UNSET
+    use_interactive_agent_shell: bool | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -50,6 +52,8 @@ class ProjectPreferences:
                 gates_item = gates_item_data.to_dict()
                 gates.append(gates_item)
 
+        use_interactive_agent_shell = self.use_interactive_agent_shell
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -62,6 +66,8 @@ class ProjectPreferences:
             field_dict["defaultPhaseAgents"] = default_phase_agents
         if gates is not UNSET:
             field_dict["gates"] = gates
+        if use_interactive_agent_shell is not UNSET:
+            field_dict["useInteractiveAgentShell"] = use_interactive_agent_shell
 
         return field_dict
 
@@ -95,11 +101,14 @@ class ProjectPreferences:
 
                 gates.append(gates_item)
 
+        use_interactive_agent_shell = d.pop("useInteractiveAgentShell", UNSET)
+
         project_preferences = cls(
             auto_run=auto_run,
             auto_worktree=auto_worktree,
             default_phase_agents=default_phase_agents,
             gates=gates,
+            use_interactive_agent_shell=use_interactive_agent_shell,
         )
 
         project_preferences.additional_properties = d

@@ -399,6 +399,10 @@ func (s *Service) ListPromptTemplates(ctx context.Context) ([]protocol.PromptTem
 	return s.client.ListPromptTemplates(ctx)
 }
 
+func (s *Service) ListAgentProfiles(ctx context.Context) ([]protocol.AgentProfile, error) {
+	return s.client.ListAgentProfiles(ctx)
+}
+
 func (s *Service) ListWorkItems(ctx context.Context, projectID string) ([]protocol.WorkItem, error) {
 	return s.client.ListWorkItems(ctx, projectID)
 }

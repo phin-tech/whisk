@@ -242,6 +242,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List selectable builtin agent profiles */
+        get: operations["listAgentProfiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agent-prompts": {
         parameters: {
             query?: never;
@@ -1623,6 +1640,12 @@ export interface components {
             /** Format: int64 */
             sizeBytes: number;
         };
+        AgentProfile: {
+            description?: string;
+            id: string;
+            label: string;
+            provider: string;
+        };
         AgentPrompt: {
             answer?: string;
             bridgeId?: string;
@@ -2082,6 +2105,7 @@ export interface components {
                 [key: string]: string;
             };
             gates?: components["schemas"]["GateConfig"][];
+            useInteractiveAgentShell?: boolean;
         };
         ProjectWorkflow: {
             id: string;
@@ -2351,9 +2375,13 @@ export interface components {
             url?: string | null;
         };
         UpdateProjectRequest: {
+            defaultPhaseAgents?: {
+                [key: string]: string;
+            };
             description?: string | null;
             name?: string | null;
             slug?: string | null;
+            useInteractiveAgentShell?: boolean | null;
         };
         WorkItem: {
             attachments: components["schemas"]["Attachment"][] | null;
@@ -2905,6 +2933,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentHookLogStatus"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listAgentProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProfile"][];
                 };
             };
             /** @description error */

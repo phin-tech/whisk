@@ -2,6 +2,8 @@ package native
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -116,6 +118,48 @@ func TestBackendSpawnInjectsEnvironment(t *testing.T) {
 			}
 		case <-ctx.Done():
 			t.Fatalf("timed out waiting for env output; got %q", output.String())
+		}
+	}
+}
+
+func TestBackendSpawnResolvesCommandWithRequestPATH(t *testing.T) {
+	binDir := t.TempDir()
+	command := "whisk-path-agent"
+	commandPath := filepath.Join(binDir, command)
+	if err := os.WriteFile(commandPath, []byte("#!/bin/sh\nprintf 'path-ok\\n'\n"), 0o755); err != nil {
+		t.Fatalf("write command: %v", err)
+	}
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	backend := NewBackend()
+	t.Cleanup(func() { _ = backend.Shutdown(context.Background()) })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := backend.Spawn(ctx, app.SpawnPTYRequest{
+		ID:         "pty_path",
+		WorkingDir: ".",
+		Command:    command,
+		Cols:       80,
+		Rows:       24,
+		Env:        map[string]string{"PATH": binDir + string(os.PathListSeparator) + "/usr/bin:/bin"},
+	}); err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+
+	for {
+		snapshot, err := backend.Output(ctx, "pty_path", 0)
+		if err != nil {
+			t.Fatalf("output: %v", err)
+		}
+		if strings.Contains(string(snapshot.OutputBytes), "path-ok") {
+			return
+		}
+		select {
+		case <-time.After(10 * time.Millisecond):
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for PATH command output; got %q", string(snapshot.OutputBytes))
 		}
 	}
 }

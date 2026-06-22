@@ -40,6 +40,7 @@ type AgentBridgeHookResponse = protocol.AgentBridgeHookResponse
 type AgentHookIntegration = protocol.AgentHookIntegration
 type AgentHookIntegrationRequest = protocol.AgentHookIntegrationRequest
 type AgentHookLogStatus = protocol.AgentHookLogStatus
+type AgentProfile = protocol.AgentProfile
 type AgentPrompt = protocol.AgentPrompt
 type AnswerQuestionRequest = protocol.AnswerQuestionRequest
 type ApproveDoneRequest = protocol.ApproveDoneRequest

@@ -80,6 +80,12 @@ func (c *HTTPClient) ListPromptTemplates(ctx context.Context) ([]protocol.Prompt
 	return templates, err
 }
 
+func (c *HTTPClient) ListAgentProfiles(ctx context.Context) ([]protocol.AgentProfile, error) {
+	var profiles []protocol.AgentProfile
+	err := c.get(ctx, "/v1/agent-profiles", nil, &profiles)
+	return profiles, err
+}
+
 func (c *HTTPClient) ListWorkItems(ctx context.Context, projectID string) ([]protocol.WorkItem, error) {
 	query := url.Values{}
 	if projectID != "" {

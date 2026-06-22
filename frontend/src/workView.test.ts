@@ -3,6 +3,7 @@ import {
   adjacentStageTargets,
   canMoveToStage,
   collapsedStageStorageKey,
+  deriveNextStep,
   deriveWorkItemAttention,
   groupWorkItemsByStage,
   parseCollapsedStages,
@@ -161,5 +162,61 @@ describe("workView", () => {
       new Set(["backlog", "done"]),
     );
     expect(parseCollapsedStages("not json")).toEqual(new Set());
+  });
+});
+
+describe("deriveNextStep", () => {
+  const base = {
+    stageId: "planning",
+    runStatus: "",
+    hasTerminal: false,
+    hasApprovedPlan: false,
+    hasDraftPlan: false,
+    hasLatestRun: false,
+  };
+
+  it("offers planning when there is no plan yet", () => {
+    const step = deriveNextStep({ ...base });
+    expect(step.kind).toBe("start-planning");
+    expect(step.isLaunch).toBe(false);
+    expect(step.label).toBe("Start planning");
+  });
+
+  it("offers retry when the run failed and no plan exists", () => {
+    expect(deriveNextStep({ ...base, runStatus: "failed" }).kind).toBe("retry-planning");
+  });
+
+  it("prioritises approving a ready draft plan", () => {
+    expect(deriveNextStep({ ...base, hasDraftPlan: true }).kind).toBe("approve-plan");
+  });
+
+  it("offers a launch (with agent picker) once approved in ready", () => {
+    const step = deriveNextStep({ ...base, stageId: "ready", hasApprovedPlan: true });
+    expect(step.kind).toBe("launch-execution");
+    expect(step.isLaunch).toBe(true);
+  });
+
+  it("treats a queued run as a launchable run", () => {
+    const step = deriveNextStep({ ...base, runStatus: "queued" });
+    expect(step.kind).toBe("launch-run");
+    expect(step.isLaunch).toBe(true);
+  });
+
+  it("surfaces the terminal while a run is active", () => {
+    const running = deriveNextStep({ ...base, runStatus: "running", hasTerminal: true });
+    expect(running.kind).toBe("open-terminal");
+    expect(running.label).toBe("Open terminal");
+    // No terminal linked -> no button label, but still not a transition.
+    expect(deriveNextStep({ ...base, runStatus: "running" }).label).toBe("");
+  });
+
+  it("guides review and done stages", () => {
+    expect(deriveNextStep({ ...base, stageId: "review" }).kind).toBe("mark-done");
+    expect(deriveNextStep({ ...base, stageId: "done" }).kind).toBe("none");
+  });
+
+  it("sends finished execution to review", () => {
+    const step = deriveNextStep({ ...base, stageId: "execution", hasApprovedPlan: true, hasLatestRun: true });
+    expect(step.kind).toBe("send-to-review");
   });
 });

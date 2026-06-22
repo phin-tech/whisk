@@ -72,6 +72,7 @@ type RuntimeClient interface {
 	GetProjectContext(ctx context.Context, projectID string) (protocol.ProjectContext, error)
 	ListWorkflowTemplates(ctx context.Context) ([]protocol.WorkflowTemplate, error)
 	ListPromptTemplates(ctx context.Context) ([]protocol.PromptTemplate, error)
+	ListAgentProfiles(ctx context.Context) ([]protocol.AgentProfile, error)
 	ListWorkItems(ctx context.Context, projectID string) ([]protocol.WorkItem, error)
 	CreateWorkItem(ctx context.Context, req protocol.CreateWorkItemRequest) (protocol.WorkItem, error)
 	MoveWorkItem(ctx context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error)

@@ -5,6 +5,7 @@
   import type {
     AgentBridgeApproval,
     AgentBridgeEvent,
+    AgentProfile,
     AgentPrompt,
     AgentHookIntegration,
     AgentHookLogStatus,
@@ -60,6 +61,7 @@
     ListAgentPrompts,
     ListAgentHookIntegrations,
     ListArtifacts,
+    ListAgentProfiles,
     ListGateReports,
     ListPTYHistory,
     ListPTYs,
@@ -149,6 +151,7 @@
   let selectedPTYHistory: PTYHistory | null = null;
   let projects: Project[] = [];
   let projectDetail: ProjectDetail | null = null;
+  let agentProfiles: AgentProfile[] = [];
   let workItems: WorkItem[] = [];
   let workItemRuns: WorkItemRun[] = [];
   let artifacts: Artifact[] = [];
@@ -441,6 +444,10 @@
       return;
     }
     projectDetail = await LoadProjectDetail(activeProjectId);
+  }
+
+  async function refreshAgentProfiles() {
+    agentProfiles = await ListAgentProfiles();
   }
 
   function syncActiveProjectDetailSessions() {
@@ -1167,6 +1174,34 @@
     }
   }
 
+  async function setPhaseAgent(projectId: string, preset: string, agentProfileId: string) {
+    if (!projectId || !preset) return;
+    error = "";
+    loadingWork = true;
+    try {
+      await UpdateProject(projectId, { defaultPhaseAgents: { [preset]: agentProfileId } });
+      await refreshProjects();
+    } catch (err) {
+      error = `Set phase agent failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function setInteractiveAgentShell(projectId: string, enabled: boolean) {
+    if (!projectId) return;
+    error = "";
+    loadingWork = true;
+    try {
+      await UpdateProject(projectId, { useInteractiveAgentShell: enabled });
+      await refreshProjects();
+    } catch (err) {
+      error = `Set agent shell failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
   async function deleteProject(projectId: string) {
     error = "";
     loadingWork = true;
@@ -1387,11 +1422,11 @@
     }
   }
 
-  async function launchWorkItemRun(runId: string) {
+  async function launchWorkItemRun(runId: string, agentProfileId = "") {
     error = "";
     loadingWork = true;
     try {
-      await LaunchWorkItemRun({ id: runId });
+      await LaunchWorkItemRun({ id: runId, agentProfileId });
       await refreshWorkState();
       await refreshSessions();
       await refreshPTYs();
@@ -1456,11 +1491,11 @@
     }
   }
 
-  async function launchExecution(workItemId: string) {
+  async function launchExecution(workItemId: string, agentProfileId = "") {
     error = "";
     loadingWork = true;
     try {
-      await LaunchExecution({ workItemId });
+      await LaunchExecution({ workItemId, agentProfileId });
       await refreshWorkState();
       await refreshSessions();
       await refreshPTYs();
@@ -1803,6 +1838,7 @@
       .then(refreshPTYs)
       .then(refreshPlugins)
       .then(() => refreshOnboarding(true))
+      .then(refreshAgentProfiles)
       .then(refreshProjects)
       .then(refreshStatusEvents)
       .then(refreshVisibleOutput)
@@ -1949,6 +1985,7 @@
             {questions}
             {gateReports}
             {workflowEvents}
+            {agentProfiles}
             {activeProjectId}
             filterQuery={workFilterQuery}
             filterStageId={workFilterStageId}
@@ -1968,6 +2005,8 @@
             onApprovePlan={approvePlan}
             onQueueExecution={queueExecution}
             onLaunchExecution={launchExecution}
+            onSetPhaseAgent={setPhaseAgent}
+            onSetInteractiveAgentShell={setInteractiveAgentShell}
             onCompleteExecution={completeExecution}
             onSubmitReviewFeedback={submitReviewFeedback}
             onAskQuestion={askQuestion}

@@ -575,6 +575,7 @@ type runtimeClientFake struct {
 	projectDetail      protocol.ProjectDetail
 	workflowTemplates  []protocol.WorkflowTemplate
 	promptTemplates    []protocol.PromptTemplate
+	agentProfiles      []protocol.AgentProfile
 	workItems          []protocol.WorkItem
 	runs               []protocol.WorkItemRun
 	httpForwards       []protocol.HTTPForward
@@ -874,6 +875,10 @@ func (f *runtimeClientFake) GetProjectContext(_ context.Context, projectID strin
 
 func (f *runtimeClientFake) ListWorkflowTemplates(context.Context) ([]protocol.WorkflowTemplate, error) {
 	return f.workflowTemplates, nil
+}
+
+func (f *runtimeClientFake) ListAgentProfiles(context.Context) ([]protocol.AgentProfile, error) {
+	return f.agentProfiles, nil
 }
 
 func (f *runtimeClientFake) ListPromptTemplates(context.Context) ([]protocol.PromptTemplate, error) {

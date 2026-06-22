@@ -127,10 +127,11 @@ type Project struct {
 }
 
 type ProjectPreferences struct {
-	AutoRun            string            `json:"autoRun"`
-	AutoWorktree       bool              `json:"autoWorktree"`
-	DefaultPhaseAgents map[string]string `json:"defaultPhaseAgents,omitempty"`
-	Gates              []GateConfig      `json:"gates,omitempty"`
+	AutoRun                  string            `json:"autoRun"`
+	AutoWorktree             bool              `json:"autoWorktree"`
+	UseInteractiveAgentShell bool              `json:"useInteractiveAgentShell,omitempty"`
+	DefaultPhaseAgents       map[string]string `json:"defaultPhaseAgents,omitempty"`
+	Gates                    []GateConfig      `json:"gates,omitempty"`
 }
 
 type GateConfig struct {
@@ -385,11 +386,16 @@ type CreateProject struct {
 }
 
 type UpdateProject struct {
-	ID          string
-	Name        *string
-	Description *string
-	Slug        *string
-	Now         time.Time
+	ID                       string
+	Name                     *string
+	Description              *string
+	Slug                     *string
+	UseInteractiveAgentShell *bool
+	// DefaultPhaseAgents merges per-phase default agent overrides (keyed by run
+	// preset) into the project's preferences. Only supplied keys are touched; an
+	// empty value clears that phase's override.
+	DefaultPhaseAgents map[string]string
+	Now                time.Time
 }
 
 type DeleteProject struct {
@@ -1171,6 +1177,26 @@ func (s *State) UpdateProject(req UpdateProject) (Project, error) {
 	}
 	if req.Slug != nil {
 		project.Slug = cleanSlug(*req.Slug)
+	}
+	if req.UseInteractiveAgentShell != nil {
+		project.Preferences.UseInteractiveAgentShell = *req.UseInteractiveAgentShell
+	}
+	if len(req.DefaultPhaseAgents) > 0 {
+		merged := map[string]string{}
+		for key, value := range project.Preferences.DefaultPhaseAgents {
+			merged[key] = value
+		}
+		for key, value := range req.DefaultPhaseAgents {
+			if strings.TrimSpace(value) == "" {
+				delete(merged, key)
+				continue
+			}
+			merged[key] = value
+		}
+		if len(merged) == 0 {
+			merged = nil
+		}
+		project.Preferences.DefaultPhaseAgents = merged
 	}
 	project.UpdatedAt = req.Now
 	if err := validateProject(project); err != nil {

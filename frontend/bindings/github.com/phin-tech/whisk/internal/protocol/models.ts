@@ -384,6 +384,40 @@ export class AgentHookLogStatus {
     }
 }
 
+/**
+ * AgentProfile is the selectable, human-facing view of a builtin agent profile
+ * exposed to clients so they can choose which agent runs an execution.
+ */
+export class AgentProfile {
+    "id": string;
+    "provider": string;
+    "label": string;
+    "description"?: string;
+
+    /** Creates a new AgentProfile instance. */
+    constructor($$source: Partial<AgentProfile> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AgentProfile instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AgentProfile {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AgentProfile($$parsedSource as Partial<AgentProfile>);
+    }
+}
+
 export class AgentPrompt {
     "id": string;
     "bridgeId"?: string;
@@ -2860,6 +2894,14 @@ export class UpdateProjectRequest {
     "name"?: string | null;
     "description"?: string | null;
     "slug"?: string | null;
+    "useInteractiveAgentShell"?: boolean | null;
+
+    /**
+     * DefaultPhaseAgents patches the per-phase default agent profile map
+     * (keyed by run preset). It is merged into existing preferences; only
+     * the supplied keys are updated.
+     */
+    "defaultPhaseAgents"?: { [_ in string]?: string };
 
     /** Creates a new UpdateProjectRequest instance. */
     constructor($$source: Partial<UpdateProjectRequest> = {}) {
@@ -2871,7 +2913,11 @@ export class UpdateProjectRequest {
      * Creates a new UpdateProjectRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): UpdateProjectRequest {
+        const $$createField4_0 = $$createType30;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("defaultPhaseAgents" in $$parsedSource) {
+            $$parsedSource["defaultPhaseAgents"] = $$createField4_0($$parsedSource["defaultPhaseAgents"]);
+        }
         return new UpdateProjectRequest($$parsedSource as Partial<UpdateProjectRequest>);
     }
 }

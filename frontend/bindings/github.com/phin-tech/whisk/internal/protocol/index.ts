@@ -12,6 +12,7 @@ export {
     AgentHookIntegration,
     AgentHookIntegrationRequest,
     AgentHookLogStatus,
+    AgentProfile,
     AgentPrompt,
     AnswerQuestionRequest,
     ApproveDoneRequest,

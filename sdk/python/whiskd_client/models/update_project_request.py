@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
+
+if TYPE_CHECKING:
+    from ..models.update_project_request_default_phase_agents import (
+        UpdateProjectRequestDefaultPhaseAgents,
+    )
+
 
 T = TypeVar("T", bound="UpdateProjectRequest")
 
@@ -15,17 +21,25 @@ T = TypeVar("T", bound="UpdateProjectRequest")
 class UpdateProjectRequest:
     """
     Attributes:
+        default_phase_agents (UpdateProjectRequestDefaultPhaseAgents | Unset):
         description (None | str | Unset):
         name (None | str | Unset):
         slug (None | str | Unset):
+        use_interactive_agent_shell (bool | None | Unset):
     """
 
+    default_phase_agents: UpdateProjectRequestDefaultPhaseAgents | Unset = UNSET
     description: None | str | Unset = UNSET
     name: None | str | Unset = UNSET
     slug: None | str | Unset = UNSET
+    use_interactive_agent_shell: bool | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        default_phase_agents: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.default_phase_agents, Unset):
+            default_phase_agents = self.default_phase_agents.to_dict()
+
         description: None | str | Unset
         if isinstance(self.description, Unset):
             description = UNSET
@@ -44,21 +58,43 @@ class UpdateProjectRequest:
         else:
             slug = self.slug
 
+        use_interactive_agent_shell: bool | None | Unset
+        if isinstance(self.use_interactive_agent_shell, Unset):
+            use_interactive_agent_shell = UNSET
+        else:
+            use_interactive_agent_shell = self.use_interactive_agent_shell
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({})
+        if default_phase_agents is not UNSET:
+            field_dict["defaultPhaseAgents"] = default_phase_agents
         if description is not UNSET:
             field_dict["description"] = description
         if name is not UNSET:
             field_dict["name"] = name
         if slug is not UNSET:
             field_dict["slug"] = slug
+        if use_interactive_agent_shell is not UNSET:
+            field_dict["useInteractiveAgentShell"] = use_interactive_agent_shell
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.update_project_request_default_phase_agents import (
+            UpdateProjectRequestDefaultPhaseAgents,
+        )
+
         d = dict(src_dict)
+        _default_phase_agents = d.pop("defaultPhaseAgents", UNSET)
+        default_phase_agents: UpdateProjectRequestDefaultPhaseAgents | Unset
+        if isinstance(_default_phase_agents, Unset):
+            default_phase_agents = UNSET
+        else:
+            default_phase_agents = UpdateProjectRequestDefaultPhaseAgents.from_dict(
+                _default_phase_agents
+            )
 
         def _parse_description(data: object) -> None | str | Unset:
             if data is None:
@@ -87,10 +123,23 @@ class UpdateProjectRequest:
 
         slug = _parse_slug(d.pop("slug", UNSET))
 
+        def _parse_use_interactive_agent_shell(data: object) -> bool | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(bool | None | Unset, data)
+
+        use_interactive_agent_shell = _parse_use_interactive_agent_shell(
+            d.pop("useInteractiveAgentShell", UNSET)
+        )
+
         update_project_request = cls(
+            default_phase_agents=default_phase_agents,
             description=description,
             name=name,
             slug=slug,
+            use_interactive_agent_shell=use_interactive_agent_shell,
         )
 
         update_project_request.additional_properties = d

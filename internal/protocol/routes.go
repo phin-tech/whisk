@@ -36,6 +36,7 @@ var (
 	apiProjectList              = []Project(nil)
 	apiWorkflowTemplateList     = []WorkflowTemplate(nil)
 	apiPromptList               = []PromptTemplate(nil)
+	apiAgentProfileList         = []AgentProfile(nil)
 	apiWorkItemList             = []WorkItem(nil)
 	apiRunList                  = []WorkItemRun(nil)
 	apiArtifactList             = []Artifact(nil)
@@ -126,6 +127,7 @@ var APIRoutes = []APIRoute{
 	{Method: "GET", Path: "/v1/projects/{projectID}/context", OperationID: "getProjectContext", Tag: "workitems", Response: ProjectContext{}},
 	{Method: "GET", Path: "/v1/workflow-templates", OperationID: "listWorkflowTemplates", Tag: "workitems", Response: apiWorkflowTemplateList},
 	{Method: "GET", Path: "/v1/prompt-templates", OperationID: "listPromptTemplates", Tag: "workitems", Response: apiPromptList},
+	{Method: "GET", Path: "/v1/agent-profiles", OperationID: "listAgentProfiles", Tag: "agents", Summary: "List selectable builtin agent profiles", Response: apiAgentProfileList},
 	{Method: "GET", Path: "/v1/work-items", OperationID: "listWorkItems", Tag: "workitems", Response: apiWorkItemList, Query: []APIQueryParam{{Name: "projectId", Type: "string"}}},
 	{Method: "POST", Path: "/v1/work-items", OperationID: "createWorkItem", Tag: "workitems", Request: CreateWorkItemRequest{}, Response: WorkItem{}, Status: 201},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/move", OperationID: "moveWorkItem", Tag: "workitems", Request: MoveWorkItemRequest{}, Response: WorkItem{}},

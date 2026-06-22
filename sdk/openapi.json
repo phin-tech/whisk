@@ -584,6 +584,40 @@
         }
       }
     },
+    "/v1/agent-profiles": {
+      "get": {
+        "operationId": "listAgentProfiles",
+        "summary": "List selectable builtin agent profiles",
+        "tags": [
+          "agents"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentProfile"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/agent-prompts": {
       "get": {
         "operationId": "listAgentPrompts",
@@ -4733,6 +4767,28 @@
         ],
         "type": "object"
       },
+      "AgentProfile": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "label"
+        ],
+        "type": "object"
+      },
       "AgentPrompt": {
         "properties": {
           "answer": {
@@ -6339,6 +6395,9 @@
               "$ref": "#/components/schemas/GateConfig"
             },
             "type": "array"
+          },
+          "useInteractiveAgentShell": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -7280,6 +7339,12 @@
       },
       "UpdateProjectRequest": {
         "properties": {
+          "defaultPhaseAgents": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
           "description": {
             "nullable": true,
             "type": "string"
@@ -7291,6 +7356,10 @@
           "slug": {
             "nullable": true,
             "type": "string"
+          },
+          "useInteractiveAgentShell": {
+            "nullable": true,
+            "type": "boolean"
           }
         },
         "type": "object"

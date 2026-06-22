@@ -18,6 +18,7 @@ from .agent_bridge_hook_response_output import AgentBridgeHookResponseOutput
 from .agent_hook_integration import AgentHookIntegration
 from .agent_hook_integration_request import AgentHookIntegrationRequest
 from .agent_hook_log_status import AgentHookLogStatus
+from .agent_profile import AgentProfile
 from .agent_prompt import AgentPrompt
 from .agent_prompt_tool_input import AgentPromptToolInput
 from .answer_question_request import AnswerQuestionRequest
@@ -132,6 +133,9 @@ from .transition_rule import TransitionRule
 from .update_project_attachment_request import UpdateProjectAttachmentRequest
 from .update_project_attachment_request_meta import UpdateProjectAttachmentRequestMeta
 from .update_project_request import UpdateProjectRequest
+from .update_project_request_default_phase_agents import (
+    UpdateProjectRequestDefaultPhaseAgents,
+)
 from .work_item import WorkItem
 from .work_item_metadata import WorkItemMetadata
 from .work_item_run import WorkItemRun
@@ -164,6 +168,7 @@ __all__ = (
     "AgentHookIntegration",
     "AgentHookIntegrationRequest",
     "AgentHookLogStatus",
+    "AgentProfile",
     "AgentPrompt",
     "AgentPromptToolInput",
     "AnswerQuestionRequest",
@@ -272,6 +277,7 @@ __all__ = (
     "UpdateProjectAttachmentRequest",
     "UpdateProjectAttachmentRequestMeta",
     "UpdateProjectRequest",
+    "UpdateProjectRequestDefaultPhaseAgents",
     "WorkflowEvent",
     "WorkflowStage",
     "WorkflowTemplate",

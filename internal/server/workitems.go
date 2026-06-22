@@ -42,10 +42,12 @@ func (s *HTTPServer) updateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	project, err := s.runtime.UpdateProject(r.Context(), app.UpdateProjectRequest{
-		ID:          pathValue(r, "projectID", ""),
-		Name:        req.Name,
-		Description: req.Description,
-		Slug:        req.Slug,
+		ID:                       pathValue(r, "projectID", ""),
+		Name:                     req.Name,
+		Description:              req.Description,
+		Slug:                     req.Slug,
+		UseInteractiveAgentShell: req.UseInteractiveAgentShell,
+		DefaultPhaseAgents:       req.DefaultPhaseAgents,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -463,6 +465,24 @@ func (s *HTTPServer) listPromptTemplates(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, templates)
+}
+
+func (s *HTTPServer) listAgentProfiles(w http.ResponseWriter, r *http.Request) {
+	profiles, err := s.runtime.ListAgentProfiles(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	out := make([]protocol.AgentProfile, len(profiles))
+	for i, profile := range profiles {
+		out[i] = protocol.AgentProfile{
+			ID:          profile.ID,
+			Provider:    string(profile.Provider),
+			Label:       profile.Label,
+			Description: profile.Description,
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *HTTPServer) listWorkItems(w http.ResponseWriter, r *http.Request) {
