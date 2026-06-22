@@ -2,42 +2,37 @@
 
 ## Core Invariant
 
-Whisk has one runtime owner: `whiskd`.
+Whisk has one runtime owner: the daemon started by `whisk daemon run`.
 
-The desktop app is always a client. It must never own, persist, or directly
-mutate runtime state. If the daemon is not available, the desktop starts it,
-waits for it, reconnects to it, or reports that it cannot connect. It must not
-fall back to a desktop-local runtime.
+The desktop app is always a client. It may start, wait for, reconnect to, or
+report failure to connect to the daemon. It must not own, persist, or directly
+mutate runtime state, and must not fall back to a desktop-local runtime.
 
-No split brain is allowed.
+No split brain.
 
-## Runtime Ownership
+## Ownership
 
-Daemon-owned state:
+Daemon-owned:
 
-- sessions
-- PTYs
-- agent processes
-- projects
-- kanban/work items
+- sessions, PTYs, agent processes, process state
+- projects, work items, boards, workflows, runs
 - mailbox/events, if added
-- runtime process state
 - durable runtime storage
+- pane layout, if it must reconnect consistently across machines
 
-Client-owned state:
+Client-owned:
 
 - native window state
 - selected/focused UI state
 - xterm instances and rendering lifecycle
 - client-specific visual preferences
-- pane layout only if explicitly treated as per-client view state
+- pane layout only when explicitly per-client view state
 
-If pane layout must reconnect consistently across machines, it is daemon-owned.
-Do not partially own layout on both sides.
+Do not partially own the same state on both sides.
 
 ## Required Architecture
 
-Use this dependency direction:
+Dependency direction:
 
 ```text
 internal/domain      pure state transitions and validation
@@ -49,79 +44,73 @@ internal/wailsapp    Wails adapter over the client only
 cmd/whisk daemon run daemon entrypoint
 ```
 
-Forbidden dependency:
+Forbidden:
 
 ```text
 internal/wailsapp -> internal/runtime
 internal/wailsapp -> internal/adapters/pty
 ```
 
-The Wails app may spawn or supervise `whiskd`, but all runtime commands must go
-through `internal/client`.
+Runtime mutations happen only through protocol commands. Frontend and Wails code
+render daemon read models and send protocol commands; they do not construct
+PTYs, update runtime stores, or persist runtime state.
 
-## Protocol Boundary
+## Daemon/API Workflow
 
-Runtime mutations happen only through protocol commands.
+For runtime features and protocol-facing changes, work from the daemon boundary
+outward:
 
-Frontend and Wails code render daemon read models and send protocol commands.
-They do not directly construct PTYs, update session stores, or persist runtime
-state.
+1. `internal/domain/...`: pure state transitions and validation.
+2. Protocol DTOs and route metadata/catalog.
+3. Runtime storage/server handler.
+4. Typed client.
+5. In-process daemon/client integration tests.
+6. CLI contract, when agent/script-facing: table output for humans, `--json`
+   for agents, and tests locking request/response shapes.
+7. CLI smoke or black-box integration tests, when a CLI path exists.
+8. OpenAPI spec generation.
+9. Generated SDKs.
+10. SDK smoke tests, when SDK paths exist.
+11. Wails adapter.
+12. Generated Wails bindings.
+13. GUI: render daemon read models and invoke protocol/CLI-equivalent actions.
 
-When changing the protocol, update in this order:
+Protocol work is incomplete until generated artifacts are refreshed and relevant
+smoke tests prove the route against a real daemon.
 
-1. Protocol DTOs and protocol API route metadata/catalog.
-2. Daemon runtime/server handler.
-3. Typed client.
-4. In-process daemon/client integration tests.
-5. CLI command contract, when the behavior is agent/script-facing.
-6. CLI smoke or black-box integration tests, when a CLI path exists.
-7. OpenAPI spec generation.
-8. Generated SDKs.
-9. SDK smoke tests for generated Python/TypeScript clients, when SDK paths exist.
-10. Wails adapter.
-11. Generated Wails bindings.
-12. Frontend behavior, when the GUI should expose the behavior.
-
-Protocol changes are not complete until the generated artifacts are refreshed
-and the relevant smoke tests prove the exposed route works against a real
-daemon. Do not merge a feature with only domain coverage if it adds or changes a
-daemon API surface.
-
-Prefer a small stable protocol over capability negotiation. Avoid Roux-style
-"who owns this right now?" branches.
-
-User-facing daemon actions should follow the principle of least surprise. A
-command named after an object-level action should complete that action end to
-end at the daemon boundary: for example, closing a pane with an attached PTY
-should handle the PTY according to the normal user expectation, not require the
-GUI to guess a multi-step kill/detach/close sequence. Offer separate actions
-only when users clearly need distinct outcomes, such as keeping a PTY running
-after detaching it from a pane.
+Prefer a small stable protocol over capability negotiation. Object-level daemon
+commands should complete the expected user action end to end; add separate
+commands only for genuinely distinct outcomes.
 
 ## Streaming And Events
 
-PTY output should use a streaming path for interactive latency. Snapshot/replay
-APIs are still required for attach, reconnect, and recovery.
+Current PTY shape:
 
-Recommended PTY shape:
+- `GET /v1/ptys/{ptyID}/attach?from=` is the interactive WebSocket stream.
+  It sends `output`, `exit`, and `error` frames and accepts `input` frames.
+- `GET /v1/ptys/{ptyID}/output?from=` returns retained replay snapshots for
+  attach, reconnect, CLI tailing, and WebSocket fallback.
+- `POST /v1/ptys/{ptyID}/write` is the HTTP write path for CLI and fallback.
+- `POST /v1/ptys/{ptyID}/resize` updates daemon-owned PTY size.
+- Runtime publishes `pty.output` and `pty.changed` events; the frontend uses
+  `/v1/events/next` to refresh read models and only polls output when no PTY
+  WebSocket is active for that PTY.
 
-- `AttachPTY` streams output/events.
-- `Output(fromOffset)` returns retained replay.
-- `WritePTY` writes input.
-- `ResizePTY` updates the daemon-owned PTY size.
-
-Do not use frontend polling as the primary terminal transport after streaming
-exists.
+Do not reintroduce frontend output polling as the primary terminal transport.
 
 ## Internal Bus
 
-If NATS or another bus is added, keep it narrow.
+Whisk uses embedded NATS in the daemon as an internal runtime event fanout.
 
 Allowed:
 
-- ephemeral fanout inside `whiskd`
-- decoupling daemon services
-- broadcasting daemon events to subscribed clients
+- `internal/events.NATSBus` owns the embedded loopback NATS server.
+- Runtime publishes `app.RuntimeEvent` values through `EventSink`.
+- Event consumers read through `EventSource`; HTTP exposes this as
+  `GET /v1/events/next`.
+- Subjects are implementation details: `whisk.session.changed`,
+  `whisk.pty.changed`, `whisk.pty.output`, `whisk.workitems.changed`, and
+  `whisk.status.changed`.
 
 Forbidden:
 
@@ -131,15 +120,15 @@ Forbidden:
 - cross-machine federation by default
 
 Durability belongs in storage. Client API belongs in the protocol. The bus is
-only internal fanout.
+only internal fanout, not a public client API.
 
-## TDD And Testing
+## Testing
 
 Use functional-core, imperative-shell design.
 
 Functional core tests:
 
-- pure input/output tests
+- pure input/output
 - no mocks
 - state-based assertions
 
@@ -149,66 +138,8 @@ Imperative shell tests:
 - real integration tests for PTY/server/client paths
 - no mocking frameworks by default
 
-For daemon/client work, prefer tests that exercise the typed client against a
-real in-process server. This catches protocol drift without booting the full
-desktop app.
+For daemon/client work, prefer typed-client tests against a real in-process
+server. This catches protocol drift without booting the desktop app.
 
-## Feature TDD Workflow
-
-For new runtime features, start at the daemon boundary and establish the CLI
-contract before building GUI behavior. This matters especially for
-agent-management features such as projects, workflows, work items, runs, and
-kanban boards: agents must be able to drive the same daemon-owned behavior
-through `cmd/whisk` that the GUI later renders.
-
-Required order:
-
-1. Write pure domain tests for state transitions and validation.
-2. Write daemon protocol/client integration tests against a real in-process
-   server.
-3. Implement the smallest runtime/server/client slice that passes.
-4. Add CLI commands and CLI contract tests for agent-facing behavior, including
-   `--json` output for commands agents are expected to consume.
-5. Add Wails adapter tests only after the daemon and CLI contracts exist.
-6. Add frontend behavior last, as a projection of daemon state.
-
-For example, project management must start with tests for:
-
-- project domain state transitions
-- daemon create/list/update/delete project commands
-- typed client behavior against the daemon server
-- `cmd/whisk` commands that expose those project operations, with stable JSON
-  output where agents need to consume the result
-- persistence or replay behavior, if the feature is durable
-
-Do not start project work by adding Svelte state, Wails-only commands, or
+Do not start runtime features with Svelte state, Wails-only commands, or
 desktop-local persistence.
-
-For work item / board / agent-run features, the required implementation shape is:
-
-1. `internal/domain/...` first: pure project/workflow/work-item/run state
-   transitions and validation.
-2. Runtime storage and protocol next: daemon-owned durable state, HTTP handlers,
-   typed client methods, and in-process server/client tests.
-3. CLI next: agent-usable commands over the typed client, table output for
-   humans and `--json` for agents, with tests locking request and response
-   shapes.
-4. Wails bindings/service after that.
-5. GUI last: render daemon read models and invoke protocol/CLI-equivalent
-   actions; never invent frontend-only board state.
-
-## Current Technical Debt
-
-The initial prototype currently has Wails directly constructing `app.Runtime`.
-That is temporary scaffolding and violates the target invariant. Remove this
-before adding substantial new runtime features.
-
-The next architectural move should be:
-
-1. Add `internal/protocol`.
-2. Add `internal/client`.
-3. Make `internal/wailsapp` depend on the client interface only.
-4. Add `internal/server`.
-5. Add `cmd/whisk daemon run`.
-6. Switch Wails to spawn/connect to the daemon through `whisk daemon run`.
-7. Delete direct Wails-to-runtime ownership.
