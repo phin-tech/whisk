@@ -985,6 +985,24 @@ export class DeleteProjectAttachmentRequest {
     }
 }
 
+export class DeleteProjectRequest {
+    "actor"?: string;
+
+    /** Creates a new DeleteProjectRequest instance. */
+    constructor($$source: Partial<DeleteProjectRequest> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DeleteProjectRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DeleteProjectRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DeleteProjectRequest($$parsedSource as Partial<DeleteProjectRequest>);
+    }
+}
+
 export class DeleteWorkItemRequest {
     "id": string;
     "actor"?: string;

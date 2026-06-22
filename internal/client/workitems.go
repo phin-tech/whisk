@@ -26,6 +26,13 @@ func (c *HTTPClient) UpdateProject(ctx context.Context, projectID string, req pr
 	return project, err
 }
 
+func (c *HTTPClient) DeleteProject(ctx context.Context, projectID string, req protocol.DeleteProjectRequest) (protocol.Project, error) {
+	var project protocol.Project
+	path := "/v1/projects/" + url.PathEscape(projectID) + "/delete"
+	err := c.post(ctx, path, req, &project)
+	return project, err
+}
+
 func (c *HTTPClient) GetProjectDetail(ctx context.Context, projectID string) (protocol.ProjectDetail, error) {
 	var detail protocol.ProjectDetail
 	path := "/v1/projects/" + url.PathEscape(projectID) + "/detail"

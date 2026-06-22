@@ -17,7 +17,7 @@ import (
 
 func runProject(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk project <list|create|show|update|attach|context>")
+		return fmt.Errorf("usage: whisk project <list|create|show|update|delete|attach|context>")
 	}
 	switch args[0] {
 	case "list":
@@ -28,12 +28,14 @@ func runProject(args []string) error {
 		return runProjectShow(args[1:])
 	case "update":
 		return runProjectUpdate(args[1:])
+	case "delete":
+		return runProjectDelete(args[1:])
 	case "attach":
 		return runProjectAttach(args[1:])
 	case "context":
 		return runProjectContext(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk project <list|create|show|update|attach|context>")
+		return fmt.Errorf("usage: whisk project <list|create|show|update|delete|attach|context>")
 	}
 }
 
@@ -151,6 +153,35 @@ func runProjectUpdate(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	project, err := client.NewHTTP(*baseURL, nil).UpdateProject(ctx, flags.Arg(0), req)
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(project)
+	}
+	fmt.Println(project.ID)
+	return nil
+}
+
+func runProjectDelete(args []string) error {
+	flags := flag.NewFlagSet("project delete", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	yes := flags.Bool("yes", false, "confirm project deletion")
+	actor := flags.String("actor", envOrDefault("WHISK_ACTOR", ""), "actor")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return fmt.Errorf("usage: whisk project delete <project-id> -yes [-actor actor] [-json] [-url http://127.0.0.1:8787]")
+	}
+	if !*yes {
+		return fmt.Errorf("project delete requires -yes")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	project, err := client.NewHTTP(*baseURL, nil).DeleteProject(ctx, flags.Arg(0), protocol.DeleteProjectRequest{Actor: *actor})
 	if err != nil {
 		return err
 	}

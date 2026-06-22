@@ -65,6 +65,7 @@ type CreatedSession = protocol.CreatedSession
 type CreatedWorktree = protocol.CreatedWorktree
 type DeletePTYRequest = protocol.DeletePTYRequest
 type DeleteProjectAttachmentRequest = protocol.DeleteProjectAttachmentRequest
+type DeleteProjectRequest = protocol.DeleteProjectRequest
 type DeleteWorkItemRequest = protocol.DeleteWorkItemRequest
 type DetachPanePTYRequest = protocol.DetachPanePTYRequest
 type DetachedPanePTY = protocol.DetachedPanePTY

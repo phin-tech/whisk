@@ -87,6 +87,7 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("GET /v1/projects", server.listProjects)
 	mux.HandleFunc("POST /v1/projects", server.createProject)
 	mux.HandleFunc("POST /v1/projects/{projectID}/update", server.updateProject)
+	mux.HandleFunc("POST /v1/projects/{projectID}/delete", server.deleteProject)
 	mux.HandleFunc("GET /v1/projects/{projectID}/detail", server.getProjectDetail)
 	mux.HandleFunc("POST /v1/projects/{projectID}/attachments", server.addProjectAttachment)
 	mux.HandleFunc("POST /v1/project-attachments/{attachmentID}/update", server.updateProjectAttachment)

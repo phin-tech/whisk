@@ -392,6 +392,12 @@ type UpdateProject struct {
 	Now         time.Time
 }
 
+type DeleteProject struct {
+	ID    string
+	Actor string
+	Now   time.Time
+}
+
 type AddProjectAttachment struct {
 	ID               string
 	ProjectID        string
@@ -1171,6 +1177,50 @@ func (s *State) UpdateProject(req UpdateProject) (Project, error) {
 		return Project{}, err
 	}
 	s.projects[project.ID] = project
+	return cloneProject(project), nil
+}
+
+func (s *State) DeleteProject(req DeleteProject) (Project, error) {
+	project, ok := s.projects[req.ID]
+	if !ok {
+		return Project{}, fmt.Errorf("project %s not found", req.ID)
+	}
+	delete(s.projects, req.ID)
+	for id, item := range s.items {
+		if item.ProjectID == req.ID {
+			delete(s.items, id)
+		}
+	}
+	for id, run := range s.runs {
+		if run.ProjectID == req.ID {
+			delete(s.runs, id)
+		}
+	}
+	for id, artifact := range s.artifacts {
+		if artifact.ProjectID == req.ID {
+			delete(s.artifacts, id)
+		}
+	}
+	for id, question := range s.questions {
+		if question.ProjectID == req.ID {
+			delete(s.questions, id)
+		}
+	}
+	for id, gate := range s.gateReports {
+		if gate.ProjectID == req.ID {
+			delete(s.gateReports, id)
+		}
+	}
+	for id, event := range s.workflowEvents {
+		if event.ProjectID == req.ID {
+			delete(s.workflowEvents, id)
+		}
+	}
+	for id, event := range s.statusEvents {
+		if event.ProjectID == req.ID {
+			delete(s.statusEvents, id)
+		}
+	}
 	return cloneProject(project), nil
 }
 

@@ -49,7 +49,7 @@ func TestDefaultAgentProfileForPreset(t *testing.T) {
 		workitem.RunPresetWriter,
 		"custom",
 	} {
-		if got := defaultAgentProfileForPreset(preset); got != "codex" {
+		if got := defaultAgentProfileForPreset(preset); got != "" {
 			t.Fatalf("profile for %q = %q", preset, got)
 		}
 	}

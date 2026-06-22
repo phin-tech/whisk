@@ -173,6 +173,12 @@ export function DeletePTY(req: protocol$0.DeletePTYRequest): $CancellablePromise
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.DeletePTY", req);
 }
 
+export function DeleteProject(projectID: string, req: protocol$0.DeleteProjectRequest): $CancellablePromise<protocol$0.Project> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.DeleteProject", projectID, req).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
 export function DeleteProjectAttachment(attachmentID: string, req: protocol$0.DeleteProjectAttachmentRequest): $CancellablePromise<protocol$0.Project> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.DeleteProjectAttachment", attachmentID, req).then(($result: any) => {
         return $$createType1($result);

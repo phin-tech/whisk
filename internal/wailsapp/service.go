@@ -367,6 +367,10 @@ func (s *Service) UpdateProject(ctx context.Context, projectID string, req proto
 	return s.client.UpdateProject(ctx, projectID, req)
 }
 
+func (s *Service) DeleteProject(ctx context.Context, projectID string, req protocol.DeleteProjectRequest) (protocol.Project, error) {
+	return s.client.DeleteProject(ctx, projectID, req)
+}
+
 func (s *Service) ProjectDetail(ctx context.Context, projectID string) (protocol.ProjectDetail, error) {
 	return s.client.GetProjectDetail(ctx, projectID)
 }

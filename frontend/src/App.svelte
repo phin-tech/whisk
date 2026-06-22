@@ -46,6 +46,7 @@
     CreateWorktree,
     DaemonStatus as LoadDaemonStatus,
     DeletePTY,
+    DeleteProject,
     DeleteProjectAttachment,
     DeleteWorkItem,
     CheckAgentHookIntegration,
@@ -1166,6 +1167,29 @@
     }
   }
 
+  async function deleteProject(projectId: string) {
+    error = "";
+    loadingWork = true;
+    try {
+      await DeleteProject(projectId, {});
+      if (activeProjectId === projectId) {
+        activeProjectId = "";
+        projectDetail = null;
+        workItems = [];
+        workItemRuns = [];
+        artifacts = [];
+        questions = [];
+        gateReports = [];
+        workflowEvents = [];
+      }
+      await refreshProjects();
+    } catch (err) {
+      error = `Delete project failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
   async function createWorkItem(request: {
     projectId: string;
     title: string;
@@ -1903,6 +1927,7 @@
             {activeProjectId}
             loading={loadingWork || loadingSession}
             onUpdateProject={(projectId, request) => void updateProject(projectId, request)}
+            onDeleteProject={(projectId) => void deleteProject(projectId)}
             onNewSession={(projectId) => openNewProjectSession(projectId)}
             onOpenSession={(sessionId) => void openSessionById(sessionId)}
             onRemoveSession={(sessionId) => void unassignProjectSession(sessionId)}

@@ -64,6 +64,7 @@ type RuntimeClient interface {
 	ListProjects(ctx context.Context) ([]protocol.Project, error)
 	CreateProject(ctx context.Context, req protocol.CreateProjectRequest) (protocol.Project, error)
 	UpdateProject(ctx context.Context, projectID string, req protocol.UpdateProjectRequest) (protocol.Project, error)
+	DeleteProject(ctx context.Context, projectID string, req protocol.DeleteProjectRequest) (protocol.Project, error)
 	GetProjectDetail(ctx context.Context, projectID string) (protocol.ProjectDetail, error)
 	AddProjectAttachment(ctx context.Context, req protocol.AddProjectAttachmentRequest) (protocol.Project, error)
 	UpdateProjectAttachment(ctx context.Context, attachmentID string, req protocol.UpdateProjectAttachmentRequest) (protocol.Project, error)

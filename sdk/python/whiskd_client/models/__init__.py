@@ -45,6 +45,7 @@ from .create_worktree_request import CreateWorktreeRequest
 from .created_session import CreatedSession
 from .created_worktree import CreatedWorktree
 from .delete_project_attachment_request import DeleteProjectAttachmentRequest
+from .delete_project_request import DeleteProjectRequest
 from .delete_work_item_request import DeleteWorkItemRequest
 from .detach_pane_pty_request import DetachPanePTYRequest
 from .detached_pane_pty import DetachedPanePTY
@@ -190,6 +191,7 @@ __all__ = (
     "CreateWorkItemRequest",
     "CreateWorktreeRequest",
     "DeleteProjectAttachmentRequest",
+    "DeleteProjectRequest",
     "DeleteWorkItemRequest",
     "DetachedPanePTY",
     "DetachPanePTYRequest",

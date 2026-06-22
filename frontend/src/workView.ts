@@ -24,6 +24,12 @@ type QuestionLike = {
   status: string;
 };
 
+type AgentPromptLike = {
+  id?: string;
+  runId?: string;
+  status: string;
+};
+
 type GateLike = {
   id?: string;
   name?: string;
@@ -93,6 +99,7 @@ export function deriveWorkItemAttention<T extends WorkItemLike>(
   context: {
     runs?: RunLike[];
     questions?: QuestionLike[];
+    agentPrompts?: AgentPromptLike[];
     gates?: GateLike[];
     artifacts?: ArtifactLike[];
     stageRequiresWorktree?: boolean;
@@ -122,6 +129,18 @@ export function deriveWorkItemAttention<T extends WorkItemLike>(
     signals.push({
       id: "open-questions",
       label: `${openQuestions} ${openQuestions === 1 ? "question" : "questions"}`,
+      tone: "warning",
+    });
+  }
+
+  const itemRunIDs = new Set(runs.filter((run) => run.workItemId === item.id).map((run) => run.id));
+  const pendingAgentQuestions = (context.agentPrompts ?? []).filter(
+    (prompt) => prompt.status === "pending" && prompt.runId && itemRunIDs.has(prompt.runId),
+  ).length;
+  if (pendingAgentQuestions > 0) {
+    signals.push({
+      id: "agent-questions",
+      label: `${pendingAgentQuestions} agent ${pendingAgentQuestions === 1 ? "question" : "questions"}`,
       tone: "warning",
     });
   }

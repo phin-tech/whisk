@@ -9,7 +9,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 19
+const DaemonAPIVersion = 20
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -507,6 +507,10 @@ type UpdateProjectRequest struct {
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Slug        *string `json:"slug,omitempty"`
+}
+
+type DeleteProjectRequest struct {
+	Actor string `json:"actor,omitempty"`
 }
 
 type AddProjectAttachmentRequest struct {

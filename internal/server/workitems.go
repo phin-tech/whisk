@@ -54,6 +54,22 @@ func (s *HTTPServer) updateProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, project)
 }
 
+func (s *HTTPServer) deleteProject(w http.ResponseWriter, r *http.Request) {
+	var req protocol.DeleteProjectRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	project, err := s.runtime.DeleteProject(r.Context(), app.DeleteProjectRequest{
+		ID:    pathValue(r, "projectID", ""),
+		Actor: req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, project)
+}
+
 func (s *HTTPServer) getProjectDetail(w http.ResponseWriter, r *http.Request) {
 	detail, err := s.runtime.GetProjectDetail(r.Context(), pathValue(r, "projectID", ""))
 	if err != nil {

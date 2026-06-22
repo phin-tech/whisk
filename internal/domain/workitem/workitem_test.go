@@ -408,6 +408,112 @@ func TestDeleteWorkItemRemovesOwnedWorkflowRecords(t *testing.T) {
 	}
 }
 
+func TestDeleteProjectCascadesOwnedRecordsOnly(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	project := mustProject(t, state, "proj_01", "One")
+	otherProject := mustProject(t, state, "proj_02", "Two")
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+	other := mustWorkItem(t, state, "wi_02", otherProject.ID)
+	if _, err := state.AddProjectAttachment(AddProjectAttachment{
+		ID:        "att_01",
+		ProjectID: project.ID,
+		Kind:      AttachmentKindNote,
+		Note:      "delete with project",
+		Now:       now,
+	}); err != nil {
+		t.Fatalf("add attachment: %v", err)
+	}
+	run, err := state.StartPlanning(StartPlanning{
+		ID:           "run_01",
+		HistoryID:    "hist_run_01",
+		RunHistoryID: "run_hist_01",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	if _, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "artifact_01",
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Title:      "Plan",
+		Body:       "Test then implement.",
+		Actor:      "agent",
+		Now:        now,
+	}); err != nil {
+		t.Fatalf("submit plan: %v", err)
+	}
+	if _, err := state.AskQuestion(AskQuestion{
+		ID:         "question_01",
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Prompt:     "Which branch?",
+		Actor:      "agent",
+		Now:        now,
+	}); err != nil {
+		t.Fatalf("ask question: %v", err)
+	}
+	if _, err := state.ReportStatus(ReportStatus{
+		ID:           "status_01",
+		RunHistoryID: "run_hist_status_01",
+		Kind:         StatusKindQuestion,
+		Message:      "Need input.",
+		Actor:        "agent",
+		RunID:        run.ID,
+		Now:          now,
+	}); err != nil {
+		t.Fatalf("report status: %v", err)
+	}
+	if _, err := state.StartPlanning(StartPlanning{
+		ID:           "run_other",
+		HistoryID:    "hist_run_other",
+		RunHistoryID: "run_hist_other",
+		WorkItemID:   other.ID,
+		Actor:        "agent",
+		Now:          now,
+	}); err != nil {
+		t.Fatalf("start other planning: %v", err)
+	}
+
+	deleted, err := state.DeleteProject(DeleteProject{ID: project.ID, Actor: "user", Now: now})
+	if err != nil {
+		t.Fatalf("delete project: %v", err)
+	}
+	if deleted.ID != project.ID {
+		t.Fatalf("deleted project = %#v", deleted)
+	}
+	if _, ok := state.GetProject(project.ID); ok {
+		t.Fatalf("project still exists")
+	}
+	if got := state.ListWorkItems(project.ID); len(got) != 0 {
+		t.Fatalf("project items remain = %#v", got)
+	}
+	if got := state.ListRuns(item.ID); len(got) != 0 {
+		t.Fatalf("project runs remain = %#v", got)
+	}
+	if got := state.ListArtifacts(item.ID); len(got) != 0 {
+		t.Fatalf("project artifacts remain = %#v", got)
+	}
+	if got := state.ListQuestions(item.ID); len(got) != 0 {
+		t.Fatalf("project questions remain = %#v", got)
+	}
+	if got := state.ListWorkflowEvents(item.ID); len(got) != 0 {
+		t.Fatalf("project workflow events remain = %#v", got)
+	}
+	if got := state.ListStatusEvents(ListStatusEvents{ProjectID: project.ID}); len(got) != 0 {
+		t.Fatalf("project status events remain = %#v", got)
+	}
+	if got := state.ListWorkItems(otherProject.ID); len(got) != 1 || got[0].ID != other.ID {
+		t.Fatalf("other project items = %#v", got)
+	}
+	if got := state.ListRuns(other.ID); len(got) != 1 || got[0].ID != "run_other" {
+		t.Fatalf("other project runs = %#v", got)
+	}
+}
+
 func TestPlanPromptTellsAgentToSubmitDraftPlan(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)

@@ -30,6 +30,11 @@ type UpdateProjectRequest struct {
 	Slug        *string
 }
 
+type DeleteProjectRequest struct {
+	ID    string
+	Actor string
+}
+
 type AddProjectAttachmentRequest struct {
 	ProjectID        string
 	Kind             string
@@ -354,6 +359,37 @@ func (r *Runtime) UpdateProject(ctx context.Context, req UpdateProjectRequest) (
 		return workitem.Project{}, err
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return project, nil
+}
+
+func (r *Runtime) DeleteProject(ctx context.Context, req DeleteProjectRequest) (workitem.Project, error) {
+	project, err := r.workItems.DeleteProject(workitem.DeleteProject{
+		ID:    req.ID,
+		Actor: req.Actor,
+		Now:   time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.Project{}, err
+	}
+	for _, current := range r.state.List() {
+		if current.ProjectID != req.ID {
+			continue
+		}
+		if _, err := r.state.SetSessionProject(session.SetSessionProject{
+			SessionID: current.ID,
+			ProjectID: "",
+		}); err != nil {
+			return workitem.Project{}, err
+		}
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.Project{}, err
+	}
+	if err := r.persistSessions(ctx); err != nil {
+		return workitem.Project{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
 	return project, nil
 }
 
@@ -1251,9 +1287,9 @@ func runPhaseLabel(run workitem.WorkItemRun) string {
 func defaultAgentProfileForPreset(preset string) string {
 	switch preset {
 	case workitem.RunPresetReader, workitem.RunPresetManager, workitem.RunPresetReviewer, workitem.RunPresetWriter:
-		return "codex"
+		return ""
 	default:
-		return "codex"
+		return ""
 	}
 }
 

@@ -34,6 +34,7 @@ export {
     CreatedWorktree,
     DeletePTYRequest,
     DeleteProjectAttachmentRequest,
+    DeleteProjectRequest,
     DeleteWorkItemRequest,
     DetachPanePTYRequest,
     DetachedPanePTY,

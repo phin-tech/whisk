@@ -118,6 +118,7 @@ var APIRoutes = []APIRoute{
 	{Method: "GET", Path: "/v1/projects", OperationID: "listProjects", Tag: "workitems", Response: apiProjectList},
 	{Method: "POST", Path: "/v1/projects", OperationID: "createProject", Tag: "workitems", Request: CreateProjectRequest{}, Response: Project{}, Status: 201},
 	{Method: "POST", Path: "/v1/projects/{projectID}/update", OperationID: "updateProject", Tag: "workitems", Request: UpdateProjectRequest{}, Response: Project{}},
+	{Method: "POST", Path: "/v1/projects/{projectID}/delete", OperationID: "deleteProject", Tag: "workitems", Request: DeleteProjectRequest{}, Response: Project{}},
 	{Method: "GET", Path: "/v1/projects/{projectID}/detail", OperationID: "getProjectDetail", Tag: "workitems", Response: ProjectDetail{}},
 	{Method: "POST", Path: "/v1/projects/{projectID}/attachments", OperationID: "addProjectAttachment", Tag: "workitems", Request: AddProjectAttachmentRequest{}, Response: Project{}, Status: 201},
 	{Method: "POST", Path: "/v1/project-attachments/{attachmentID}/update", OperationID: "updateProjectAttachment", Tag: "workitems", Request: UpdateProjectAttachmentRequest{}, Response: Project{}},

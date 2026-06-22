@@ -94,6 +94,29 @@ describe("workView", () => {
     ).toEqual({ severity: "none", terminalRunId: "", signals: [] });
   });
 
+  it("shows pending agent prompts linked through work item runs", () => {
+    expect(
+      deriveWorkItemAttention(
+        { id: "a", stageId: "execution", worktree: { branch: "feature" } },
+        {
+          runs: [
+            { id: "run-1", workItemId: "a", status: "running" },
+            { id: "run-2", workItemId: "b", status: "running" },
+          ],
+          agentPrompts: [
+            { id: "prompt-1", runId: "run-1", status: "pending" },
+            { id: "prompt-2", runId: "run-1", status: "resolved" },
+            { id: "prompt-3", runId: "run-2", status: "pending" },
+          ],
+        },
+      ),
+    ).toEqual({
+      severity: "warning",
+      terminalRunId: "",
+      signals: [{ id: "agent-questions", label: "1 agent question", tone: "warning" }],
+    });
+  });
+
   it("treats queued runs as visible actionable info", () => {
     expect(
       deriveWorkItemAttention(

@@ -36,6 +36,7 @@
     projectId: string,
     request: { name: string; description: string },
   ) => void;
+  export let onDeleteProject: (projectId: string) => void;
   export let onNewSession: (projectId: string) => void;
   export let onOpenSession: (sessionId: string) => void;
   export let onRemoveSession: (sessionId: string) => void;
@@ -155,6 +156,13 @@
       name: editName.trim(),
       description: editDescription.trim(),
     });
+  }
+
+  function deleteProject() {
+    if (!visibleDetail) return;
+    if (window.confirm(`Delete project ${visibleDetail.project.name}? Sessions and files will be kept.`)) {
+      onDeleteProject(visibleDetail.project.id);
+    }
   }
 
   function createCard() {
@@ -322,6 +330,15 @@
                 >
                   <Plus size={14} />
                   <span>New card</span>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center gap-1 rounded border border-red/30 bg-red/10 px-2.5 text-[12px] text-red transition-colors hover:border-red/50 hover:bg-red/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={loading}
+                  on:click={deleteProject}
+                >
+                  <Trash2 size={14} />
+                  <span>Delete</span>
                 </button>
               </div>
             </div>

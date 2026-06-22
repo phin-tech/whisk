@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/domain/workitem"
@@ -128,6 +129,55 @@ func TestRunProjectUpdatePrintsJSONContract(t *testing.T) {
 		t.Fatalf("json output %q: %v", output, err)
 	}
 	if project.ID != "proj_01" || project.Description != "Daemon owned" {
+		t.Fatalf("project = %#v", project)
+	}
+}
+
+func TestRunProjectDeleteRequiresConfirmation(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := run([]string{"project", "delete", "-url", server.URL, "proj_01"})
+	if err == nil || !strings.Contains(err.Error(), "requires -yes") {
+		t.Fatalf("delete error = %v", err)
+	}
+	if called {
+		t.Fatalf("delete endpoint was called without confirmation")
+	}
+}
+
+func TestRunProjectDeletePrintsJSONContract(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/projects/proj_01/delete" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req protocol.DeleteProjectRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.Actor != "user" {
+			t.Fatalf("request = %#v", req)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.Project{ID: "proj_01", Name: "App"})
+	}))
+	defer server.Close()
+
+	output, err := captureStdout(func() error {
+		return run([]string{"project", "delete", "-url", server.URL, "-yes", "-actor", "user", "-json", "proj_01"})
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var project protocol.Project
+	if err := json.Unmarshal([]byte(output), &project); err != nil {
+		t.Fatalf("json output %q: %v", output, err)
+	}
+	if project.ID != "proj_01" {
 		t.Fatalf("project = %#v", project)
 	}
 }
@@ -386,6 +436,31 @@ func TestRunCommandsUseDaemonAPI(t *testing.T) {
 	}
 	if requests["POST /v1/work-item-runs"] != 1 || requests["GET /v1/work-item-runs"] != 1 || requests["POST /v1/work-item-runs/run_01/cancel"] != 1 {
 		t.Fatalf("requests = %#v", requests)
+	}
+}
+
+func TestRunStartDoesNotSendImplicitCodexProfile(t *testing.T) {
+	t.Setenv("WHISK_AGENT_PROFILE", "")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/work-item-runs" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req protocol.StartWorkItemRunRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode start: %v", err)
+		}
+		if req.AgentProfileID != "" {
+			t.Fatalf("agent profile = %q", req.AgentProfileID)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(protocol.WorkItemRun{ID: "run_01", WorkItemID: req.WorkItemID, Status: "queued"})
+	}))
+	defer server.Close()
+
+	if _, err := captureStdout(func() error {
+		return run([]string{"run", "start", "-url", server.URL, "-work-item", "wi_01", "-json"})
+	}); err != nil {
+		t.Fatalf("start: %v", err)
 	}
 }
 

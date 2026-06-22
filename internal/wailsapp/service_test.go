@@ -614,6 +614,8 @@ type runtimeClientFake struct {
 	createProjectReq           protocol.CreateProjectRequest
 	updateProjectID            string
 	updateProjectReq           protocol.UpdateProjectRequest
+	deleteProjectID            string
+	deleteProjectReq           protocol.DeleteProjectRequest
 	projectDetailID            string
 	addProjectAttachmentReq    protocol.AddProjectAttachmentRequest
 	updateProjectAttachmentID  string
@@ -827,6 +829,12 @@ func (f *runtimeClientFake) UpdateProject(_ context.Context, projectID string, r
 		project.Description = *req.Description
 	}
 	return project, nil
+}
+
+func (f *runtimeClientFake) DeleteProject(_ context.Context, projectID string, req protocol.DeleteProjectRequest) (protocol.Project, error) {
+	f.deleteProjectID = projectID
+	f.deleteProjectReq = req
+	return protocol.Project{ID: projectID}, nil
 }
 
 func (f *runtimeClientFake) GetProjectDetail(_ context.Context, projectID string) (protocol.ProjectDetail, error) {

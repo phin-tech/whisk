@@ -64,14 +64,14 @@ func runRunStart(args []string) error {
 	sessionID := flags.String("session", "", "session id")
 	ptyID := flags.String("pty", "", "pty id")
 	launch := flags.Bool("launch", true, "launch an agent PTY for the run")
-	agentProfileID := flags.String("agent-profile", envOrDefault("WHISK_AGENT_PROFILE", "codex"), "agent profile id")
+	agentProfileID := flags.String("agent-profile", envOrDefault("WHISK_AGENT_PROFILE", ""), "agent profile id")
 	systemPrompt := flags.String("system-prompt", "", "agent system prompt")
 	actor := flags.String("actor", envOrDefault("WHISK_ACTOR", ""), "actor")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 || *workItemID == "" {
-		return fmt.Errorf("usage: whisk run start -work-item <id> [-preset writer] [-template implement] [-launch=false] [-agent-profile codex] [-system-prompt text] [-session id] [-pty id] [-actor actor] [-json] [-url http://127.0.0.1:8787]")
+		return fmt.Errorf("usage: whisk run start -work-item <id> [-preset writer] [-template implement] [-launch=false] [-agent-profile id] [-system-prompt text] [-session id] [-pty id] [-actor actor] [-json] [-url http://127.0.0.1:8787]")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
