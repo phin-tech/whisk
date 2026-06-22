@@ -6,7 +6,7 @@
 name: "whisk-app"
 arch: ${GOARCH}
 platform: "linux"
-version: "0.0.2-pre.2"
+version: "0.0.2-pre.3"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
@@ -19,8 +19,6 @@ release: "1"
 contents:
   - src: "./bin/whisk-app"
     dst: "/usr/local/bin/whisk-app"
-  - src: "./bin/whisk"
-    dst: "/usr/local/bin/whisk"
   - src: "./build/appicon.png"
     dst: "/usr/share/icons/hicolor/128x128/apps/whisk-app.png"
   - src: "./build/linux/whisk-app.desktop"
