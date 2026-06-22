@@ -6,4 +6,15 @@ describe("NewSessionDialog", () => {
     expect(source).not.toMatch(/Root directory/);
     expect(source).not.toMatch(/Working directory/);
   });
+
+  it("lets new sessions opt into agent bridge env injection", () => {
+    expect(source).toMatch(/Agent bridge/);
+    expect(source).toMatch(/agentBridge: agentBridge/);
+  });
+
+  it("auto-detects known agent commands for bridge provider defaults", () => {
+    expect(source).toMatch(/function commandProvider/);
+    expect(source).toMatch(/base === "claude"/);
+    expect(source).toMatch(/base === "codex"/);
+  });
 });

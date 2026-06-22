@@ -45,7 +45,7 @@
   export let onSelectAgentPrompt: (prompt: AgentPrompt) => void;
   export let onSelectAgentBridgeEvent: (event: AgentBridgeEvent) => void;
   export let onResolveAgentBridgeApproval: (id: string, action: "allow" | "deny") => void;
-  export let onResolveAgentPrompt: (id: string, answer: string) => void;
+  export let onResolveAgentPrompt: (prompt: AgentPrompt, answer: string, tuiInput?: string) => void;
   export let onRefreshWork: () => void;
   export let onNewProject: () => void;
   export let onSelectProject: (projectId: string) => void;

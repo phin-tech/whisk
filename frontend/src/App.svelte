@@ -100,6 +100,7 @@
     UntrustPlugin,
     UpdateProject,
     UpdateProjectAttachment,
+    WritePTY,
     ListPlugins,
     OnboardingStatus as LoadOnboardingStatus,
     ListRegistryPlugins,
@@ -662,6 +663,7 @@
       if (ptyTraceEnabled) void LogPTYTrace(ptyInputTraceLine("frontend.websocket", ptyId, data, performance.now()));
       return;
     }
+    await WritePTY({ ptyId, data });
     if (ptyTraceEnabled) void LogPTYTrace(ptyInputTraceLine("frontend.missing-websocket", ptyId, data, performance.now()));
   }
 
@@ -690,7 +692,12 @@
     name: string;
     rootDir: string;
     workingDir: string;
-    initialPty: { cols: number; rows: number; command: string } | null;
+    initialPty: {
+      cols: number;
+      rows: number;
+      command: string;
+      agentBridge?: { enabled: boolean; provider: string };
+    } | null;
   }) {
     error = "";
     loadingSession = true;
@@ -1075,12 +1082,14 @@
     }
   }
 
-  async function resolveAgentPrompt(promptId: string, answer: string) {
+  async function resolveAgentPrompt(prompt: AgentPrompt, answer: string, tuiInput = "") {
     error = "";
     loadingStatusEvents = true;
     try {
-      await ResolveAgentPrompt(promptId, { answer });
+      if (tuiInput && prompt.ptyId) await writePTYInput(prompt.ptyId, tuiInput);
+      await ResolveAgentPrompt(prompt.id, { answer });
       await refreshStatusEvents();
+      await refreshVisibleOutput();
     } catch (err) {
       error = `Resolve prompt failed: ${backendError(err)}`;
     } finally {
@@ -1858,7 +1867,7 @@
         onSelectAgentPrompt={(prompt) => void selectAgentPrompt(prompt)}
         onSelectAgentBridgeEvent={(event) => void selectAgentBridgeEvent(event)}
         onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
-        onResolveAgentPrompt={(id, answer) => void resolveAgentPrompt(id, answer)}
+        onResolveAgentPrompt={(prompt, answer, tuiInput) => void resolveAgentPrompt(prompt, answer, tuiInput)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
         onSelectProject={activeSidebar === "projects" ? selectProjectDetail : selectProject}
@@ -2102,7 +2111,7 @@
         onSelectAgentPrompt={(prompt) => void selectAgentPrompt(prompt)}
         onSelectAgentBridgeEvent={(event) => void selectAgentBridgeEvent(event)}
         onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
-        onResolveAgentPrompt={(id, answer) => void resolveAgentPrompt(id, answer)}
+        onResolveAgentPrompt={(prompt, answer, tuiInput) => void resolveAgentPrompt(prompt, answer, tuiInput)}
         onRefreshWork={() => void refreshProjects()}
         onNewProject={openNewProject}
         onSelectProject={activeSidebar === "projects" ? selectProjectDetail : selectProject}

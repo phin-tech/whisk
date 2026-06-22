@@ -215,7 +215,7 @@ func TestPromptAnswerToProviderOutput(t *testing.T) {
 		t.Fatalf("hookSpecificOutput = %#v", hookSpecific)
 	}
 
-	out, ok = agentbridge.PromptAnswerToProviderOutput(agentbridge.ProviderClaude, "PreToolUse", "", "Uranus", map[string]any{
+	out, ok = agentbridge.PromptAnswerToProviderOutput(agentbridge.ProviderClaude, "PermissionRequest", "", "Uranus", map[string]any{
 		"questions": []any{
 			map[string]any{
 				"question": "Which planet rotates on its side?",
@@ -227,7 +227,7 @@ func TestPromptAnswerToProviderOutput(t *testing.T) {
 		t.Fatalf("expected AskUserQuestion output")
 	}
 	hookSpecific, ok = out["hookSpecificOutput"].(map[string]any)
-	if !ok || hookSpecific["hookEventName"] != "PreToolUse" || hookSpecific["permissionDecision"] != "allow" {
+	if !ok || hookSpecific["hookEventName"] != "PermissionRequest" || hookSpecific["permissionDecision"] != "allow" {
 		t.Fatalf("AskUserQuestion hookSpecificOutput = %#v", hookSpecific)
 	}
 	updatedInput, ok := hookSpecific["updatedInput"].(map[string]any)

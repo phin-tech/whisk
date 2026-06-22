@@ -479,7 +479,7 @@ func TestRuntimeAgentBridgeHookAnswersClaudeAskUserQuestion(t *testing.T) {
 			BridgeID:   bridgeID,
 			Token:      token,
 			Provider:   "claude",
-			EventName:  "PreToolUse",
+			EventName:  "PermissionRequest",
 			ToolName:   "AskUserQuestion",
 			ToolInput:  toolInput,
 			RawPayload: map[string]any{"tool_input": toolInput},

@@ -342,7 +342,7 @@ func PromptAnswerToProviderOutput(_ Provider, eventName string, elicitationID st
 	if answer == "" {
 		return nil, false
 	}
-	if eventName == "PreToolUse" {
+	if eventName == "PreToolUse" || eventName == "PermissionRequest" {
 		if len(toolInputs) == 0 {
 			return nil, false
 		}

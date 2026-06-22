@@ -118,7 +118,7 @@ func (r *Runtime) HandleAgentBridgeHook(ctx context.Context, req AgentBridgeHook
 }
 
 func isAgentPromptHook(req AgentBridgeHookRequest) bool {
-	return req.EventName == "Elicitation" || (req.EventName == "PreToolUse" && req.ToolName == "AskUserQuestion")
+	return req.EventName == "Elicitation" || ((req.EventName == "PreToolUse" || req.EventName == "PermissionRequest") && req.ToolName == "AskUserQuestion")
 }
 
 var ErrUnauthorizedAgentBridgeHook = fmt.Errorf("unauthorized agent bridge hook")

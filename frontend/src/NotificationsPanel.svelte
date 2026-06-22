@@ -27,12 +27,16 @@
   export let onSelectAgentPrompt: (prompt: AgentPrompt) => void;
   export let onSelectAgentBridgeEvent: (event: AgentBridgeEvent) => void;
   export let onResolveAgentBridgeApproval: (id: string, action: "allow" | "deny") => void;
-  export let onResolveAgentPrompt: (id: string, answer: string) => void;
+  export let onResolveAgentPrompt: (prompt: AgentPrompt, answer: string, tuiInput?: string) => void;
 
   let expandedIds = new Set<string>();
+  let promptAnswers: Record<string, string> = {};
 
   $: rows = notificationRows(statusEvents);
-  $: hookRows = agentHookNotificationRows(agentBridgeEvents, sessions);
+  $: promptMessages = new Set(agentPrompts.map((prompt) => prompt.message).filter(Boolean));
+  $: hookRows = agentHookNotificationRows(agentBridgeEvents, sessions).filter(
+    (hook) => !promptMessages.has(hook.title) && !promptMessages.has(hook.message),
+  );
   $: hasRows = rows.length > 0 || agentPrompts.length > 0 || agentBridgeApprovals.length > 0 || hookRows.length > 0;
   $: canClear = notificationClearEnabled(statusEvents, agentBridgeEvents);
 
@@ -55,6 +59,25 @@
     if (next.has(id)) next.delete(id);
     else next.add(id);
     expandedIds = next;
+  }
+
+  function promptAnswer(id: string) {
+    return (promptAnswers[id] || "").trim();
+  }
+
+  function setPromptAnswer(id: string, event: Event) {
+    promptAnswers = { ...promptAnswers, [id]: (event.currentTarget as HTMLInputElement).value };
+  }
+
+  function resolveTextPrompt(prompt: AgentPrompt) {
+    const answer = promptAnswer(prompt.id);
+    if (!answer) return;
+    onResolveAgentPrompt(prompt, answer);
+  }
+
+  function resolveOptionPrompt(prompt: AgentPrompt, answer: string, index: number) {
+    const tuiInput = prompt.provider === "claude" && prompt.toolName === "AskUserQuestion" ? `${index + 1}\n` : "";
+    onResolveAgentPrompt(prompt, answer, tuiInput);
   }
 </script>
 
@@ -92,58 +115,88 @@
     {:else}
       <div class="space-y-1">
         {#each agentPrompts as prompt (prompt.id)}
+          {@const expanded = isExpanded(prompt.id)}
+          {@const hasOptions = (prompt.options || []).length > 0}
           <div
             class="rounded border border-accent-dim/50 bg-accent-dim/10 px-2.5 py-2 text-text-primary"
           >
             <div class="flex min-w-0 items-start gap-2">
-              {#if prompt.kind === "approval"}
-                <ShieldQuestion size={14} class="mt-0.5 shrink-0 text-accent" />
-              {:else}
-                <CircleHelp size={14} class="mt-0.5 shrink-0 text-accent" />
-              {/if}
+              <button
+                type="button"
+                class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-accent transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+                aria-label={expanded ? "Collapse response controls" : "Expand response controls"}
+                aria-expanded={expanded}
+                on:click={() => toggleExpanded(prompt.id)}
+              >
+                <ChevronRight size={13} class="transition-transform {expanded ? 'rotate-90' : ''}" />
+              </button>
               <div class="min-w-0 flex-1">
                 <button
                   type="button"
                   class="w-full min-w-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-                  on:click={() => onSelectAgentPrompt(prompt)}
+                  on:click={() => toggleExpanded(prompt.id)}
+                  on:dblclick|stopPropagation={() => onSelectAgentPrompt(prompt)}
                 >
                   <div class="flex min-w-0 items-center justify-between gap-2">
                     <div class="truncate text-[12px] font-semibold">
-                      {prompt.kind === "approval" ? "Agent approval" : "Agent question"}
+                      {prompt.message}
                     </div>
                     <div class="max-w-[72px] shrink-0 truncate rounded border border-border-subtle px-1.5 py-0.5 text-[10px] uppercase text-text-muted">
                       {prompt.provider || "unknown"}
                     </div>
                   </div>
                   <div class="mt-1 line-clamp-3 text-[12px] leading-4 text-text-secondary">
-                    {prompt.message}
+                    {prompt.provider ? `${prompt.provider.charAt(0).toUpperCase()}${prompt.provider.slice(1)} ` : "Agent "}{prompt.kind}
                   </div>
                   <div class="mt-1 min-w-0 break-all font-mono text-[10px] leading-4 text-text-muted">
                     {prompt.cwd || `${prompt.sessionId || "unowned"} / ${prompt.ptyId || "no pty"}`}
                   </div>
+                  {#if !expanded}
+                    <div class="mt-1 text-[10px] text-text-muted">Click to respond</div>
+                  {/if}
                 </button>
-                <div class="mt-2 grid grid-cols-2 gap-1">
-                  {#each prompt.options || [] as option}
-                    <button
-                      type="button"
-                      class="inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded border text-[12px] font-semibold text-text-primary transition-colors disabled:cursor-default disabled:opacity-60 {option.value ===
-                      'allow'
-                        ? 'border-green/30 bg-green/10 hover:border-green/60 hover:bg-green/15'
-                        : option.value === 'deny'
-                          ? 'border-red/30 bg-red/10 hover:border-red/60 hover:bg-red/15'
-                          : 'border-accent-dim/50 bg-accent-dim/15 hover:border-accent hover:bg-accent-dim/20'}"
-                      disabled={loading}
-                      on:click|stopPropagation={() => onResolveAgentPrompt(prompt.id, option.value)}
-                    >
-                      {#if option.value === "allow"}
-                        <CheckCircle2 size={13} />
-                      {:else if option.value === "deny"}
-                        <Ban size={13} />
-                      {/if}
-                      <span class="truncate">{option.label}</span>
-                    </button>
-                  {/each}
-                </div>
+                {#if expanded}
+                  {#if hasOptions}
+                    <div class="mt-2 grid grid-cols-2 gap-1">
+                      {#each prompt.options || [] as option, index}
+                        <button
+                          type="button"
+                          class="inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded border text-[12px] font-semibold text-text-primary transition-colors disabled:cursor-default disabled:opacity-60 {option.value ===
+                          'allow'
+                            ? 'border-green/30 bg-green/10 hover:border-green/60 hover:bg-green/15'
+                            : option.value === 'deny'
+                              ? 'border-red/30 bg-red/10 hover:border-red/60 hover:bg-red/15'
+                              : 'border-accent-dim/50 bg-accent-dim/15 hover:border-accent hover:bg-accent-dim/20'}"
+                          disabled={loading}
+                          on:click|stopPropagation={() => resolveOptionPrompt(prompt, option.value, index)}
+                        >
+                          {#if option.value === "allow"}
+                            <CheckCircle2 size={13} />
+                          {:else if option.value === "deny"}
+                            <Ban size={13} />
+                          {/if}
+                          <span class="truncate">{option.label}</span>
+                        </button>
+                      {/each}
+                    </div>
+                  {:else}
+                    <form class="mt-2 flex min-w-0 gap-1" on:submit|preventDefault={() => resolveTextPrompt(prompt)}>
+                      <input
+                        class="min-w-0 flex-1 rounded border border-border-subtle bg-bg-base px-2 py-1 text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
+                        placeholder="Type response"
+                        value={promptAnswers[prompt.id] || ""}
+                        on:input={(event) => setPromptAnswer(prompt.id, event)}
+                      />
+                      <button
+                        type="submit"
+                        class="shrink-0 rounded border border-accent-dim/50 bg-accent-dim/15 px-2 py-1 text-[12px] font-semibold text-text-primary transition-colors hover:border-accent disabled:cursor-default disabled:opacity-60"
+                        disabled={loading || !promptAnswer(prompt.id)}
+                      >
+                        Send
+                      </button>
+                    </form>
+                  {/if}
+                {/if}
               </div>
             </div>
           </div>

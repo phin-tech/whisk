@@ -133,7 +133,7 @@ func TestNormalizeEventMapsClaudeAskUserQuestionToolInput(t *testing.T) {
 		normalized.Options[0].Value != "Fix a bug" ||
 		normalized.Options[1].Label != "Build a feature" ||
 		normalized.Options[1].Value != "Build a feature" ||
-		normalized.Answerable {
+		!normalized.Answerable {
 		t.Fatalf("normalized AskUserQuestion = %#v", normalized)
 	}
 

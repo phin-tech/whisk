@@ -7,4 +7,12 @@ describe("NotificationsPanel", () => {
     expect(source).toContain("max-w-[72px]");
     expect(source).toContain("break-all");
   });
+
+  it("expands prompt rows to answer inline", () => {
+    expect(source).toContain("Click to respond");
+    expect(source).toContain("toggleExpanded(prompt.id)");
+    expect(source).toContain("resolveOptionPrompt(prompt, option.value, index)");
+    expect(source).toContain("resolveTextPrompt(prompt)");
+    expect(source).toContain("promptMessages.has(hook.title)");
+  });
 });

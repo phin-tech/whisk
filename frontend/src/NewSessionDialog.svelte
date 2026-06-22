@@ -13,17 +13,30 @@
     name: string;
     rootDir: string;
     workingDir: string;
-    initialPty: { cols: number; rows: number; command: string } | null;
+    initialPty: {
+      cols: number;
+      rows: number;
+      command: string;
+      agentBridge?: { enabled: boolean; provider: string };
+    } | null;
   }) => void;
 
   let name = "";
   let directory = "";
   let command = "";
   let initialPty = true;
+  let agentBridge = false;
+  let agentProvider = "claude";
+  let agentBridgeTouched = false;
   let localError = "";
   let previousVisible = false;
 
   $: canCreate = directory.trim().length > 0 && !loading;
+  $: detectedProvider = commandProvider(command);
+  $: if (initialPty && detectedProvider && !agentBridgeTouched) {
+    agentBridge = true;
+    agentProvider = detectedProvider;
+  }
   $: if (visible && !previousVisible) reset();
   $: previousVisible = visible;
 
@@ -32,7 +45,22 @@
     directory = initialWorkingDir || initialRootDir;
     command = "";
     initialPty = true;
+    agentBridge = false;
+    agentProvider = "claude";
+    agentBridgeTouched = false;
     localError = "";
+  }
+
+  function commandProvider(value: string) {
+    const base = value.trim().split(/\s+/)[0]?.split(/[\\/]/).pop()?.toLowerCase() || "";
+    if (base === "claude") return "claude";
+    if (base === "codex") return "codex";
+    return "";
+  }
+
+  function setAgentBridge(enabled: boolean) {
+    agentBridgeTouched = true;
+    agentBridge = enabled;
   }
 
   function submit() {
@@ -43,7 +71,14 @@
       name: name.trim(),
       rootDir: initialRootDir.trim() || selectedDir,
       workingDir: selectedDir,
-      initialPty: initialPty ? { cols: 0, rows: 0, command: command.trim() } : null,
+      initialPty: initialPty
+        ? {
+            cols: 0,
+            rows: 0,
+            command: command.trim(),
+            agentBridge: agentBridge ? { enabled: true, provider: agentProvider } : undefined,
+          }
+        : null,
     });
   }
 
@@ -178,6 +213,29 @@
               disabled={loading}
             />
           </label>
+
+          <div class="flex items-center justify-between gap-3 rounded border border-border-subtle bg-bg-surface/25 px-3 py-2">
+            <label class="flex min-w-0 items-center gap-2 text-[13px] text-text-primary">
+              <input
+                class="h-4 w-4 rounded border-border-subtle bg-bg-deep accent-accent"
+                type="checkbox"
+                checked={agentBridge}
+                disabled={loading}
+                on:change={(event) => setAgentBridge(event.currentTarget.checked)}
+              />
+              <span>Agent bridge</span>
+            </label>
+            {#if agentBridge}
+              <select
+                class="h-8 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none focus:border-accent-dim"
+                bind:value={agentProvider}
+                disabled={loading}
+              >
+                <option value="claude">Claude</option>
+                <option value="codex">Codex</option>
+              </select>
+            {/if}
+          </div>
         {/if}
 
         {#if localError}
