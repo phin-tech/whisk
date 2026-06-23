@@ -131,13 +131,14 @@
     type PTYStreamFrame,
     writePTYInputOverSocket,
   } from "./ptyStream";
-  import { commandIdForShortcut, sessionSplitCommands } from "./sessionCommands";
+  import { sessionSplitCommands } from "./sessionCommands";
   import { activeWindow, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
     normalizeStartupView,
     startupTarget,
     type StartupView,
   } from "./startupView";
+  import { nextSidebarAfterToggle } from "./sidebarCommands";
 
   type SidebarId = "sessions" | "ptys" | "work" | "projects" | "notifications";
   type MainView = "session" | "work" | "projects";
@@ -238,6 +239,12 @@
       run: () => {
         commandPaletteOpen = true;
       },
+    },
+    {
+      id: "sidebar.toggle",
+      title: "Show/Hide Sidebar",
+      shortcut: "Cmd/Ctrl \\",
+      run: toggleCurrentSidebar,
     },
     {
       id: "notifications.clear",
@@ -1774,6 +1781,11 @@
     settingsOpen = false;
   }
 
+  function toggleCurrentSidebar() {
+    activeSidebar = nextSidebarAfterToggle(activeSidebar, activeMain);
+    settingsOpen = false;
+  }
+
   function toggleSettings() {
     settingsOpen = !settingsOpen;
     if (!settingsOpen) return;
@@ -1788,19 +1800,6 @@
       if (ran) commandPaletteOpen = false;
     } catch (err) {
       error = `Command failed: ${backendError(err)}`;
-    }
-  }
-
-  function handleCommandKey(event: KeyboardEvent) {
-    const commandId = commandIdForShortcut(event);
-    if (commandId) {
-      event.preventDefault();
-      void executeCommand(commandId);
-      return;
-    }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-      void executeCommand("palette.open");
     }
   }
 
@@ -1873,8 +1872,6 @@
     for (const socket of Object.values(ptyStreams)) socket.close();
   });
 </script>
-
-<svelte:window on:keydown={handleCommandKey} />
 
 <main class="flex h-screen flex-col overflow-hidden bg-bg-deep text-text-primary">
   <div class="flex min-h-0 flex-1 flex-row">

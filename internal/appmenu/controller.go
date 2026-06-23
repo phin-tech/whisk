@@ -14,7 +14,15 @@ import (
 const EventCommandRun = "command:run"
 
 // Frontend command ids, kept in sync with the entries registered in App.svelte's `commands` array.
-const FrontendCommandOpenPreferences = "preferences.open"
+const (
+	FrontendCommandOpenPreferences = "preferences.open"
+	FrontendCommandOpenPalette     = "palette.open"
+	FrontendCommandToggleSidebar   = "sidebar.toggle"
+	FrontendCommandSplitVertical   = "split-pane-vertical"
+	FrontendCommandSplitHorizontal = "split-pane-horizontal"
+	FrontendCommandClosePane       = "close-pane"
+	FrontendCommandCloseSession    = "close-session"
+)
 
 // FrontendSelectSessionCommand returns the frontend command id for the session in slot i (0-based),
 // e.g. "session.select.1" for the first session.
@@ -117,27 +125,65 @@ func (c *Controller) Rebuild() {
 	menu.Update()
 }
 
+func (c *Controller) newMenu() *application.Menu {
+	if c.app == nil {
+		return application.NewMenu()
+	}
+	return c.app.NewMenu()
+}
+
 // build assembles the menu bar: the standard macOS roles plus our custom Preferences item and the
 // dynamic Sessions menu.
 func (c *Controller) build(settings appsettings.Settings, sessions []SessionRef) *application.Menu {
 	effective := Resolve(settings)
-	menu := c.app.NewMenu()
+	menu := c.newMenu()
 
 	// Application menu (About / Services / Hide / Quit). Insert our Preferences item, which the
 	// AppMenu role does not provide in this Wails version.
-	menu.AddRole(application.AppMenu)
-	if appSubmenu := submenuForRole(menu, application.AppMenu); appSubmenu != nil {
-		pref := appSubmenu.Add("Preferences…").SetAccelerator(effective[CommandOpenPreferences])
-		pref.OnClick(func(*application.Context) {
-			c.app.Event.Emit(EventCommandRun, FrontendCommandOpenPreferences)
-		})
+	if c.app != nil {
+		menu.AddRole(application.AppMenu)
+		if appSubmenu := submenuForRole(menu, application.AppMenu); appSubmenu != nil {
+			pref := appSubmenu.Add("Preferences…").SetAccelerator(effective[CommandOpenPreferences])
+			pref.OnClick(func(*application.Context) {
+				c.app.Event.Emit(EventCommandRun, FrontendCommandOpenPreferences)
+			})
+		}
 	}
 
 	// Edit menu — gives Undo/Cut/Copy/Paste/Select All to the app's text fields for free.
-	menu.AddRole(application.EditMenu)
+	if c.app != nil {
+		menu.AddRole(application.EditMenu)
+	}
+
+	viewMenu := menu.AddSubmenu("View")
+	palette := viewMenu.Add("Open Command Palette").SetAccelerator(effective[CommandOpenPalette])
+	palette.OnClick(func(*application.Context) {
+		c.app.Event.Emit(EventCommandRun, FrontendCommandOpenPalette)
+	})
+	toggleSidebar := viewMenu.Add("Show/Hide Sidebar").SetAccelerator(effective[CommandToggleSidebar])
+	toggleSidebar.OnClick(func(*application.Context) {
+		c.app.Event.Emit(EventCommandRun, FrontendCommandToggleSidebar)
+	})
 
 	// Sessions menu — rebuilt from the current session list with Cmd+1..Cmd+0 accelerators.
 	sessionsMenu := menu.AddSubmenu("Sessions")
+	splitVertical := sessionsMenu.Add("Split Pane Vertically").SetAccelerator(effective[CommandSplitPaneVertical])
+	splitVertical.OnClick(func(*application.Context) {
+		c.app.Event.Emit(EventCommandRun, FrontendCommandSplitVertical)
+	})
+	splitHorizontal := sessionsMenu.Add("Split Pane Horizontally").SetAccelerator(effective[CommandSplitPaneHorizontal])
+	splitHorizontal.OnClick(func(*application.Context) {
+		c.app.Event.Emit(EventCommandRun, FrontendCommandSplitHorizontal)
+	})
+	closePane := sessionsMenu.Add("Close Pane").SetAccelerator(effective[CommandClosePane])
+	closePane.OnClick(func(*application.Context) {
+		c.app.Event.Emit(EventCommandRun, FrontendCommandClosePane)
+	})
+	closeSession := sessionsMenu.Add("Close Session").SetAccelerator(effective[CommandCloseSession])
+	closeSession.OnClick(func(*application.Context) {
+		c.app.Event.Emit(EventCommandRun, FrontendCommandCloseSession)
+	})
+	sessionsMenu.AddSeparator()
 	for _, entry := range sessionMenuEntries(sessions, effective) {
 		index := entry.Index
 		item := sessionsMenu.Add(entry.Label)
@@ -149,13 +195,16 @@ func (c *Controller) build(settings appsettings.Settings, sessions []SessionRef)
 		})
 	}
 
-	// Window menu + an explicit Close Window (the darwin WindowMenu role omits it).
-	menu.AddRole(application.WindowMenu)
-	if windowSubmenu := submenuForRole(menu, application.WindowMenu); windowSubmenu != nil {
-		windowSubmenu.AddRole(application.CloseWindow)
+	if c.app != nil {
+		menu.AddRole(application.WindowMenu)
+		if windowSubmenu := submenuForRole(menu, application.WindowMenu); windowSubmenu != nil {
+			windowSubmenu.AddRole(application.CloseWindow)
+			if closeWindow := windowSubmenu.FindByRole(application.CloseWindow); closeWindow != nil {
+				closeWindow.RemoveAccelerator()
+			}
+		}
+		menu.AddRole(application.HelpMenu)
 	}
-
-	menu.AddRole(application.HelpMenu)
 	return menu
 }
 

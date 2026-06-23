@@ -42,6 +42,29 @@ func TestSessionMenuEntriesUsesOverrideAndFallbackLabel(t *testing.T) {
 	}
 }
 
+func TestControllerBuildIncludesNativeCommandAccelerators(t *testing.T) {
+	settings := appsettings.Settings{Keybindings: map[string]string{CommandOpenPalette: "Cmd+Shift+K"}}
+	menu := NewController(nil, settings).build(settings, nil)
+
+	cases := map[string]string{
+		"Open Command Palette":    "Cmd+Shift+K",
+		"Show/Hide Sidebar":       "Cmd+\\",
+		"Split Pane Vertically":   "Cmd+D",
+		"Split Pane Horizontally": "Cmd+Shift+D",
+		"Close Pane":              "Cmd+W",
+		"Close Session":           "Cmd+Shift+W",
+	}
+	for label, want := range cases {
+		item := menu.FindByLabel(label)
+		if item == nil {
+			t.Fatalf("menu missing %q", label)
+		}
+		if got := item.GetAccelerator(); got != want {
+			t.Fatalf("%s accelerator = %q, want %q", label, got, want)
+		}
+	}
+}
+
 func TestControllerStateMutatorsAreNoOpWithoutApp(t *testing.T) {
 	// With no app attached, Rebuild must not panic and state setters should still record state.
 	c := NewController(nil, appsettings.Settings{})

@@ -22,8 +22,12 @@ const (
 // the session bar, SelectSessionID(9) the tenth.
 const (
 	CommandOpenPreferences     = "open-preferences"
+	CommandOpenPalette         = "open-palette"
+	CommandToggleSidebar       = "toggle-sidebar"
 	CommandSplitPaneVertical   = "split-pane-vertical"
 	CommandSplitPaneHorizontal = "split-pane-horizontal"
+	CommandClosePane           = "close-pane"
+	CommandCloseSession        = "close-session"
 	selectSessionPrefix        = "select-session-"
 )
 
@@ -76,12 +80,26 @@ func defaultSessionAccelerator(i int) string {
 // Commands returns the full registry in display order: the editable app commands first, then the
 // read-only standard macOS items surfaced for reference in the panel.
 func Commands() []Command {
-	commands := make([]Command, 0, 3+SessionSlots+9)
+	commands := make([]Command, 0, 7+SessionSlots+8)
 	commands = append(commands, Command{
 		ID:       CommandOpenPreferences,
 		Label:    "Open Preferences",
 		Category: CategoryApplication,
 		Default:  "CmdOrCtrl+,",
+		Editable: true,
+	})
+	commands = append(commands, Command{
+		ID:       CommandOpenPalette,
+		Label:    "Open Command Palette",
+		Category: CategoryApplication,
+		Default:  "CmdOrCtrl+K",
+		Editable: true,
+	})
+	commands = append(commands, Command{
+		ID:       CommandToggleSidebar,
+		Label:    "Show/Hide Sidebar",
+		Category: CategoryApplication,
+		Default:  "CmdOrCtrl+\\",
 		Editable: true,
 	})
 	commands = append(commands,
@@ -99,6 +117,20 @@ func Commands() []Command {
 			Default:  "CmdOrCtrl+Shift+D",
 			Editable: true,
 		},
+		Command{
+			ID:       CommandClosePane,
+			Label:    "Close Pane",
+			Category: CategorySessions,
+			Default:  "CmdOrCtrl+W",
+			Editable: true,
+		},
+		Command{
+			ID:       CommandCloseSession,
+			Label:    "Close Session",
+			Category: CategorySessions,
+			Default:  "CmdOrCtrl+Shift+W",
+			Editable: true,
+		},
 	)
 	for i := 0; i < SessionSlots; i++ {
 		commands = append(commands, Command{
@@ -113,7 +145,6 @@ func Commands() []Command {
 	// and are not rebindable; they appear in the panel so users can see the full shortcut map.
 	standard := []Command{
 		{ID: "std-quit", Label: "Quit Whisk", Default: "CmdOrCtrl+Q"},
-		{ID: "std-close-window", Label: "Close Window", Default: "CmdOrCtrl+W"},
 		{ID: "std-undo", Label: "Undo", Default: "CmdOrCtrl+Z"},
 		{ID: "std-redo", Label: "Redo", Default: "CmdOrCtrl+Shift+Z"},
 		{ID: "std-cut", Label: "Cut", Default: "CmdOrCtrl+X"},

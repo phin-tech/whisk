@@ -28,7 +28,7 @@ func TestCommandsIncludeAllSessionSlots(t *testing.T) {
 	}
 }
 
-func TestCommandsIncludeITermSplitShortcuts(t *testing.T) {
+func TestCommandsIncludeSessionActionShortcuts(t *testing.T) {
 	commands := Commands()
 	byID := make(map[string]Command, len(commands))
 	for _, cmd := range commands {
@@ -41,11 +41,13 @@ func TestCommandsIncludeITermSplitShortcuts(t *testing.T) {
 	}{
 		CommandSplitPaneVertical:   {"Split Pane Vertically", "CmdOrCtrl+D"},
 		CommandSplitPaneHorizontal: {"Split Pane Horizontally", "CmdOrCtrl+Shift+D"},
+		CommandClosePane:           {"Close Pane", "CmdOrCtrl+W"},
+		CommandCloseSession:        {"Close Session", "CmdOrCtrl+Shift+W"},
 	}
 	for id, want := range cases {
 		cmd, ok := byID[id]
 		if !ok {
-			t.Fatalf("registry missing split command %q", id)
+			t.Fatalf("registry missing session command %q", id)
 		}
 		if cmd.Label != want.label {
 			t.Fatalf("%s label = %q, want %q", id, cmd.Label, want.label)
@@ -59,6 +61,56 @@ func TestCommandsIncludeITermSplitShortcuts(t *testing.T) {
 		if !cmd.Editable {
 			t.Fatalf("%s should be editable", id)
 		}
+	}
+}
+
+func TestCommandsIncludeCommandPaletteShortcut(t *testing.T) {
+	commands := Commands()
+	byID := make(map[string]Command, len(commands))
+	for _, cmd := range commands {
+		byID[cmd.ID] = cmd
+	}
+
+	cmd, ok := byID[CommandOpenPalette]
+	if !ok {
+		t.Fatalf("registry missing command palette command")
+	}
+	if cmd.Label != "Open Command Palette" {
+		t.Fatalf("label = %q", cmd.Label)
+	}
+	if cmd.Category != CategoryApplication {
+		t.Fatalf("category = %q, want %q", cmd.Category, CategoryApplication)
+	}
+	if cmd.Default != "CmdOrCtrl+K" {
+		t.Fatalf("shortcut = %q, want CmdOrCtrl+K", cmd.Default)
+	}
+	if !cmd.Editable {
+		t.Fatalf("command palette should be editable")
+	}
+}
+
+func TestCommandsIncludeToggleSidebarShortcut(t *testing.T) {
+	commands := Commands()
+	byID := make(map[string]Command, len(commands))
+	for _, cmd := range commands {
+		byID[cmd.ID] = cmd
+	}
+
+	cmd, ok := byID[CommandToggleSidebar]
+	if !ok {
+		t.Fatalf("registry missing toggle sidebar command")
+	}
+	if cmd.Label != "Show/Hide Sidebar" {
+		t.Fatalf("label = %q", cmd.Label)
+	}
+	if cmd.Category != CategoryApplication {
+		t.Fatalf("category = %q, want %q", cmd.Category, CategoryApplication)
+	}
+	if cmd.Default != "CmdOrCtrl+\\" {
+		t.Fatalf("shortcut = %q, want CmdOrCtrl+\\", cmd.Default)
+	}
+	if !cmd.Editable {
+		t.Fatalf("toggle sidebar should be editable")
 	}
 }
 
