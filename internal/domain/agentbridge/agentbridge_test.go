@@ -10,18 +10,31 @@ import (
 func TestHookPayloadToEvaluationRequestMapsToolCallAndResult(t *testing.T) {
 	pre, ok := agentbridge.HookPayloadToEvaluationRequest(agentbridge.HookPayload{
 		Provider:  agentbridge.ProviderClaude,
-		EventName: "PreToolUse",
+		EventName: "PermissionRequest",
 		ToolName:  "Bash",
 		ToolInput: map[string]any{"command": "rm -rf /tmp/x"},
 	})
 	if !ok {
-		t.Fatalf("expected PreToolUse to produce an evaluation request")
+		t.Fatalf("expected PermissionRequest to produce an evaluation request")
 	}
 	if pre.Phase != agentbridge.PhaseToolCall || pre.ToolName != "Bash" {
 		t.Fatalf("pre request = %#v", pre)
 	}
 	if pre.ToolInput["command"] != "rm -rf /tmp/x" {
 		t.Fatalf("pre tool input = %#v", pre.ToolInput)
+	}
+
+	codexPre, ok := agentbridge.HookPayloadToEvaluationRequest(agentbridge.HookPayload{
+		Provider:  agentbridge.ProviderCodex,
+		EventName: "PreToolUse",
+		ToolName:  "Bash",
+		ToolInput: map[string]any{"command": "go test ./..."},
+	})
+	if !ok {
+		t.Fatalf("expected Codex PreToolUse to produce an evaluation request")
+	}
+	if codexPre.Phase != agentbridge.PhaseToolCall || codexPre.ToolInput["command"] != "go test ./..." {
+		t.Fatalf("codex pre request = %#v", codexPre)
 	}
 
 	post, ok := agentbridge.HookPayloadToEvaluationRequest(agentbridge.HookPayload{
@@ -36,6 +49,18 @@ func TestHookPayloadToEvaluationRequestMapsToolCallAndResult(t *testing.T) {
 	}
 	if post.Phase != agentbridge.PhaseToolResult || post.ToolOutput != "contents" {
 		t.Fatalf("post request = %#v", post)
+	}
+}
+
+func TestHookPayloadTreatsClaudePreToolUseAsPassive(t *testing.T) {
+	_, ok := agentbridge.HookPayloadToEvaluationRequest(agentbridge.HookPayload{
+		Provider:  agentbridge.ProviderClaude,
+		EventName: "PreToolUse",
+		ToolName:  "Write",
+		ToolInput: map[string]any{"file_path": "/tmp/plan.md"},
+	})
+	if ok {
+		t.Fatalf("expected Claude PreToolUse to be passive so Claude owns normal tool approval")
 	}
 }
 

@@ -277,7 +277,17 @@ func HookPayloadToEvaluationRequest(payload HookPayload) (EvaluationRequest, boo
 		input = map[string]any{}
 	}
 	switch payload.EventName {
-	case "PreToolUse", "PermissionRequest":
+	case "PreToolUse":
+		if payload.Provider == ProviderClaude {
+			return EvaluationRequest{}, false
+		}
+		return EvaluationRequest{
+			Phase:     PhaseToolCall,
+			Provider:  payload.Provider,
+			ToolName:  payload.ToolName,
+			ToolInput: cloneMap(input),
+		}, true
+	case "PermissionRequest":
 		return EvaluationRequest{
 			Phase:     PhaseToolCall,
 			Provider:  payload.Provider,

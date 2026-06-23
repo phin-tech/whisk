@@ -491,7 +491,7 @@ func TestHTTPServerAgentBridgeHooksValidateTokenAndReturnProviderOutput(t *testi
 	allow := postJSON[protocol.AgentBridgeHookResponse](t, handler, "/v1/agent-bridges/"+bridgeID+"/hooks", protocol.AgentBridgeHookRequest{
 		Token:     token,
 		Provider:  "claude",
-		EventName: "PreToolUse",
+		EventName: "PermissionRequest",
 		ToolName:  "Bash",
 		ToolInput: map[string]any{"command": "pwd"},
 		Decision:  protocol.AgentBridgeHookDecision{Action: "allow"},
@@ -503,7 +503,7 @@ func TestHTTPServerAgentBridgeHooksValidateTokenAndReturnProviderOutput(t *testi
 	deny := postJSON[protocol.AgentBridgeHookResponse](t, handler, "/v1/agent-bridges/"+bridgeID+"/hooks", protocol.AgentBridgeHookRequest{
 		Token:     token,
 		Provider:  "claude",
-		EventName: "PreToolUse",
+		EventName: "PermissionRequest",
 		ToolName:  "Bash",
 		ToolInput: map[string]any{"command": "rm -rf /tmp/x"},
 		Decision:  protocol.AgentBridgeHookDecision{Action: "deny", Reason: "blocked by policy"},
@@ -597,11 +597,11 @@ func TestHTTPServerAgentBridgeApprovalLifecycle(t *testing.T) {
 		t.Fatalf("spawn bridge env = %#v", spawn.Env)
 	}
 
-	// A tool-call hook with no pre-supplied decision blocks until the approval is resolved.
+	// A permission hook with no pre-supplied decision blocks until the approval is resolved.
 	hookBody, err := json.Marshal(protocol.AgentBridgeHookRequest{
 		Token:     token,
 		Provider:  "claude",
-		EventName: "PreToolUse",
+		EventName: "PermissionRequest",
 		ToolName:  "Bash",
 		ToolInput: map[string]any{"command": "ls"},
 	})

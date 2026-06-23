@@ -520,7 +520,7 @@ func TestRuntimeAgentBridgeHookWaitsForApprovalResolution(t *testing.T) {
 			BridgeID:  env["WHISK_AGENT_BRIDGE_ID"],
 			Token:     env["WHISK_AGENT_BRIDGE_TOKEN"],
 			Provider:  "claude",
-			EventName: "PreToolUse",
+			EventName: "PermissionRequest",
 			ToolName:  "Bash",
 			ToolInput: map[string]any{"command": "pwd"},
 		})

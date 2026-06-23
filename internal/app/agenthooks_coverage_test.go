@@ -221,9 +221,36 @@ func toolCallHook(bridgeID, token string) app.AgentBridgeHookRequest {
 		BridgeID:  bridgeID,
 		Token:     token,
 		Provider:  "claude",
-		EventName: "PreToolUse",
+		EventName: "PermissionRequest",
 		ToolName:  "Bash",
 		ToolInput: map[string]any{"command": "ls"},
+	}
+}
+
+func TestRuntimeAgentBridgeLogsClaudePreToolUseWithoutApproval(t *testing.T) {
+	runtime, bridgeID, token := launchAgentBridge(t, time.Second)
+	ctx := context.Background()
+
+	resp, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+		BridgeID:  bridgeID,
+		Token:     token,
+		Provider:  "claude",
+		EventName: "PreToolUse",
+		ToolName:  "Write",
+		ToolInput: map[string]any{"file_path": "/tmp/plan.md", "content": "draft"},
+	})
+	if err != nil {
+		t.Fatalf("hook: %v", err)
+	}
+	if resp.Output != nil {
+		t.Fatalf("response = %#v", resp.Output)
+	}
+	approvals, err := runtime.ListAgentBridgeApprovals(ctx, app.ListAgentBridgeApprovalsRequest{Status: "pending"})
+	if err != nil {
+		t.Fatalf("list approvals: %v", err)
+	}
+	if len(approvals) != 0 {
+		t.Fatalf("approvals = %#v", approvals)
 	}
 }
 
@@ -231,7 +258,7 @@ func TestRuntimeAgentBridgeApprovalLifecycle(t *testing.T) {
 	runtime, bridgeID, token := launchAgentBridge(t, 5*time.Second)
 	ctx := context.Background()
 
-	// A tool-call hook with no pre-supplied decision blocks until the approval is resolved.
+	// A permission hook with no pre-supplied decision blocks until the approval is resolved.
 	hookErr := make(chan error, 1)
 	go func() {
 		_, err := runtime.HandleAgentBridgeHook(ctx, toolCallHook(bridgeID, token))
