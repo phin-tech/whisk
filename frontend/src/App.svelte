@@ -517,14 +517,15 @@
   async function refreshStatusEvents() {
     loadingStatusEvents = true;
     try {
-      const [nextStatusEvents, nextPrompts, nextBridgeEvents] = await Promise.all([
+      const [nextStatusEvents, nextPrompts, nextApprovals, nextBridgeEvents] = await Promise.all([
         ListStatusEvents({ unreadOnly: true }),
         ListAgentPrompts({ status: "pending" }),
+        ListAgentBridgeApprovals({ status: "pending" }),
         ListAgentBridgeEvents({ status: "pending" }),
       ]);
       statusEvents = nextStatusEvents;
       agentPrompts = nextPrompts;
-      agentBridgeApprovals = [];
+      agentBridgeApprovals = nextApprovals;
       agentBridgeEvents = nextBridgeEvents;
     } finally {
       loadingStatusEvents = false;

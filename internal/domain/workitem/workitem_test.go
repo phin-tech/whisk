@@ -623,6 +623,8 @@ func TestPlanPromptTellsAgentToSubmitDraftPlan(t *testing.T) {
 	}
 	if !strings.Contains(run.PromptSnapshot, "${WHISK_CLI:-whisk} workflow submit-plan") ||
 		!strings.Contains(run.PromptSnapshot, "-body '<plan markdown>'") ||
+		!strings.Contains(run.PromptSnapshot, "If an external plan review tool opens") ||
+		!strings.Contains(run.PromptSnapshot, "Do not submit drafts to Whisk before external plan approval") ||
 		!strings.Contains(run.PromptSnapshot, "Do not treat the plan as complete") {
 		t.Fatalf("prompt snapshot = %q", run.PromptSnapshot)
 	}
@@ -661,7 +663,9 @@ func TestSnapshotLoadRefreshesBuiltinPromptTemplates(t *testing.T) {
 	for _, template := range templates {
 		byID[template.ID] = template
 	}
-	if !strings.Contains(byID[PromptTemplatePlan].Body, "${WHISK_CLI:-whisk} workflow submit-plan") {
+	if !strings.Contains(byID[PromptTemplatePlan].Body, "${WHISK_CLI:-whisk} workflow submit-plan") ||
+		!strings.Contains(byID[PromptTemplatePlan].Body, "If an external plan review tool opens") ||
+		!strings.Contains(byID[PromptTemplatePlan].Body, "Do not submit drafts to Whisk before external plan approval") {
 		t.Fatalf("plan template = %q", byID[PromptTemplatePlan].Body)
 	}
 	if byID["custom"].Body != custom.Body {
