@@ -60,6 +60,24 @@ func TestWorkflowDefinitionValidationRejectsUnknownStagesAndRequirements(t *test
 	}
 }
 
+func TestWorkflowDefinitionValidationAcceptsCustomKanbanStages(t *testing.T) {
+	definition := WorkflowDefinition{
+		ID:      "uat-flex",
+		Version: 1,
+		Stages:  []string{"backlog", "triage", "doing", "done"},
+		Actions: []WorkflowActionDefinition{
+			{ID: "triage", From: []string{"backlog"}, To: "triage"},
+			{ID: "start", From: []string{"triage"}, To: "doing"},
+			{ID: "finish", From: []string{"doing"}, To: "done"},
+		},
+		Gates: []WorkflowGateDefinition{{ID: "uat", Phase: "doing", Blocking: true}},
+	}
+
+	if err := ValidateWorkflowDefinition(definition); err != nil {
+		t.Fatalf("custom workflow should validate: %v", err)
+	}
+}
+
 func TestCreateWorkItemStampsWorkflowDefinitionVersion(t *testing.T) {
 	state := NewState()
 	mustProject(t, state, "proj_01", "One")

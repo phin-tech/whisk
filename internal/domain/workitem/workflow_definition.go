@@ -105,17 +105,25 @@ func ValidateWorkflowDefinition(definition WorkflowDefinition) error {
 	if definition.Version <= 0 {
 		return fmt.Errorf("workflow version must be positive")
 	}
-	if len(definition.Stages) != len(UniversalStages()) {
-		return fmt.Errorf("workflow stages must match universal stages")
-	}
 	validStages := map[string]struct{}{}
-	for _, stage := range UniversalStages() {
-		validStages[stage] = struct{}{}
-	}
-	for i, stage := range definition.Stages {
-		if stage != UniversalStages()[i] {
+	if definition.ID == WorkflowPlanExecuteReview {
+		if len(definition.Stages) != len(UniversalStages()) {
 			return fmt.Errorf("workflow stages must match universal stages")
 		}
+		for i, stage := range definition.Stages {
+			if stage != UniversalStages()[i] {
+				return fmt.Errorf("workflow stages must match universal stages")
+			}
+		}
+	}
+	for _, stage := range definition.Stages {
+		if stage == "" {
+			return fmt.Errorf("workflow stage id required")
+		}
+		if _, exists := validStages[stage]; exists {
+			return fmt.Errorf("workflow stage %s already exists", stage)
+		}
+		validStages[stage] = struct{}{}
 	}
 	actions := map[string]struct{}{}
 	for _, action := range definition.Actions {
