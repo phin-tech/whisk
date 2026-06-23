@@ -271,13 +271,15 @@ func runProjectContext(args []string) error {
 
 func runWorkItem(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk work-item <list|create|move|bind-worktree|attach-file|delete>")
+		return fmt.Errorf("usage: whisk work-item <list|create|update|move|bind-worktree|attach-file|delete>")
 	}
 	switch args[0] {
 	case "list":
 		return runWorkItemList(args[1:])
 	case "create":
 		return runWorkItemCreate(args[1:])
+	case "update":
+		return runWorkItemUpdate(args[1:])
 	case "move":
 		return runWorkItemMove(args[1:])
 	case "bind-worktree":
@@ -287,7 +289,7 @@ func runWorkItem(args []string) error {
 	case "delete":
 		return runWorkItemDelete(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk work-item <list|create|move|bind-worktree|attach-file|delete>")
+		return fmt.Errorf("usage: whisk work-item <list|create|update|move|bind-worktree|attach-file|delete>")
 	}
 }
 
@@ -351,6 +353,38 @@ func runWorkItemCreate(args []string) error {
 	}
 	fmt.Printf("%s\t#%d\n", item.ID, item.Number)
 	return nil
+}
+
+func runWorkItemUpdate(args []string) error {
+	flags := flag.NewFlagSet("work-item update", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	actor := flags.String("actor", envOrDefault("WHISK_ACTOR", ""), "actor")
+	var req protocol.UpdateWorkItemRequest
+	flags.Func("title", "work item title", func(value string) error {
+		req.Title = &value
+		return nil
+	})
+	flags.Func("body", "markdown body", func(value string) error {
+		req.BodyMarkdown = &value
+		return nil
+	})
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 || (req.Title == nil && req.BodyMarkdown == nil) {
+		return fmt.Errorf("usage: whisk work-item update <work-item-id> [-title title] [-body markdown] [-actor actor] [-json] [-url http://127.0.0.1:8787]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req.ID = flags.Arg(0)
+	req.Actor = *actor
+	item, err := client.NewHTTP(*baseURL, nil).UpdateWorkItem(ctx, req)
+	if err != nil {
+		return err
+	}
+	return printWorkItemResult(item, *outputJSON)
 }
 
 func runWorkItemMove(args []string) error {

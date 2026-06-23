@@ -59,6 +59,11 @@
     title: string;
     bodyMarkdown: string;
   }) => void;
+  export let onUpdateWorkItem: (request: {
+    id: string;
+    title: string;
+    bodyMarkdown: string;
+  }) => void;
   export let onMoveWorkItem: (workItemId: string, stageId: string) => void;
   export let onGenerateWorktree: (request: { workItemId: string; branch: string }) => void;
   export let onAttachFile: (workItemId: string, path: string) => void;
@@ -104,6 +109,9 @@
   let doneReasons: Record<string, string> = {};
   let agentSelections: Record<string, string> = {};
   let detailItemId = "";
+  let detailDraftItemId = "";
+  let detailTitle = "";
+  let detailBody = "";
   let createBodyOpen = false;
   let collapsedStageIds = new Set<string>();
   let collapsedProjectId = "";
@@ -114,6 +122,9 @@
   $: boardStages = filterStageId ? stages.filter((stage) => stage.id === filterStageId) : stages;
   $: itemsByStage = groupWorkItemsByStage(filteredWorkItems, stages);
   $: detailItem = workItems.find((item) => item.id === detailItemId) ?? null;
+  $: detailDirty = Boolean(
+    detailItem && (detailTitle !== detailItem.title || detailBody !== detailItem.bodyMarkdown),
+  );
   $: runsByItem = groupRunsByItem(workItemRuns);
   $: detailRuns = detailItem ? (runsByItem[detailItem.id] ?? []) : [];
   $: detailArtifacts = detailItem ? artifacts.filter((artifact) => artifact.workItemId === detailItem.id) : [];
@@ -409,6 +420,31 @@
     }
   }
 
+  function openDetail(item: WorkItem) {
+    detailItemId = item.id;
+    detailDraftItemId = item.id;
+    detailTitle = item.title;
+    detailBody = item.bodyMarkdown;
+  }
+
+  function resetDetailDraft() {
+    if (!detailItem) return;
+    detailDraftItemId = detailItem.id;
+    detailTitle = detailItem.title;
+    detailBody = detailItem.bodyMarkdown;
+  }
+
+  function saveDetail() {
+    if (!detailItem || loading || !detailTitle.trim()) return;
+    detailTitle = detailTitle.trim();
+    onUpdateWorkItem({
+      id: detailItem.id,
+      title: detailTitle,
+      bodyMarkdown: detailBody,
+    });
+    detailDraftItemId = detailItem.id;
+  }
+
   function movePrevious(item: WorkItem) {
     const { previous } = adjacentStageTargets(item, stages);
     if (previous) onMoveWorkItem(item.id, previous.id);
@@ -490,6 +526,9 @@
 
   function closeDetail() {
     detailItemId = "";
+    detailDraftItemId = "";
+    detailTitle = "";
+    detailBody = "";
   }
 
   function handleKey(event: KeyboardEvent) {
@@ -661,7 +700,7 @@
                           <button
                             type="button"
                             class="work-card-title min-w-0 flex-1 text-left text-[14px] font-semibold leading-5 text-text-primary outline-none transition-colors hover:text-accent focus-visible:text-accent"
-                            on:click={() => (detailItemId = item.id)}
+                            on:click={() => openDetail(item)}
                           >
                             <span class="font-mono text-[12px] font-medium text-text-muted">#{item.number}</span>
                             {item.title}
@@ -803,9 +842,14 @@
                 {detailCurrentRun?.status || detailItem.runState || "idle"}
               </span>
             </div>
-            <h2 class="max-w-[860px] text-[20px] font-semibold leading-7 text-text-primary">
-              {detailItem.title}
-            </h2>
+            <input
+              class="max-w-[860px] bg-transparent text-[20px] font-semibold leading-7 text-text-primary outline-none focus:text-accent"
+              type="text"
+              value={detailDraftItemId === detailItem.id ? detailTitle : detailItem.title}
+              disabled={loading}
+              aria-label="Work item title"
+              on:input={(event) => (detailTitle = event.currentTarget.value)}
+            />
             <div class="mt-2 truncate text-[13px] text-text-muted">
               {activeProject.name}
             </div>
@@ -878,10 +922,33 @@
                 <h3 class="text-[13px] font-semibold uppercase tracking-wide text-text-muted">
                   Description
                 </h3>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="h-8 rounded-md border border-white/14 bg-white/6 px-3 text-[12px] font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={loading || !detailDirty}
+                    on:click={resetDetailDraft}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="h-8 rounded-md border border-accent-dim bg-accent/15 px-3 text-[12px] font-semibold text-accent transition-colors hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={loading || !detailDirty || !detailTitle.trim()}
+                    on:click={saveDetail}
+                  >
+                    Save
+                  </button>
+                </div>
               </div>
-              <div class="min-h-36 whitespace-pre-wrap rounded-md border border-white/12 bg-[#0d0d10] px-4 py-3 text-[14px] leading-6 text-text-secondary">
-                {detailItem.bodyMarkdown || "No body."}
-              </div>
+              <textarea
+                class="min-h-36 resize-y rounded-md border border-white/12 bg-[#0d0d10] px-4 py-3 text-[14px] leading-6 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                value={detailDraftItemId === detailItem.id ? detailBody : detailItem.bodyMarkdown}
+                disabled={loading}
+                aria-label="Work item description"
+                placeholder="No body."
+                on:input={(event) => (detailBody = event.currentTarget.value)}
+              ></textarea>
             </section>
 
             <section class="grid gap-3">

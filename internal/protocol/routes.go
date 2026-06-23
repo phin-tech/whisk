@@ -130,6 +130,7 @@ var APIRoutes = []APIRoute{
 	{Method: "GET", Path: "/v1/agent-profiles", OperationID: "listAgentProfiles", Tag: "agents", Summary: "List selectable builtin agent profiles", Response: apiAgentProfileList},
 	{Method: "GET", Path: "/v1/work-items", OperationID: "listWorkItems", Tag: "workitems", Response: apiWorkItemList, Query: []APIQueryParam{{Name: "projectId", Type: "string"}}},
 	{Method: "POST", Path: "/v1/work-items", OperationID: "createWorkItem", Tag: "workitems", Request: CreateWorkItemRequest{}, Response: WorkItem{}, Status: 201},
+	{Method: "POST", Path: "/v1/work-items/{workItemID}/update", OperationID: "updateWorkItem", Tag: "workitems", Request: UpdateWorkItemRequest{}, Response: WorkItem{}},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/move", OperationID: "moveWorkItem", Tag: "workitems", Request: MoveWorkItemRequest{}, Response: WorkItem{}},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/start-planning", OperationID: "startPlanning", Tag: "workitems", Request: StartPlanningRequest{}, Response: WorkItemRun{}, Status: 201},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/plan-drafts", OperationID: "submitDraftPlan", Tag: "workitems", Request: SubmitDraftPlanRequest{}, Response: Artifact{}, Status: 201},

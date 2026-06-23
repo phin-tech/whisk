@@ -70,6 +70,20 @@ func TestHTTPClientDrivesDaemonWorkItemAPI(t *testing.T) {
 	if item.Number != 1 || item.StageID != "backlog" || item.RunState != workitem.RunStateIdle {
 		t.Fatalf("item = %#v", item)
 	}
+	updatedTitle := "Updated CLI contract"
+	updatedBody := ""
+	item, err = daemon.UpdateWorkItem(ctx, protocol.UpdateWorkItemRequest{
+		ID:           item.ID,
+		Title:        &updatedTitle,
+		BodyMarkdown: &updatedBody,
+		Actor:        "human",
+	})
+	if err != nil {
+		t.Fatalf("update work item: %v", err)
+	}
+	if item.Title != updatedTitle || item.BodyMarkdown != "" {
+		t.Fatalf("updated item = %#v", item)
+	}
 
 	if _, err := daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: item.ID, StageID: "execution"}); err == nil {
 		t.Fatalf("expected execution move without worktree to fail")

@@ -102,6 +102,13 @@ func (c *HTTPClient) CreateWorkItem(ctx context.Context, req protocol.CreateWork
 	return item, err
 }
 
+func (c *HTTPClient) UpdateWorkItem(ctx context.Context, req protocol.UpdateWorkItemRequest) (protocol.WorkItem, error) {
+	var item protocol.WorkItem
+	path := "/v1/work-items/" + url.PathEscape(req.ID) + "/update"
+	err := c.post(ctx, path, req, &item)
+	return item, err
+}
+
 func (c *HTTPClient) MoveWorkItem(ctx context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error) {
 	var item protocol.WorkItem
 	path := "/v1/work-items/" + url.PathEscape(req.ID) + "/move"

@@ -108,6 +108,7 @@ export {
     SubmitReviewFeedbackRequest,
     UpdateProjectAttachmentRequest,
     UpdateProjectRequest,
+    UpdateWorkItemRequest,
     WorkItem,
     WorkItemRun,
     WorkflowEvent,

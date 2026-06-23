@@ -72,6 +72,50 @@ func TestRuntimeWorkItemRunLifecyclePersistsAndPublishes(t *testing.T) {
 	}
 }
 
+func TestRuntimeUpdateWorkItemPersistsAndPublishes(t *testing.T) {
+	ctx := context.Background()
+	store := &memoryWorkItemStore{}
+	sink := &memoryEventSink{}
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		WorkItemStore: store,
+		EventSink:     sink,
+	})
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{
+		ProjectID:    project.ID,
+		Title:        "Old",
+		BodyMarkdown: "Old body",
+	})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	sink.events = nil
+	title := "New"
+	body := "New body"
+
+	updated, err := runtime.UpdateWorkItem(ctx, app.UpdateWorkItemRequest{
+		ID:           item.ID,
+		Title:        &title,
+		BodyMarkdown: &body,
+		Actor:        "human",
+	})
+	if err != nil {
+		t.Fatalf("update work item: %v", err)
+	}
+	if updated.Title != title || updated.BodyMarkdown != body {
+		t.Fatalf("updated item = %#v", updated)
+	}
+	if len(store.saved.Items) != 1 || store.saved.Items[0].Title != title {
+		t.Fatalf("saved snapshot = %#v", store.saved.Items)
+	}
+	if !hasRuntimeEvent(sink.events, app.EventWorkItemsChanged) {
+		t.Fatalf("events = %#v", sink.events)
+	}
+}
+
 func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

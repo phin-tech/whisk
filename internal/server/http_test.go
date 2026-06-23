@@ -722,6 +722,17 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	if item.ID == "" || item.Number != 1 {
 		t.Fatalf("item = %#v", item)
 	}
+	editedTitle := "Ship edited route workflow"
+	editedBody := ""
+	editedItem := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/update", protocol.UpdateWorkItemRequest{
+		Title:        &editedTitle,
+		BodyMarkdown: &editedBody,
+		Actor:        "human",
+	}, http.StatusOK)
+	if editedItem.Title != editedTitle || editedItem.BodyMarkdown != "" {
+		t.Fatalf("updated item = %#v", editedItem)
+	}
+	item = editedItem
 	items := getJSON[[]protocol.WorkItem](t, handler, "/v1/work-items?projectId="+project.ID, http.StatusOK)
 	if len(items) != 1 || items[0].ID != item.ID {
 		t.Fatalf("items = %#v", items)
@@ -1033,6 +1044,9 @@ func TestHTTPServerReportsBadRequests(t *testing.T) {
 	assertStatus(t, handler, http.MethodPost, "/v1/projects", `{"name":"App"}`, http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodPost, "/v1/work-items", `{`, http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodPost, "/v1/work-items", `{"title":"Task"}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/update", `{`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/update", `{}`, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/update", `{"title":"Task"}`, http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/move", `{`, http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/move", `{"stageId":"execution"}`, http.StatusBadRequest)
 	assertStatus(t, handler, http.MethodPost, "/v1/work-items/missing/start-planning", `{`, http.StatusBadRequest)

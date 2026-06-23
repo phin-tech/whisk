@@ -226,6 +226,12 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || item.ID != "wi_02" || fake.createWorkItemReq.Title != "Task" {
 		t.Fatalf("create work item = %#v, req = %#v, err = %v", item, fake.createWorkItemReq, err)
 	}
+	title := "Updated task"
+	body := ""
+	item, err = service.UpdateWorkItem(ctx, protocol.UpdateWorkItemRequest{ID: "wi_02", Title: &title, BodyMarkdown: &body})
+	if err != nil || item.Title != title || fake.updateWorkItemReq.BodyMarkdown == nil {
+		t.Fatalf("update work item = %#v, req = %#v, err = %v", item, fake.updateWorkItemReq, err)
+	}
 	item, err = service.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: "wi_02", StageID: "ready"})
 	if err != nil || item.StageID != "ready" || fake.moveWorkItemReq.StageID != "ready" {
 		t.Fatalf("move work item = %#v, req = %#v, err = %v", item, fake.moveWorkItemReq, err)
@@ -625,6 +631,7 @@ type runtimeClientFake struct {
 	projectContextID           string
 	listWorkItemsProjectID     string
 	createWorkItemReq          protocol.CreateWorkItemRequest
+	updateWorkItemReq          protocol.UpdateWorkItemRequest
 	moveWorkItemReq            protocol.MoveWorkItemRequest
 	bindWorkItemReq            protocol.BindWorkItemWorktreeRequest
 	addWorkItemAttachmentReq   protocol.AddWorkItemAttachmentRequest
@@ -893,6 +900,18 @@ func (f *runtimeClientFake) ListWorkItems(_ context.Context, projectID string) (
 func (f *runtimeClientFake) CreateWorkItem(_ context.Context, req protocol.CreateWorkItemRequest) (protocol.WorkItem, error) {
 	f.createWorkItemReq = req
 	return protocol.WorkItem{ID: "wi_02", ProjectID: req.ProjectID, Number: 2, Title: req.Title}, nil
+}
+
+func (f *runtimeClientFake) UpdateWorkItem(_ context.Context, req protocol.UpdateWorkItemRequest) (protocol.WorkItem, error) {
+	f.updateWorkItemReq = req
+	item := protocol.WorkItem{ID: req.ID}
+	if req.Title != nil {
+		item.Title = *req.Title
+	}
+	if req.BodyMarkdown != nil {
+		item.BodyMarkdown = *req.BodyMarkdown
+	}
+	return item, nil
 }
 
 func (f *runtimeClientFake) MoveWorkItem(_ context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error) {

@@ -1410,6 +1410,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/work-items/{workItemID}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["updateWorkItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workflow-events": {
         parameters: {
             query?: never;
@@ -2382,6 +2398,12 @@ export interface components {
             name?: string | null;
             slug?: string | null;
             useInteractiveAgentShell?: boolean | null;
+        };
+        UpdateWorkItemRequest: {
+            actor?: string;
+            bodyMarkdown?: string | null;
+            id: string;
+            title?: string | null;
         };
         WorkItem: {
             attachments: components["schemas"]["Attachment"][] | null;
@@ -5534,6 +5556,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkItemRun"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateWorkItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkItemRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
                 };
             };
             /** @description error */

@@ -98,6 +98,7 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("GET /v1/agent-profiles", server.listAgentProfiles)
 	mux.HandleFunc("GET /v1/work-items", server.listWorkItems)
 	mux.HandleFunc("POST /v1/work-items", server.createWorkItem)
+	mux.HandleFunc("POST /v1/work-items/{workItemID}/update", server.updateWorkItem)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/move", server.moveWorkItem)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/start-planning", server.startPlanning)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/plan-drafts", server.submitDraftPlan)

@@ -566,6 +566,13 @@ type CreateWorkItemRequest struct {
 	Actor        string `json:"actor,omitempty"`
 }
 
+type UpdateWorkItemRequest struct {
+	ID           string  `json:"id"`
+	Title        *string `json:"title,omitempty"`
+	BodyMarkdown *string `json:"bodyMarkdown,omitempty"`
+	Actor        string  `json:"actor,omitempty"`
+}
+
 type MoveWorkItemRequest struct {
 	ID      string `json:"id"`
 	StageID string `json:"stageId"`

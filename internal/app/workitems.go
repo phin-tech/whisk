@@ -112,6 +112,13 @@ type CreateWorkItemRequest struct {
 	Actor        string
 }
 
+type UpdateWorkItemRequest struct {
+	ID           string
+	Title        *string
+	BodyMarkdown *string
+	Actor        string
+}
+
 type MoveWorkItemRequest struct {
 	ID      string
 	StageID string
@@ -549,6 +556,25 @@ func (r *Runtime) CreateWorkItem(ctx context.Context, req CreateWorkItemRequest)
 		StageID:      req.StageID,
 		Actor:        req.Actor,
 		Now:          now,
+	})
+	if err != nil {
+		return workitem.WorkItem{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkItem{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return item, nil
+}
+
+func (r *Runtime) UpdateWorkItem(ctx context.Context, req UpdateWorkItemRequest) (workitem.WorkItem, error) {
+	item, err := r.workItems.UpdateWorkItem(workitem.UpdateWorkItem{
+		ID:           req.ID,
+		HistoryID:    r.ids(),
+		Title:        req.Title,
+		BodyMarkdown: req.BodyMarkdown,
+		Actor:        req.Actor,
+		Now:          time.Now().UTC(),
 	})
 	if err != nil {
 		return workitem.WorkItem{}, err

@@ -103,6 +103,7 @@
     UntrustPlugin,
     UpdateProject,
     UpdateProjectAttachment,
+    UpdateWorkItem,
     WritePTY,
     ListPlugins,
     OnboardingStatus as LoadOnboardingStatus,
@@ -1254,6 +1255,28 @@
     }
   }
 
+  async function updateWorkItem(request: {
+    id: string;
+    title: string;
+    bodyMarkdown: string;
+  }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await UpdateWorkItem({
+        id: request.id,
+        title: request.title,
+        bodyMarkdown: request.bodyMarkdown,
+      });
+      await refreshWorkState();
+      if (activeMain === "projects") await refreshProjectDetail();
+    } catch (err) {
+      error = `Update work item failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
   async function moveWorkItem(workItemId: string, stageId: string) {
     error = "";
     loadingWork = true;
@@ -1990,6 +2013,7 @@
             loading={loadingWork}
             onRefresh={() => void refreshProjects()}
             onCreateWorkItem={createWorkItem}
+            onUpdateWorkItem={updateWorkItem}
             onMoveWorkItem={moveWorkItem}
             onGenerateWorktree={generateWorktree}
             onAttachFile={attachFile}

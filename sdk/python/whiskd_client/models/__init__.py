@@ -136,6 +136,7 @@ from .update_project_request import UpdateProjectRequest
 from .update_project_request_default_phase_agents import (
     UpdateProjectRequestDefaultPhaseAgents,
 )
+from .update_work_item_request import UpdateWorkItemRequest
 from .work_item import WorkItem
 from .work_item_metadata import WorkItemMetadata
 from .work_item_run import WorkItemRun
@@ -278,6 +279,7 @@ __all__ = (
     "UpdateProjectAttachmentRequestMeta",
     "UpdateProjectRequest",
     "UpdateProjectRequestDefaultPhaseAgents",
+    "UpdateWorkItemRequest",
     "WorkflowEvent",
     "WorkflowStage",
     "WorkflowTemplate",

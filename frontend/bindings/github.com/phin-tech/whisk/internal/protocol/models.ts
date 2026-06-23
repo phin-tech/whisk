@@ -2922,6 +2922,30 @@ export class UpdateProjectRequest {
     }
 }
 
+export class UpdateWorkItemRequest {
+    "id": string;
+    "title"?: string | null;
+    "bodyMarkdown"?: string | null;
+    "actor"?: string;
+
+    /** Creates a new UpdateWorkItemRequest instance. */
+    constructor($$source: Partial<UpdateWorkItemRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UpdateWorkItemRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): UpdateWorkItemRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new UpdateWorkItemRequest($$parsedSource as Partial<UpdateWorkItemRequest>);
+    }
+}
+
 export const WorkItem = workitem$0.WorkItem;
 export type WorkItem = workitem$0.WorkItem;
 

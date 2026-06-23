@@ -259,6 +259,15 @@ func TestRunWorkItemCreateListAndActionsUseDaemonAPI(t *testing.T) {
 				t.Fatalf("query = %s", r.URL.RawQuery)
 			}
 			_ = json.NewEncoder(w).Encode([]protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/work-items/wi_01/update":
+			var req protocol.UpdateWorkItemRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode update: %v", err)
+			}
+			if req.Title == nil || *req.Title != "Updated task" || req.BodyMarkdown == nil || *req.BodyMarkdown != "" || req.Actor != "agent" {
+				t.Fatalf("update request = %#v", req)
+			}
+			_ = json.NewEncoder(w).Encode(protocol.WorkItem{ID: "wi_01", Number: 1, Title: *req.Title, BodyMarkdown: *req.BodyMarkdown})
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/work-items/wi_01/bind-worktree":
 			var req protocol.BindWorkItemWorktreeRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -321,6 +330,11 @@ func TestRunWorkItemCreateListAndActionsUseDaemonAPI(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	if _, err := captureStdout(func() error {
+		return run([]string{"work-item", "update", "-url", server.URL, "-title", "Updated task", "-body", "", "-actor", "agent", "-json", "wi_01"})
+	}); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if _, err := captureStdout(func() error {
 		return run([]string{"work-item", "bind-worktree", "-url", server.URL, "-branch", "whisk/app-1-task", "-path", ".", "-json", "wi_01"})
 	}); err != nil {
 		t.Fatalf("bind: %v", err)
@@ -340,7 +354,7 @@ func TestRunWorkItemCreateListAndActionsUseDaemonAPI(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if requests["POST /v1/work-items"] != 1 || requests["GET /v1/work-items"] != 1 || requests["POST /v1/work-items/wi_01/delete"] != 1 {
+	if requests["POST /v1/work-items"] != 1 || requests["GET /v1/work-items"] != 1 || requests["POST /v1/work-items/wi_01/update"] != 1 || requests["POST /v1/work-items/wi_01/delete"] != 1 {
 		t.Fatalf("requests = %#v", requests)
 	}
 }

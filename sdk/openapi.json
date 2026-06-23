@@ -4132,6 +4132,56 @@
         }
       }
     },
+    "/v1/work-items/{workItemID}/update": {
+      "post": {
+        "operationId": "updateWorkItem",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItem"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/workflow-events": {
       "get": {
         "operationId": "listWorkflowEvents",
@@ -7362,6 +7412,28 @@
             "type": "boolean"
           }
         },
+        "type": "object"
+      },
+      "UpdateWorkItemRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "bodyMarkdown": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
         "type": "object"
       },
       "WorkItem": {

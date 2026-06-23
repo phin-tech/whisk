@@ -411,6 +411,10 @@ func (s *Service) CreateWorkItem(ctx context.Context, req protocol.CreateWorkIte
 	return s.client.CreateWorkItem(ctx, req)
 }
 
+func (s *Service) UpdateWorkItem(ctx context.Context, req protocol.UpdateWorkItemRequest) (protocol.WorkItem, error) {
+	return s.client.UpdateWorkItem(ctx, req)
+}
+
 func (s *Service) MoveWorkItem(ctx context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error) {
 	return s.client.MoveWorkItem(ctx, req)
 }

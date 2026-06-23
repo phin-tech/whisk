@@ -667,6 +667,12 @@ export function UpdateProjectAttachment(attachmentID: string, req: protocol$0.Up
     });
 }
 
+export function UpdateWorkItem(req: protocol$0.UpdateWorkItemRequest): $CancellablePromise<protocol$0.WorkItem> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.UpdateWorkItem", req).then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
 export function WritePTY(req: protocol$0.WritePTYRequest): $CancellablePromise<void> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.WritePTY", req);
 }

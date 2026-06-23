@@ -75,6 +75,7 @@ type RuntimeClient interface {
 	ListAgentProfiles(ctx context.Context) ([]protocol.AgentProfile, error)
 	ListWorkItems(ctx context.Context, projectID string) ([]protocol.WorkItem, error)
 	CreateWorkItem(ctx context.Context, req protocol.CreateWorkItemRequest) (protocol.WorkItem, error)
+	UpdateWorkItem(ctx context.Context, req protocol.UpdateWorkItemRequest) (protocol.WorkItem, error)
 	MoveWorkItem(ctx context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error)
 	StartPlanning(ctx context.Context, req protocol.StartPlanningRequest) (protocol.WorkItemRun, error)
 	SubmitDraftPlan(ctx context.Context, req protocol.SubmitDraftPlanRequest) (protocol.Artifact, error)

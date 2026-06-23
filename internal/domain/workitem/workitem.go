@@ -95,6 +95,7 @@ const (
 	WorkflowEventDoneApproved        = "done_approved"
 
 	HistoryCreated          = "created"
+	HistoryUpdated          = "updated"
 	HistoryStageMoved       = "stage_moved"
 	HistoryAttachmentAdded  = "attachment_added"
 	HistoryWorktreeBound    = "worktree_bound"
@@ -448,6 +449,15 @@ type CreateWorkItem struct {
 	Title        string
 	BodyMarkdown string
 	StageID      string
+	Actor        string
+	Now          time.Time
+}
+
+type UpdateWorkItem struct {
+	ID           string
+	HistoryID    string
+	Title        *string
+	BodyMarkdown *string
 	Actor        string
 	Now          time.Time
 }
@@ -1409,6 +1419,39 @@ func (s *State) CreateWorkItem(req CreateWorkItem) (WorkItem, error) {
 		return WorkItem{}, fmt.Errorf("history id required")
 	}
 	s.projects[project.ID] = project
+	s.items[item.ID] = item
+	return cloneWorkItem(item), nil
+}
+
+func (s *State) UpdateWorkItem(req UpdateWorkItem) (WorkItem, error) {
+	item, ok := s.items[req.ID]
+	if !ok {
+		return WorkItem{}, fmt.Errorf("work item %s not found", req.ID)
+	}
+	if req.Title == nil && req.BodyMarkdown == nil {
+		return WorkItem{}, fmt.Errorf("work item update requires title or body")
+	}
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if title == "" {
+			return WorkItem{}, fmt.Errorf("work item title required")
+		}
+		item.Title = title
+	}
+	if req.BodyMarkdown != nil {
+		item.BodyMarkdown = *req.BodyMarkdown
+	}
+	item.UpdatedAt = req.Now
+	if err := appendHistory(&item, HistoryEvent{
+		ID:      req.HistoryID,
+		Type:    HistoryUpdated,
+		At:      req.Now,
+		Actor:   req.Actor,
+		Message: "updated work item",
+		StageID: item.StageID,
+	}); err != nil {
+		return WorkItem{}, err
+	}
 	s.items[item.ID] = item
 	return cloneWorkItem(item), nil
 }

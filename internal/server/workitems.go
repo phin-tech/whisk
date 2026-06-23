@@ -514,6 +514,25 @@ func (s *HTTPServer) createWorkItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, item)
 }
 
+func (s *HTTPServer) updateWorkItem(w http.ResponseWriter, r *http.Request) {
+	var req protocol.UpdateWorkItemRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.ID = pathValue(r, "workItemID", req.ID)
+	item, err := s.runtime.UpdateWorkItem(r.Context(), app.UpdateWorkItemRequest{
+		ID:           req.ID,
+		Title:        req.Title,
+		BodyMarkdown: req.BodyMarkdown,
+		Actor:        req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (s *HTTPServer) moveWorkItem(w http.ResponseWriter, r *http.Request) {
 	var req protocol.MoveWorkItemRequest
 	if !decodeJSON(w, r, &req) {

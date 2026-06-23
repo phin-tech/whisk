@@ -220,6 +220,69 @@ func TestStateCreatesWorkItemsWithPerProjectNumbersAndHistory(t *testing.T) {
 	}
 }
 
+func TestStateUpdatesWorkItemTitleAndBody(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item, err := state.CreateWorkItem(CreateWorkItem{
+		ID:           "wi_01",
+		HistoryID:    "hist_01",
+		ProjectID:    "proj_01",
+		Title:        "Old title",
+		BodyMarkdown: "Old body",
+		Actor:        "user",
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	title := "  New title  "
+	body := ""
+
+	updated, err := state.UpdateWorkItem(UpdateWorkItem{
+		ID:           item.ID,
+		HistoryID:    "hist_02",
+		Title:        &title,
+		BodyMarkdown: &body,
+		Actor:        "human",
+		Now:          now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("update work item: %v", err)
+	}
+	if updated.Title != "New title" || updated.BodyMarkdown != "" || !updated.UpdatedAt.Equal(now.Add(time.Minute)) {
+		t.Fatalf("updated item = %#v", updated)
+	}
+	if len(updated.History) != 2 || updated.History[1].Type != HistoryUpdated || updated.History[1].Actor != "human" {
+		t.Fatalf("history = %#v", updated.History)
+	}
+	stored, ok := state.GetWorkItem(item.ID)
+	if !ok || stored.Title != "New title" || stored.BodyMarkdown != "" {
+		t.Fatalf("stored item = %#v, ok = %v", stored, ok)
+	}
+}
+
+func TestStateRejectsInvalidWorkItemUpdates(t *testing.T) {
+	state := NewState()
+	mustProject(t, state, "proj_01", "One")
+	item, err := state.CreateWorkItem(CreateWorkItem{
+		ID:        "wi_01",
+		HistoryID: "hist_01",
+		ProjectID: "proj_01",
+		Title:     "Task",
+	})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	if _, err := state.UpdateWorkItem(UpdateWorkItem{ID: item.ID, HistoryID: "hist_02"}); err == nil {
+		t.Fatalf("expected no-op update error")
+	}
+	blank := " "
+	if _, err := state.UpdateWorkItem(UpdateWorkItem{ID: item.ID, HistoryID: "hist_03", Title: &blank}); err == nil {
+		t.Fatalf("expected blank title error")
+	}
+}
+
 func TestMoveToExecutionRequiresWorktreeAndBindWorktreeAllowsMove(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)

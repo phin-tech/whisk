@@ -142,6 +142,7 @@ type SubmitDraftPlanRequest = protocol.SubmitDraftPlanRequest
 type SubmitReviewFeedbackRequest = protocol.SubmitReviewFeedbackRequest
 type UpdateProjectAttachmentRequest = protocol.UpdateProjectAttachmentRequest
 type UpdateProjectRequest = protocol.UpdateProjectRequest
+type UpdateWorkItemRequest = protocol.UpdateWorkItemRequest
 type WorkItem = protocol.WorkItem
 type WorkItemRun = protocol.WorkItemRun
 type WorkflowEvent = protocol.WorkflowEvent
@@ -199,6 +200,7 @@ const (
 	HistoryDeleted                     = workitem.HistoryDeleted
 	HistoryRunEventAppended            = workitem.HistoryRunEventAppended
 	HistoryStageMoved                  = workitem.HistoryStageMoved
+	HistoryUpdated                     = workitem.HistoryUpdated
 	HistoryWorktreeBound               = workitem.HistoryWorktreeBound
 	MetadataOwnerArtifact              = workitem.MetadataOwnerArtifact
 	MetadataOwnerProject               = workitem.MetadataOwnerProject
