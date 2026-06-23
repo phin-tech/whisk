@@ -15,4 +15,8 @@ describe("NotificationsPanel", () => {
     expect(source).toContain("resolveTextPrompt(prompt)");
     expect(source).toContain("promptMessages.has(hook.title)");
   });
+
+  it("submits Claude option prompts with terminal enter", () => {
+    expect(source).toContain('`${index + 1}\\r`');
+  });
 });

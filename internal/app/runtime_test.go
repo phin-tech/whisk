@@ -81,6 +81,33 @@ func TestRuntimeCreateSessionAttachAndReplayOutput(t *testing.T) {
 	}
 }
 
+func TestRuntimeWritePTYNormalizesTrailingLineFeed(t *testing.T) {
+	ptyBackend := newMemoryPTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: ptyBackend})
+
+	ctx := context.Background()
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    t.TempDir(),
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	if err := runtime.WritePTY(ctx, created.MainPtyID, []byte("one\ntwo\n")); err != nil {
+		t.Fatalf("write pty: %v", err)
+	}
+	if err := runtime.WritePTY(ctx, created.MainPtyID, []byte("three\r\n")); err != nil {
+		t.Fatalf("write pty crlf: %v", err)
+	}
+
+	writes := ptyBackend.writes[created.MainPtyID]
+	if len(writes) != 2 || string(writes[0]) != "one\ntwo\r" || string(writes[1]) != "three\r" {
+		t.Fatalf("writes = %#v", writes)
+	}
+}
+
 func TestRuntimeCreateSessionRunsInitialCommand(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	runtime := app.NewRuntime(app.RuntimeConfig{

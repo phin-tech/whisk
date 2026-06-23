@@ -76,7 +76,7 @@
   }
 
   function resolveOptionPrompt(prompt: AgentPrompt, answer: string, index: number) {
-    const tuiInput = prompt.provider === "claude" && prompt.toolName === "AskUserQuestion" ? `${index + 1}\n` : "";
+    const tuiInput = prompt.provider === "claude" && prompt.toolName === "AskUserQuestion" ? `${index + 1}\r` : "";
     onResolveAgentPrompt(prompt, answer, tuiInput);
   }
 </script>

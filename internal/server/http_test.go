@@ -289,7 +289,7 @@ func TestHTTPServerSessionLifecycleActions(t *testing.T) {
 	if started.PTYID == "" || backend.records[started.PTYID].WorkingDir != paneDir {
 		t.Fatalf("started = %#v record = %#v", started, backend.records[started.PTYID])
 	}
-	if string(backend.outputs[started.PTYID]) != "echo server-command\n" {
+	if string(backend.outputs[started.PTYID]) != "echo server-command\r" {
 		t.Fatalf("initial command output = %q", string(backend.outputs[started.PTYID]))
 	}
 	execCreated := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{

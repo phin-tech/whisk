@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	bridgeinstaller "github.com/phin-tech/whisk/internal/adapters/agentbridge"
 	"github.com/phin-tech/whisk/internal/adapters/agents"
@@ -93,6 +95,13 @@ type ProjectContextItem struct {
 	SourceURL    string
 	Error        string
 }
+
+var (
+	interactiveAgentReadyPollInterval = 100 * time.Millisecond
+	interactiveAgentReadyTimeout      = 20 * time.Second
+	interactiveAgentPromptEchoTimeout = 10 * time.Second
+	interactiveAgentPromptSubmitDelay = 250 * time.Millisecond
+)
 
 type CreateWorkItemRequest struct {
 	ProjectID    string
@@ -1169,6 +1178,10 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 		}
 	}
 	if strings.TrimSpace(launch.Stdin) != "" {
+		if project.Preferences.UseInteractiveAgentShell {
+			r.submitInteractiveAgentPrompt(created.MainPtyID, launch.Provider, launch.Stdin)
+			return created.Session.ID, created.MainPtyID, nil
+		}
 		if err := r.WritePTY(ctx, created.MainPtyID, []byte(launch.Stdin+"\n")); err != nil {
 			return "", "", err
 		}
@@ -1176,9 +1189,112 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	return created.Session.ID, created.MainPtyID, nil
 }
 
+func (r *Runtime) submitInteractiveAgentPrompt(ptyID string, provider agents.Provider, stdin string) {
+	go func() {
+		if err := r.waitInteractiveAgentReady(r.watchCtx, ptyID, provider); err != nil {
+			return
+		}
+		if err := r.WritePTY(r.watchCtx, ptyID, []byte(stdin)); err != nil {
+			return
+		}
+		if err := r.waitInteractiveAgentPromptEcho(r.watchCtx, ptyID, stdin); err != nil {
+			return
+		}
+		timer := time.NewTimer(interactiveAgentPromptSubmitDelay)
+		defer timer.Stop()
+		select {
+		case <-r.watchCtx.Done():
+			return
+		case <-timer.C:
+		}
+		_ = r.WritePTY(r.watchCtx, ptyID, []byte("\r"))
+	}()
+}
+
+func (r *Runtime) waitInteractiveAgentReady(ctx context.Context, ptyID string, provider agents.Provider) error {
+	if provider != agents.ProviderClaude {
+		return nil
+	}
+	deadline := time.NewTimer(interactiveAgentReadyTimeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(interactiveAgentReadyPollInterval)
+	defer ticker.Stop()
+	for {
+		snapshot, err := r.PTYOutput(ctx, ptyID, 0)
+		if err == nil && interactiveAgentOutputReady(provider, snapshot.OutputBytes) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+func interactiveAgentOutputReady(provider agents.Provider, output []byte) bool {
+	if provider != agents.ProviderClaude {
+		return true
+	}
+	text := strings.ToLower(string(output))
+	return strings.Contains(text, "auto mode on") || strings.Contains(text, "automodeon")
+}
+
+func (r *Runtime) waitInteractiveAgentPromptEcho(ctx context.Context, ptyID string, prompt string) error {
+	marker := promptEchoMarker(prompt)
+	if marker == "" {
+		return nil
+	}
+	deadline := time.NewTimer(interactiveAgentPromptEchoTimeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(interactiveAgentReadyPollInterval)
+	defer ticker.Stop()
+	for {
+		snapshot, err := r.PTYOutput(ctx, ptyID, 0)
+		if err == nil && strings.Contains(normalizedTerminalText(string(snapshot.OutputBytes)), marker) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+func promptEchoMarker(prompt string) string {
+	normalized := normalizedTerminalText(prompt)
+	const finalInstruction = "donottreattheplanascompleteuntilthewhiskcommandsucceeds"
+	if strings.Contains(normalized, finalInstruction) {
+		return finalInstruction
+	}
+	if len(normalized) > 80 {
+		return normalized[len(normalized)-80:]
+	}
+	return normalized
+}
+
+func normalizedTerminalText(value string) string {
+	var b strings.Builder
+	for _, r := range value {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return b.String()
+}
+
 func agentStartPTYOptions(launch agents.Launch, env map[string]string, useInteractiveShell bool) *StartPTYOptions {
 	if useInteractiveShell {
-		return &StartPTYOptions{Command: agents.CommandLine(launch.Command, launch.Args), Env: env}
+		shell := os.Getenv("SHELL")
+		if shell == "" {
+			shell = "sh"
+		}
+		return &StartPTYOptions{Command: shell, Args: []string{"-lc", agents.CommandLine(launch.Command, launch.Args)}, Exec: true, Env: env}
 	}
 	return &StartPTYOptions{Command: launch.Command, Args: launch.Args, Exec: true, Env: env}
 }

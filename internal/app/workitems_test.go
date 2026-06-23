@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -167,6 +168,7 @@ func TestRuntimeStartWorkItemRunUsesInteractiveAgentShellWhenEnabled(t *testing.
 	root := t.TempDir()
 	store := &memoryWorkItemStore{}
 	ptyBackend := newMemoryPTYBackend()
+	ptyBackend.outputBytes = []byte("ClaudeCode\n⏵⏵ auto mode on")
 	nextID := 0
 	runtime := app.NewRuntime(app.RuntimeConfig{
 		IDGenerator: func() string {
@@ -196,7 +198,7 @@ func TestRuntimeStartWorkItemRunUsesInteractiveAgentShellWhenEnabled(t *testing.
 		Preset:           workitem.RunPresetWriter,
 		PromptTemplateID: workitem.PromptTemplateImplement,
 		Launch:           true,
-		AgentProfileID:   "codex",
+		AgentProfileID:   "claude",
 		SystemPrompt:     "Don't overbuild.",
 	})
 	if err != nil {
@@ -207,12 +209,70 @@ func TestRuntimeStartWorkItemRunUsesInteractiveAgentShellWhenEnabled(t *testing.
 		t.Fatalf("spawns = %#v", ptyBackend.spawns)
 	}
 	spawn := ptyBackend.spawns[0]
-	if spawn.Command != "" || len(spawn.Args) != 0 {
+	if spawn.Command != "/bin/zsh" || len(spawn.Args) != 2 || spawn.Args[0] != "-lc" {
 		t.Fatalf("spawn command/args = %q %#v", spawn.Command, spawn.Args)
 	}
-	writes := ptyBackend.writes[run.PTYID]
-	if len(writes) != 1 || !strings.Contains(string(writes[0]), "codex -c") || !strings.Contains(string(writes[0]), "overbuild.") {
+	if !strings.Contains(spawn.Args[1], "claude --append-system-prompt") || !strings.Contains(spawn.Args[1], "overbuild.") {
+		t.Fatalf("spawn command line = %q", spawn.Args[1])
+	}
+	writes := waitForPTYWrites(t, ptyBackend, run.PTYID, 2)
+	if ptyOutputCalls(ptyBackend, run.PTYID) < 2 {
+		t.Fatalf("interactive launch did not wait for Claude readiness and prompt echo")
+	}
+	if len(writes) != 2 || !strings.Contains(string(writes[0]), "Implement the work item.") {
 		t.Fatalf("writes = %#v", writes)
+	}
+	if strings.HasSuffix(string(writes[0]), "\r") || string(writes[1]) != "\r" {
+		t.Fatalf("interactive launch must submit the prompt after writing it, writes = %#v", writes)
+	}
+}
+
+func TestRuntimeStartWorkItemRunDoesNotBlockWaitingForInteractiveAgentReady(t *testing.T) {
+	t.Setenv("SHELL", "/bin/zsh")
+	root := t.TempDir()
+	store := &memoryWorkItemStore{}
+	ptyBackend := newMemoryPTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: store,
+		PTYBackend:    ptyBackend,
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	setupCtx := context.Background()
+	project, err := runtime.CreateProject(setupCtx, app.CreateProjectRequest{
+		Name:    "App",
+		RootDir: root,
+		Preferences: workitem.ProjectPreferences{
+			UseInteractiveAgentShell: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(setupCtx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Wire agent"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	run, err := runtime.StartWorkItemRun(ctx, app.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		Launch:           true,
+		AgentProfileID:   "claude",
+	})
+	if err != nil {
+		t.Fatalf("start run should not wait for Claude readiness: %v", err)
+	}
+	if run.PTYID == "" {
+		t.Fatalf("run missing pty: %#v", run)
 	}
 }
 
@@ -1847,15 +1907,19 @@ func (s *memoryEventSink) Publish(_ context.Context, event app.RuntimeEvent) err
 }
 
 type memoryPTYBackend struct {
-	records map[string]app.PTYRecord
-	spawns  []app.SpawnPTYRequest
-	writes  map[string][][]byte
+	mu          sync.Mutex
+	records     map[string]app.PTYRecord
+	spawns      []app.SpawnPTYRequest
+	writes      map[string][][]byte
+	outputBytes []byte
+	outputCalls map[string]int
 }
 
 func newMemoryPTYBackend() *memoryPTYBackend {
 	return &memoryPTYBackend{
-		records: map[string]app.PTYRecord{},
-		writes:  map[string][][]byte{},
+		records:     map[string]app.PTYRecord{},
+		writes:      map[string][][]byte{},
+		outputCalls: map[string]int{},
 	}
 }
 
@@ -1873,10 +1937,13 @@ func (b *memoryPTYBackend) Spawn(_ context.Context, req app.SpawnPTYRequest) (ap
 }
 
 func (b *memoryPTYBackend) Write(_ context.Context, ptyID string, data []byte) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if _, ok := b.records[ptyID]; !ok {
 		return fmt.Errorf("pty %s not found", ptyID)
 	}
 	b.writes[ptyID] = append(b.writes[ptyID], append([]byte(nil), data...))
+	b.outputBytes = append(b.outputBytes, data...)
 	return nil
 }
 
@@ -1911,11 +1978,43 @@ func (b *memoryPTYBackend) Attach(context.Context, app.AttachPTYRequest) (*app.P
 }
 
 func (b *memoryPTYBackend) Output(_ context.Context, ptyID string, _ uint64) (app.PTYOutputSnapshot, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	record, ok := b.records[ptyID]
 	if !ok {
 		return app.PTYOutputSnapshot{}, fmt.Errorf("pty %s not found", ptyID)
 	}
-	return app.PTYOutputSnapshot{Record: record}, nil
+	b.outputCalls[ptyID]++
+	return app.PTYOutputSnapshot{Record: record, OutputBytes: append([]byte(nil), b.outputBytes...)}, nil
+}
+
+func waitForPTYWrites(t *testing.T, b *memoryPTYBackend, ptyID string, count int) [][]byte {
+	t.Helper()
+	deadline := time.After(3 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		b.mu.Lock()
+		writes := append([][]byte(nil), b.writes[ptyID]...)
+		for i := range writes {
+			writes[i] = append([]byte(nil), writes[i]...)
+		}
+		b.mu.Unlock()
+		if len(writes) >= count {
+			return writes
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for %d writes to %s, got %#v", count, ptyID, writes)
+		case <-ticker.C:
+		}
+	}
+}
+
+func ptyOutputCalls(b *memoryPTYBackend, ptyID string) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.outputCalls[ptyID]
 }
 
 func (b *memoryPTYBackend) List(context.Context) ([]app.PTYRecord, error) {

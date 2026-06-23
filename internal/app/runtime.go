@@ -1306,7 +1306,7 @@ func (r *Runtime) ListPTYs(ctx context.Context) ([]PTYInfo, error) {
 }
 
 func (r *Runtime) WritePTY(ctx context.Context, ptyID string, data []byte) error {
-	return r.ptys.Write(ctx, ptyID, data)
+	return r.ptys.Write(ctx, ptyID, terminalInput(data))
 }
 
 func (r *Runtime) ResizePTY(ctx context.Context, ptyID string, size PTYSize) error {
@@ -1317,6 +1317,18 @@ func (r *Runtime) ResizePTY(ctx context.Context, ptyID string, size PTYSize) err
 		return fmt.Errorf("pty rows must be positive")
 	}
 	return r.ptys.Resize(ctx, ptyID, size)
+}
+
+func terminalInput(data []byte) []byte {
+	if len(data) == 0 || data[len(data)-1] != '\n' {
+		return data
+	}
+	if len(data) > 1 && data[len(data)-2] == '\r' {
+		return data[:len(data)-1]
+	}
+	normalized := append([]byte(nil), data...)
+	normalized[len(normalized)-1] = '\r'
+	return normalized
 }
 
 func (r *Runtime) AttachPTY(ctx context.Context, req AttachPTYRequest) (*PTYAttach, error) {
@@ -1481,7 +1493,7 @@ func (r *Runtime) writeInitialCommand(ctx context.Context, ptyID string, command
 	if command == "" {
 		return nil
 	}
-	return r.ptys.Write(ctx, ptyID, []byte(command+"\n"))
+	return r.ptys.Write(ctx, ptyID, []byte(command+"\r"))
 }
 
 func (r *Runtime) ptyContextEnv(sessionID string, ptyID string, extra map[string]string) map[string]string {
