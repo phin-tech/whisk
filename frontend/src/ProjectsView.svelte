@@ -26,7 +26,12 @@
     projectAttachmentEditValues,
     type ProjectAttachmentLike,
   } from "./projectAttachments";
-  import { projectDetailCounts, selectedProjectDetail } from "./projectView";
+  import {
+    projectDetailCounts,
+    selectedProjectDetail,
+    sessionNameSuffix,
+    sortRunsRecent,
+  } from "./projectView";
 
   export let projects: Project[] = [];
   export let activeProjectId = "";
@@ -112,7 +117,8 @@
   );
   $: recentWorkItems = workItems.slice(0, 5);
   $: recentSessions = sessions.slice(0, 5);
-  $: recentRuns = runs.slice(0, 5);
+  $: sortedRuns = sortRunsRecent(runs);
+  $: recentRuns = sortedRuns.slice(0, 5);
   $: if (visibleDetail?.project.id !== editProjectId) {
     editProjectId = visibleDetail?.project.id ?? "";
     editName = visibleDetail?.project.name ?? "";
@@ -395,7 +401,13 @@
             <div class="grid gap-5 xl:grid-cols-3">
               <section>
                 <div class="mb-2 flex items-center justify-between gap-2">
-                  <div class="text-[11px] font-semibold uppercase text-text-muted">Active sessions</div>
+                  <button
+                    type="button"
+                    class="text-left text-[11px] font-semibold uppercase text-text-muted transition-colors hover:text-text-primary"
+                    on:click={() => (activeTab = "sessions")}
+                  >
+                    Sessions <span class="font-mono">{counts.sessions}</span>
+                  </button>
                   <button
                     type="button"
                     class="inline-flex h-7 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
@@ -406,7 +418,7 @@
                     <span>Add</span>
                   </button>
                 </div>
-                <div class="grid gap-1.5">
+                <div class="grid grid-cols-1 gap-1.5">
                   {#if recentSessions.length === 0}
                     <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
                       No sessions.
@@ -418,16 +430,38 @@
                         class="min-w-0 border border-border-subtle bg-bg-surface/30 px-3 py-2 text-left transition-colors hover:border-accent-dim"
                         on:click={() => onOpenSession(session.id)}
                       >
-                        <div class="truncate text-[13px] font-medium text-text-primary">{session.name}</div>
+                        <div class="truncate text-[13px] font-medium text-text-primary">
+                          {session.name}
+                          {#if sessionNameSuffix(session, sessions)}
+                            <span class="font-mono text-[10px] text-text-muted">#{sessionNameSuffix(session, sessions)}</span>
+                          {/if}
+                        </div>
                         <div class="truncate font-mono text-[10px] text-text-muted">{session.rootDir}</div>
                       </button>
                     {/each}
+                    {#if counts.sessions > recentSessions.length}
+                      <button
+                        type="button"
+                        class="border border-border-subtle bg-bg-surface/20 px-3 py-2 text-left text-[12px] text-text-muted transition-colors hover:border-accent-dim hover:text-text-primary"
+                        on:click={() => (activeTab = "sessions")}
+                      >
+                        View all ({counts.sessions})
+                      </button>
+                    {/if}
                   {/if}
                 </div>
               </section>
 
               <section>
-                <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Recent cards</div>
+                <div class="mb-2 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    class="text-left text-[11px] font-semibold uppercase text-text-muted transition-colors hover:text-text-primary"
+                    on:click={() => (activeTab = "cards")}
+                  >
+                    Recent cards <span class="font-mono">{counts.workItems}</span>
+                  </button>
+                </div>
                 <div class="grid gap-1.5">
                   {#if recentWorkItems.length === 0}
                     <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
@@ -447,12 +481,29 @@
                         </span>
                       </button>
                     {/each}
+                    {#if counts.workItems > recentWorkItems.length}
+                      <button
+                        type="button"
+                        class="border border-border-subtle bg-bg-surface/20 px-3 py-2 text-left text-[12px] text-text-muted transition-colors hover:border-accent-dim hover:text-text-primary"
+                        on:click={() => (activeTab = "cards")}
+                      >
+                        View all ({counts.workItems})
+                      </button>
+                    {/if}
                   {/if}
                 </div>
               </section>
 
               <section>
-                <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Latest runs</div>
+                <div class="mb-2 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    class="text-left text-[11px] font-semibold uppercase text-text-muted transition-colors hover:text-text-primary"
+                    on:click={() => (activeTab = "runs")}
+                  >
+                    Latest runs <span class="font-mono">{counts.runs}</span>
+                  </button>
+                </div>
                 <div class="grid gap-1.5">
                   {#if recentRuns.length === 0}
                     <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
@@ -475,6 +526,15 @@
                         <div class="truncate text-[11px] text-text-muted">{workItemTitle(run.workItemId)}</div>
                       </button>
                     {/each}
+                    {#if counts.runs > recentRuns.length}
+                      <button
+                        type="button"
+                        class="border border-border-subtle bg-bg-surface/20 px-3 py-2 text-left text-[12px] text-text-muted transition-colors hover:border-accent-dim hover:text-text-primary"
+                        on:click={() => (activeTab = "runs")}
+                      >
+                        View all ({counts.runs})
+                      </button>
+                    {/if}
                   {/if}
                 </div>
               </section>
@@ -727,7 +787,7 @@
                 <span>Add</span>
               </button>
             </div>
-            <div class="grid gap-1.5">
+            <div class="grid grid-cols-1 gap-1.5">
               {#if sessions.length === 0}
                 <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
                   No sessions.
@@ -738,6 +798,9 @@
                     <div class="min-w-0">
                       <div class="truncate text-[13px] font-medium text-text-primary">
                         {session.name}
+                        {#if sessionNameSuffix(session, sessions)}
+                          <span class="font-mono text-[10px] text-text-muted">#{sessionNameSuffix(session, sessions)}</span>
+                        {/if}
                       </div>
                       <div class="truncate font-mono text-[10px] text-text-muted">
                         {session.rootDir}
@@ -773,7 +836,7 @@
                   No runs.
                 </div>
               {:else}
-                {#each runs as run (run.id)}
+                {#each sortedRuns as run (run.id)}
                   <div class="grid grid-cols-[minmax(0,1fr)_96px_88px] items-center gap-3 border border-border-subtle bg-bg-surface/30 px-3 py-2">
                     <div class="min-w-0">
                       <div class="truncate text-[13px] font-medium text-text-primary">

@@ -125,6 +125,7 @@
   import type { Command } from "./commands";
   import { runCommand } from "./commands";
   import { notificationSurfaceCount, targetForStatusEvent } from "./notificationsView";
+  import { projectDetailWithStoreSessions } from "./projectView";
   import {
     nextPTYStreamOffset,
     ptyAttachWebSocketURL,
@@ -460,7 +461,11 @@
       projectDetail = null;
       return;
     }
-    projectDetail = await LoadProjectDetail(activeProjectId);
+    projectDetail = projectDetailWithStoreSessions(
+      await LoadProjectDetail(activeProjectId),
+      activeProjectId,
+      sessions,
+    );
   }
 
   async function refreshAgentProfiles() {
@@ -469,10 +474,7 @@
 
   function syncActiveProjectDetailSessions() {
     if (!projectDetail || projectDetail.project.id !== activeProjectId) return;
-    projectDetail = {
-      ...projectDetail,
-      sessions: sessions.filter((session) => session.projectId === activeProjectId),
-    };
+    projectDetail = projectDetailWithStoreSessions(projectDetail, activeProjectId, sessions);
   }
 
   async function refreshWorkItems() {
