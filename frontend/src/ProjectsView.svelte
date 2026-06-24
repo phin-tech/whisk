@@ -1,7 +1,9 @@
 <script lang="ts">
   import { Browser } from "@wailsio/runtime";
-  import Folder from "@lucide/svelte/icons/folder";
+  import Ellipsis from "@lucide/svelte/icons/ellipsis";
   import ExternalLink from "@lucide/svelte/icons/external-link";
+  import Folder from "@lucide/svelte/icons/folder";
+  import Info from "@lucide/svelte/icons/info";
   import LayoutDashboard from "@lucide/svelte/icons/layout-dashboard";
   import ListChecks from "@lucide/svelte/icons/list-checks";
   import Paperclip from "@lucide/svelte/icons/paperclip";
@@ -26,7 +28,12 @@
     projectAttachmentEditValues,
     type ProjectAttachmentLike,
   } from "./projectAttachments";
-  import { projectDetailCounts, selectedProjectDetail } from "./projectView";
+  import {
+    projectDetailCounts,
+    selectedProjectDetail,
+    sessionNameSuffix,
+    sortRunsRecent,
+  } from "./projectView";
 
   export let projects: Project[] = [];
   export let activeProjectId = "";
@@ -46,6 +53,7 @@
     bodyMarkdown: string;
   }) => void;
   export let onDeleteWorkItem: (workItemId: string) => void;
+  export let onOpenWorkItem: (workItemId: string) => void;
   export let onOpenRunTerminal: (run: WorkItemRun) => void;
   export let onAddProjectAttachment: (request: {
     projectId: string;
@@ -87,6 +95,8 @@
   let editProjectId = "";
   let editName = "";
   let editDescription = "";
+  let descOpen = false;
+  let menuOpen = false;
   let newCardTitle = "";
   let newCardBody = "";
   let attachmentKind = "file";
@@ -112,12 +122,14 @@
   );
   $: recentWorkItems = workItems.slice(0, 5);
   $: recentSessions = sessions.slice(0, 5);
-  $: recentRuns = runs.slice(0, 5);
+  $: sortedRuns = sortRunsRecent(runs);
+  $: recentRuns = sortedRuns.slice(0, 5);
   $: if (visibleDetail?.project.id !== editProjectId) {
     editProjectId = visibleDetail?.project.id ?? "";
     editName = visibleDetail?.project.name ?? "";
     editDescription = visibleDetail?.project.description ?? "";
     activeTab = "overview";
+    descOpen = false;
   }
   $: projectDirty = Boolean(
     visibleDetail &&
@@ -141,13 +153,11 @@
     return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
   }
 
-  function runStatusClass(status: string) {
-    if (status === "running" || status === "awaiting_input") {
-      return "border-green/35 bg-green/10 text-green";
-    }
-    if (status === "queued") return "border-blue/35 bg-blue/10 text-blue";
-    if (status === "failed" || status === "cancelled") return "border-red/35 bg-red/10 text-red";
-    return "border-border-subtle bg-bg-surface/50 text-text-secondary";
+  function runStatusDot(status: string) {
+    if (status === "running" || status === "awaiting_input") return "text-green";
+    if (status === "queued") return "text-blue";
+    if (status === "failed" || status === "cancelled") return "text-red";
+    return "text-text-muted";
   }
 
   function saveProject() {
@@ -160,6 +170,7 @@
 
   function deleteProject() {
     if (!visibleDetail) return;
+    menuOpen = false;
     if (window.confirm(`Delete project ${visibleDetail.project.name}? Sessions and files will be kept.`)) {
       onDeleteProject(visibleDetail.project.id);
     }
@@ -276,378 +287,476 @@
   ];
 </script>
 
+{#snippet emptyState(text: string)}
+  <div class="px-3 py-3 text-[12px] text-text-muted">
+    {text}
+  </div>
+{/snippet}
+
 <div class="h-full min-h-0 bg-bg-deep">
-  <section class="h-full min-w-0">
+  <section class="flex h-full min-w-0 flex-col">
     {#if visibleDetail}
-      <div class="app-scrollbar h-full overflow-y-auto">
-        <div class="border-b border-hairline bg-bg-deep px-5 py-4">
-          <div class="flex min-w-0 flex-wrap items-start justify-between gap-4">
-            <div class="min-w-0">
-              <div class="grid min-w-0 grid-cols-[17px_minmax(0,1fr)_auto] items-center gap-2">
-                <Folder size={17} class="shrink-0 text-accent" />
-                <input
-                  class="min-w-0 rounded border border-transparent bg-transparent px-1 text-[20px] font-semibold text-text-primary outline-none transition-colors focus:border-accent-dim focus:bg-bg-deep"
-                  bind:value={editName}
+      <!-- Compact header -->
+      <div class="shrink-0 border-b border-hairline bg-bg-deep px-4 py-2.5">
+        <div class="flex min-w-0 items-center gap-2">
+          <Folder size={14} class="shrink-0 text-accent" />
+          <input
+            class="min-w-0 rounded border border-transparent bg-transparent px-1 text-[15px] font-medium text-text-primary outline-none transition-colors focus:border-accent-dim focus:bg-bg-deep"
+            bind:value={editName}
+            disabled={loading}
+            aria-label="Project name"
+            on:blur={saveProject}
+          />
+          {#if canSaveProject}
+            <button
+              type="button"
+              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!canSaveProject}
+              aria-label="Save project"
+              title="Save project"
+              on:click={saveProject}
+            >
+              <Save size={12} />
+            </button>
+          {/if}
+          <span class="min-w-0 flex-1 truncate font-mono text-[11px] text-text-muted">
+            {visibleDetail.project.rootDir}
+          </span>
+          <button
+            type="button"
+            class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:text-text-primary {descOpen ? 'border-border-subtle text-text-primary' : ''}"
+            aria-label="Toggle description"
+            title="Toggle description"
+            on:click={() => (descOpen = !descOpen)}
+          >
+            <Info size={13} />
+          </button>
+          <div class="relative">
+            <button
+              type="button"
+              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:text-text-primary"
+              aria-label="Project actions"
+              title="Project actions"
+              on:click={() => (menuOpen = !menuOpen)}
+            >
+              <Ellipsis size={13} />
+            </button>
+            {#if menuOpen}
+              <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+              <div class="fixed inset-0 z-10" on:click={() => (menuOpen = false)}></div>
+              <div class="absolute right-0 top-full z-20 mt-1 min-w-36 rounded border border-border-subtle bg-bg-surface py-1 shadow-lg">
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text-secondary transition-colors hover:bg-bg-surface/80 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={loading}
-                  aria-label="Project name"
-                />
-                <button
-                  type="button"
-                  class="inline-flex h-8 w-8 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!canSaveProject}
-                  aria-label="Save project"
-                  title="Save project"
-                  on:click={saveProject}
+                  on:click={() => { onNewSession(visibleDetail.project.id); menuOpen = false; }}
                 >
-                  <Save size={14} />
+                  <Terminal size={13} />
+                  New session
                 </button>
-              </div>
-              <div class="mt-1 truncate font-mono text-[11px] text-text-muted">
-                {visibleDetail.project.rootDir}
-              </div>
-              <textarea
-                class="mt-3 min-h-16 w-full resize-y rounded border border-border-subtle bg-bg-surface/35 px-3 py-2 text-[13px] text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent-dim"
-                bind:value={editDescription}
-                disabled={loading}
-                placeholder="Project description"
-                aria-label="Project description"
-              ></textarea>
-              <div class="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  class="inline-flex h-8 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text-secondary transition-colors hover:bg-bg-surface/80 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={loading}
-                  on:click={() => onNewSession(visibleDetail.project.id)}
+                  on:click={() => { activeTab = "cards"; menuOpen = false; }}
                 >
-                  <Terminal size={14} />
-                  <span>New session</span>
+                  <Plus size={13} />
+                  New card
                 </button>
+                <div class="my-1 border-t border-hairline"></div>
                 <button
                   type="button"
-                  class="inline-flex h-8 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={loading}
-                  on:click={() => (activeTab = "cards")}
-                >
-                  <Plus size={14} />
-                  <span>New card</span>
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex h-8 items-center gap-1 rounded border border-red/30 bg-red/10 px-2.5 text-[12px] text-red transition-colors hover:border-red/50 hover:bg-red/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={loading}
                   on:click={deleteProject}
                 >
-                  <Trash2 size={14} />
-                  <span>Delete</span>
+                  <Trash2 size={13} />
+                  Delete
                 </button>
               </div>
-            </div>
-            <div class="grid grid-cols-3 gap-2 text-center">
-              <div class="min-w-16 border-l border-hairline pl-3">
-                <div class="font-mono text-[16px] text-text-primary">{counts.workItems}</div>
-                <div class="text-[10px] uppercase text-text-muted">Items</div>
-              </div>
-              <div class="min-w-16 border-l border-hairline pl-3">
-                <div class="font-mono text-[16px] text-text-primary">{counts.sessions}</div>
-                <div class="text-[10px] uppercase text-text-muted">Sessions</div>
-              </div>
-              <div class="min-w-16 border-l border-hairline pl-3">
-                <div class="font-mono text-[16px] text-text-primary">{counts.runs}</div>
-                <div class="text-[10px] uppercase text-text-muted">Runs</div>
-              </div>
-            </div>
+            {/if}
           </div>
         </div>
-
-        <div class="border-b border-hairline px-5">
-          <div class="flex min-h-10 items-end gap-1 overflow-x-auto">
-            {#each tabs as tab (tab.id)}
-              <button
-                type="button"
-                class="inline-flex h-10 items-center gap-1.5 border-b px-3 text-[12px] font-medium transition-colors {activeTab ===
-                tab.id
-                  ? 'border-accent text-text-primary'
-                  : 'border-transparent text-text-muted hover:text-text-primary'}"
-                on:click={() => (activeTab = tab.id)}
-              >
-                {#if tab.id === "overview"}
-                  <LayoutDashboard size={14} />
-                {:else if tab.id === "attachments"}
-                  <Paperclip size={14} />
-                {:else if tab.id === "sessions"}
-                  <Terminal size={14} />
-                {:else if tab.id === "cards"}
-                  <ListChecks size={14} />
-                {:else}
-                  <PlayCircle size={14} />
-                {/if}
-                <span>{tab.label}</span>
-                {#if tab.count() > 0}
-                  <span class="font-mono text-[10px] text-text-muted">{tab.count()}</span>
-                {/if}
-              </button>
-            {/each}
-          </div>
+        <div class="mt-1 flex items-center gap-1.5 text-[11px] text-text-muted">
+          <span class="font-mono">{counts.workItems}</span><span>items</span>
+          <span class="opacity-40">·</span>
+          <span class="font-mono">{counts.sessions}</span><span>sessions</span>
+          <span class="opacity-40">·</span>
+          <span class="font-mono">{counts.runs}</span><span>runs</span>
         </div>
+        {#if descOpen}
+          <div class="mt-2 border-t border-hairline pt-2">
+            <textarea
+              class="min-h-16 w-full resize-y rounded border border-border-subtle bg-bg-surface/35 px-3 py-2 text-[13px] text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent-dim"
+              bind:value={editDescription}
+              disabled={loading}
+              placeholder="Project description"
+              aria-label="Project description"
+            ></textarea>
+            {#if canSaveProject}
+              <div class="mt-1.5 flex justify-end">
+                <button
+                  type="button"
+                  class="inline-flex h-7 items-center gap-1 rounded border border-accent-dim bg-accent-dim px-2.5 text-[12px] font-semibold text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!canSaveProject}
+                  on:click={saveProject}
+                >
+                  <Save size={13} />
+                  Save
+                </button>
+              </div>
+            {/if}
+          </div>
+        {/if}
+      </div>
 
-        <div class="p-5">
-          {#if activeTab === "overview"}
-            <div class="grid gap-5 xl:grid-cols-3">
-              <section>
-                <div class="mb-2 flex items-center justify-between gap-2">
-                  <div class="text-[11px] font-semibold uppercase text-text-muted">Active sessions</div>
-                  <button
-                    type="button"
-                    class="inline-flex h-7 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={loading}
-                    on:click={() => onNewSession(visibleDetail.project.id)}
-                  >
-                    <Plus size={13} />
-                    <span>Add</span>
-                  </button>
-                </div>
-                <div class="grid gap-1.5">
-                  {#if recentSessions.length === 0}
-                    <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
-                      No sessions.
-                    </div>
-                  {:else}
-                    {#each recentSessions as session (session.id)}
-                      <button
-                        type="button"
-                        class="min-w-0 border border-border-subtle bg-bg-surface/30 px-3 py-2 text-left transition-colors hover:border-accent-dim"
-                        on:click={() => onOpenSession(session.id)}
-                      >
-                        <div class="truncate text-[13px] font-medium text-text-primary">{session.name}</div>
-                        <div class="truncate font-mono text-[10px] text-text-muted">{session.rootDir}</div>
-                      </button>
-                    {/each}
-                  {/if}
-                </div>
-              </section>
+      <!-- Tab bar -->
+      <div class="shrink-0 border-b border-hairline px-5">
+        <div class="flex min-h-10 items-end gap-1 overflow-x-auto">
+          {#each tabs as tab (tab.id)}
+            <button
+              type="button"
+              class="inline-flex h-10 items-center gap-1.5 border-b px-3 text-[12px] font-medium transition-colors {activeTab ===
+              tab.id
+                ? 'border-accent text-text-primary'
+                : 'border-transparent text-text-muted hover:text-text-primary'}"
+              on:click={() => (activeTab = tab.id)}
+            >
+              {#if tab.id === "overview"}
+                <LayoutDashboard size={14} />
+              {:else if tab.id === "attachments"}
+                <Paperclip size={14} />
+              {:else if tab.id === "sessions"}
+                <Terminal size={14} />
+              {:else if tab.id === "cards"}
+                <ListChecks size={14} />
+              {:else}
+                <PlayCircle size={14} />
+              {/if}
+              <span>{tab.label}</span>
+              {#if tab.count() > 0}
+                <span class="font-mono text-[10px] text-text-muted">{tab.count()}</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      </div>
 
-              <section>
-                <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Recent cards</div>
-                <div class="grid gap-1.5">
-                  {#if recentWorkItems.length === 0}
-                    <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
-                      No cards.
-                    </div>
-                  {:else}
-                    {#each recentWorkItems as item (item.id)}
-                      <button
-                        type="button"
-                        class="grid min-w-0 grid-cols-[56px_minmax(0,1fr)] gap-2 border border-border-subtle bg-bg-surface/30 px-3 py-2 text-left transition-colors hover:border-accent-dim"
-                        on:click={() => (activeTab = "cards")}
-                      >
-                        <span class="font-mono text-[11px] text-text-muted">#{item.number}</span>
-                        <span class="min-w-0">
-                          <span class="block truncate text-[13px] font-medium text-text-primary">{item.title}</span>
-                          <span class="block truncate text-[11px] text-text-muted">{item.stageId}</span>
-                        </span>
-                      </button>
-                    {/each}
-                  {/if}
-                </div>
-              </section>
-
-              <section>
-                <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Latest runs</div>
-                <div class="grid gap-1.5">
-                  {#if recentRuns.length === 0}
-                    <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
-                      No runs.
-                    </div>
-                  {:else}
-                    {#each recentRuns as run (run.id)}
-                      <button
-                        type="button"
-                        class="min-w-0 border border-border-subtle bg-bg-surface/30 px-3 py-2 text-left transition-colors hover:border-accent-dim disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={!run.sessionId && !run.ptyId}
-                        on:click={() => onOpenRunTerminal(run)}
-                      >
-                        <div class="flex min-w-0 items-center justify-between gap-2">
-                          <div class="truncate text-[13px] font-medium text-text-primary">{runLabel(run)}</div>
-                          <span class="shrink-0 rounded border px-1.5 py-0.5 text-[10px] {runStatusClass(run.status)}">
-                            {run.status}
-                          </span>
-                        </div>
-                        <div class="truncate text-[11px] text-text-muted">{workItemTitle(run.workItemId)}</div>
-                      </button>
-                    {/each}
-                  {/if}
-                </div>
-              </section>
-            </div>
-          {:else if activeTab === "attachments"}
+      <!-- Content -->
+      <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto p-5">
+        {#if activeTab === "overview"}
+          <div class="grid gap-5 xl:grid-cols-3">
             <section>
-              <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Attachments</div>
-              <div class="mb-2 border border-border-subtle bg-bg-surface/25 p-2">
-                <div class="flex flex-wrap gap-1.5">
-                  {#each ["file", "url", "note"] as mode}
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  class="text-left text-[11px] font-semibold uppercase text-text-muted transition-colors hover:text-text-primary"
+                  on:click={() => (activeTab = "sessions")}
+                >
+                  Sessions <span class="font-mono">{counts.sessions}</span>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-7 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={loading}
+                  on:click={() => onNewSession(visibleDetail.project.id)}
+                >
+                  <Plus size={13} />
+                  <span>Add</span>
+                </button>
+              </div>
+              <div class="divide-y divide-hairline">
+                {#if recentSessions.length === 0}
+                  {@render emptyState("No sessions.")}
+                {:else}
+                  {#each recentSessions as session (session.id)}
                     <button
                       type="button"
-                      class="inline-flex h-8 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={loading}
-                      on:click={() => openAttachmentForm(mode)}
+                      class="w-full min-w-0 px-3 py-2 text-left transition-colors hover:bg-bg-surface/40"
+                      on:click={() => onOpenSession(session.id)}
                     >
-                      <Plus size={14} />
-                      <span>{mode}</span>
-                    </button>
-                  {/each}
-                  {#each pluginAttachmentTemplates as template (`${template.pluginId}:${template.id}`)}
-                    <button
-                      type="button"
-                      class="inline-flex h-8 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={loading}
-                      on:click={() => openAttachmentForm(`${template.pluginId}:${template.id}`)}
-                    >
-                      <Plus size={14} />
-                      <span>{template.label || template.id}</span>
-                    </button>
-                  {/each}
-                </div>
-
-                {#if attachmentFormOpen}
-                  <div class="mt-2 grid gap-2 border-t border-hairline pt-2">
-                    {#if selectedPluginTemplate && !attachmentEditId}
-                      <div class="text-[12px] font-medium text-text-primary">
-                        {selectedPluginTemplate.label || selectedPluginTemplate.id}
-                      </div>
-                      <div class="grid gap-2 md:grid-cols-2">
-                        {#each selectedPluginTemplate.fields ?? [] as field (field.id)}
-                          <input
-                            class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
-                            type="text"
-                            value={pluginFieldValue(field.id)}
-                            placeholder={field.placeholder || field.label || field.id}
-                            disabled={loading}
-                            on:input={(event) => setPluginFieldValue(field.id, event.currentTarget.value)}
-                          />
-                        {/each}
-                      </div>
-                    {:else}
-                      <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                        <input
-                          class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
-                          type="text"
-                          bind:value={attachmentTitle}
-                          placeholder="Title"
-                          disabled={loading}
-                        />
-                        {#if attachmentKind === "note"}
-                          <input
-                            class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
-                            type="text"
-                            bind:value={attachmentNote}
-                            placeholder="Note"
-                            disabled={loading}
-                          />
-                        {:else}
-                          <input
-                            class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
-                            type="text"
-                            bind:value={attachmentTarget}
-                            placeholder={attachmentTargetLabel(attachmentKind)}
-                            disabled={loading}
-                          />
+                      <div class="truncate text-[13px] font-medium text-text-primary">
+                        {session.name}
+                        {#if sessionNameSuffix(session, sessions)}
+                          <span class="font-mono text-[10px] text-text-muted">#{sessionNameSuffix(session, sessions)}</span>
                         {/if}
                       </div>
-                    {/if}
-
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                      <label class="inline-flex items-center gap-2 text-[12px] text-text-secondary">
-                        <input type="checkbox" bind:checked={attachmentInContext} disabled={loading || Boolean(selectedPluginTemplate)} />
-                        <span>Use as agent context</span>
-                      </label>
-                      <div class="flex gap-1.5">
-                        <button
-                          type="button"
-                          class="inline-flex h-8 items-center rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                          on:click={closeAttachmentForm}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          class="inline-flex h-8 items-center gap-1 rounded border border-accent-dim bg-accent-dim px-2.5 text-[12px] font-semibold text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={loading}
-                          on:click={createAttachment}
-                        >
-                          {#if attachmentEditId}
-                            <Save size={14} />
-                            <span>Save</span>
-                          {:else}
-                            <Plus size={14} />
-                            <span>Add</span>
-                          {/if}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                {/if}
-              </div>
-              <div class="grid gap-1.5">
-                {#if attachments.length === 0}
-                  <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
-                    No attachments.
-                  </div>
-                {:else}
-                  {#each attachments as attachment (attachment.id)}
-                    <div class="grid grid-cols-[96px_minmax(0,1fr)_72px_32px_32px_32px] items-center gap-3 border border-border-subtle bg-bg-surface/30 px-3 py-2">
-                      <div class="font-mono text-[11px] text-text-muted">{attachment.kind}</div>
-                      <div class="min-w-0">
-                        <div class="truncate text-[13px] font-medium text-text-primary">
-                          {attachment.title || attachmentSummary(attachment)}
-                        </div>
-                        <div class="truncate font-mono text-[10px] text-text-muted">
-                          {attachmentSummary(attachment)}
-                        </div>
-                      </div>
-                      <div class="text-[11px] text-text-muted">
-                        {attachment.includeInContext ? "context" : ""}
-                      </div>
-                      {#if externalAttachmentURL(attachment)}
-                        <button
-                          type="button"
-                          class="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-accent/40 hover:bg-accent-dim/10 hover:text-accent"
-                          aria-label="Open attachment URL"
-                          title="Open attachment URL"
-                          on:click={() => openAttachmentURL(attachment)}
-                        >
-                          <ExternalLink size={13} />
-                        </button>
-                      {:else}
-                        <span></span>
-                      {/if}
-                      <button
-                        type="button"
-                        class="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-accent/40 hover:bg-accent-dim/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={loading}
-                        aria-label="Edit attachment"
-                        title="Edit attachment"
-                        on:click={() => openAttachmentEditor(attachment)}
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        class="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-red/40 hover:bg-red/10 hover:text-red disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={loading}
-                        aria-label="Delete attachment"
-                        title="Delete attachment"
-                        on:click={() => onDeleteProjectAttachment(visibleDetail.project.id, attachment.id)}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                      <div class="truncate font-mono text-[10px] text-text-muted">{session.rootDir}</div>
+                    </button>
                   {/each}
+                  {#if counts.sessions > recentSessions.length}
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 text-left text-[12px] text-accent transition-colors hover:text-accent/80"
+                      on:click={() => (activeTab = "sessions")}
+                    >
+                      View all ({counts.sessions}) →
+                    </button>
+                  {/if}
                 {/if}
               </div>
             </section>
-          {:else if activeTab === "cards"}
+
             <section>
-              <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Cards</div>
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  class="text-left text-[11px] font-semibold uppercase text-text-muted transition-colors hover:text-text-primary"
+                  on:click={() => (activeTab = "cards")}
+                >
+                  Recent cards <span class="font-mono">{counts.workItems}</span>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-7 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={loading}
+                  on:click={() => (activeTab = "cards")}
+                >
+                  <Plus size={13} />
+                  <span>Add</span>
+                </button>
+              </div>
+              <div class="divide-y divide-hairline">
+                {#if recentWorkItems.length === 0}
+                  {@render emptyState("No cards.")}
+                {:else}
+                  {#each recentWorkItems as item (item.id)}
+                    <button
+                      type="button"
+                      class="grid w-full min-w-0 grid-cols-[56px_minmax(0,1fr)] gap-2 px-3 py-2 text-left transition-colors hover:bg-bg-surface/40"
+                      on:click={() => onOpenWorkItem(item.id)}
+                    >
+                      <span class="font-mono text-[11px] text-text-muted">#{item.number}</span>
+                      <span class="min-w-0">
+                        <span class="block truncate text-[13px] font-medium text-text-primary">{item.title}</span>
+                        <span class="block truncate text-[11px] text-text-muted">{item.stageId}</span>
+                      </span>
+                    </button>
+                  {/each}
+                  {#if counts.workItems > recentWorkItems.length}
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 text-left text-[12px] text-accent transition-colors hover:text-accent/80"
+                      on:click={() => (activeTab = "cards")}
+                    >
+                      View all ({counts.workItems}) →
+                    </button>
+                  {/if}
+                {/if}
+              </div>
+            </section>
+
+            <section>
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  class="text-left text-[11px] font-semibold uppercase text-text-muted transition-colors hover:text-text-primary"
+                  on:click={() => (activeTab = "runs")}
+                >
+                  Latest runs <span class="font-mono">{counts.runs}</span>
+                </button>
+              </div>
+              <div class="divide-y divide-hairline">
+                {#if recentRuns.length === 0}
+                  {@render emptyState("No runs.")}
+                {:else}
+                  {#each recentRuns as run (run.id)}
+                    <button
+                      type="button"
+                      class="w-full min-w-0 px-3 py-2 text-left transition-colors hover:bg-bg-surface/40 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!run.sessionId && !run.ptyId}
+                      on:click={() => onOpenRunTerminal(run)}
+                    >
+                      <div class="flex min-w-0 items-center gap-2">
+                        <div class="min-w-0 flex-1 truncate text-[13px] font-medium text-text-primary">{runLabel(run)}</div>
+                        <span class="shrink-0 text-[11px] {runStatusDot(run.status)}">●</span>
+                        <span class="shrink-0 text-[11px] text-text-muted">{run.status}</span>
+                      </div>
+                      <div class="truncate text-[11px] text-text-muted">{workItemTitle(run.workItemId)}</div>
+                    </button>
+                  {/each}
+                  {#if counts.runs > recentRuns.length}
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 text-left text-[12px] text-accent transition-colors hover:text-accent/80"
+                      on:click={() => (activeTab = "runs")}
+                    >
+                      View all ({counts.runs}) →
+                    </button>
+                  {/if}
+                {/if}
+              </div>
+            </section>
+          </div>
+
+        {:else if activeTab === "attachments"}
+          <section>
+            <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Attachments</div>
+            <div class="mb-2 border border-border-subtle bg-bg-surface/25 p-2">
+              <div class="flex flex-wrap gap-1.5">
+                {#each ["file", "url", "note"] as mode}
+                  <button
+                    type="button"
+                    class="inline-flex h-8 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={loading}
+                    on:click={() => openAttachmentForm(mode)}
+                  >
+                    <Plus size={14} />
+                    <span>{mode}</span>
+                  </button>
+                {/each}
+                {#each pluginAttachmentTemplates as template (`${template.pluginId}:${template.id}`)}
+                  <button
+                    type="button"
+                    class="inline-flex h-8 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={loading}
+                    on:click={() => openAttachmentForm(`${template.pluginId}:${template.id}`)}
+                  >
+                    <Plus size={14} />
+                    <span>{template.label || template.id}</span>
+                  </button>
+                {/each}
+              </div>
+
+              {#if attachmentFormOpen}
+                <div class="mt-2 grid gap-2 border-t border-hairline pt-2">
+                  {#if selectedPluginTemplate && !attachmentEditId}
+                    <div class="text-[12px] font-medium text-text-primary">
+                      {selectedPluginTemplate.label || selectedPluginTemplate.id}
+                    </div>
+                    <div class="grid gap-2 md:grid-cols-2">
+                      {#each selectedPluginTemplate.fields ?? [] as field (field.id)}
+                        <input
+                          class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                          type="text"
+                          value={pluginFieldValue(field.id)}
+                          placeholder={field.placeholder || field.label || field.id}
+                          disabled={loading}
+                          on:input={(event) => setPluginFieldValue(field.id, event.currentTarget.value)}
+                        />
+                      {/each}
+                    </div>
+                  {:else}
+                    <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <input
+                        class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                        type="text"
+                        bind:value={attachmentTitle}
+                        placeholder="Title"
+                        disabled={loading}
+                      />
+                      {#if attachmentKind === "note"}
+                        <input
+                          class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                          type="text"
+                          bind:value={attachmentNote}
+                          placeholder="Note"
+                          disabled={loading}
+                        />
+                      {:else}
+                        <input
+                          class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                          type="text"
+                          bind:value={attachmentTarget}
+                          placeholder={attachmentTargetLabel(attachmentKind)}
+                          disabled={loading}
+                        />
+                      {/if}
+                    </div>
+                  {/if}
+
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <label class="inline-flex items-center gap-2 text-[12px] text-text-secondary">
+                      <input type="checkbox" bind:checked={attachmentInContext} disabled={loading || Boolean(selectedPluginTemplate)} />
+                      <span>Use as agent context</span>
+                    </label>
+                    <div class="flex gap-1.5">
+                      <button
+                        type="button"
+                        class="inline-flex h-8 items-center rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                        on:click={closeAttachmentForm}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        class="inline-flex h-8 items-center gap-1 rounded border border-accent-dim bg-accent-dim px-2.5 text-[12px] font-semibold text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={loading}
+                        on:click={createAttachment}
+                      >
+                        {#if attachmentEditId}
+                          <Save size={14} />
+                          <span>Save</span>
+                        {:else}
+                          <Plus size={14} />
+                          <span>Add</span>
+                        {/if}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              {/if}
+            </div>
+            <div class="divide-y divide-hairline">
+              {#if attachments.length === 0}
+                {@render emptyState("No attachments.")}
+              {:else}
+                {#each attachments as attachment (attachment.id)}
+                  <div class="grid grid-cols-[96px_minmax(0,1fr)_72px_32px_32px_32px] items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-surface/40">
+                    <div class="font-mono text-[11px] text-text-muted">{attachment.kind}</div>
+                    <div class="min-w-0">
+                      <div class="truncate text-[13px] font-medium text-text-primary">
+                        {attachment.title || attachmentSummary(attachment)}
+                      </div>
+                      <div class="truncate font-mono text-[10px] text-text-muted">
+                        {attachmentSummary(attachment)}
+                      </div>
+                    </div>
+                    <div class="text-[11px] text-text-muted">
+                      {attachment.includeInContext ? "context" : ""}
+                    </div>
+                    {#if externalAttachmentURL(attachment)}
+                      <button
+                        type="button"
+                        class="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-accent/40 hover:bg-accent-dim/10 hover:text-accent"
+                        aria-label="Open attachment URL"
+                        title="Open attachment URL"
+                        on:click={() => openAttachmentURL(attachment)}
+                      >
+                        <ExternalLink size={13} />
+                      </button>
+                    {:else}
+                      <span></span>
+                    {/if}
+                    <button
+                      type="button"
+                      class="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-accent/40 hover:bg-accent-dim/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={loading}
+                      aria-label="Edit attachment"
+                      title="Edit attachment"
+                      on:click={() => openAttachmentEditor(attachment)}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      class="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-red/40 hover:bg-red/10 hover:text-red disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={loading}
+                      aria-label="Delete attachment"
+                      title="Delete attachment"
+                      on:click={() => onDeleteProjectAttachment(visibleDetail.project.id, attachment.id)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                {/each}
+              {/if}
+            </div>
+          </section>
+
+        {:else if activeTab === "cards"}
+          <section>
+            <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Cards</div>
             <div class="mb-2 grid gap-2 border border-border-subtle bg-bg-surface/25 p-2">
               <input
                 class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent-dim"
@@ -680,14 +789,18 @@
                 </button>
               </div>
             </div>
-            <div class="grid gap-1.5">
+            <div class="divide-y divide-hairline">
               {#if workItems.length === 0}
-                <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
-                  No cards.
-                </div>
+                {@render emptyState("No cards.")}
               {:else}
                 {#each workItems as item (item.id)}
-                  <div class="grid grid-cols-[72px_minmax(0,1fr)_120px_32px] items-center gap-3 border border-border-subtle bg-bg-surface/30 px-3 py-2">
+                  <div
+                    class="grid grid-cols-[72px_minmax(0,1fr)_120px_32px] items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-surface/40 cursor-pointer"
+                    role="button"
+                    tabindex="0"
+                    on:click={() => onOpenWorkItem(item.id)}
+                    on:keydown={(e) => e.key === "Enter" && onOpenWorkItem(item.id)}
+                  >
                     <div class="font-mono text-[11px] text-text-muted">#{item.number}</div>
                     <div class="min-w-0">
                       <div class="truncate text-[13px] font-medium text-text-primary">
@@ -713,8 +826,9 @@
               {/if}
             </div>
           </section>
-          {:else if activeTab === "sessions"}
-            <section>
+
+        {:else if activeTab === "sessions"}
+          <section>
             <div class="mb-2 flex items-center justify-between gap-2">
               <div class="text-[11px] font-semibold uppercase text-text-muted">Sessions</div>
               <button
@@ -727,25 +841,42 @@
                 <span>Add</span>
               </button>
             </div>
-            <div class="grid gap-1.5">
+            <div class="divide-y divide-hairline">
               {#if sessions.length === 0}
-                <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
-                  No sessions.
-                </div>
+                {@render emptyState("No sessions.")}
               {:else}
                 {#each sessions as session (session.id)}
-                  <div class="grid grid-cols-[minmax(0,1fr)_88px_88px] items-center gap-3 border border-border-subtle bg-bg-surface/30 px-3 py-2">
-                    <div class="min-w-0">
+                  {@const sessionRun = sortedRuns.find((r) => r.sessionId === session.id) ?? null}
+                  {@const sessionItem = sessionRun ? workItems.find((w) => w.id === sessionRun.workItemId) ?? null : null}
+                  <div class="flex min-w-0 items-center gap-3 px-3 py-2">
+                    <div class="min-w-0 flex-1">
                       <div class="truncate text-[13px] font-medium text-text-primary">
                         {session.name}
+                        {#if sessionNameSuffix(session, sessions)}
+                          <span class="font-mono text-[10px] text-text-muted">#{sessionNameSuffix(session, sessions)}</span>
+                        {/if}
                       </div>
-                      <div class="truncate font-mono text-[10px] text-text-muted">
-                        {session.rootDir}
-                      </div>
+                      {#if sessionItem}
+                        <div class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-text-muted">
+                          <span class="truncate">{sessionItem.title}</span>
+                          {#if sessionItem.stageId}
+                            <span class="opacity-40">·</span>
+                            <span class="shrink-0">{sessionItem.stageId}</span>
+                          {/if}
+                        </div>
+                      {:else}
+                        <div class="truncate font-mono text-[10px] text-text-muted">{session.rootDir}</div>
+                      {/if}
                     </div>
+                    {#if sessionRun}
+                      <div class="flex shrink-0 items-center gap-1 text-[11px]">
+                        <span class="{runStatusDot(sessionRun.status)}">●</span>
+                        <span class="text-text-muted">{sessionRun.status}</span>
+                      </div>
+                    {/if}
                     <button
                       type="button"
-                      class="h-7 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                      class="h-7 shrink-0 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={loading}
                       on:click={() => onOpenSession(session.id)}
                     >
@@ -753,28 +884,29 @@
                     </button>
                     <button
                       type="button"
-                      class="h-7 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-secondary transition-colors hover:border-red/40 hover:text-red disabled:cursor-not-allowed disabled:opacity-50"
+                      class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-red/40 hover:bg-red/10 hover:text-red disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={loading}
+                      aria-label="Remove session"
+                      title="Remove session"
                       on:click={() => onRemoveSession(session.id)}
                     >
-                      Remove
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 {/each}
               {/if}
             </div>
           </section>
-          {:else if activeTab === "runs"}
-            <section>
+
+        {:else if activeTab === "runs"}
+          <section>
             <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Runs</div>
-            <div class="grid gap-1.5">
+            <div class="divide-y divide-hairline">
               {#if runs.length === 0}
-                <div class="border border-border-subtle bg-bg-surface/35 px-3 py-3 text-[12px] text-text-muted">
-                  No runs.
-                </div>
+                {@render emptyState("No runs.")}
               {:else}
-                {#each runs as run (run.id)}
-                  <div class="grid grid-cols-[minmax(0,1fr)_96px_88px] items-center gap-3 border border-border-subtle bg-bg-surface/30 px-3 py-2">
+                {#each sortedRuns as run (run.id)}
+                  <div class="grid grid-cols-[minmax(0,1fr)_auto_88px] items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-surface/40">
                     <div class="min-w-0">
                       <div class="truncate text-[13px] font-medium text-text-primary">
                         {runLabel(run)}
@@ -791,8 +923,9 @@
                         </div>
                       {/if}
                     </div>
-                    <div class="truncate rounded border px-2 py-1 text-center text-[11px] {runStatusClass(run.status)}">
-                      {run.status}
+                    <div class="flex shrink-0 items-center gap-1.5 text-[11px]">
+                      <span class="{runStatusDot(run.status)}">●</span>
+                      <span class="text-text-muted">{run.status}</span>
                     </div>
                     <button
                       type="button"
@@ -807,8 +940,7 @@
               {/if}
             </div>
           </section>
-          {/if}
-        </div>
+        {/if}
       </div>
     {:else}
       <div class="flex h-full items-center justify-center text-[13px] text-text-muted">

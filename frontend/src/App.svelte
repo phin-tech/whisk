@@ -126,6 +126,14 @@
   import { runCommand } from "./commands";
   import { notificationSurfaceCount, targetForStatusEvent } from "./notificationsView";
   import {
+    clearNavigationStack as clearNavigationStackState,
+    navigateBack as navigateBackState,
+    navigateTo as navigateToState,
+    type MainView,
+    type NavigationState,
+  } from "./navigation";
+  import { projectDetailWithStoreSessions } from "./projectView";
+  import {
     nextPTYStreamOffset,
     ptyAttachWebSocketURL,
     ptyInputTraceLine,
@@ -142,7 +150,6 @@
   import { nextSidebarAfterToggle } from "./sidebarCommands";
 
   type SidebarId = "sessions" | "ptys" | "work" | "projects" | "notifications";
-  type MainView = "session" | "work" | "projects";
   type RailSide = "left" | "right";
 
   const SETTINGS_KEY = "whisk.ui.settings";
@@ -179,6 +186,30 @@
   let workFilterStageId = "";
   let workFilterRunState = "";
   let activeMain: MainView = "session";
+  let workBoardOpenItemId = "";
+  let navigationStack: MainView[] = [];
+
+  function currentNavigationState(): NavigationState {
+    return { activeMain, navigationStack, workBoardOpenItemId };
+  }
+
+  function applyNavigationState(next: NavigationState) {
+    activeMain = next.activeMain;
+    navigationStack = next.navigationStack;
+    workBoardOpenItemId = next.workBoardOpenItemId;
+  }
+
+  function navigateTo(target: MainView, opts?: { openItemId?: string }) {
+    applyNavigationState(navigateToState(currentNavigationState(), target, opts));
+  }
+
+  function navigateBack() {
+    applyNavigationState(navigateBackState(currentNavigationState()));
+  }
+
+  function clearNavigationStack() {
+    applyNavigationState(clearNavigationStackState(currentNavigationState()));
+  }
   let activeSidebar: SidebarId | null = "sessions";
   let commandPaletteOpen = false;
   let newProjectOpen = false;
@@ -202,6 +233,7 @@
   let keepDaemonAlive = true;
   let hookLogEnabled = true;
   let clearHookLogAfterSession = false;
+  let worktrunkPath = "/opt/homebrew/bin/wt";
   let error = "";
   let loadingSession = false;
   let loadingPtys = false;
@@ -343,6 +375,7 @@
       if (typeof loaded.clearHookLogAfterSession === "boolean") {
         clearHookLogAfterSession = loaded.clearHookLogAfterSession;
       }
+      if (typeof loaded.worktrunkPath === "string") worktrunkPath = loaded.worktrunkPath;
       applyStartupView(startupView);
       await SetAgentHookLogSettings({
         enabled: hookLogEnabled,
@@ -371,6 +404,7 @@
         keepDaemonAlive,
         hookLogEnabled,
         clearHookLogAfterSession,
+        worktrunkPath,
       });
       startupView = normalizeStartupView(saved.startupView);
       keepDaemonAlive = saved.keepDaemonAlive;
@@ -378,6 +412,7 @@
       if (typeof saved.clearHookLogAfterSession === "boolean") {
         clearHookLogAfterSession = saved.clearHookLogAfterSession;
       }
+      if (typeof saved.worktrunkPath === "string") worktrunkPath = saved.worktrunkPath;
     } catch (err) {
       error = `Save settings failed: ${backendError(err)}`;
     }
@@ -390,6 +425,11 @@
 
   async function setKeepDaemonAlive(keep: boolean) {
     keepDaemonAlive = keep;
+    await persistAppSettings();
+  }
+
+  async function setWorktrunkPath(path: string) {
+    worktrunkPath = path;
     await persistAppSettings();
   }
 
@@ -451,7 +491,11 @@
       projectDetail = null;
       return;
     }
-    projectDetail = await LoadProjectDetail(activeProjectId);
+    projectDetail = projectDetailWithStoreSessions(
+      await LoadProjectDetail(activeProjectId),
+      activeProjectId,
+      sessions,
+    );
   }
 
   async function refreshAgentProfiles() {
@@ -460,10 +504,7 @@
 
   function syncActiveProjectDetailSessions() {
     if (!projectDetail || projectDetail.project.id !== activeProjectId) return;
-    projectDetail = {
-      ...projectDetail,
-      sessions: sessions.filter((session) => session.projectId === activeProjectId),
-    };
+    projectDetail = projectDetailWithStoreSessions(projectDetail, activeProjectId, sessions);
   }
 
   async function refreshWorkItems() {
@@ -682,9 +723,13 @@
     }
     await WritePTY({ ptyId, data });
     if (ptyTraceEnabled) void LogPTYTrace(ptyInputTraceLine("frontend.missing-websocket", ptyId, data, performance.now()));
+    void refreshOutput(ptyId).catch((err) => {
+      if (!isStalePTYError(err)) error = backendError(err);
+    });
   }
 
   function openNewSession() {
+    clearNavigationStack();
     error = "";
     settingsOpen = false;
     pendingSessionProjectId = "";
@@ -697,6 +742,7 @@
   function openNewProjectSession(projectId: string) {
     const project = projects.find((candidate) => candidate.id === projectId);
     if (!project) return;
+    clearNavigationStack();
     error = "";
     settingsOpen = false;
     pendingSessionProjectId = project.id;
@@ -991,6 +1037,7 @@
   }
 
   function selectSession(session: Session) {
+    clearNavigationStack();
     activeMain = "session";
     activeSessionId = session.id;
     activePaneId = firstPaneId(session);
@@ -1019,6 +1066,7 @@
   }
 
   function selectProject(projectId: string) {
+    clearNavigationStack();
     activeMain = "work";
     activeProjectId = projectId;
     workFilterQuery = "";
@@ -1030,6 +1078,7 @@
   }
 
   function selectProjectDetail(projectId: string) {
+    clearNavigationStack();
     activeMain = "projects";
     activeSidebar = "projects";
     activeProjectId = projectId;
@@ -1039,6 +1088,7 @@
   }
 
   async function selectStatusEvent(event: StatusEvent) {
+    clearNavigationStack();
     const target = targetForStatusEvent(event, sessions);
     if (target.main === "work") {
       activeMain = "work";
@@ -1059,6 +1109,7 @@
   }
 
   async function selectAgentBridgeEvent(event: AgentBridgeEvent) {
+    clearNavigationStack();
     const target = agentHookNotificationClickTarget(event, sessions);
     activeMain = "session";
     if (target.sessionId) activeSessionId = target.sessionId;
@@ -1078,6 +1129,7 @@
   }
 
   async function selectAgentPrompt(prompt: AgentPrompt) {
+    clearNavigationStack();
     activeMain = "session";
     if (prompt.sessionId) activeSessionId = prompt.sessionId;
     const session = sessions.find((candidate) => candidate.id === prompt.sessionId);
@@ -1115,6 +1167,7 @@
   }
 
   async function openWorkItemRun(run: WorkItemRun) {
+    clearNavigationStack();
     try {
       const nextSessions = await ListSessions();
       sessions = nextSessions;
@@ -1138,6 +1191,7 @@
   }
 
   function openNewProject() {
+    clearNavigationStack();
     if (activeMain !== "projects") {
       activeMain = "work";
       activeSidebar = "work";
@@ -1308,6 +1362,7 @@
         repoPath: project.rootDir,
         branch: request.branch,
         base: "",
+        overridePath: worktrunkPath,
       });
       await BindWorkItemWorktree({
         id: request.workItemId,
@@ -1457,7 +1512,7 @@
     error = "";
     loadingWork = true;
     try {
-      await LaunchWorkItemRun({ id: runId, agentProfileId });
+      await LaunchWorkItemRun({ id: runId, agentProfileId, worktreeOverridePath: worktrunkPath });
       await refreshWorkState();
       await refreshSessions();
       await refreshPTYs();
@@ -1526,7 +1581,7 @@
     error = "";
     loadingWork = true;
     try {
-      await LaunchExecution({ workItemId, agentProfileId });
+      await LaunchExecution({ workItemId, agentProfileId, worktreeOverridePath: worktrunkPath });
       await refreshWorkState();
       await refreshSessions();
       await refreshPTYs();
@@ -1777,6 +1832,7 @@
   async function openSessionById(sessionId: string) {
     await refreshSessions();
     const session = sessions.find((candidate) => candidate.id === sessionId);
+    clearNavigationStack();
     activeSessionId = sessionId;
     activePaneId = firstPaneId(session);
     activeMain = "session";
@@ -1785,6 +1841,7 @@
   }
 
   function toggleSidebar(id: SidebarId) {
+    clearNavigationStack();
     if (id === "projects") {
       activeMain = "projects";
       activeSidebar = activeSidebar === "projects" ? null : "projects";
@@ -1806,6 +1863,7 @@
   }
 
   function toggleCurrentSidebar() {
+    clearNavigationStack();
     activeSidebar = nextSidebarAfterToggle(activeSidebar, activeMain);
     settingsOpen = false;
   }
@@ -1990,6 +2048,7 @@
             onRemoveSession={(sessionId) => void unassignProjectSession(sessionId)}
             onCreateWorkItem={createWorkItem}
             onDeleteWorkItem={deleteWorkItem}
+            onOpenWorkItem={(workItemId) => navigateTo("work", { openItemId: workItemId })}
             onOpenRunTerminal={(run) => void openWorkItemRun(run)}
             pluginAttachmentTemplates={projectAttachmentTemplates}
             onAddProjectAttachment={addProjectAttachment}
@@ -1999,6 +2058,8 @@
           />
         {:else if activeMain === "work"}
           <WorkBoard
+            openItemId={workBoardOpenItemId}
+            onDetailClose={navigationStack.length > 0 ? navigateBack : null}
             {projects}
             {workItems}
             {workItemRuns}
@@ -2116,6 +2177,7 @@
           {terminalFontSize}
           {terminalCursorBlink}
           {keepDaemonAlive}
+          {worktrunkPath}
           {agentHookIntegrations}
           {plugins}
           {registryPlugins}
@@ -2130,6 +2192,7 @@
           onTerminalFontSize={(size) => (terminalFontSize = size)}
           onTerminalCursorBlink={(blink) => (terminalCursorBlink = blink)}
           onKeepDaemonAlive={(keep) => void setKeepDaemonAlive(keep)}
+          onWorktrunkPath={(path) => void setWorktrunkPath(path)}
           onRefreshAgentHookIntegrations={() => void refreshAgentHookIntegrations()}
           onRefreshPlugins={() => void rescanPlugins()}
           onSetPluginTrusted={(pluginId, trusted) => void setPluginTrusted(pluginId, trusted)}

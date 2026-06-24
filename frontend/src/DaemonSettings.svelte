@@ -13,12 +13,16 @@
   import type { DaemonStatus } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/models";
 
   export let keepDaemonAlive = true;
+  export let worktrunkPath = "/opt/homebrew/bin/wt";
   export let onKeepDaemonAlive: (value: boolean) => void;
+  export let onWorktrunkPath: (value: string) => void;
 
   let status: DaemonStatus | null = null;
   let busy = false;
   let actionError = "";
   let pollTimer: number | undefined;
+  let pendingWorktrunkPath = worktrunkPath;
+  let lastWorktrunkPath = worktrunkPath;
 
   const POLL_MS = 3000;
 
@@ -52,6 +56,17 @@
   const stop = () => run(StopDaemon);
   const restart = () => run(RestartDaemon);
 
+  function saveWorktrunkPath() {
+    const next = pendingWorktrunkPath.trim();
+    if (next !== worktrunkPath) onWorktrunkPath(next);
+  }
+
+  function pathKey(event: KeyboardEvent) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    saveWorktrunkPath();
+  }
+
   onMount(() => {
     void refresh();
     pollTimer = window.setInterval(() => {
@@ -71,6 +86,10 @@
   $: versionLabel = status?.running
     ? `${buildLabel || "unknown build"} · API v${status.apiVersion}`
     : "";
+  $: if (worktrunkPath !== lastWorktrunkPath) {
+    pendingWorktrunkPath = worktrunkPath;
+    lastWorktrunkPath = worktrunkPath;
+  }
 </script>
 
 <div class="rounded-xl border border-border-subtle bg-bg-surface/35 p-3">
@@ -136,6 +155,26 @@
   {#if actionError}
     <div class="mt-2 text-[11px] text-red">{actionError}</div>
   {/if}
+</div>
+
+<div class="mt-4 py-2">
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <div class="text-[13px]">Worktrunk binary</div>
+      <div class="mt-0.5 text-[11px] text-text-muted">
+        Path used when generating worktrees.
+      </div>
+    </div>
+    <input
+      class="w-[260px] rounded border border-border bg-bg-deep px-2 py-1 text-right font-mono text-xs text-text-primary outline-none focus:border-accent-dim"
+      type="text"
+      bind:value={pendingWorktrunkPath}
+      placeholder="/opt/homebrew/bin/wt"
+      on:blur={saveWorktrunkPath}
+      on:keydown={pathKey}
+      aria-label="Worktrunk binary path"
+    />
+  </div>
 </div>
 
 <div class="mt-4 flex items-center justify-between gap-3 py-2">

@@ -100,7 +100,7 @@ func serveDaemon(addr string) error {
 	}
 	runtime, err := app.NewRuntimeWithError(app.RuntimeConfig{
 		PTYBackend:       native.NewBackend(),
-		Worktrees:        worktrunk.NewBackend(nil),
+		Worktrees:        worktrunk.NewBackendWithOptions(nil, worktrunk.BackendOptions{OverridePath: envOrDefault("WHISK_WORKTRUNK_PATH", "/opt/homebrew/bin/wt")}),
 		Plugins:          pluginManager,
 		EventSink:        eventBus,
 		SessionStore:     store,

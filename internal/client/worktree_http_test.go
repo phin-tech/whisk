@@ -42,21 +42,22 @@ func TestHTTPClientDrivesDaemonWorktreeAPI(t *testing.T) {
 		t.Fatalf("detect req = %#v", backend.detectReq)
 	}
 
-	worktrees, err := daemon.ListWorktrees(ctx, protocol.ListWorktreesRequest{RepoPath: "/repo"})
+	worktrees, err := daemon.ListWorktrees(ctx, protocol.ListWorktreesRequest{RepoPath: "/repo", OverridePath: "/custom/wt"})
 	if err != nil {
 		t.Fatalf("list worktrees: %v", err)
 	}
 	if len(worktrees) != 1 || worktrees[0].Branch != "feature" {
 		t.Fatalf("worktrees = %#v", worktrees)
 	}
-	if backend.listReq.RepoPath != "/repo" {
+	if backend.listReq.RepoPath != "/repo" || backend.listReq.OverridePath != "/custom/wt" {
 		t.Fatalf("list req = %#v", backend.listReq)
 	}
 
 	created, err := daemon.CreateWorktree(ctx, protocol.CreateWorktreeRequest{
-		RepoPath: "/repo",
-		Branch:   "created",
-		Base:     "main",
+		RepoPath:     "/repo",
+		Branch:       "created",
+		Base:         "main",
+		OverridePath: "/custom/wt",
 	})
 	if err != nil {
 		t.Fatalf("create worktree: %v", err)
@@ -64,7 +65,7 @@ func TestHTTPClientDrivesDaemonWorktreeAPI(t *testing.T) {
 	if created.Path != "/repo/.worktrees/created" {
 		t.Fatalf("created = %#v", created)
 	}
-	if backend.createReq.Branch != "created" || backend.createReq.Base != "main" {
+	if backend.createReq.Branch != "created" || backend.createReq.Base != "main" || backend.createReq.OverridePath != "/custom/wt" {
 		t.Fatalf("create req = %#v", backend.createReq)
 	}
 
@@ -73,10 +74,11 @@ func TestHTTPClientDrivesDaemonWorktreeAPI(t *testing.T) {
 		WorktreePath: "/repo/.worktrees/created",
 		AlsoBranch:   false,
 		Force:        false,
+		OverridePath: "/custom/wt",
 	}); err != nil {
 		t.Fatalf("remove worktree: %v", err)
 	}
-	if backend.removeReq.WorktreePath != "/repo/.worktrees/created" || backend.removeReq.AlsoBranch || backend.removeReq.Force {
+	if backend.removeReq.WorktreePath != "/repo/.worktrees/created" || backend.removeReq.AlsoBranch || backend.removeReq.Force || backend.removeReq.OverridePath != "/custom/wt" {
 		t.Fatalf("remove req = %#v", backend.removeReq)
 	}
 }

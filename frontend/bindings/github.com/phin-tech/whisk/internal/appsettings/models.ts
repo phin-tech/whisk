@@ -66,6 +66,7 @@ export class Settings {
     "keepDaemonAlive": boolean;
     "hookLogEnabled": boolean;
     "clearHookLogAfterSession"?: boolean;
+    "worktrunkPath"?: string;
 
     /**
      * Keybindings holds user overrides for editable keyboard shortcuts, keyed by command id
@@ -102,18 +103,18 @@ export class Settings {
      * Creates a new Settings instance from a string or object.
      */
     static createFrom($$source: any = {}): Settings {
-        const $$createField4_0 = $$createType0;
-        const $$createField5_0 = $$createType1;
-        const $$createField6_0 = $$createType3;
+        const $$createField5_0 = $$createType0;
+        const $$createField6_0 = $$createType1;
+        const $$createField7_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("keybindings" in $$parsedSource) {
-            $$parsedSource["keybindings"] = $$createField4_0($$parsedSource["keybindings"]);
+            $$parsedSource["keybindings"] = $$createField5_0($$parsedSource["keybindings"]);
         }
         if ("trustedPlugins" in $$parsedSource) {
-            $$parsedSource["trustedPlugins"] = $$createField5_0($$parsedSource["trustedPlugins"]);
+            $$parsedSource["trustedPlugins"] = $$createField6_0($$parsedSource["trustedPlugins"]);
         }
         if ("pluginRegistries" in $$parsedSource) {
-            $$parsedSource["pluginRegistries"] = $$createField6_0($$parsedSource["pluginRegistries"]);
+            $$parsedSource["pluginRegistries"] = $$createField7_0($$parsedSource["pluginRegistries"]);
         }
         return new Settings($$parsedSource as Partial<Settings>);
     }

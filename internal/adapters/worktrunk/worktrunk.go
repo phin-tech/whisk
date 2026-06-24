@@ -356,6 +356,8 @@ func (c *Client) Create(ctx context.Context, req CreateRequest) (string, error) 
 		if path := findBranchPath(items, req.Branch); path != "" {
 			return path, nil
 		}
+	} else if isWorktrunkNotRegisteredError(err) {
+		return c.createGitWorktree(ctx, req)
 	}
 	args := []string{"switch", "--create", "--no-cd"}
 	if req.Base != "" {
@@ -378,6 +380,42 @@ func (c *Client) Create(ctx context.Context, req CreateRequest) (string, error) 
 		return path, nil
 	}
 	return "", &NotFoundError{Path: "wt reported success but no worktree named " + strconv.Quote(req.Branch) + " is listed"}
+}
+
+func isWorktrunkNotRegisteredError(err error) bool {
+	var exitError *ExitError
+	return errors.As(err, &exitError) && strings.Contains(strings.ToLower(exitError.Stderr), "no worktree registered")
+}
+
+func (c *Client) createGitWorktree(ctx context.Context, req CreateRequest) (string, error) {
+	path := filepath.Join(req.RepoPath, ".worktrees", safeWorktreeName(req.Branch))
+	args := []string{"worktree", "add"}
+	if req.Base != "" {
+		args = append(args, "-b", req.Branch, path, req.Base)
+	} else {
+		args = append(args, "-b", req.Branch, path)
+	}
+	output, err := c.runner.Run(ctx, Command{
+		Path: "git",
+		Args: args,
+		Dir:  req.RepoPath,
+		Env:  cloneEnv(req.Env),
+	})
+	if err != nil {
+		return "", err
+	}
+	if output.StatusCode != 0 {
+		return "", &ExitError{StatusCode: output.StatusCode, Stderr: string(output.Stderr)}
+	}
+	return path, nil
+}
+
+func safeWorktreeName(branch string) string {
+	name := strings.Trim(strings.ReplaceAll(branch, "/", "-"), ".- ")
+	if name == "" {
+		return "worktree"
+	}
+	return name
 }
 
 func isBranchAlreadyExistsError(err error, branch string) bool {

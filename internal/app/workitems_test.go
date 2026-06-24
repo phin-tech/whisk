@@ -212,7 +212,6 @@ func TestRuntimeStartWorkItemRunUsesInteractiveAgentShellWhenEnabled(t *testing.
 	root := t.TempDir()
 	store := &memoryWorkItemStore{}
 	ptyBackend := newMemoryPTYBackend()
-	ptyBackend.outputBytes = []byte("ClaudeCode\n⏵⏵ auto mode on")
 	nextID := 0
 	runtime := app.NewRuntime(app.RuntimeConfig{
 		IDGenerator: func() string {
@@ -256,18 +255,16 @@ func TestRuntimeStartWorkItemRunUsesInteractiveAgentShellWhenEnabled(t *testing.
 	if spawn.Command != "/bin/zsh" || len(spawn.Args) != 2 || spawn.Args[0] != "-lc" {
 		t.Fatalf("spawn command/args = %q %#v", spawn.Command, spawn.Args)
 	}
+	// The prompt rides in argv (claude auto-runs the first turn), so it appears in
+	// the launched command line — not typed into the PTY.
 	if !strings.Contains(spawn.Args[1], "claude --append-system-prompt") || !strings.Contains(spawn.Args[1], "overbuild.") {
 		t.Fatalf("spawn command line = %q", spawn.Args[1])
 	}
-	writes := waitForPTYWrites(t, ptyBackend, run.PTYID, 2)
-	if ptyOutputCalls(ptyBackend, run.PTYID) < 2 {
-		t.Fatalf("interactive launch did not wait for Claude readiness and prompt echo")
+	if !strings.Contains(spawn.Args[1], "Implement the work item.") {
+		t.Fatalf("prompt should be passed as an argument, command line = %q", spawn.Args[1])
 	}
-	if len(writes) != 2 || !strings.Contains(string(writes[0]), "Implement the work item.") {
-		t.Fatalf("writes = %#v", writes)
-	}
-	if strings.HasSuffix(string(writes[0]), "\r") || string(writes[1]) != "\r" {
-		t.Fatalf("interactive launch must submit the prompt after writing it, writes = %#v", writes)
+	if writes := ptyBackend.writes[run.PTYID]; len(writes) != 0 {
+		t.Fatalf("interactive agent prompt must not be typed into the PTY, writes = %#v", writes)
 	}
 }
 
@@ -317,6 +314,84 @@ func TestRuntimeStartWorkItemRunDoesNotBlockWaitingForInteractiveAgentReady(t *t
 	}
 	if run.PTYID == "" {
 		t.Fatalf("run missing pty: %#v", run)
+	}
+}
+
+func TestSubmitReviewFeedbackSubmitsIntoRunningAgentTUI(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	store := &memoryWorkItemStore{}
+	ptyBackend := newMemoryPTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: store,
+		PTYBackend:    ptyBackend,
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(ctx) })
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: root})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Review me"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	run, err := runtime.StartWorkItemRun(ctx, app.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		Launch:           true,
+		AgentProfileID:   "claude",
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	if run.PTYID == "" {
+		t.Fatalf("run missing pty: %#v", run)
+	}
+
+	if _, err := runtime.SubmitReviewFeedback(ctx, app.SubmitReviewFeedbackRequest{
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Body:       "Tighten the tests.\nAdd an edge case.",
+		Actor:      "reviewer",
+	}); err != nil {
+		t.Fatalf("submit review feedback: %v", err)
+	}
+
+	// Delivery is async (clear → paste → settle → separate Enter).
+	var writes [][]byte
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		ptyBackend.mu.Lock()
+		writes = append([][]byte(nil), ptyBackend.writes[run.PTYID]...)
+		ptyBackend.mu.Unlock()
+		if len(writes) >= 3 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if len(writes) != 3 {
+		t.Fatalf("expected clear+paste+enter writes, got %d: %q", len(writes), writes)
+	}
+	if string(writes[0]) != "\x01\x0b" {
+		t.Fatalf("first write must clear the draft (Ctrl-A Ctrl-K), got %q", writes[0])
+	}
+	paste := string(writes[1])
+	if !strings.HasPrefix(paste, "\x1b[200~") || !strings.HasSuffix(paste, "\x1b[201~") {
+		t.Fatalf("second write must be a bracketed paste, got %q", paste)
+	}
+	if !strings.Contains(paste, "Tighten the tests.") || strings.Contains(paste, "\n") {
+		t.Fatalf("paste body must be CR-joined with no line feed, got %q", paste)
+	}
+	if string(writes[2]) != "\r" {
+		t.Fatalf("final write must be a separate submit Enter, got %q", writes[2])
 	}
 }
 
@@ -960,6 +1035,60 @@ func TestRuntimeLaunchExecutionMovesReadyItemAndLaunchesRun(t *testing.T) {
 		!containsArg(ptyBackend.spawns[0].Args, "instructions=Be direct.") ||
 		!containsArgWith(ptyBackend.spawns[0].Args, "Implement the work item.") ||
 		!containsArgWith(ptyBackend.spawns[0].Args, "Launch execution") {
+		t.Fatalf("spawn command/args = %q %#v", ptyBackend.spawns[0].Command, ptyBackend.spawns[0].Args)
+	}
+}
+
+func TestRuntimeLaunchExecutionCreatesAndBindsWorktreeWhenMissing(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	root := t.TempDir()
+	worktreeBackend := &worktreeBackendFake{
+		created: app.CreatedWorktree{Path: filepath.Join(root, ".worktrees", "app-1-launch-execution")},
+	}
+	store := &memoryWorkItemStore{}
+	ptyBackend := newMemoryPTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: store,
+		PTYBackend:    ptyBackend,
+		Worktrees:     worktreeBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+
+	item := createApprovedWorkItem(t, ctx, runtime, root, "Launch execution")
+	run, err := runtime.LaunchExecution(ctx, app.LaunchExecutionRequest{
+		WorkItemID:           item.ID,
+		AgentProfileID:       "codex",
+		WorktreeOverridePath: "/custom/wt",
+		Actor:                "agent",
+	})
+	if err != nil {
+		t.Fatalf("launch execution: %v", err)
+	}
+	if run.Status != workitem.RunStateRunning {
+		t.Fatalf("run = %#v", run)
+	}
+	if worktreeBackend.createReq.RepoPath != root ||
+		worktreeBackend.createReq.Branch != "whisk/app-1-launch-execution" ||
+		worktreeBackend.createReq.OverridePath != "/custom/wt" {
+		t.Fatalf("create worktree req = %#v", worktreeBackend.createReq)
+	}
+	updated := findWorkItem(t, ctx, runtime, item.ID)
+	if updated.Worktree == nil ||
+		updated.Worktree.Branch != "whisk/app-1-launch-execution" ||
+		updated.Worktree.WorktreePath != filepath.Join(root, ".worktrees", "app-1-launch-execution") {
+		t.Fatalf("updated work item = %#v", updated)
+	}
+	if len(ptyBackend.spawns) != 1 || ptyBackend.spawns[0].WorkingDir != updated.Worktree.WorktreePath {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	if ptyBackend.spawns[0].Command != "codex" {
 		t.Fatalf("spawn command/args = %q %#v", ptyBackend.spawns[0].Command, ptyBackend.spawns[0].Args)
 	}
 }
@@ -2030,35 +2159,6 @@ func (b *memoryPTYBackend) Output(_ context.Context, ptyID string, _ uint64) (ap
 	}
 	b.outputCalls[ptyID]++
 	return app.PTYOutputSnapshot{Record: record, OutputBytes: append([]byte(nil), b.outputBytes...)}, nil
-}
-
-func waitForPTYWrites(t *testing.T, b *memoryPTYBackend, ptyID string, count int) [][]byte {
-	t.Helper()
-	deadline := time.After(3 * time.Second)
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		b.mu.Lock()
-		writes := append([][]byte(nil), b.writes[ptyID]...)
-		for i := range writes {
-			writes[i] = append([]byte(nil), writes[i]...)
-		}
-		b.mu.Unlock()
-		if len(writes) >= count {
-			return writes
-		}
-		select {
-		case <-deadline:
-			t.Fatalf("timed out waiting for %d writes to %s, got %#v", count, ptyID, writes)
-		case <-ticker.C:
-		}
-	}
-}
-
-func ptyOutputCalls(b *memoryPTYBackend, ptyID string) int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.outputCalls[ptyID]
 }
 
 func (b *memoryPTYBackend) List(context.Context) ([]app.PTYRecord, error) {

@@ -67,6 +67,35 @@ func TestBackendListWorktrees(t *testing.T) {
 	}
 }
 
+func TestBackendUsesConfiguredWorktrunkPathForOperations(t *testing.T) {
+	ctx := context.Background()
+	bin := filepath.Join(t.TempDir(), "wt")
+	if err := os.WriteFile(bin, []byte(""), 0o755); err != nil {
+		t.Fatalf("write wt: %v", err)
+	}
+	runner := &fakeRunner{
+		outputs: []Output{
+			{StatusCode: 0, Stdout: []byte("wt 0.44.0\n")},
+			{StatusCode: 0, Stdout: []byte(`[]`)},
+		},
+	}
+	backend := NewBackendWithOptions(runner, BackendOptions{OverridePath: bin})
+
+	worktrees, err := backend.ListWorktrees(ctx, app.ListWorktreesRequest{RepoPath: "/repo"})
+	if err != nil {
+		t.Fatalf("ListWorktrees error: %v", err)
+	}
+	if len(worktrees) != 0 {
+		t.Fatalf("worktrees = %#v", worktrees)
+	}
+	if len(runner.lookups) != 0 {
+		t.Fatalf("configured path should skip lookup: %#v", runner.lookups)
+	}
+	if runner.commands[0].Path != bin || runner.commands[1].Path != bin {
+		t.Fatalf("commands = %#v", runner.commands)
+	}
+}
+
 func TestBackendCreateAndRemoveWorktree(t *testing.T) {
 	ctx := context.Background()
 	runner := &fakeRunner{

@@ -19,12 +19,14 @@ class LaunchWorkItemRunRequest:
         actor (str | Unset):
         agent_profile_id (str | Unset):
         system_prompt (str | Unset):
+        worktree_override_path (str | Unset):
     """
 
     id: str
     actor: str | Unset = UNSET
     agent_profile_id: str | Unset = UNSET
     system_prompt: str | Unset = UNSET
+    worktree_override_path: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -35,6 +37,8 @@ class LaunchWorkItemRunRequest:
         agent_profile_id = self.agent_profile_id
 
         system_prompt = self.system_prompt
+
+        worktree_override_path = self.worktree_override_path
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -49,6 +53,8 @@ class LaunchWorkItemRunRequest:
             field_dict["agentProfileId"] = agent_profile_id
         if system_prompt is not UNSET:
             field_dict["systemPrompt"] = system_prompt
+        if worktree_override_path is not UNSET:
+            field_dict["worktreeOverridePath"] = worktree_override_path
 
         return field_dict
 
@@ -63,11 +69,14 @@ class LaunchWorkItemRunRequest:
 
         system_prompt = d.pop("systemPrompt", UNSET)
 
+        worktree_override_path = d.pop("worktreeOverridePath", UNSET)
+
         launch_work_item_run_request = cls(
             id=id,
             actor=actor,
             agent_profile_id=agent_profile_id,
             system_prompt=system_prompt,
+            worktree_override_path=worktree_override_path,
         )
 
         launch_work_item_run_request.additional_properties = d

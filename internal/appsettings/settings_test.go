@@ -86,6 +86,21 @@ func TestStoreRoundTripsKeybindings(t *testing.T) {
 	}
 }
 
+func TestStoreRoundTripsWorktrunkPath(t *testing.T) {
+	store := appsettings.NewStore(filepath.Join(t.TempDir(), "whisk.json"))
+
+	if _, err := store.Save(context.Background(), appsettings.Settings{WorktrunkPath: " /custom/wt "}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if loaded.WorktrunkPath != "/custom/wt" {
+		t.Fatalf("worktrunk path = %q", loaded.WorktrunkPath)
+	}
+}
+
 func TestNormalizeDropsBlankKeybindings(t *testing.T) {
 	got, err := appsettings.Normalize(appsettings.Settings{
 		Keybindings: map[string]string{

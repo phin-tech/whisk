@@ -24,6 +24,7 @@
   export let terminalFontSize = 13;
   export let terminalCursorBlink = true;
   export let keepDaemonAlive = true;
+  export let worktrunkPath = "/opt/homebrew/bin/wt";
   export let agentHookIntegrations: AgentHookIntegration[] = [];
   export let plugins: PluginStatus[] = [];
   export let agentHookLogStatus: AgentHookLogStatus | null = null;
@@ -36,6 +37,7 @@
   export let onTerminalFontSize: (size: number) => void;
   export let onTerminalCursorBlink: (blink: boolean) => void;
   export let onKeepDaemonAlive: (keep: boolean) => void;
+  export let onWorktrunkPath: (path: string) => void;
   export let onRefreshAgentHookIntegrations: () => void;
   export let onRefreshPlugins: () => void;
   export let onSetPluginTrusted: (pluginId: string, trusted: boolean) => void;
@@ -346,7 +348,7 @@
         {:else if selected === "shortcuts"}
           <KeybindingsPanel visible={visible && selected === "shortcuts"} />
         {:else if selected === "daemon"}
-          <DaemonSettings {keepDaemonAlive} onKeepDaemonAlive={onKeepDaemonAlive} />
+          <DaemonSettings {keepDaemonAlive} {worktrunkPath} onKeepDaemonAlive={onKeepDaemonAlive} onWorktrunkPath={onWorktrunkPath} />
         {:else if selected === "plugins"}
           <div class="flex items-center justify-between gap-3 pb-3">
             <div>

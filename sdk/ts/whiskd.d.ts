@@ -1837,6 +1837,7 @@ export interface components {
         CreateWorktreeRequest: {
             base: string;
             branch: string;
+            overridePath?: string;
             repoPath: string;
         };
         CreatedSession: {
@@ -1943,12 +1944,14 @@ export interface components {
             agentProfileId?: string;
             systemPrompt?: string;
             workItemId: string;
+            worktreeOverridePath?: string;
         };
         LaunchWorkItemRunRequest: {
             actor?: string;
             agentProfileId?: string;
             id: string;
             systemPrompt?: string;
+            worktreeOverridePath?: string;
         };
         LayoutNode: {
             children?: components["schemas"]["LayoutNode"][];
@@ -1958,6 +1961,7 @@ export interface components {
             sizes?: number[];
         };
         ListWorktreesRequest: {
+            overridePath?: string;
             repoPath: string;
         };
         MarkAgentBridgeEventReadRequest: {
@@ -2175,6 +2179,7 @@ export interface components {
         RemoveWorktreeRequest: {
             alsoBranch: boolean;
             force: boolean;
+            overridePath?: string;
             repoPath: string;
             worktreePath: string;
         };
@@ -2293,6 +2298,7 @@ export interface components {
             sessionId?: string;
             systemPrompt?: string;
             workItemId: string;
+            worktreeOverridePath?: string;
         };
         StartPTYAgentBridgeOptions: {
             enabled: boolean;

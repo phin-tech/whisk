@@ -98,6 +98,9 @@
   export let onCompleteGate: (request: { id: string; status: string; overrideReason: string }) => void;
   export let onApproveDone: (workItemId: string, reason: string) => void;
 
+  export let openItemId = "";
+  export let onDetailClose: (() => void) | null = null;
+
   let newItemTitle = "";
   let newItemBody = "";
   let worktreeBranches: Record<string, string> = {};
@@ -109,6 +112,12 @@
   let doneReasons: Record<string, string> = {};
   let agentSelections: Record<string, string> = {};
   let detailItemId = "";
+  let appliedOpenItemId = "";
+
+  $: if (openItemId && openItemId !== appliedOpenItemId) {
+    appliedOpenItemId = openItemId;
+    detailItemId = openItemId;
+  }
   let detailDraftItemId = "";
   let detailTitle = "";
   let detailBody = "";
@@ -241,7 +250,6 @@
 
   function openRunTerminal(run: WorkItemRun) {
     if (!canOpenRunTerminal(run)) return;
-    closeDetail();
     onOpenRunTerminal(run);
   }
 
@@ -416,7 +424,7 @@
     if (loading) return;
     if (window.confirm(`Delete #${item.number} ${item.title}?`)) {
       onDeleteWorkItem(item.id);
-      if (detailItemId === item.id) detailItemId = "";
+      if (detailItemId === item.id) closeDetail();
     }
   }
 
@@ -529,6 +537,7 @@
     detailDraftItemId = "";
     detailTitle = "";
     detailBody = "";
+    onDetailClose?.();
   }
 
   function handleKey(event: KeyboardEvent) {

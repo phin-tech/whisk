@@ -615,10 +615,11 @@ type StartWorkItemRunRequest struct {
 }
 
 type LaunchWorkItemRunRequest struct {
-	ID             string `json:"id"`
-	AgentProfileID string `json:"agentProfileId,omitempty"`
-	SystemPrompt   string `json:"systemPrompt,omitempty"`
-	Actor          string `json:"actor,omitempty"`
+	ID                   string `json:"id"`
+	AgentProfileID       string `json:"agentProfileId,omitempty"`
+	SystemPrompt         string `json:"systemPrompt,omitempty"`
+	WorktreeOverridePath string `json:"worktreeOverridePath,omitempty"`
+	Actor                string `json:"actor,omitempty"`
 }
 
 type QueueExecutionRequest struct {
@@ -627,10 +628,11 @@ type QueueExecutionRequest struct {
 }
 
 type LaunchExecutionRequest struct {
-	WorkItemID     string `json:"workItemId"`
-	AgentProfileID string `json:"agentProfileId,omitempty"`
-	SystemPrompt   string `json:"systemPrompt,omitempty"`
-	Actor          string `json:"actor,omitempty"`
+	WorkItemID           string `json:"workItemId"`
+	AgentProfileID       string `json:"agentProfileId,omitempty"`
+	SystemPrompt         string `json:"systemPrompt,omitempty"`
+	WorktreeOverridePath string `json:"worktreeOverridePath,omitempty"`
+	Actor                string `json:"actor,omitempty"`
 }
 
 type CancelWorkItemRunRequest struct {
@@ -663,13 +665,14 @@ type ApprovePlanRequest struct {
 }
 
 type StartExecutionRequest struct {
-	WorkItemID     string `json:"workItemId"`
-	SessionID      string `json:"sessionId,omitempty"`
-	PTYID          string `json:"ptyId,omitempty"`
-	Launch         bool   `json:"launch,omitempty"`
-	AgentProfileID string `json:"agentProfileId,omitempty"`
-	SystemPrompt   string `json:"systemPrompt,omitempty"`
-	Actor          string `json:"actor,omitempty"`
+	WorkItemID           string `json:"workItemId"`
+	SessionID            string `json:"sessionId,omitempty"`
+	PTYID                string `json:"ptyId,omitempty"`
+	Launch               bool   `json:"launch,omitempty"`
+	AgentProfileID       string `json:"agentProfileId,omitempty"`
+	SystemPrompt         string `json:"systemPrompt,omitempty"`
+	WorktreeOverridePath string `json:"worktreeOverridePath,omitempty"`
+	Actor                string `json:"actor,omitempty"`
 }
 
 type AskQuestionRequest struct {
@@ -761,7 +764,8 @@ type WorktrunkStatus struct {
 }
 
 type ListWorktreesRequest struct {
-	RepoPath string `json:"repoPath"`
+	RepoPath     string `json:"repoPath"`
+	OverridePath string `json:"overridePath,omitempty"`
 }
 
 type Worktree struct {
@@ -775,9 +779,10 @@ type Worktree struct {
 }
 
 type CreateWorktreeRequest struct {
-	RepoPath string `json:"repoPath"`
-	Branch   string `json:"branch"`
-	Base     string `json:"base"`
+	RepoPath     string `json:"repoPath"`
+	Branch       string `json:"branch"`
+	Base         string `json:"base"`
+	OverridePath string `json:"overridePath,omitempty"`
 }
 
 type CreatedWorktree struct {
@@ -789,6 +794,7 @@ type RemoveWorktreeRequest struct {
 	WorktreePath string `json:"worktreePath"`
 	AlsoBranch   bool   `json:"alsoBranch"`
 	Force        bool   `json:"force"`
+	OverridePath string `json:"overridePath,omitempty"`
 }
 
 type HTTPForward struct {

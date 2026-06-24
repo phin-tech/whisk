@@ -409,6 +409,31 @@ func TestCreateExistingBranchFallbackReportsRelistFailure(t *testing.T) {
 	}
 }
 
+func TestCreateFallsBackToGitWhenWorktrunkCannotListCreatedWorktree(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{
+		outputs: []Output{
+			{StatusCode: 1, Stderr: []byte("no worktree registered at wt")},
+			{StatusCode: 0},
+		},
+	}
+	client := NewClient(Binary{Path: "/bin/wt"}, runner)
+
+	path, err := client.Create(ctx, CreateRequest{RepoPath: "/repo", Branch: "whisk/app-1-async-start"})
+	if err != nil {
+		t.Fatalf("Create error: %v", err)
+	}
+	if path != "/repo/.worktrees/whisk-app-1-async-start" {
+		t.Fatalf("path = %q", path)
+	}
+	if !reflect.DeepEqual(runner.commands[1].Args, []string{"worktree", "add", "-b", "whisk/app-1-async-start", "/repo/.worktrees/whisk-app-1-async-start"}) {
+		t.Fatalf("git fallback args = %#v", runner.commands[1].Args)
+	}
+	if runner.commands[1].Path != "git" || runner.commands[1].Dir != "/repo" {
+		t.Fatalf("git fallback command = %#v", runner.commands[1])
+	}
+}
+
 func TestCreateExistingBranchFallbackPreservesFallbackFailure(t *testing.T) {
 	ctx := context.Background()
 	runner := &fakeRunner{
