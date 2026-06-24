@@ -41,7 +41,7 @@ export function selectedProjectDetail<T extends ProjectLike>(
 }
 
 export function sortRunsRecent<T extends RunLike>(runs: T[]) {
-  return [...runs].sort((a, b) => runTime(b) - runTime(a));
+  return [...runs].sort((a, b) => runPriority(b) - runPriority(a) || runTime(b) - runTime(a));
 }
 
 export function sessionNameSuffix<T extends SessionLike>(session: T, sessions: T[]) {
@@ -69,4 +69,9 @@ function runTime(run: RunLike) {
   if (!value) return 0;
   const parsed = value instanceof Date ? value.getTime() : new Date(String(value)).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function runPriority(run: RunLike) {
+  const status = "status" in run ? run.status : "";
+  return status === "running" || status === "awaiting_input" || status === "queued" ? 1 : 0;
 }

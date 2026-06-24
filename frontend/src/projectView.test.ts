@@ -46,6 +46,24 @@ describe("projectView", () => {
     expect(runs.map((run) => run.id)).toEqual(["old-cancelled", "created-only", "new-plan"]);
   });
 
+  it("keeps live runs ahead of terminal runs before sorting each group by recency", () => {
+    const runs = [
+      { id: "new-completed", status: "completed", createdAt: "2026-01-05T10:00:00Z", updatedAt: "2026-01-05T10:00:00Z" },
+      { id: "old-running", status: "running", createdAt: "2026-01-01T10:00:00Z", updatedAt: "2026-01-01T10:00:00Z" },
+      { id: "new-queued", status: "queued", createdAt: "2026-01-03T10:00:00Z", updatedAt: "2026-01-03T10:00:00Z" },
+      { id: "awaiting-input", status: "awaiting_input", createdAt: "2026-01-02T10:00:00Z", updatedAt: "2026-01-02T10:00:00Z" },
+      { id: "failed", status: "failed", createdAt: "2026-01-04T10:00:00Z", updatedAt: "2026-01-04T10:00:00Z" },
+    ];
+
+    expect(sortRunsRecent(runs).map((run) => run.id)).toEqual([
+      "new-queued",
+      "awaiting-input",
+      "old-running",
+      "new-completed",
+      "failed",
+    ]);
+  });
+
   it("only disambiguates same-named sessions", () => {
     const sessions = [
       { id: "sess_abcdef123", name: "dev", rootDir: "/repo/a" },

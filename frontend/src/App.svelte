@@ -180,6 +180,26 @@
   let workFilterStageId = "";
   let workFilterRunState = "";
   let activeMain: MainView = "session";
+  let workBoardOpenItemId = "";
+  let navigationStack: MainView[] = [];
+
+  function navigateTo(target: MainView, opts?: { openItemId?: string }) {
+    navigationStack = [...navigationStack, activeMain];
+    activeMain = target;
+    if (opts?.openItemId !== undefined) workBoardOpenItemId = opts.openItemId;
+  }
+
+  function navigateBack() {
+    const prev = navigationStack.at(-1);
+    navigationStack = navigationStack.slice(0, -1);
+    workBoardOpenItemId = "";
+    if (prev) activeMain = prev;
+  }
+
+  function clearNavigationStack() {
+    navigationStack = [];
+    workBoardOpenItemId = "";
+  }
   let activeSidebar: SidebarId | null = "sessions";
   let commandPaletteOpen = false;
   let newProjectOpen = false;
@@ -1005,6 +1025,7 @@
   }
 
   function selectSession(session: Session) {
+    clearNavigationStack();
     activeMain = "session";
     activeSessionId = session.id;
     activePaneId = firstPaneId(session);
@@ -1033,6 +1054,7 @@
   }
 
   function selectProject(projectId: string) {
+    clearNavigationStack();
     activeMain = "work";
     activeProjectId = projectId;
     workFilterQuery = "";
@@ -1044,6 +1066,7 @@
   }
 
   function selectProjectDetail(projectId: string) {
+    clearNavigationStack();
     activeMain = "projects";
     activeSidebar = "projects";
     activeProjectId = projectId;
@@ -1792,6 +1815,7 @@
   async function openSessionById(sessionId: string) {
     await refreshSessions();
     const session = sessions.find((candidate) => candidate.id === sessionId);
+    clearNavigationStack();
     activeSessionId = sessionId;
     activePaneId = firstPaneId(session);
     activeMain = "session";
@@ -1800,6 +1824,7 @@
   }
 
   function toggleSidebar(id: SidebarId) {
+    clearNavigationStack();
     if (id === "projects") {
       activeMain = "projects";
       activeSidebar = activeSidebar === "projects" ? null : "projects";
@@ -2005,6 +2030,7 @@
             onRemoveSession={(sessionId) => void unassignProjectSession(sessionId)}
             onCreateWorkItem={createWorkItem}
             onDeleteWorkItem={deleteWorkItem}
+            onOpenWorkItem={(workItemId) => navigateTo("work", { openItemId: workItemId })}
             onOpenRunTerminal={(run) => void openWorkItemRun(run)}
             pluginAttachmentTemplates={projectAttachmentTemplates}
             onAddProjectAttachment={addProjectAttachment}
@@ -2014,6 +2040,8 @@
           />
         {:else if activeMain === "work"}
           <WorkBoard
+            openItemId={workBoardOpenItemId}
+            onDetailClose={navigationStack.length > 0 ? navigateBack : null}
             {projects}
             {workItems}
             {workItemRuns}
