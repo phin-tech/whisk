@@ -250,7 +250,6 @@
 
   function openRunTerminal(run: WorkItemRun) {
     if (!canOpenRunTerminal(run)) return;
-    closeDetail();
     onOpenRunTerminal(run);
   }
 

@@ -125,6 +125,13 @@
   import type { Command } from "./commands";
   import { runCommand } from "./commands";
   import { notificationSurfaceCount, targetForStatusEvent } from "./notificationsView";
+  import {
+    clearNavigationStack as clearNavigationStackState,
+    navigateBack as navigateBackState,
+    navigateTo as navigateToState,
+    type MainView,
+    type NavigationState,
+  } from "./navigation";
   import { projectDetailWithStoreSessions } from "./projectView";
   import {
     nextPTYStreamOffset,
@@ -143,7 +150,6 @@
   import { nextSidebarAfterToggle } from "./sidebarCommands";
 
   type SidebarId = "sessions" | "ptys" | "work" | "projects" | "notifications";
-  type MainView = "session" | "work" | "projects";
   type RailSide = "left" | "right";
 
   const SETTINGS_KEY = "whisk.ui.settings";
@@ -183,22 +189,26 @@
   let workBoardOpenItemId = "";
   let navigationStack: MainView[] = [];
 
+  function currentNavigationState(): NavigationState {
+    return { activeMain, navigationStack, workBoardOpenItemId };
+  }
+
+  function applyNavigationState(next: NavigationState) {
+    activeMain = next.activeMain;
+    navigationStack = next.navigationStack;
+    workBoardOpenItemId = next.workBoardOpenItemId;
+  }
+
   function navigateTo(target: MainView, opts?: { openItemId?: string }) {
-    navigationStack = [...navigationStack, activeMain];
-    activeMain = target;
-    if (opts?.openItemId !== undefined) workBoardOpenItemId = opts.openItemId;
+    applyNavigationState(navigateToState(currentNavigationState(), target, opts));
   }
 
   function navigateBack() {
-    const prev = navigationStack.at(-1);
-    navigationStack = navigationStack.slice(0, -1);
-    workBoardOpenItemId = "";
-    if (prev) activeMain = prev;
+    applyNavigationState(navigateBackState(currentNavigationState()));
   }
 
   function clearNavigationStack() {
-    navigationStack = [];
-    workBoardOpenItemId = "";
+    applyNavigationState(clearNavigationStackState(currentNavigationState()));
   }
   let activeSidebar: SidebarId | null = "sessions";
   let commandPaletteOpen = false;
@@ -719,6 +729,7 @@
   }
 
   function openNewSession() {
+    clearNavigationStack();
     error = "";
     settingsOpen = false;
     pendingSessionProjectId = "";
@@ -731,6 +742,7 @@
   function openNewProjectSession(projectId: string) {
     const project = projects.find((candidate) => candidate.id === projectId);
     if (!project) return;
+    clearNavigationStack();
     error = "";
     settingsOpen = false;
     pendingSessionProjectId = project.id;
@@ -1076,6 +1088,7 @@
   }
 
   async function selectStatusEvent(event: StatusEvent) {
+    clearNavigationStack();
     const target = targetForStatusEvent(event, sessions);
     if (target.main === "work") {
       activeMain = "work";
@@ -1096,6 +1109,7 @@
   }
 
   async function selectAgentBridgeEvent(event: AgentBridgeEvent) {
+    clearNavigationStack();
     const target = agentHookNotificationClickTarget(event, sessions);
     activeMain = "session";
     if (target.sessionId) activeSessionId = target.sessionId;
@@ -1115,6 +1129,7 @@
   }
 
   async function selectAgentPrompt(prompt: AgentPrompt) {
+    clearNavigationStack();
     activeMain = "session";
     if (prompt.sessionId) activeSessionId = prompt.sessionId;
     const session = sessions.find((candidate) => candidate.id === prompt.sessionId);
@@ -1152,6 +1167,7 @@
   }
 
   async function openWorkItemRun(run: WorkItemRun) {
+    clearNavigationStack();
     try {
       const nextSessions = await ListSessions();
       sessions = nextSessions;
@@ -1175,6 +1191,7 @@
   }
 
   function openNewProject() {
+    clearNavigationStack();
     if (activeMain !== "projects") {
       activeMain = "work";
       activeSidebar = "work";
@@ -1846,6 +1863,7 @@
   }
 
   function toggleCurrentSidebar() {
+    clearNavigationStack();
     activeSidebar = nextSidebarAfterToggle(activeSidebar, activeMain);
     settingsOpen = false;
   }
