@@ -29,7 +29,8 @@ type WorktrunkStatus struct {
 }
 
 type ListWorktreesRequest struct {
-	RepoPath string
+	RepoPath     string
+	OverridePath string
 }
 
 type Worktree struct {
@@ -43,9 +44,10 @@ type Worktree struct {
 }
 
 type CreateWorktreeRequest struct {
-	RepoPath string
-	Branch   string
-	Base     string
+	RepoPath     string
+	Branch       string
+	Base         string
+	OverridePath string
 }
 
 type CreatedWorktree struct {
@@ -57,6 +59,7 @@ type RemoveWorktreeRequest struct {
 	WorktreePath string
 	AlsoBranch   bool
 	Force        bool
+	OverridePath string
 }
 
 func (r *Runtime) DetectWorktrunk(ctx context.Context, req DetectWorktrunkRequest) (WorktrunkStatus, error) {

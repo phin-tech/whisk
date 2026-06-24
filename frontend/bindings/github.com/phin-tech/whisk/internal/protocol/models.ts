@@ -896,6 +896,7 @@ export class CreateWorktreeRequest {
     "repoPath": string;
     "branch": string;
     "base": string;
+    "overridePath"?: string;
 
     /** Creates a new CreateWorktreeRequest instance. */
     constructor($$source: Partial<CreateWorktreeRequest> = {}) {
@@ -1199,6 +1200,7 @@ export class LaunchExecutionRequest {
     "workItemId": string;
     "agentProfileId"?: string;
     "systemPrompt"?: string;
+    "worktreeOverridePath"?: string;
     "actor"?: string;
 
     /** Creates a new LaunchExecutionRequest instance. */
@@ -1223,6 +1225,7 @@ export class LaunchWorkItemRunRequest {
     "id": string;
     "agentProfileId"?: string;
     "systemPrompt"?: string;
+    "worktreeOverridePath"?: string;
     "actor"?: string;
 
     /** Creates a new LaunchWorkItemRunRequest instance. */
@@ -1322,6 +1325,7 @@ export class ListStatusEventsRequest {
 
 export class ListWorktreesRequest {
     "repoPath": string;
+    "overridePath"?: string;
 
     /** Creates a new ListWorktreesRequest instance. */
     constructor($$source: Partial<ListWorktreesRequest> = {}) {
@@ -2083,6 +2087,7 @@ export class RemoveWorktreeRequest {
     "worktreePath": string;
     "alsoBranch": boolean;
     "force": boolean;
+    "overridePath"?: string;
 
     /** Creates a new RemoveWorktreeRequest instance. */
     constructor($$source: Partial<RemoveWorktreeRequest> = {}) {
@@ -2535,6 +2540,7 @@ export class StartExecutionRequest {
     "launch"?: boolean;
     "agentProfileId"?: string;
     "systemPrompt"?: string;
+    "worktreeOverridePath"?: string;
     "actor"?: string;
 
     /** Creates a new StartExecutionRequest instance. */

@@ -82,7 +82,11 @@ func BuildLaunch(req LaunchRequest) (Launch, error) {
 		if req.SystemPrompt != "" {
 			args = append(args, "--append-system-prompt", req.SystemPrompt)
 		}
-		if req.Prompt != "" && containsArg(args, "--print") {
+		// Pass the prompt as a positional arg so Claude Code auto-runs the first
+		// turn on launch — same "just go" behavior as --print, but it stays in the
+		// interactive session instead of printing and exiting. No typing into the
+		// TUI means no readiness/paste/Enter races to fight.
+		if req.Prompt != "" {
 			args = append(args, req.Prompt)
 		}
 	case ProviderCodex:
@@ -94,7 +98,7 @@ func BuildLaunch(req LaunchRequest) (Launch, error) {
 		}
 	}
 	stdin := req.Prompt
-	if profile.Provider == ProviderCodex || (profile.Provider == ProviderClaude && containsArg(args, "--print")) {
+	if profile.Provider == ProviderCodex || profile.Provider == ProviderClaude {
 		stdin = ""
 	}
 	return Launch{

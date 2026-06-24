@@ -5413,6 +5413,9 @@
           "branch": {
             "type": "string"
           },
+          "overridePath": {
+            "type": "string"
+          },
           "repoPath": {
             "type": "string"
           }
@@ -5783,6 +5786,9 @@
           },
           "workItemId": {
             "type": "string"
+          },
+          "worktreeOverridePath": {
+            "type": "string"
           }
         },
         "required": [
@@ -5802,6 +5808,9 @@
             "type": "string"
           },
           "systemPrompt": {
+            "type": "string"
+          },
+          "worktreeOverridePath": {
             "type": "string"
           }
         },
@@ -5841,6 +5850,9 @@
       },
       "ListWorktreesRequest": {
         "properties": {
+          "overridePath": {
+            "type": "string"
+          },
           "repoPath": {
             "type": "string"
           }
@@ -6639,6 +6651,9 @@
           "force": {
             "type": "boolean"
           },
+          "overridePath": {
+            "type": "string"
+          },
           "repoPath": {
             "type": "string"
           },
@@ -7055,6 +7070,9 @@
             "type": "string"
           },
           "workItemId": {
+            "type": "string"
+          },
+          "worktreeOverridePath": {
             "type": "string"
           }
         },

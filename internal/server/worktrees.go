@@ -28,7 +28,10 @@ func (s *HTTPServer) listWorktrees(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	worktrees, err := s.runtime.ListWorktrees(r.Context(), app.ListWorktreesRequest{RepoPath: req.RepoPath})
+	worktrees, err := s.runtime.ListWorktrees(r.Context(), app.ListWorktreesRequest{
+		RepoPath:     req.RepoPath,
+		OverridePath: req.OverridePath,
+	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -46,9 +49,10 @@ func (s *HTTPServer) createWorktree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	created, err := s.runtime.CreateWorktree(r.Context(), app.CreateWorktreeRequest{
-		RepoPath: req.RepoPath,
-		Branch:   req.Branch,
-		Base:     req.Base,
+		RepoPath:     req.RepoPath,
+		Branch:       req.Branch,
+		Base:         req.Base,
+		OverridePath: req.OverridePath,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -67,6 +71,7 @@ func (s *HTTPServer) removeWorktree(w http.ResponseWriter, r *http.Request) {
 		WorktreePath: req.WorktreePath,
 		AlsoBranch:   req.AlsoBranch,
 		Force:        req.Force,
+		OverridePath: req.OverridePath,
 	}); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return

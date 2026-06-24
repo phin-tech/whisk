@@ -202,6 +202,7 @@
   let keepDaemonAlive = true;
   let hookLogEnabled = true;
   let clearHookLogAfterSession = false;
+  let worktrunkPath = "/opt/homebrew/bin/wt";
   let error = "";
   let loadingSession = false;
   let loadingPtys = false;
@@ -343,6 +344,7 @@
       if (typeof loaded.clearHookLogAfterSession === "boolean") {
         clearHookLogAfterSession = loaded.clearHookLogAfterSession;
       }
+      if (typeof loaded.worktrunkPath === "string") worktrunkPath = loaded.worktrunkPath;
       applyStartupView(startupView);
       await SetAgentHookLogSettings({
         enabled: hookLogEnabled,
@@ -371,6 +373,7 @@
         keepDaemonAlive,
         hookLogEnabled,
         clearHookLogAfterSession,
+        worktrunkPath,
       });
       startupView = normalizeStartupView(saved.startupView);
       keepDaemonAlive = saved.keepDaemonAlive;
@@ -378,6 +381,7 @@
       if (typeof saved.clearHookLogAfterSession === "boolean") {
         clearHookLogAfterSession = saved.clearHookLogAfterSession;
       }
+      if (typeof saved.worktrunkPath === "string") worktrunkPath = saved.worktrunkPath;
     } catch (err) {
       error = `Save settings failed: ${backendError(err)}`;
     }
@@ -390,6 +394,11 @@
 
   async function setKeepDaemonAlive(keep: boolean) {
     keepDaemonAlive = keep;
+    await persistAppSettings();
+  }
+
+  async function setWorktrunkPath(path: string) {
+    worktrunkPath = path;
     await persistAppSettings();
   }
 
@@ -682,6 +691,9 @@
     }
     await WritePTY({ ptyId, data });
     if (ptyTraceEnabled) void LogPTYTrace(ptyInputTraceLine("frontend.missing-websocket", ptyId, data, performance.now()));
+    void refreshOutput(ptyId).catch((err) => {
+      if (!isStalePTYError(err)) error = backendError(err);
+    });
   }
 
   function openNewSession() {
@@ -1308,6 +1320,7 @@
         repoPath: project.rootDir,
         branch: request.branch,
         base: "",
+        overridePath: worktrunkPath,
       });
       await BindWorkItemWorktree({
         id: request.workItemId,
@@ -1457,7 +1470,7 @@
     error = "";
     loadingWork = true;
     try {
-      await LaunchWorkItemRun({ id: runId, agentProfileId });
+      await LaunchWorkItemRun({ id: runId, agentProfileId, worktreeOverridePath: worktrunkPath });
       await refreshWorkState();
       await refreshSessions();
       await refreshPTYs();
@@ -1526,7 +1539,7 @@
     error = "";
     loadingWork = true;
     try {
-      await LaunchExecution({ workItemId, agentProfileId });
+      await LaunchExecution({ workItemId, agentProfileId, worktreeOverridePath: worktrunkPath });
       await refreshWorkState();
       await refreshSessions();
       await refreshPTYs();
@@ -2116,6 +2129,7 @@
           {terminalFontSize}
           {terminalCursorBlink}
           {keepDaemonAlive}
+          {worktrunkPath}
           {agentHookIntegrations}
           {plugins}
           {registryPlugins}
@@ -2130,6 +2144,7 @@
           onTerminalFontSize={(size) => (terminalFontSize = size)}
           onTerminalCursorBlink={(blink) => (terminalCursorBlink = blink)}
           onKeepDaemonAlive={(keep) => void setKeepDaemonAlive(keep)}
+          onWorktrunkPath={(path) => void setWorktrunkPath(path)}
           onRefreshAgentHookIntegrations={() => void refreshAgentHookIntegrations()}
           onRefreshPlugins={() => void rescanPlugins()}
           onSetPluginTrusted={(pluginId, trusted) => void setPluginTrusted(pluginId, trusted)}

@@ -6,6 +6,8 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..types import UNSET, Unset
+
 T = TypeVar("T", bound="RemoveWorktreeRequest")
 
 
@@ -17,12 +19,14 @@ class RemoveWorktreeRequest:
         force (bool):
         repo_path (str):
         worktree_path (str):
+        override_path (str | Unset):
     """
 
     also_branch: bool
     force: bool
     repo_path: str
     worktree_path: str
+    override_path: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -34,6 +38,8 @@ class RemoveWorktreeRequest:
 
         worktree_path = self.worktree_path
 
+        override_path = self.override_path
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -44,6 +50,8 @@ class RemoveWorktreeRequest:
                 "worktreePath": worktree_path,
             }
         )
+        if override_path is not UNSET:
+            field_dict["overridePath"] = override_path
 
         return field_dict
 
@@ -58,11 +66,14 @@ class RemoveWorktreeRequest:
 
         worktree_path = d.pop("worktreePath")
 
+        override_path = d.pop("overridePath", UNSET)
+
         remove_worktree_request = cls(
             also_branch=also_branch,
             force=force,
             repo_path=repo_path,
             worktree_path=worktree_path,
+            override_path=override_path,
         )
 
         remove_worktree_request.additional_properties = d

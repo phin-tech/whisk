@@ -20,9 +20,10 @@ type Settings struct {
 	// KeepDaemonAlive controls whether a daemon the app started is left running after the app
 	// quits. It defaults to true so sessions persist across app restarts; setting it false makes
 	// the app stop the daemon it started on quit.
-	KeepDaemonAlive          bool `json:"keepDaemonAlive"`
-	HookLogEnabled           bool `json:"hookLogEnabled"`
-	ClearHookLogAfterSession bool `json:"clearHookLogAfterSession,omitempty"`
+	KeepDaemonAlive          bool   `json:"keepDaemonAlive"`
+	HookLogEnabled           bool   `json:"hookLogEnabled"`
+	ClearHookLogAfterSession bool   `json:"clearHookLogAfterSession,omitempty"`
+	WorktrunkPath            string `json:"worktrunkPath,omitempty"`
 	// Keybindings holds user overrides for editable keyboard shortcuts, keyed by command id
 	// (e.g. "open-preferences") with an accelerator value (e.g. "Cmd+Shift+P"). Commands absent
 	// from the map use their built-in default; an empty map means all defaults.
@@ -69,6 +70,7 @@ func Normalize(settings Settings) (Settings, error) {
 		settings.StartupView = StartupViewSessions
 	}
 	settings.Keybindings = normalizeKeybindings(settings.Keybindings)
+	settings.WorktrunkPath = strings.TrimSpace(settings.WorktrunkPath)
 	settings.TrustedPlugins = normalizeTrustedPlugins(settings.TrustedPlugins)
 	registries, err := normalizePluginRegistries(settings.PluginRegistries)
 	if err != nil {

@@ -16,11 +16,13 @@ func TestClaudePlanLaunchUsesPlanModeAndSystemPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildLaunch error: %v", err)
 	}
-	wantArgs := []string{"--permission-mode", "plan", "--append-system-prompt", "Follow AGENTS.md"}
+	// The prompt rides in argv (positional) so Claude auto-runs the first turn on
+	// launch, and Stdin stays empty — nothing is typed into the TUI.
+	wantArgs := []string{"--permission-mode", "plan", "--append-system-prompt", "Follow AGENTS.md", "Plan the work"}
 	if launch.Command != "claude" || !reflect.DeepEqual(launch.Args, wantArgs) || launch.WorkingDir != "/repo" {
 		t.Fatalf("launch = %#v", launch)
 	}
-	if launch.Stdin != "Plan the work" || launch.Provider != ProviderClaude {
+	if launch.Stdin != "" || launch.Provider != ProviderClaude {
 		t.Fatalf("launch metadata = %#v", launch)
 	}
 }

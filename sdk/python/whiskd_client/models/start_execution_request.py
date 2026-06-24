@@ -22,6 +22,7 @@ class StartExecutionRequest:
         pty_id (str | Unset):
         session_id (str | Unset):
         system_prompt (str | Unset):
+        worktree_override_path (str | Unset):
     """
 
     work_item_id: str
@@ -31,6 +32,7 @@ class StartExecutionRequest:
     pty_id: str | Unset = UNSET
     session_id: str | Unset = UNSET
     system_prompt: str | Unset = UNSET
+    worktree_override_path: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -47,6 +49,8 @@ class StartExecutionRequest:
         session_id = self.session_id
 
         system_prompt = self.system_prompt
+
+        worktree_override_path = self.worktree_override_path
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -67,6 +71,8 @@ class StartExecutionRequest:
             field_dict["sessionId"] = session_id
         if system_prompt is not UNSET:
             field_dict["systemPrompt"] = system_prompt
+        if worktree_override_path is not UNSET:
+            field_dict["worktreeOverridePath"] = worktree_override_path
 
         return field_dict
 
@@ -87,6 +93,8 @@ class StartExecutionRequest:
 
         system_prompt = d.pop("systemPrompt", UNSET)
 
+        worktree_override_path = d.pop("worktreeOverridePath", UNSET)
+
         start_execution_request = cls(
             work_item_id=work_item_id,
             actor=actor,
@@ -95,6 +103,7 @@ class StartExecutionRequest:
             pty_id=pty_id,
             session_id=session_id,
             system_prompt=system_prompt,
+            worktree_override_path=worktree_override_path,
         )
 
         start_execution_request.additional_properties = d

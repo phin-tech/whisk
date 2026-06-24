@@ -2,23 +2,33 @@ package worktrunk
 
 import (
 	"context"
+	"strings"
 
 	"github.com/phin-tech/whisk/internal/app"
 )
 
+type BackendOptions struct {
+	OverridePath string
+}
+
 type Backend struct {
-	runner Runner
+	runner       Runner
+	overridePath string
 }
 
 func NewBackend(runner Runner) *Backend {
+	return NewBackendWithOptions(runner, BackendOptions{})
+}
+
+func NewBackendWithOptions(runner Runner, opts BackendOptions) *Backend {
 	if runner == nil {
 		runner = OSRunner{}
 	}
-	return &Backend{runner: runner}
+	return &Backend{runner: runner, overridePath: strings.TrimSpace(opts.OverridePath)}
 }
 
 func (b *Backend) DetectWorktrunk(ctx context.Context, req app.DetectWorktrunkRequest) (app.WorktrunkStatus, error) {
-	binary, available, err := Detect(ctx, b.runner, DetectOptions{OverridePath: req.OverridePath})
+	binary, available, err := Detect(ctx, b.runner, DetectOptions{OverridePath: firstNonEmpty(req.OverridePath, b.overridePath)})
 	if err != nil {
 		return app.WorktrunkStatus{}, err
 	}
@@ -30,7 +40,7 @@ func (b *Backend) DetectWorktrunk(ctx context.Context, req app.DetectWorktrunkRe
 }
 
 func (b *Backend) ListWorktrees(ctx context.Context, req app.ListWorktreesRequest) ([]app.Worktree, error) {
-	client, err := b.client(ctx)
+	client, err := b.client(ctx, req.OverridePath)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +56,7 @@ func (b *Backend) ListWorktrees(ctx context.Context, req app.ListWorktreesReques
 }
 
 func (b *Backend) CreateWorktree(ctx context.Context, req app.CreateWorktreeRequest) (app.CreatedWorktree, error) {
-	client, err := b.client(ctx)
+	client, err := b.client(ctx, req.OverridePath)
 	if err != nil {
 		return app.CreatedWorktree{}, err
 	}
@@ -62,7 +72,7 @@ func (b *Backend) CreateWorktree(ctx context.Context, req app.CreateWorktreeRequ
 }
 
 func (b *Backend) RemoveWorktree(ctx context.Context, req app.RemoveWorktreeRequest) error {
-	client, err := b.client(ctx)
+	client, err := b.client(ctx, req.OverridePath)
 	if err != nil {
 		return err
 	}
@@ -74,8 +84,8 @@ func (b *Backend) RemoveWorktree(ctx context.Context, req app.RemoveWorktreeRequ
 	})
 }
 
-func (b *Backend) client(ctx context.Context) (*Client, error) {
-	binary, available, err := Detect(ctx, b.runner, DetectOptions{})
+func (b *Backend) client(ctx context.Context, overridePath string) (*Client, error) {
+	binary, available, err := Detect(ctx, b.runner, DetectOptions{OverridePath: firstNonEmpty(overridePath, b.overridePath)})
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +93,15 @@ func (b *Backend) client(ctx context.Context) (*Client, error) {
 		return nil, &NotFoundError{Path: "wt"}
 	}
 	return NewClient(binary, b.runner), nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func toAppWorktree(item Item) app.Worktree {

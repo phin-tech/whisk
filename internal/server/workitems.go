@@ -250,13 +250,14 @@ func (s *HTTPServer) startExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
 	run, err := s.runtime.StartExecution(r.Context(), app.StartExecutionRequest{
-		WorkItemID:     req.WorkItemID,
-		SessionID:      req.SessionID,
-		PTYID:          req.PTYID,
-		Launch:         req.Launch,
-		AgentProfileID: req.AgentProfileID,
-		SystemPrompt:   req.SystemPrompt,
-		Actor:          req.Actor,
+		WorkItemID:           req.WorkItemID,
+		SessionID:            req.SessionID,
+		PTYID:                req.PTYID,
+		Launch:               req.Launch,
+		AgentProfileID:       req.AgentProfileID,
+		SystemPrompt:         req.SystemPrompt,
+		WorktreeOverridePath: req.WorktreeOverridePath,
+		Actor:                req.Actor,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -289,10 +290,11 @@ func (s *HTTPServer) launchExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
 	run, err := s.runtime.LaunchExecution(r.Context(), app.LaunchExecutionRequest{
-		WorkItemID:     req.WorkItemID,
-		AgentProfileID: req.AgentProfileID,
-		SystemPrompt:   req.SystemPrompt,
-		Actor:          req.Actor,
+		WorkItemID:           req.WorkItemID,
+		AgentProfileID:       req.AgentProfileID,
+		SystemPrompt:         req.SystemPrompt,
+		WorktreeOverridePath: req.WorktreeOverridePath,
+		Actor:                req.Actor,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -649,10 +651,11 @@ func (s *HTTPServer) launchWorkItemRun(w http.ResponseWriter, r *http.Request) {
 	}
 	req.ID = pathValue(r, "runID", req.ID)
 	run, err := s.runtime.LaunchWorkItemRun(r.Context(), app.LaunchWorkItemRunRequest{
-		ID:             req.ID,
-		AgentProfileID: req.AgentProfileID,
-		SystemPrompt:   req.SystemPrompt,
-		Actor:          req.Actor,
+		ID:                   req.ID,
+		AgentProfileID:       req.AgentProfileID,
+		SystemPrompt:         req.SystemPrompt,
+		WorktreeOverridePath: req.WorktreeOverridePath,
+		Actor:                req.Actor,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)

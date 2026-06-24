@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 	"time"
-	"unicode"
 
 	bridgeinstaller "github.com/phin-tech/whisk/internal/adapters/agentbridge"
 	"github.com/phin-tech/whisk/internal/adapters/agents"
@@ -96,12 +95,6 @@ type ProjectContextItem struct {
 	Error        string
 }
 
-var (
-	interactiveAgentReadyPollInterval = 100 * time.Millisecond
-	interactiveAgentReadyTimeout      = 20 * time.Second
-	interactiveAgentPromptEchoTimeout = 10 * time.Second
-	interactiveAgentPromptSubmitDelay = 250 * time.Millisecond
-)
 
 type CreateWorkItemRequest struct {
 	ProjectID    string
@@ -149,22 +142,24 @@ type DeleteWorkItemRequest struct {
 }
 
 type StartWorkItemRunRequest struct {
-	WorkItemID       string
-	Preset           string
-	PromptTemplateID string
-	SessionID        string
-	PTYID            string
-	Launch           bool
-	AgentProfileID   string
-	SystemPrompt     string
-	Actor            string
+	WorkItemID           string
+	Preset               string
+	PromptTemplateID     string
+	SessionID            string
+	PTYID                string
+	Launch               bool
+	AgentProfileID       string
+	SystemPrompt         string
+	WorktreeOverridePath string
+	Actor                string
 }
 
 type LaunchWorkItemRunRequest struct {
-	ID             string
-	AgentProfileID string
-	SystemPrompt   string
-	Actor          string
+	ID                   string
+	AgentProfileID       string
+	SystemPrompt         string
+	WorktreeOverridePath string
+	Actor                string
 }
 
 type QueueExecutionRequest struct {
@@ -173,10 +168,11 @@ type QueueExecutionRequest struct {
 }
 
 type LaunchExecutionRequest struct {
-	WorkItemID     string
-	AgentProfileID string
-	SystemPrompt   string
-	Actor          string
+	WorkItemID           string
+	AgentProfileID       string
+	SystemPrompt         string
+	WorktreeOverridePath string
+	Actor                string
 }
 
 type StartPlanningRequest struct {
@@ -204,13 +200,14 @@ type ApprovePlanRequest struct {
 }
 
 type StartExecutionRequest struct {
-	WorkItemID     string
-	SessionID      string
-	PTYID          string
-	Launch         bool
-	AgentProfileID string
-	SystemPrompt   string
-	Actor          string
+	WorkItemID           string
+	SessionID            string
+	PTYID                string
+	Launch               bool
+	AgentProfileID       string
+	SystemPrompt         string
+	WorktreeOverridePath string
+	Actor                string
 }
 
 type AskQuestionRequest struct {
@@ -754,12 +751,13 @@ func (r *Runtime) LaunchWorkItemRun(ctx context.Context, req LaunchWorkItemRunRe
 		return workitem.WorkItemRun{}, fmt.Errorf("work item run %s is %s, not queued", req.ID, run.Status)
 	}
 	launched, err := r.launchAndMarkWorkItemRun(ctx, run, StartWorkItemRunRequest{
-		WorkItemID:       run.WorkItemID,
-		Preset:           run.Preset,
-		PromptTemplateID: run.PromptTemplateID,
-		AgentProfileID:   req.AgentProfileID,
-		SystemPrompt:     req.SystemPrompt,
-		Actor:            req.Actor,
+		WorkItemID:           run.WorkItemID,
+		Preset:               run.Preset,
+		PromptTemplateID:     run.PromptTemplateID,
+		AgentProfileID:       req.AgentProfileID,
+		SystemPrompt:         req.SystemPrompt,
+		WorktreeOverridePath: req.WorktreeOverridePath,
+		Actor:                req.Actor,
 	})
 	if err != nil {
 		failed, failErr := r.workItems.FailRun(workitem.FailRun{
@@ -877,11 +875,12 @@ func (r *Runtime) QueueExecution(ctx context.Context, req QueueExecutionRequest)
 
 func (r *Runtime) LaunchExecution(ctx context.Context, req LaunchExecutionRequest) (workitem.WorkItemRun, error) {
 	return r.startExecution(ctx, StartExecutionRequest{
-		WorkItemID:     req.WorkItemID,
-		Launch:         true,
-		AgentProfileID: req.AgentProfileID,
-		SystemPrompt:   req.SystemPrompt,
-		Actor:          req.Actor,
+		WorkItemID:           req.WorkItemID,
+		Launch:               true,
+		AgentProfileID:       req.AgentProfileID,
+		SystemPrompt:         req.SystemPrompt,
+		WorktreeOverridePath: req.WorktreeOverridePath,
+		Actor:                req.Actor,
 	})
 }
 
@@ -901,11 +900,12 @@ func (r *Runtime) startExecution(ctx context.Context, req StartExecutionRequest)
 	}
 	if req.Launch {
 		run, err = r.launchAndMarkWorkItemRun(ctx, run, StartWorkItemRunRequest{
-			WorkItemID:     req.WorkItemID,
-			Launch:         true,
-			AgentProfileID: req.AgentProfileID,
-			SystemPrompt:   req.SystemPrompt,
-			Actor:          req.Actor,
+			WorkItemID:           req.WorkItemID,
+			Launch:               true,
+			AgentProfileID:       req.AgentProfileID,
+			SystemPrompt:         req.SystemPrompt,
+			WorktreeOverridePath: req.WorktreeOverridePath,
+			Actor:                req.Actor,
 		})
 		if err != nil {
 			return workitem.WorkItemRun{}, err
@@ -999,8 +999,8 @@ func (r *Runtime) SubmitReviewFeedback(ctx context.Context, req SubmitReviewFeed
 			if err != nil || !snapshot.Record.Running {
 				break
 			}
-			envelope := "\n<whisk-review-feedback>\n" + req.Body + "\n</whisk-review-feedback>\n"
-			_ = r.WritePTY(ctx, run.PTYID, []byte(envelope))
+			envelope := "<whisk-review-feedback>\n" + req.Body + "\n</whisk-review-feedback>"
+			r.submitAgentMessage(run.PTYID, envelope)
 			break
 		}
 	}
@@ -1009,6 +1009,80 @@ func (r *Runtime) SubmitReviewFeedback(ctx context.Context, req SubmitReviewFeed
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	return artifact, nil
+}
+
+// submitAgentMessage delivers a message into an already-running interactive agent
+// TUI and submits it. Argv can only seed the first turn (see agents.BuildLaunch),
+// so mid-session injection has to go through the terminal. It runs asynchronously:
+// clear any stale draft, paste the text inside bracketed-paste markers so
+// multi-line content stays editable data instead of submitting on each newline,
+// wait for the TUI to settle the paste, then send Enter as its own keystroke. An
+// Enter carried in the same burst as the paste gets folded into the draft and the
+// message sits unsent, so it must arrive separately and after the paste lands.
+func (r *Runtime) submitAgentMessage(ptyID, text string) {
+	go func() {
+		ctx := r.watchCtx
+		// Clear a stale draft first: Ctrl-A (home) + Ctrl-K (kill to end).
+		if err := r.WritePTY(ctx, ptyID, []byte{0x01, 0x0b}); err != nil {
+			return
+		}
+		baseLen := 0
+		if snapshot, err := r.PTYOutput(ctx, ptyID, 0); err == nil {
+			baseLen = len(snapshot.OutputBytes)
+		}
+		if err := r.WritePTY(ctx, ptyID, bracketedPaste(text)); err != nil {
+			return
+		}
+		r.waitPTYOutputSettled(ctx, ptyID, baseLen)
+		_ = r.WritePTY(ctx, ptyID, []byte("\r"))
+	}()
+}
+
+// bracketedPaste wraps text in bracketed-paste markers, mapping interior newlines
+// to the carriage return a real paste carries between lines (so the TUI keeps them
+// as data) and appending a trailing CR that absorbs any trailing backslash so it
+// can't escape the submit Enter.
+func bracketedPaste(text string) []byte {
+	body := strings.ReplaceAll(text, "\r\n", "\r")
+	body = strings.ReplaceAll(body, "\n", "\r")
+	return []byte("\x1b[200~" + body + "\r\x1b[201~")
+}
+
+// waitPTYOutputSettled blocks until the PTY output has grown past baseLen (the
+// paste echoed) and then stayed quiet for a short window, or a max timeout
+// elapses. This commits the paste before the follow-up Enter — a fixed sleep
+// races it under load or with large payloads.
+func (r *Runtime) waitPTYOutputSettled(ctx context.Context, ptyID string, baseLen int) {
+	const (
+		quietWindow = 150 * time.Millisecond
+		maxWait     = 3 * time.Second
+		pollEvery   = 50 * time.Millisecond
+	)
+	deadline := time.NewTimer(maxWait)
+	defer deadline.Stop()
+	ticker := time.NewTicker(pollEvery)
+	defer ticker.Stop()
+	lastLen := -1
+	var stableSince time.Time
+	for {
+		if snapshot, err := r.PTYOutput(ctx, ptyID, 0); err == nil {
+			n := len(snapshot.OutputBytes)
+			switch {
+			case n != lastLen:
+				lastLen = n
+				stableSince = time.Now()
+			case n > baseLen && !stableSince.IsZero() && time.Since(stableSince) >= quietWindow:
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-deadline.C:
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func (r *Runtime) ListArtifacts(_ context.Context, workItemID string) ([]workitem.Artifact, error) {
@@ -1147,6 +1221,11 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	if !ok {
 		return "", "", fmt.Errorf("project %s not found", item.ProjectID)
 	}
+	var err error
+	item, err = r.ensureExecutionWorktree(ctx, project, item, run, req.WorktreeOverridePath, req.Actor)
+	if err != nil {
+		return "", "", err
+	}
 	workingDir := project.RootDir
 	if item.Worktree != nil && item.Worktree.WorktreePath != "" {
 		workingDir = item.Worktree.WorktreePath
@@ -1203,11 +1282,10 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 			return "", "", err
 		}
 	}
+	// Agent prompts (Claude, Codex) ride in argv so the agent auto-runs the first
+	// turn — see agents.BuildLaunch. Only non-agent shell providers still carry a
+	// prompt in Stdin to type in.
 	if strings.TrimSpace(launch.Stdin) != "" {
-		if project.Preferences.UseInteractiveAgentShell {
-			r.submitInteractiveAgentPrompt(created.MainPtyID, launch.Provider, launch.Stdin)
-			return created.Session.ID, created.MainPtyID, nil
-		}
 		if err := r.WritePTY(ctx, created.MainPtyID, []byte(launch.Stdin+"\n")); err != nil {
 			return "", "", err
 		}
@@ -1215,103 +1293,33 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	return created.Session.ID, created.MainPtyID, nil
 }
 
-func (r *Runtime) submitInteractiveAgentPrompt(ptyID string, provider agents.Provider, stdin string) {
-	go func() {
-		if err := r.waitInteractiveAgentReady(r.watchCtx, ptyID, provider); err != nil {
-			return
-		}
-		if err := r.WritePTY(r.watchCtx, ptyID, []byte(stdin)); err != nil {
-			return
-		}
-		if err := r.waitInteractiveAgentPromptEcho(r.watchCtx, ptyID, stdin); err != nil {
-			return
-		}
-		timer := time.NewTimer(interactiveAgentPromptSubmitDelay)
-		defer timer.Stop()
-		select {
-		case <-r.watchCtx.Done():
-			return
-		case <-timer.C:
-		}
-		_ = r.WritePTY(r.watchCtx, ptyID, []byte("\r"))
-	}()
-}
-
-func (r *Runtime) waitInteractiveAgentReady(ctx context.Context, ptyID string, provider agents.Provider) error {
-	if provider != agents.ProviderClaude {
-		return nil
+func (r *Runtime) ensureExecutionWorktree(ctx context.Context, project workitem.Project, item workitem.WorkItem, run workitem.WorkItemRun, overridePath string, actor string) (workitem.WorkItem, error) {
+	if item.Worktree != nil || run.PromptTemplateID != workitem.PromptTemplateImplement || r.worktrees == nil {
+		return item, nil
 	}
-	deadline := time.NewTimer(interactiveAgentReadyTimeout)
-	defer deadline.Stop()
-	ticker := time.NewTicker(interactiveAgentReadyPollInterval)
-	defer ticker.Stop()
-	for {
-		snapshot, err := r.PTYOutput(ctx, ptyID, 0)
-		if err == nil && interactiveAgentOutputReady(provider, snapshot.OutputBytes) {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-deadline.C:
-			return nil
-		case <-ticker.C:
-		}
+	branch := defaultWorktreeBranch(project, item)
+	created, err := r.worktrees.CreateWorktree(ctx, CreateWorktreeRequest{
+		RepoPath:     project.RootDir,
+		Branch:       branch,
+		OverridePath: overridePath,
+	})
+	if err != nil {
+		return workitem.WorkItem{}, err
 	}
-}
-
-func interactiveAgentOutputReady(provider agents.Provider, output []byte) bool {
-	if provider != agents.ProviderClaude {
-		return true
+	if strings.TrimSpace(created.Path) == "" {
+		return workitem.WorkItem{}, fmt.Errorf("created worktree path required")
 	}
-	text := strings.ToLower(string(output))
-	return strings.Contains(text, "auto mode on") || strings.Contains(text, "automodeon")
-}
-
-func (r *Runtime) waitInteractiveAgentPromptEcho(ctx context.Context, ptyID string, prompt string) error {
-	marker := promptEchoMarker(prompt)
-	if marker == "" {
-		return nil
+	if strings.TrimSpace(actor) == "" {
+		actor = "agent"
 	}
-	deadline := time.NewTimer(interactiveAgentPromptEchoTimeout)
-	defer deadline.Stop()
-	ticker := time.NewTicker(interactiveAgentReadyPollInterval)
-	defer ticker.Stop()
-	for {
-		snapshot, err := r.PTYOutput(ctx, ptyID, 0)
-		if err == nil && strings.Contains(normalizedTerminalText(string(snapshot.OutputBytes)), marker) {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-deadline.C:
-			return nil
-		case <-ticker.C:
-		}
-	}
-}
-
-func promptEchoMarker(prompt string) string {
-	normalized := normalizedTerminalText(prompt)
-	const finalInstruction = "donottreattheplanascompleteuntilthewhiskcommandsucceeds"
-	if strings.Contains(normalized, finalInstruction) {
-		return finalInstruction
-	}
-	if len(normalized) > 80 {
-		return normalized[len(normalized)-80:]
-	}
-	return normalized
-}
-
-func normalizedTerminalText(value string) string {
-	var b strings.Builder
-	for _, r := range value {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(unicode.ToLower(r))
-		}
-	}
-	return b.String()
+	return r.workItems.BindWorktree(workitem.BindWorktree{
+		ID:           item.ID,
+		HistoryID:    r.ids(),
+		Branch:       branch,
+		WorktreePath: created.Path,
+		Actor:        actor,
+		Now:          time.Now().UTC(),
+	})
 }
 
 func agentStartPTYOptions(launch agents.Launch, env map[string]string, useInteractiveShell bool) *StartPTYOptions {
@@ -1431,11 +1439,44 @@ func runPhaseLabel(run workitem.WorkItemRun) string {
 
 func defaultAgentProfileForPreset(preset string) string {
 	switch preset {
-	case workitem.RunPresetReader, workitem.RunPresetManager, workitem.RunPresetReviewer, workitem.RunPresetWriter:
-		return ""
+	case workitem.RunPresetReader:
+		return "claude-plan"
+	case workitem.RunPresetManager, workitem.RunPresetReviewer, workitem.RunPresetWriter:
+		return "claude"
 	default:
 		return ""
 	}
+}
+
+func defaultWorktreeBranch(project workitem.Project, item workitem.WorkItem) string {
+	projectSlug := strings.TrimSpace(project.Slug)
+	if projectSlug == "" {
+		projectSlug = "work"
+	}
+	itemSlug := worktreeBranchSlug(item.Title)
+	if itemSlug == "" {
+		itemSlug = "item"
+	}
+	return fmt.Sprintf("whisk/%s-%d-%s", projectSlug, item.Number, itemSlug)
+}
+
+func worktreeBranchSlug(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var builder strings.Builder
+	lastDash := false
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			builder.WriteRune(r)
+			lastDash = false
+		default:
+			if !lastDash && builder.Len() > 0 {
+				builder.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+	return strings.Trim(builder.String(), "-")
 }
 
 // resolveAgentProfileID chooses the agent profile to launch with. An explicit
