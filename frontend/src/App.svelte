@@ -116,6 +116,7 @@
     InstallPlugin,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import ActivityRail from "./ActivityRail.svelte";
+  import Button from "./ui/Button.svelte";
   import CommandPalette from "./CommandPalette.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import LayoutView from "./LayoutView.svelte";
@@ -2181,14 +2182,15 @@
                 Start a daemon-owned shell session.
               </p>
             </div>
-            <button
-              type="button"
-              class="rounded-lg border border-border-subtle bg-bg-surface/80 px-4 py-2 text-[12px] font-semibold text-text-primary shadow-[0_18px_40px_rgba(2,6,23,0.45)] transition-colors hover:border-accent hover:text-accent"
+            <Button
+              variant="outline"
+              size="lg"
+              class="shadow-[0_18px_40px_rgba(2,6,23,0.45)]"
               disabled={loadingSession}
-              on:click={openNewSession}
+              onclick={openNewSession}
             >
               New Session
-            </button>
+            </Button>
           </div>
         {/if}
 

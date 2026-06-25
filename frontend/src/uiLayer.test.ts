@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import designSystemDoc from "../../agents/DESIGN-SYSTEM.md?raw";
+import appSource from "./App.svelte?raw";
 import commandPaletteSource from "./CommandPalette.svelte?raw";
 import activityRailSource from "./ActivityRail.svelte?raw";
 import confirmDialogSource from "./ConfirmDialog.svelte?raw";
@@ -295,6 +296,12 @@ describe("local UI layer", () => {
     expect(sidebarDockSource).toContain('from "./ui/ResizeHandle.svelte"');
     expect(sidebarDockSource).not.toMatch(/<button\b/);
     expect(sidebarDockSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("migrates App empty-state actions onto the local UI layer", () => {
+    expect(appSource).toContain('from "./ui/Button.svelte"');
+    expect(appSource).not.toMatch(/<button\b/);
+    expect(appSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {
