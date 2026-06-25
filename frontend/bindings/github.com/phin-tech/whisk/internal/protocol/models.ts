@@ -122,6 +122,36 @@ export class AddWorkItemAttachmentRequest {
     }
 }
 
+export class AddWorkItemLinkRequest {
+    "sourceWorkItemId": string;
+    "targetWorkItemId": string;
+    "type": string;
+    "actor"?: string;
+
+    /** Creates a new AddWorkItemLinkRequest instance. */
+    constructor($$source: Partial<AddWorkItemLinkRequest> = {}) {
+        if (!("sourceWorkItemId" in $$source)) {
+            this["sourceWorkItemId"] = "";
+        }
+        if (!("targetWorkItemId" in $$source)) {
+            this["targetWorkItemId"] = "";
+        }
+        if (!("type" in $$source)) {
+            this["type"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AddWorkItemLinkRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AddWorkItemLinkRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AddWorkItemLinkRequest($$parsedSource as Partial<AddWorkItemLinkRequest>);
+    }
+}
+
 export class AgentBridgeApproval {
     "id": string;
     "bridgeId": string;
@@ -2018,6 +2048,27 @@ export class QueueExecutionRequest {
     }
 }
 
+export const ReadyWorkExplanation = workitem$0.ReadyWorkExplanation;
+export type ReadyWorkExplanation = workitem$0.ReadyWorkExplanation;
+
+export class ReadyWorkRequest {
+    "projectId"?: string;
+
+    /** Creates a new ReadyWorkRequest instance. */
+    constructor($$source: Partial<ReadyWorkRequest> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReadyWorkRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ReadyWorkRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ReadyWorkRequest($$parsedSource as Partial<ReadyWorkRequest>);
+    }
+}
+
 /**
  * RegistryPlugin is one installable plugin advertised by a configured plugin
  * registry, annotated with local install and trust state.
@@ -2954,6 +3005,9 @@ export class UpdateWorkItemRequest {
 
 export const WorkItem = workitem$0.WorkItem;
 export type WorkItem = workitem$0.WorkItem;
+
+export const WorkItemLink = workitem$0.WorkItemLink;
+export type WorkItemLink = workitem$0.WorkItemLink;
 
 export const WorkItemRun = workitem$0.WorkItemRun;
 export type WorkItemRun = workitem$0.WorkItemRun;

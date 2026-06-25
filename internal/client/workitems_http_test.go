@@ -197,6 +197,98 @@ func TestHTTPClientDrivesDaemonWorkItemAPI(t *testing.T) {
 	}
 }
 
+func TestHTTPClientDrivesDaemonWorkItemLinkAndReadyAPI(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend()})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	handler := server.NewHTTP(runtime)
+	httpServer := httptest.NewServer(handler)
+	defer httpServer.Close()
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx := context.Background()
+
+	project, err := daemon.CreateProject(ctx, protocol.CreateProjectRequest{
+		Name:    "Dependency UI",
+		RootDir: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	blocker, err := daemon.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{
+		ProjectID: project.ID,
+		Title:     "Publish API contract",
+		Actor:     "agent",
+	})
+	if err != nil {
+		t.Fatalf("create blocker: %v", err)
+	}
+	blocked, err := daemon.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{
+		ProjectID: project.ID,
+		Title:     "Build UI dependency controls",
+		Actor:     "agent",
+	})
+	if err != nil {
+		t.Fatalf("create blocked: %v", err)
+	}
+	blocker, err = daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: blocker.ID, StageID: workitem.StageReady, Actor: "agent"})
+	if err != nil {
+		t.Fatalf("move blocker: %v", err)
+	}
+	blocked, err = daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: blocked.ID, StageID: workitem.StageReady, Actor: "agent"})
+	if err != nil {
+		t.Fatalf("move blocked: %v", err)
+	}
+
+	link, err := daemon.AddWorkItemLink(ctx, protocol.AddWorkItemLinkRequest{
+		SourceWorkItemID: blocked.ID,
+		TargetWorkItemID: blocker.ID,
+		Type:             workitem.WorkItemLinkBlocks,
+		Actor:            "agent",
+	})
+	if err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	if link.ProjectID != project.ID || link.SourceWorkItemID != blocked.ID || link.TargetWorkItemID != blocker.ID {
+		t.Fatalf("link = %#v", link)
+	}
+
+	links, err := daemon.ListWorkItemLinks(ctx, blocked.ID)
+	if err != nil || len(links) != 1 || links[0].ID != link.ID {
+		t.Fatalf("links = %#v, err = %v", links, err)
+	}
+
+	ready, err := daemon.ReadyWork(ctx, protocol.ReadyWorkRequest{ProjectID: project.ID})
+	if err != nil {
+		t.Fatalf("ready work: %v", err)
+	}
+	if ready.Summary.TotalReady != 1 || ready.Summary.TotalBlocked != 1 {
+		t.Fatalf("ready summary = %#v", ready.Summary)
+	}
+	if len(ready.Ready) != 1 || ready.Ready[0].WorkItem.ID != blocker.ID {
+		t.Fatalf("ready items = %#v", ready.Ready)
+	}
+	if len(ready.Blocked) != 1 || ready.Blocked[0].WorkItem.ID != blocked.ID {
+		t.Fatalf("blocked items = %#v", ready.Blocked)
+	}
+
+	blocker, err = daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: blocker.ID, StageID: workitem.StageDone, Actor: "agent"})
+	if err != nil {
+		t.Fatalf("complete blocker: %v", err)
+	}
+	ready, err = daemon.ReadyWork(ctx, protocol.ReadyWorkRequest{ProjectID: project.ID})
+	if err != nil {
+		t.Fatalf("ready work after completion: %v", err)
+	}
+	if ready.Summary.TotalReady != 1 || ready.Summary.TotalBlocked != 0 {
+		t.Fatalf("ready summary after completion = %#v", ready.Summary)
+	}
+	if len(ready.Ready) != 1 || ready.Ready[0].WorkItem.ID != blocked.ID {
+		t.Fatalf("ready after completion = %#v", ready.Ready)
+	}
+	if len(ready.Ready[0].ResolvedBlockers) != 1 || ready.Ready[0].ResolvedBlockers[0] != blocker.ID {
+		t.Fatalf("resolved blockers = %#v", ready.Ready[0].ResolvedBlockers)
+	}
+}
+
 func TestHTTPClientCreatesProjectSession(t *testing.T) {
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend()})
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })

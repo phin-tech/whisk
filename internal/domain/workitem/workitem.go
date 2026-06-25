@@ -110,6 +110,12 @@ const (
 	PromptTemplatePlan      = "plan"
 	PromptTemplateImplement = "implement"
 	PromptTemplateReview    = "review"
+
+	WorkItemLinkBlocks      = "blocks"
+	WorkItemLinkParentChild = "parent-child"
+	WorkItemLinkRelated     = "related"
+	WorkItemLinkDuplicates  = "duplicates"
+	WorkItemLinkSupersedes  = "supersedes"
 )
 
 type Project struct {
@@ -206,6 +212,16 @@ type WorkItem struct {
 	History         []HistoryEvent           `json:"history"`
 	CreatedAt       time.Time                `json:"createdAt"`
 	UpdatedAt       time.Time                `json:"updatedAt"`
+}
+
+type WorkItemLink struct {
+	ID               string    `json:"id"`
+	ProjectID        string    `json:"projectId"`
+	SourceWorkItemID string    `json:"sourceWorkItemId"`
+	TargetWorkItemID string    `json:"targetWorkItemId"`
+	Type             string    `json:"type"`
+	CreatedBy        string    `json:"createdBy,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 type PromptTemplate struct {
@@ -352,6 +368,7 @@ type State struct {
 	templates       map[string]WorkflowTemplate
 	promptTemplates map[string]PromptTemplate
 	items           map[string]WorkItem
+	links           map[string]WorkItemLink
 	runs            map[string]WorkItemRun
 	artifacts       map[string]Artifact
 	questions       map[string]Question
@@ -365,6 +382,7 @@ type Snapshot struct {
 	Templates       []WorkflowTemplate `json:"workflowTemplates"`
 	PromptTemplates []PromptTemplate   `json:"promptTemplates"`
 	Items           []WorkItem         `json:"workItems"`
+	Links           []WorkItemLink     `json:"workItemLinks,omitempty"`
 	Runs            []WorkItemRun      `json:"workItemRuns"`
 	Artifacts       []Artifact         `json:"artifacts"`
 	Questions       []Question         `json:"questions"`
@@ -498,6 +516,15 @@ type DeleteWorkItem struct {
 	HistoryID string
 	Actor     string
 	Now       time.Time
+}
+
+type AddWorkItemLink struct {
+	ID               string
+	SourceWorkItemID string
+	TargetWorkItemID string
+	Type             string
+	Actor            string
+	Now              time.Time
 }
 
 type StartRun struct {
@@ -685,12 +712,55 @@ type MarkStatusEventRead struct {
 	Now time.Time
 }
 
+type ReadyWorkInput struct {
+	ProjectID string
+	WorkItems []WorkItem
+	Links     []WorkItemLink
+}
+
+type ReadyWorkExplanation struct {
+	Ready   []ReadyWorkItem   `json:"ready"`
+	Blocked []BlockedWorkItem `json:"blocked"`
+	Cycles  [][]string        `json:"cycles,omitempty"`
+	Summary ReadyWorkSummary  `json:"summary"`
+}
+
+type ReadyWorkItem struct {
+	WorkItem         WorkItem `json:"workItem"`
+	Reason           string   `json:"reason"`
+	ResolvedBlockers []string `json:"resolvedBlockers,omitempty"`
+	DependencyCount  int      `json:"dependencyCount"`
+	DependentCount   int      `json:"dependentCount"`
+	ParentWorkItemID *string  `json:"parentWorkItemId,omitempty"`
+}
+
+type BlockedWorkItem struct {
+	WorkItem       WorkItem           `json:"workItem"`
+	BlockedBy      []ReadyBlockerInfo `json:"blockedBy"`
+	BlockedByCount int                `json:"blockedByCount"`
+}
+
+type ReadyBlockerInfo struct {
+	ID       string `json:"id"`
+	Number   int    `json:"number,omitempty"`
+	Title    string `json:"title,omitempty"`
+	StageID  string `json:"stageId,omitempty"`
+	RunState string `json:"runState,omitempty"`
+}
+
+type ReadyWorkSummary struct {
+	TotalReady   int `json:"totalReady"`
+	TotalBlocked int `json:"totalBlocked"`
+	CycleCount   int `json:"cycleCount"`
+}
+
 func NewState() *State {
 	state := &State{
 		projects:        map[string]Project{},
 		templates:       map[string]WorkflowTemplate{},
 		promptTemplates: map[string]PromptTemplate{},
 		items:           map[string]WorkItem{},
+		links:           map[string]WorkItemLink{},
 		runs:            map[string]WorkItemRun{},
 		artifacts:       map[string]Artifact{},
 		questions:       map[string]Question{},
@@ -712,6 +782,7 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		templates:       map[string]WorkflowTemplate{},
 		promptTemplates: map[string]PromptTemplate{},
 		items:           map[string]WorkItem{},
+		links:           map[string]WorkItemLink{},
 		runs:            map[string]WorkItemRun{},
 		artifacts:       map[string]Artifact{},
 		questions:       map[string]Question{},
@@ -774,6 +845,18 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 			return nil, fmt.Errorf("work item %s already exists", item.ID)
 		}
 		state.items[item.ID] = cloneWorkItem(item)
+	}
+	for _, link := range snapshot.Links {
+		if err := state.validateWorkItemLink(link); err != nil {
+			return nil, err
+		}
+		if _, exists := state.links[link.ID]; exists {
+			return nil, fmt.Errorf("work item link %s already exists", link.ID)
+		}
+		if link.Type == WorkItemLinkBlocks && state.wouldCreateBlockingCycle(link.SourceWorkItemID, link.TargetWorkItemID) {
+			return nil, fmt.Errorf("work item link creates blocking cycle")
+		}
+		state.links[link.ID] = cloneWorkItemLink(link)
 	}
 	for _, run := range snapshot.Runs {
 		if _, ok := state.items[run.WorkItemID]; !ok {
@@ -919,6 +1002,7 @@ func (s *State) Snapshot() Snapshot {
 		Templates:       s.ListWorkflowTemplates(),
 		PromptTemplates: s.ListPromptTemplates(),
 		Items:           s.ListWorkItems(""),
+		Links:           s.ListWorkItemLinks(""),
 		Runs:            s.ListRuns(""),
 		Artifacts:       s.ListArtifacts(""),
 		Questions:       s.ListQuestions(""),
@@ -978,6 +1062,152 @@ func (s *State) ListWorkItems(projectID string) []WorkItem {
 		return out[i].ID < out[j].ID
 	})
 	return out
+}
+
+func (s *State) ListWorkItemLinks(workItemID string) []WorkItemLink {
+	out := make([]WorkItemLink, 0, len(s.links))
+	for _, link := range s.links {
+		if workItemID == "" || link.SourceWorkItemID == workItemID || link.TargetWorkItemID == workItemID {
+			out = append(out, cloneWorkItemLink(link))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].ProjectID != out[j].ProjectID {
+			return out[i].ProjectID < out[j].ProjectID
+		}
+		if out[i].SourceWorkItemID != out[j].SourceWorkItemID {
+			return out[i].SourceWorkItemID < out[j].SourceWorkItemID
+		}
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		if out[i].TargetWorkItemID != out[j].TargetWorkItemID {
+			return out[i].TargetWorkItemID < out[j].TargetWorkItemID
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func BuildReadyWorkExplanation(input ReadyWorkInput) ReadyWorkExplanation {
+	itemsByID := map[string]WorkItem{}
+	for _, item := range input.WorkItems {
+		if input.ProjectID != "" && item.ProjectID != input.ProjectID {
+			continue
+		}
+		itemsByID[item.ID] = cloneWorkItem(item)
+	}
+
+	outgoing := map[string][]WorkItemLink{}
+	incoming := map[string][]WorkItemLink{}
+	for _, link := range input.Links {
+		if input.ProjectID != "" && link.ProjectID != input.ProjectID {
+			continue
+		}
+		outgoing[link.SourceWorkItemID] = append(outgoing[link.SourceWorkItemID], cloneWorkItemLink(link))
+		incoming[link.TargetWorkItemID] = append(incoming[link.TargetWorkItemID], cloneWorkItemLink(link))
+	}
+
+	explanation := ReadyWorkExplanation{}
+	for _, item := range input.WorkItems {
+		if input.ProjectID != "" && item.ProjectID != input.ProjectID {
+			continue
+		}
+		if !readyWorkCandidate(item) {
+			continue
+		}
+
+		var parentID *string
+		var resolved []string
+		var blockers []ReadyBlockerInfo
+		for _, link := range outgoing[item.ID] {
+			switch link.Type {
+			case WorkItemLinkParentChild:
+				parent := link.TargetWorkItemID
+				parentID = &parent
+			case WorkItemLinkBlocks:
+				blocker, ok := itemsByID[link.TargetWorkItemID]
+				if ok && workItemDone(blocker) {
+					resolved = append(resolved, link.TargetWorkItemID)
+					continue
+				}
+				blockers = append(blockers, readyBlockerInfo(link.TargetWorkItemID, blocker, ok))
+			}
+		}
+
+		if len(blockers) > 0 {
+			explanation.Blocked = append(explanation.Blocked, BlockedWorkItem{
+				WorkItem:       cloneWorkItem(item),
+				BlockedBy:      blockers,
+				BlockedByCount: len(blockers),
+			})
+			continue
+		}
+
+		reason := "no blocking dependencies"
+		if len(resolved) > 0 {
+			reason = fmt.Sprintf("%d blocker(s) resolved", len(resolved))
+		}
+		explanation.Ready = append(explanation.Ready, ReadyWorkItem{
+			WorkItem:         cloneWorkItem(item),
+			Reason:           reason,
+			ResolvedBlockers: resolved,
+			DependencyCount:  len(outgoing[item.ID]),
+			DependentCount:   len(incoming[item.ID]),
+			ParentWorkItemID: parentID,
+		})
+	}
+
+	sort.Slice(explanation.Ready, func(i, j int) bool {
+		return workItemLess(explanation.Ready[i].WorkItem, explanation.Ready[j].WorkItem)
+	})
+	sort.Slice(explanation.Blocked, func(i, j int) bool {
+		return workItemLess(explanation.Blocked[i].WorkItem, explanation.Blocked[j].WorkItem)
+	})
+	explanation.Summary = ReadyWorkSummary{
+		TotalReady:   len(explanation.Ready),
+		TotalBlocked: len(explanation.Blocked),
+		CycleCount:   len(explanation.Cycles),
+	}
+	return explanation
+}
+
+func readyWorkCandidate(item WorkItem) bool {
+	switch item.StageID {
+	case StagePlanning, StageExecution, StageBlocked, StageDone:
+		return false
+	}
+	switch item.RunState {
+	case RunStateQueued, RunStateRunning, RunStateAwaitingInput:
+		return false
+	}
+	return true
+}
+
+func workItemDone(item WorkItem) bool {
+	return item.StageID == StageDone
+}
+
+func readyBlockerInfo(id string, blocker WorkItem, ok bool) ReadyBlockerInfo {
+	info := ReadyBlockerInfo{ID: id}
+	if !ok {
+		return info
+	}
+	info.Number = blocker.Number
+	info.Title = blocker.Title
+	info.StageID = blocker.StageID
+	info.RunState = blocker.RunState
+	return info
+}
+
+func workItemLess(left WorkItem, right WorkItem) bool {
+	if left.ProjectID != right.ProjectID {
+		return left.ProjectID < right.ProjectID
+	}
+	if left.Number != right.Number {
+		return left.Number < right.Number
+	}
+	return left.ID < right.ID
 }
 
 func (s *State) ListRuns(workItemID string) []WorkItemRun {
@@ -1225,6 +1455,11 @@ func (s *State) DeleteProject(req DeleteProject) (Project, error) {
 	for id, item := range s.items {
 		if item.ProjectID == req.ID {
 			delete(s.items, id)
+		}
+	}
+	for id, link := range s.links {
+		if link.ProjectID == req.ID {
+			delete(s.links, id)
 		}
 	}
 	for id, run := range s.runs {
@@ -1601,7 +1836,44 @@ func (s *State) DeleteWorkItem(req DeleteWorkItem) (WorkItem, error) {
 			delete(s.statusEvents, id)
 		}
 	}
+	for id, link := range s.links {
+		if link.SourceWorkItemID == req.ID || link.TargetWorkItemID == req.ID {
+			delete(s.links, id)
+		}
+	}
 	return cloneWorkItem(item), nil
+}
+
+func (s *State) AddWorkItemLink(req AddWorkItemLink) (WorkItemLink, error) {
+	source, ok := s.items[req.SourceWorkItemID]
+	if !ok {
+		return WorkItemLink{}, fmt.Errorf("work item %s not found", req.SourceWorkItemID)
+	}
+	link := WorkItemLink{
+		ID:               req.ID,
+		ProjectID:        source.ProjectID,
+		SourceWorkItemID: req.SourceWorkItemID,
+		TargetWorkItemID: req.TargetWorkItemID,
+		Type:             strings.TrimSpace(req.Type),
+		CreatedBy:        req.Actor,
+		CreatedAt:        req.Now,
+	}
+	if err := s.validateWorkItemLink(link); err != nil {
+		return WorkItemLink{}, err
+	}
+	if _, exists := s.links[link.ID]; exists {
+		return WorkItemLink{}, fmt.Errorf("work item link %s already exists", link.ID)
+	}
+	for _, existing := range s.links {
+		if existing.SourceWorkItemID == link.SourceWorkItemID && existing.TargetWorkItemID == link.TargetWorkItemID && existing.Type == link.Type {
+			return WorkItemLink{}, fmt.Errorf("work item link already exists")
+		}
+	}
+	if link.Type == WorkItemLinkBlocks && s.wouldCreateBlockingCycle(link.SourceWorkItemID, link.TargetWorkItemID) {
+		return WorkItemLink{}, fmt.Errorf("work item link creates blocking cycle")
+	}
+	s.links[link.ID] = link
+	return cloneWorkItemLink(link), nil
 }
 
 func (s *State) StartRun(req StartRun) (WorkItemRun, error) {
@@ -2450,6 +2722,69 @@ func (s *State) validateWorkItem(item WorkItem) error {
 	return validateMetadataMap(item.Metadata)
 }
 
+func (s *State) validateWorkItemLink(link WorkItemLink) error {
+	if link.ID == "" {
+		return fmt.Errorf("work item link id required")
+	}
+	if link.SourceWorkItemID == "" {
+		return fmt.Errorf("source work item id required")
+	}
+	if link.TargetWorkItemID == "" {
+		return fmt.Errorf("target work item id required")
+	}
+	if link.SourceWorkItemID == link.TargetWorkItemID {
+		return fmt.Errorf("cannot link work item to itself")
+	}
+	source, ok := s.items[link.SourceWorkItemID]
+	if !ok {
+		return fmt.Errorf("work item %s not found", link.SourceWorkItemID)
+	}
+	target, ok := s.items[link.TargetWorkItemID]
+	if !ok {
+		return fmt.Errorf("work item %s not found", link.TargetWorkItemID)
+	}
+	if source.ProjectID != target.ProjectID {
+		return fmt.Errorf("work item links must stay within the same project")
+	}
+	if link.ProjectID != "" && link.ProjectID != source.ProjectID {
+		return fmt.Errorf("work item link project mismatch")
+	}
+	switch link.Type {
+	case WorkItemLinkBlocks, WorkItemLinkParentChild, WorkItemLinkRelated, WorkItemLinkDuplicates, WorkItemLinkSupersedes:
+		return nil
+	default:
+		return fmt.Errorf("unsupported link type %s", link.Type)
+	}
+}
+
+func (s *State) wouldCreateBlockingCycle(sourceID string, targetID string) bool {
+	graph := map[string][]string{}
+	for _, link := range s.links {
+		if link.Type == WorkItemLinkBlocks {
+			graph[link.SourceWorkItemID] = append(graph[link.SourceWorkItemID], link.TargetWorkItemID)
+		}
+	}
+	graph[sourceID] = append(graph[sourceID], targetID)
+	seen := map[string]bool{}
+	var hasPath func(string) bool
+	hasPath = func(id string) bool {
+		if id == sourceID {
+			return true
+		}
+		if seen[id] {
+			return false
+		}
+		seen[id] = true
+		for _, next := range graph[id] {
+			if hasPath(next) {
+				return true
+			}
+		}
+		return false
+	}
+	return hasPath(targetID)
+}
+
 func validateWorkflowTemplate(template WorkflowTemplate) error {
 	if template.ID == "" {
 		return fmt.Errorf("workflow template id required")
@@ -2955,6 +3290,10 @@ func cloneWorkItem(item WorkItem) WorkItem {
 	item.Metadata = cloneMetadata(item.Metadata)
 	item.History = append([]HistoryEvent(nil), item.History...)
 	return item
+}
+
+func cloneWorkItemLink(link WorkItemLink) WorkItemLink {
+	return link
 }
 
 func cloneRun(run WorkItemRun) WorkItemRun {

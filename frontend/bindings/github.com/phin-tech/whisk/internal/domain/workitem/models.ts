@@ -110,6 +110,43 @@ export class Attachment {
     }
 }
 
+export class BlockedWorkItem {
+    "workItem": WorkItem;
+    "blockedBy": ReadyBlockerInfo[];
+    "blockedByCount": number;
+
+    /** Creates a new BlockedWorkItem instance. */
+    constructor($$source: Partial<BlockedWorkItem> = {}) {
+        if (!("workItem" in $$source)) {
+            this["workItem"] = (new WorkItem());
+        }
+        if (!("blockedBy" in $$source)) {
+            this["blockedBy"] = [];
+        }
+        if (!("blockedByCount" in $$source)) {
+            this["blockedByCount"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new BlockedWorkItem instance from a string or object.
+     */
+    static createFrom($$source: any = {}): BlockedWorkItem {
+        const $$createField0_0 = $$createType2;
+        const $$createField1_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("workItem" in $$parsedSource) {
+            $$parsedSource["workItem"] = $$createField0_0($$parsedSource["workItem"]);
+        }
+        if ("blockedBy" in $$parsedSource) {
+            $$parsedSource["blockedBy"] = $$createField1_0($$parsedSource["blockedBy"]);
+        }
+        return new BlockedWorkItem($$parsedSource as Partial<BlockedWorkItem>);
+    }
+}
+
 export class GateConfig {
     "id": string;
     "name": string;
@@ -311,9 +348,9 @@ export class Project {
      * Creates a new Project instance from a string or object.
      */
     static createFrom($$source: any = {}): Project {
-        const $$createField5_0 = $$createType2;
-        const $$createField6_0 = $$createType3;
-        const $$createField7_0 = $$createType5;
+        const $$createField5_0 = $$createType5;
+        const $$createField6_0 = $$createType6;
+        const $$createField7_0 = $$createType8;
         const $$createField8_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workflow" in $$parsedSource) {
@@ -355,8 +392,8 @@ export class ProjectPreferences {
      * Creates a new ProjectPreferences instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectPreferences {
-        const $$createField3_0 = $$createType6;
-        const $$createField4_0 = $$createType8;
+        const $$createField3_0 = $$createType9;
+        const $$createField4_0 = $$createType11;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("defaultPhaseAgents" in $$parsedSource) {
             $$parsedSource["defaultPhaseAgents"] = $$createField3_0($$parsedSource["defaultPhaseAgents"]);
@@ -400,8 +437,8 @@ export class ProjectWorkflow {
      * Creates a new ProjectWorkflow instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectWorkflow {
-        const $$createField3_0 = $$createType10;
-        const $$createField4_0 = $$createType12;
+        const $$createField3_0 = $$createType13;
+        const $$createField4_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("stages" in $$parsedSource) {
             $$parsedSource["stages"] = $$createField3_0($$parsedSource["stages"]);
@@ -503,6 +540,149 @@ export class Question {
     static createFrom($$source: any = {}): Question {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new Question($$parsedSource as Partial<Question>);
+    }
+}
+
+export class ReadyBlockerInfo {
+    "id": string;
+    "number"?: number;
+    "title"?: string;
+    "stageId"?: string;
+    "runState"?: string;
+
+    /** Creates a new ReadyBlockerInfo instance. */
+    constructor($$source: Partial<ReadyBlockerInfo> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReadyBlockerInfo instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ReadyBlockerInfo {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ReadyBlockerInfo($$parsedSource as Partial<ReadyBlockerInfo>);
+    }
+}
+
+export class ReadyWorkExplanation {
+    "ready": ReadyWorkItem[];
+    "blocked": BlockedWorkItem[];
+    "cycles"?: string[][];
+    "summary": ReadyWorkSummary;
+
+    /** Creates a new ReadyWorkExplanation instance. */
+    constructor($$source: Partial<ReadyWorkExplanation> = {}) {
+        if (!("ready" in $$source)) {
+            this["ready"] = [];
+        }
+        if (!("blocked" in $$source)) {
+            this["blocked"] = [];
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = (new ReadyWorkSummary());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReadyWorkExplanation instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ReadyWorkExplanation {
+        const $$createField0_0 = $$createType17;
+        const $$createField1_0 = $$createType19;
+        const $$createField2_0 = $$createType21;
+        const $$createField3_0 = $$createType22;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("ready" in $$parsedSource) {
+            $$parsedSource["ready"] = $$createField0_0($$parsedSource["ready"]);
+        }
+        if ("blocked" in $$parsedSource) {
+            $$parsedSource["blocked"] = $$createField1_0($$parsedSource["blocked"]);
+        }
+        if ("cycles" in $$parsedSource) {
+            $$parsedSource["cycles"] = $$createField2_0($$parsedSource["cycles"]);
+        }
+        if ("summary" in $$parsedSource) {
+            $$parsedSource["summary"] = $$createField3_0($$parsedSource["summary"]);
+        }
+        return new ReadyWorkExplanation($$parsedSource as Partial<ReadyWorkExplanation>);
+    }
+}
+
+export class ReadyWorkItem {
+    "workItem": WorkItem;
+    "reason": string;
+    "resolvedBlockers"?: string[];
+    "dependencyCount": number;
+    "dependentCount": number;
+    "parentWorkItemId"?: string | null;
+
+    /** Creates a new ReadyWorkItem instance. */
+    constructor($$source: Partial<ReadyWorkItem> = {}) {
+        if (!("workItem" in $$source)) {
+            this["workItem"] = (new WorkItem());
+        }
+        if (!("reason" in $$source)) {
+            this["reason"] = "";
+        }
+        if (!("dependencyCount" in $$source)) {
+            this["dependencyCount"] = 0;
+        }
+        if (!("dependentCount" in $$source)) {
+            this["dependentCount"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReadyWorkItem instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ReadyWorkItem {
+        const $$createField0_0 = $$createType2;
+        const $$createField2_0 = $$createType20;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("workItem" in $$parsedSource) {
+            $$parsedSource["workItem"] = $$createField0_0($$parsedSource["workItem"]);
+        }
+        if ("resolvedBlockers" in $$parsedSource) {
+            $$parsedSource["resolvedBlockers"] = $$createField2_0($$parsedSource["resolvedBlockers"]);
+        }
+        return new ReadyWorkItem($$parsedSource as Partial<ReadyWorkItem>);
+    }
+}
+
+export class ReadyWorkSummary {
+    "totalReady": number;
+    "totalBlocked": number;
+    "cycleCount": number;
+
+    /** Creates a new ReadyWorkSummary instance. */
+    constructor($$source: Partial<ReadyWorkSummary> = {}) {
+        if (!("totalReady" in $$source)) {
+            this["totalReady"] = 0;
+        }
+        if (!("totalBlocked" in $$source)) {
+            this["totalBlocked"] = 0;
+        }
+        if (!("cycleCount" in $$source)) {
+            this["cycleCount"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReadyWorkSummary instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ReadyWorkSummary {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ReadyWorkSummary($$parsedSource as Partial<ReadyWorkSummary>);
     }
 }
 
@@ -680,10 +860,10 @@ export class WorkItem {
      * Creates a new WorkItem instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkItem {
-        const $$createField10_0 = $$createType14;
-        const $$createField11_0 = $$createType5;
+        const $$createField10_0 = $$createType24;
+        const $$createField11_0 = $$createType8;
         const $$createField12_0 = $$createType1;
-        const $$createField13_0 = $$createType16;
+        const $$createField13_0 = $$createType26;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worktree" in $$parsedSource) {
             $$parsedSource["worktree"] = $$createField10_0($$parsedSource["worktree"]);
@@ -698,6 +878,48 @@ export class WorkItem {
             $$parsedSource["history"] = $$createField13_0($$parsedSource["history"]);
         }
         return new WorkItem($$parsedSource as Partial<WorkItem>);
+    }
+}
+
+export class WorkItemLink {
+    "id": string;
+    "projectId": string;
+    "sourceWorkItemId": string;
+    "targetWorkItemId": string;
+    "type": string;
+    "createdBy"?: string;
+    "createdAt": time$0.Time;
+
+    /** Creates a new WorkItemLink instance. */
+    constructor($$source: Partial<WorkItemLink> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = "";
+        }
+        if (!("sourceWorkItemId" in $$source)) {
+            this["sourceWorkItemId"] = "";
+        }
+        if (!("targetWorkItemId" in $$source)) {
+            this["targetWorkItemId"] = "";
+        }
+        if (!("type" in $$source)) {
+            this["type"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkItemLink instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkItemLink {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkItemLink($$parsedSource as Partial<WorkItemLink>);
     }
 }
 
@@ -758,7 +980,7 @@ export class WorkItemRun {
      */
     static createFrom($$source: any = {}): WorkItemRun {
         const $$createField9_0 = $$createType1;
-        const $$createField13_0 = $$createType18;
+        const $$createField13_0 = $$createType28;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("metadata" in $$parsedSource) {
             $$parsedSource["metadata"] = $$createField9_0($$parsedSource["metadata"]);
@@ -880,8 +1102,8 @@ export class WorkflowTemplate {
      * Creates a new WorkflowTemplate instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkflowTemplate {
-        const $$createField3_0 = $$createType10;
-        const $$createField4_0 = $$createType12;
+        const $$createField3_0 = $$createType13;
+        const $$createField4_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("stages" in $$parsedSource) {
             $$parsedSource["stages"] = $$createField3_0($$parsedSource["stages"]);
@@ -929,20 +1151,30 @@ export class WorktreeBinding {
 // Private type creation functions
 const $$createType0 = MetadataValue.createFrom;
 const $$createType1 = $Create.Map($Create.Any, $$createType0);
-const $$createType2 = ProjectWorkflow.createFrom;
-const $$createType3 = ProjectPreferences.createFrom;
-const $$createType4 = Attachment.createFrom;
-const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = $Create.Map($Create.Any, $Create.Any);
-const $$createType7 = GateConfig.createFrom;
+const $$createType2 = WorkItem.createFrom;
+const $$createType3 = ReadyBlockerInfo.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = ProjectWorkflow.createFrom;
+const $$createType6 = ProjectPreferences.createFrom;
+const $$createType7 = Attachment.createFrom;
 const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = WorkflowStage.createFrom;
-const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = TransitionRule.createFrom;
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = WorktreeBinding.createFrom;
-const $$createType14 = $Create.Nullable($$createType13);
-const $$createType15 = HistoryEvent.createFrom;
-const $$createType16 = $Create.Array($$createType15);
-const $$createType17 = RunEvent.createFrom;
-const $$createType18 = $Create.Array($$createType17);
+const $$createType9 = $Create.Map($Create.Any, $Create.Any);
+const $$createType10 = GateConfig.createFrom;
+const $$createType11 = $Create.Array($$createType10);
+const $$createType12 = WorkflowStage.createFrom;
+const $$createType13 = $Create.Array($$createType12);
+const $$createType14 = TransitionRule.createFrom;
+const $$createType15 = $Create.Array($$createType14);
+const $$createType16 = ReadyWorkItem.createFrom;
+const $$createType17 = $Create.Array($$createType16);
+const $$createType18 = BlockedWorkItem.createFrom;
+const $$createType19 = $Create.Array($$createType18);
+const $$createType20 = $Create.Array($Create.Any);
+const $$createType21 = $Create.Array($$createType20);
+const $$createType22 = ReadyWorkSummary.createFrom;
+const $$createType23 = WorktreeBinding.createFrom;
+const $$createType24 = $Create.Nullable($$createType23);
+const $$createType25 = HistoryEvent.createFrom;
+const $$createType26 = $Create.Array($$createType25);
+const $$createType27 = RunEvent.createFrom;
+const $$createType28 = $Create.Array($$createType27);

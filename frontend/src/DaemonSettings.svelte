@@ -166,7 +166,7 @@
       </div>
     </div>
     <input
-      class="w-[260px] rounded border border-border bg-bg-deep px-2 py-1 text-right font-mono text-xs text-text-primary outline-none focus:border-accent-dim"
+      class="w-[260px] rounded border border-border bg-bg-deep px-2 py-1 text-right font-mono text-[12px] text-text-primary outline-none focus:border-accent-dim"
       type="text"
       bind:value={pendingWorktrunkPath}
       placeholder="/opt/homebrew/bin/wt"

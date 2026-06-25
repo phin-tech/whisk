@@ -200,7 +200,7 @@
 
     <div class="flex min-w-0 flex-1 flex-col">
       <div class="flex h-10 shrink-0 items-center border-b border-hairline px-4">
-        <h2 class="text-sm font-semibold tracking-tight">
+        <h2 class="text-[13px] font-semibold tracking-tight">
           {categories.find((category) => category.id === selected)?.label}
         </h2>
       </div>
@@ -215,7 +215,7 @@
                   Refined Zinc
                 </div>
               </div>
-              <div class="rounded border border-border bg-bg-deep px-2 py-1 text-xs text-text-secondary">
+              <div class="rounded border border-border bg-bg-deep px-2 py-1 text-[12px] text-text-secondary">
                 Default
               </div>
             </div>
@@ -313,7 +313,7 @@
           <div class="flex items-center justify-between py-2">
             <span class="text-[13px]">Font size</span>
             <input
-              class="w-20 rounded border border-border bg-bg-deep px-2 py-1 text-right text-xs text-text-primary outline-none focus:border-accent-dim"
+              class="w-20 rounded border border-border bg-bg-deep px-2 py-1 text-right text-[12px] text-text-primary outline-none focus:border-accent-dim"
               type="number"
               min="10"
               max="20"
@@ -721,7 +721,7 @@
                       <div class="grid gap-2 md:grid-cols-[20px_92px_1fr]">
                         <button
                           type="button"
-                          class="inline-flex h-5 w-5 items-center justify-center rounded text-text-muted transition-colors hover:bg-white/5 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+                          class="inline-flex h-5 w-5 items-center justify-center rounded text-text-muted transition-colors hover:bg-bg-surface/60 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
                           aria-label={expanded ? "Collapse hook event details" : "Expand hook event details"}
                           aria-expanded={expanded}
                           on:click={() => toggleHookEventExpanded(event.id)}

@@ -10,6 +10,8 @@ describe("NewSessionDialog", () => {
   it("lets new sessions opt into agent bridge env injection", () => {
     expect(source).toMatch(/Agent bridge/);
     expect(source).toMatch(/agentBridge: agentBridge/);
+    expect(source).toContain('from "./ui/Switch.svelte"');
+    expect(source).toContain('from "./ui/SelectField.svelte"');
   });
 
   it("auto-detects known agent commands for bridge provider defaults", () => {

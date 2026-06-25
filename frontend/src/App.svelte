@@ -25,11 +25,14 @@
     MetadataValue,
     Question,
     WorkItem,
+    WorkItemLink,
     WorkItemRun,
     WorkflowEvent,
+    ReadyWorkExplanation,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
     AddProjectAttachment,
+    AddWorkItemLink,
     AddWorkItemAttachment,
     AnswerQuestion,
     ApproveDone,
@@ -70,6 +73,7 @@
     ListQuestions,
     ListSessions,
     ListStatusEvents,
+    ListWorkItemLinks,
     ListWorkItemRuns,
     ListWorkItems,
     ListWorkflowEvents,
@@ -85,6 +89,7 @@
     OpenAgentHookLog,
     PTYTraceEnabled,
     QueueExecution,
+    ReadyWork,
     RemoveAgentHookIntegration,
     RescanPlugins,
     ResolveAgentBridgeApproval,
@@ -162,6 +167,8 @@
   let projectDetail: ProjectDetail | null = null;
   let agentProfiles: AgentProfile[] = [];
   let workItems: WorkItem[] = [];
+  let workItemLinks: WorkItemLink[] = [];
+  let readyWork: ReadyWorkExplanation = emptyReadyWorkExplanation();
   let workItemRuns: WorkItemRun[] = [];
   let artifacts: Artifact[] = [];
   let questions: Question[] = [];
@@ -188,6 +195,10 @@
   let activeMain: MainView = "session";
   let workBoardOpenItemId = "";
   let navigationStack: MainView[] = [];
+
+  function emptyReadyWorkExplanation(): ReadyWorkExplanation {
+    return { ready: [], blocked: [], summary: { totalReady: 0, totalBlocked: 0, cycleCount: 0 } };
+  }
 
   function currentNavigationState(): NavigationState {
     return { activeMain, navigationStack, workBoardOpenItemId };
@@ -515,6 +526,20 @@
     workItems = await ListWorkItems(activeProjectId);
   }
 
+  async function refreshWorkItemLinks() {
+    if (!activeProjectId) {
+      workItemLinks = [];
+      readyWork = emptyReadyWorkExplanation();
+      return;
+    }
+    const [nextLinks, nextReadyWork] = await Promise.all([
+      ListWorkItemLinks(""),
+      ReadyWork({ projectId: activeProjectId }),
+    ]);
+    workItemLinks = nextLinks;
+    readyWork = nextReadyWork;
+  }
+
   async function refreshWorkItemRuns() {
     workItemRuns = await ListWorkItemRuns("");
   }
@@ -541,6 +566,7 @@
 
   async function refreshWorkState() {
     await refreshWorkItems();
+    await refreshWorkItemLinks();
     await refreshWorkItemRuns();
     await refreshWorkflowRecords();
   }
@@ -1274,6 +1300,8 @@
         activeProjectId = "";
         projectDetail = null;
         workItems = [];
+        workItemLinks = [];
+        readyWork = emptyReadyWorkExplanation();
         workItemRuns = [];
         artifacts = [];
         questions = [];
@@ -1341,6 +1369,24 @@
     } catch (err) {
       error = `Move work item failed: ${backendError(err)}`;
       await refreshWorkItems().catch(() => undefined);
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function addWorkItemLink(request: {
+    sourceWorkItemId: string;
+    targetWorkItemId: string;
+    type: string;
+  }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await AddWorkItemLink(request);
+      await refreshWorkState();
+      if (activeMain === "projects") await refreshProjectDetail();
+    } catch (err) {
+      error = `Add dependency failed: ${backendError(err)}`;
     } finally {
       loadingWork = false;
     }
@@ -2062,6 +2108,8 @@
             onDetailClose={navigationStack.length > 0 ? navigateBack : null}
             {projects}
             {workItems}
+            workItemLinks={workItemLinks}
+            readyWork={readyWork}
             {workItemRuns}
             {artifacts}
             {questions}
@@ -2077,6 +2125,7 @@
             onCreateWorkItem={createWorkItem}
             onUpdateWorkItem={updateWorkItem}
             onMoveWorkItem={moveWorkItem}
+            onAddWorkItemLink={addWorkItemLink}
             onGenerateWorktree={generateWorktree}
             onAttachFile={attachFile}
             onDeleteWorkItem={deleteWorkItem}
@@ -2122,19 +2171,19 @@
             <div
               class="flex h-16 w-16 items-center justify-center rounded-2xl border border-border-subtle bg-bg-surface/80 text-accent shadow-[0_18px_40px_rgba(2,6,23,0.45)]"
             >
-              <span class="text-3xl">W</span>
+              <span class="text-[30px]">W</span>
             </div>
             <div class="space-y-1">
-              <p class="text-base font-semibold tracking-tight text-text-primary">
+              <p class="text-[14px] font-semibold tracking-tight text-text-primary">
                 No active sessions
               </p>
-              <p class="text-sm text-text-secondary">
+              <p class="text-[13px] text-text-secondary">
                 Start a daemon-owned shell session.
               </p>
             </div>
             <button
               type="button"
-              class="rounded-lg border border-border-subtle bg-bg-surface/80 px-4 py-2 text-sm font-semibold text-text-primary shadow-[0_18px_40px_rgba(2,6,23,0.45)] transition-colors hover:border-accent hover:text-accent"
+              class="rounded-lg border border-border-subtle bg-bg-surface/80 px-4 py-2 text-[12px] font-semibold text-text-primary shadow-[0_18px_40px_rgba(2,6,23,0.45)] transition-colors hover:border-accent hover:text-accent"
               disabled={loadingSession}
               on:click={openNewSession}
             >

@@ -43,6 +43,16 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		workflowTemplates: []protocol.WorkflowTemplate{{ID: "default", Name: "Default"}},
 		promptTemplates:   []protocol.PromptTemplate{{ID: "implement", Name: "Implement"}},
 		workItems:         []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
+		workItemLinks: []protocol.WorkItemLink{{
+			ID:               "link_01",
+			ProjectID:        "proj_01",
+			SourceWorkItemID: "wi_02",
+			TargetWorkItemID: "wi_01",
+			Type:             workitem.WorkItemLinkBlocks,
+		}},
+		readyWork: protocol.ReadyWorkExplanation{
+			Summary: protocol.ReadyWorkSummary{TotalReady: 1, TotalBlocked: 1},
+		},
 		runs:              []protocol.WorkItemRun{{ID: "run_01", WorkItemID: "wi_01", Status: "queued", Preset: "writer"}},
 		httpForwards:      []protocol.HTTPForward{{ID: "fwd_01", TargetURL: "http://127.0.0.1:4966"}},
 		agentIntegrations: []protocol.AgentHookIntegration{{Provider: "claude", Status: "current"}},
@@ -235,6 +245,23 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	item, err = service.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: "wi_02", StageID: "ready"})
 	if err != nil || item.StageID != "ready" || fake.moveWorkItemReq.StageID != "ready" {
 		t.Fatalf("move work item = %#v, req = %#v, err = %v", item, fake.moveWorkItemReq, err)
+	}
+	link, err := service.AddWorkItemLink(ctx, protocol.AddWorkItemLinkRequest{
+		SourceWorkItemID: "wi_02",
+		TargetWorkItemID: "wi_01",
+		Type:             workitem.WorkItemLinkBlocks,
+		Actor:            "agent",
+	})
+	if err != nil || link.ID != "link_01" || fake.addWorkItemLinkReq.SourceWorkItemID != "wi_02" {
+		t.Fatalf("add work item link = %#v, req = %#v, err = %v", link, fake.addWorkItemLinkReq, err)
+	}
+	links, err := service.ListWorkItemLinks(ctx, "wi_02")
+	if err != nil || len(links) != 1 || links[0].ID != "link_01" || fake.listWorkItemLinksID != "wi_02" {
+		t.Fatalf("list work item links = %#v, id = %q, err = %v", links, fake.listWorkItemLinksID, err)
+	}
+	readyWork, err := service.ReadyWork(ctx, protocol.ReadyWorkRequest{ProjectID: "proj_01"})
+	if err != nil || readyWork.Summary.TotalReady != 1 || fake.readyWorkReq.ProjectID != "proj_01" {
+		t.Fatalf("ready work = %#v, req = %#v, err = %v", readyWork, fake.readyWorkReq, err)
 	}
 	item, err = service.BindWorkItemWorktree(ctx, protocol.BindWorkItemWorktreeRequest{ID: "wi_02", Branch: "whisk/app-2-task", WorktreePath: "/repo/.worktrees/task"})
 	if err != nil || item.Worktree == nil || fake.bindWorkItemReq.Branch != "whisk/app-2-task" {
@@ -583,6 +610,8 @@ type runtimeClientFake struct {
 	promptTemplates    []protocol.PromptTemplate
 	agentProfiles      []protocol.AgentProfile
 	workItems          []protocol.WorkItem
+	workItemLinks      []protocol.WorkItemLink
+	readyWork          protocol.ReadyWorkExplanation
 	runs               []protocol.WorkItemRun
 	httpForwards       []protocol.HTTPForward
 	agentApprovals     []protocol.AgentBridgeApproval
@@ -633,6 +662,9 @@ type runtimeClientFake struct {
 	createWorkItemReq          protocol.CreateWorkItemRequest
 	updateWorkItemReq          protocol.UpdateWorkItemRequest
 	moveWorkItemReq            protocol.MoveWorkItemRequest
+	addWorkItemLinkReq         protocol.AddWorkItemLinkRequest
+	listWorkItemLinksID        string
+	readyWorkReq               protocol.ReadyWorkRequest
 	bindWorkItemReq            protocol.BindWorkItemWorktreeRequest
 	addWorkItemAttachmentReq   protocol.AddWorkItemAttachmentRequest
 	deleteWorkItemReq          protocol.DeleteWorkItemRequest
@@ -917,6 +949,24 @@ func (f *runtimeClientFake) UpdateWorkItem(_ context.Context, req protocol.Updat
 func (f *runtimeClientFake) MoveWorkItem(_ context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error) {
 	f.moveWorkItemReq = req
 	return protocol.WorkItem{ID: req.ID, StageID: req.StageID}, nil
+}
+
+func (f *runtimeClientFake) AddWorkItemLink(_ context.Context, req protocol.AddWorkItemLinkRequest) (protocol.WorkItemLink, error) {
+	f.addWorkItemLinkReq = req
+	if len(f.workItemLinks) == 0 {
+		return protocol.WorkItemLink{}, nil
+	}
+	return f.workItemLinks[0], nil
+}
+
+func (f *runtimeClientFake) ListWorkItemLinks(_ context.Context, workItemID string) ([]protocol.WorkItemLink, error) {
+	f.listWorkItemLinksID = workItemID
+	return f.workItemLinks, nil
+}
+
+func (f *runtimeClientFake) ReadyWork(_ context.Context, req protocol.ReadyWorkRequest) (protocol.ReadyWorkExplanation, error) {
+	f.readyWorkReq = req
+	return f.readyWork, nil
 }
 
 func (f *runtimeClientFake) StartPlanning(_ context.Context, req protocol.StartPlanningRequest) (protocol.WorkItemRun, error) {

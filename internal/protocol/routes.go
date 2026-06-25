@@ -38,6 +38,7 @@ var (
 	apiPromptList               = []PromptTemplate(nil)
 	apiAgentProfileList         = []AgentProfile(nil)
 	apiWorkItemList             = []WorkItem(nil)
+	apiWorkItemLinkList         = []WorkItemLink(nil)
 	apiRunList                  = []WorkItemRun(nil)
 	apiArtifactList             = []Artifact(nil)
 	apiQuestionList             = []Question(nil)
@@ -132,6 +133,9 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/work-items", OperationID: "createWorkItem", Tag: "workitems", Request: CreateWorkItemRequest{}, Response: WorkItem{}, Status: 201},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/update", OperationID: "updateWorkItem", Tag: "workitems", Request: UpdateWorkItemRequest{}, Response: WorkItem{}},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/move", OperationID: "moveWorkItem", Tag: "workitems", Request: MoveWorkItemRequest{}, Response: WorkItem{}},
+	{Method: "GET", Path: "/v1/work-item-links", OperationID: "listWorkItemLinks", Tag: "workitems", Response: apiWorkItemLinkList, Query: []APIQueryParam{{Name: "workItemId", Type: "string"}}},
+	{Method: "POST", Path: "/v1/work-item-links", OperationID: "addWorkItemLink", Tag: "workitems", Request: AddWorkItemLinkRequest{}, Response: WorkItemLink{}, Status: 201},
+	{Method: "GET", Path: "/v1/ready-work", OperationID: "readyWork", Tag: "workitems", Response: ReadyWorkExplanation{}, Query: []APIQueryParam{{Name: "projectId", Type: "string"}}},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/start-planning", OperationID: "startPlanning", Tag: "workitems", Request: StartPlanningRequest{}, Response: WorkItemRun{}, Status: 201},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/plan-drafts", OperationID: "submitDraftPlan", Tag: "workitems", Request: SubmitDraftPlanRequest{}, Response: Artifact{}, Status: 201},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/approve-plan", OperationID: "approvePlan", Tag: "workitems", Request: ApprovePlanRequest{}, Response: WorkItem{}},

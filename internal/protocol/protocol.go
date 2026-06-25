@@ -9,7 +9,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 20
+const DaemonAPIVersion = 21
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -458,6 +458,7 @@ type Project = workitem.Project
 type WorkflowTemplate = workitem.WorkflowTemplate
 type PromptTemplate = workitem.PromptTemplate
 type WorkItem = workitem.WorkItem
+type WorkItemLink = workitem.WorkItemLink
 type WorkItemRun = workitem.WorkItemRun
 type StatusEvent = workitem.StatusEvent
 type WorktreeBinding = workitem.WorktreeBinding
@@ -468,6 +469,11 @@ type Artifact = workitem.Artifact
 type Question = workitem.Question
 type GateReport = workitem.GateReport
 type WorkflowEvent = workitem.WorkflowEvent
+type ReadyWorkExplanation = workitem.ReadyWorkExplanation
+type ReadyWorkItem = workitem.ReadyWorkItem
+type BlockedWorkItem = workitem.BlockedWorkItem
+type ReadyBlockerInfo = workitem.ReadyBlockerInfo
+type ReadyWorkSummary = workitem.ReadyWorkSummary
 
 // AgentProfile is the selectable, human-facing view of a builtin agent profile
 // exposed to clients so they can choose which agent runs an execution.
@@ -577,6 +583,17 @@ type MoveWorkItemRequest struct {
 	ID      string `json:"id"`
 	StageID string `json:"stageId"`
 	Actor   string `json:"actor,omitempty"`
+}
+
+type AddWorkItemLinkRequest struct {
+	SourceWorkItemID string `json:"sourceWorkItemId"`
+	TargetWorkItemID string `json:"targetWorkItemId"`
+	Type             string `json:"type"`
+	Actor            string `json:"actor,omitempty"`
+}
+
+type ReadyWorkRequest struct {
+	ProjectID string `json:"projectId,omitempty"`
 }
 
 type BindWorkItemWorktreeRequest struct {

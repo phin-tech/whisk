@@ -1,0 +1,1168 @@
+<script lang="ts">
+  import { Dialogs } from "@wailsio/runtime";
+  import ChevronDown from "@lucide/svelte/icons/chevron-down";
+  import ClipboardCheck from "@lucide/svelte/icons/clipboard-check";
+  import Clock3 from "@lucide/svelte/icons/clock-3";
+  import Ellipsis from "@lucide/svelte/icons/ellipsis";
+  import FileText from "@lucide/svelte/icons/file-text";
+  import GitBranch from "@lucide/svelte/icons/git-branch";
+  import History from "@lucide/svelte/icons/history";
+  import Paperclip from "@lucide/svelte/icons/paperclip";
+  import Play from "@lucide/svelte/icons/play";
+  import Search from "@lucide/svelte/icons/search";
+  import Square from "@lucide/svelte/icons/square";
+  import SquareTerminal from "@lucide/svelte/icons/square-terminal";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+  import X from "@lucide/svelte/icons/x";
+  import type { WorkflowStage } from "../bindings/github.com/phin-tech/whisk/internal/domain/workitem/models";
+  import type {
+    AgentProfile,
+    Artifact,
+    GateReport,
+    Project,
+    Question,
+    WorkItem,
+    WorkItemLink,
+    WorkItemRun,
+    WorkflowEvent,
+    ReadyWorkExplanation,
+  } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import { canMoveToStage, deriveNextStep, selectDetailRun } from "./workView";
+  import type { NextStepView } from "./workView";
+  import Badge from "./ui/Badge.svelte";
+  import Button from "./ui/Button.svelte";
+  import Checkbox from "./ui/Checkbox.svelte";
+  import DetailLayout from "./ui/DetailLayout.svelte";
+  import IconButton from "./ui/IconButton.svelte";
+  import Menu from "./ui/Menu.svelte";
+  import MenuItem from "./ui/MenuItem.svelte";
+  import ModalShell from "./ui/ModalShell.svelte";
+  import Popover from "./ui/Popover.svelte";
+  import SectionHeader from "./ui/SectionHeader.svelte";
+  import StatusDot from "./ui/StatusDot.svelte";
+  import TextField from "./ui/TextField.svelte";
+
+  export let item: WorkItem;
+  export let project: Project;
+  export let stages: WorkflowStage[] = [];
+  export let agentProfiles: AgentProfile[] = [];
+  export let workItems: WorkItem[] = [];
+  export let workItemLinks: WorkItemLink[] = [];
+  export let readyWork: ReadyWorkExplanation = { ready: [], blocked: [], summary: { totalReady: 0, totalBlocked: 0, cycleCount: 0 } };
+  export let workItemRuns: WorkItemRun[] = [];
+  export let artifacts: Artifact[] = [];
+  export let questions: Question[] = [];
+  export let gateReports: GateReport[] = [];
+  export let workflowEvents: WorkflowEvent[] = [];
+  export let loading = false;
+
+  export let onClose: () => void;
+  export let onUpdateWorkItem: (request: { id: string; title: string; bodyMarkdown: string }) => void;
+  export let onMoveWorkItem: (workItemId: string, stageId: string) => void;
+  export let onAddWorkItemLink: (request: {
+    sourceWorkItemId: string;
+    targetWorkItemId: string;
+    type: string;
+  }) => void;
+  export let onGenerateWorktree: (request: { workItemId: string; branch: string }) => void;
+  export let onAttachFile: (workItemId: string, path: string) => void;
+  export let onDeleteWorkItem: (workItemId: string) => void;
+  export let onCancelRun: (runId: string) => void;
+  export let onLaunchRun: (runId: string, agentProfileId?: string) => void;
+  export let onOpenRunTerminal: (run: WorkItemRun) => void;
+  export let onStartPlanning: (workItemId: string) => void;
+  export let onSubmitPlan: (request: { workItemId: string; runId: string; title: string; body: string }) => void;
+  export let onApprovePlan: (workItemId: string, artifactId: string) => void;
+  export let onQueueExecution: (workItemId: string) => void;
+  export let onLaunchExecution: (workItemId: string, agentProfileId?: string) => void;
+  export let onSetPhaseAgent: (projectId: string, preset: string, agentProfileId: string) => void;
+  export let onSetInteractiveAgentShell: (projectId: string, enabled: boolean) => void;
+  export let onCompleteExecution: (request: { workItemId: string; runId: string; message: string }) => void;
+  export let onSubmitReviewFeedback: (request: { workItemId: string; runId: string; body: string }) => void;
+  export let onAskQuestion: (request: { workItemId: string; runId: string; prompt: string }) => void;
+  export let onAnswerQuestion: (questionId: string, answer: string) => void;
+  export let onCompleteGate: (request: { id: string; status: string; overrideReason: string }) => void;
+  export let onApproveDone: (workItemId: string, reason: string) => void;
+
+  // Modal-local input state, keyed per item so switching items resets cleanly.
+  let worktreeBranches: Record<string, string> = {};
+  let planBodies: Record<string, string> = {};
+  let feedbackBodies: Record<string, string> = {};
+  let questionPrompts: Record<string, string> = {};
+  let questionAnswers: Record<string, string> = {};
+  let gateOverrideReasons: Record<string, string> = {};
+  let doneReasons: Record<string, string> = {};
+  let agentSelections: Record<string, string> = {};
+  let blockerSelections: Record<string, string> = {};
+
+  // One popover open at a time in the properties rail.
+  let openMenu = "";
+  let runHistoryOpen = false;
+
+  // Title/description draft, reset when the open item changes.
+  let draftItemId = "";
+  let title = "";
+  let body = "";
+  $: if (item.id !== draftItemId) {
+    draftItemId = item.id;
+    title = item.title;
+    body = item.bodyMarkdown;
+    openMenu = "";
+    runHistoryOpen = false;
+  }
+  $: dirty = title !== item.title || body !== item.bodyMarkdown;
+
+  $: detailRuns = [...workItemRuns.filter((run) => run.workItemId === item.id)].sort(
+    (a, b) => timestamp(b.createdAt) - timestamp(a.createdAt),
+  );
+  $: detailArtifacts = artifacts.filter((artifact) => artifact.workItemId === item.id);
+  $: detailQuestions = questions.filter((question) => question.workItemId === item.id);
+  $: detailGates = gateReports.filter((gate) => gate.workItemId === item.id);
+  $: detailWorkflowEvents = workflowEvents.filter((event) => event.workItemId === item.id);
+  $: detailLatestRun = detailRuns[0] ?? null;
+  $: detailCurrentRun = selectDetailRun(detailRuns);
+  $: detailPastRuns = detailCurrentRun
+    ? detailRuns.filter((run) => run.id !== detailCurrentRun.id)
+    : detailRuns;
+  $: latestDraftPlan = [...detailArtifacts]
+    .reverse()
+    .find((artifact) => artifact.kind === "plan" && artifact.status === "draft");
+  $: approvedPlan = [...detailArtifacts]
+    .reverse()
+    .find((artifact) => artifact.kind === "plan" && artifact.status === "approved");
+  $: planArtifacts = [...detailArtifacts]
+    .filter((artifact) => artifact.kind === "plan")
+    .sort((a, b) => timestamp(b.updatedAt || b.createdAt) - timestamp(a.updatedAt || a.createdAt));
+  $: feedbackArtifacts = detailArtifacts.filter((artifact) => artifact.kind === "feedback");
+  $: blockingLinks = workItemLinks.filter(
+    (link) => link.sourceWorkItemId === item.id && link.type === "blocks",
+  );
+  $: dependentLinks = workItemLinks.filter(
+    (link) => link.targetWorkItemId === item.id && link.type === "blocks",
+  );
+  $: blockedExplanation = readyWork.blocked?.find((entry) => entry.workItem?.id === item.id) ?? null;
+  $: readyExplanation = readyWork.ready?.find((entry) => entry.workItem?.id === item.id) ?? null;
+  $: availableBlockers = workItems.filter(
+    (candidate) =>
+      candidate.projectId === item.projectId &&
+      candidate.id !== item.id &&
+      !blockingLinks.some((link) => link.targetWorkItemId === candidate.id),
+  );
+  $: selectedBlockerId = blockerSelections[item.id] || availableBlockers[0]?.id || "";
+
+  // Agent selection: the preset a launch runs under and the project's remembered default.
+  $: executionStage = stages.find((stage) => stage.kind === "execution" || stage.id === "execution") ?? null;
+  $: launchPreset = detailCurrentRun?.preset || executionStage?.defaultRunPreset || "writer";
+  $: phaseAgentDefault = project?.preferences?.defaultPhaseAgents?.[launchPreset] ?? "";
+  $: selectedAgentId = agentSelections[launchPreset] ?? phaseAgentDefault;
+  $: selectedAgentLabel =
+    agentProfiles.find((profile) => profile.id === selectedAgentId)?.label ?? "Default agent";
+
+  $: nextStep = computeNextStep(item, detailCurrentRun, detailLatestRun, approvedPlan, latestDraftPlan);
+
+  $: canExecuteActions =
+    item.stageId === "ready" && Boolean(approvedPlan) && !hasActiveRun(detailCurrentRun);
+
+  function timestamp(value: unknown) {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    return new Date(String(value)).getTime() || 0;
+  }
+
+  function formattedTime(value: unknown) {
+    if (!value) return "";
+    if (value instanceof Date) return value.toLocaleString();
+    const parsed = new Date(String(value));
+    return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
+  }
+
+  function slugify(value: string) {
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function defaultWorktreeBranch(target: WorkItem) {
+    const projectSlug = project?.slug || "work";
+    const itemSlug = slugify(target.title) || "item";
+    return `whisk/${projectSlug}-${target.number}-${itemSlug}`;
+  }
+
+  function canCancelRun(run: WorkItemRun | null) {
+    return run?.status === "queued" || run?.status === "running" || run?.status === "awaiting_input";
+  }
+
+  function canOpenRunTerminal(run: WorkItemRun | null) {
+    return Boolean(run?.sessionId || run?.ptyId);
+  }
+
+  function hasActiveRun(run: WorkItemRun | null) {
+    return run?.status === "queued" || run?.status === "running" || run?.status === "awaiting_input";
+  }
+
+  function stageLabel(stageId: string) {
+    return stages.find((stage) => stage.id === stageId)?.name ?? stageId;
+  }
+
+  function workItemLabel(workItemId: string) {
+    const linked = workItems.find((candidate) => candidate.id === workItemId);
+    if (!linked) return workItemId;
+    return `#${linked.number} ${linked.title}`;
+  }
+
+  function blockerStageLabel(workItemId: string) {
+    const linked = workItems.find((candidate) => candidate.id === workItemId);
+    return linked ? stageLabel(linked.stageId) : "";
+  }
+
+  function addBlocker() {
+    if (!selectedBlockerId || loading) return;
+    onAddWorkItemLink({
+      sourceWorkItemId: item.id,
+      targetWorkItemId: selectedBlockerId,
+      type: "blocks",
+    });
+    blockerSelections = { ...blockerSelections, [item.id]: "" };
+  }
+
+  function openRunTerminal(run: WorkItemRun | null) {
+    if (!run || !canOpenRunTerminal(run)) return;
+    onOpenRunTerminal(run);
+  }
+
+  function setMenuOpen(name: string, open: boolean) {
+    openMenu = open ? name : openMenu === name ? "" : openMenu;
+  }
+
+  function moveToStage(stageId: string) {
+    openMenu = "";
+    if (stageId === item.stageId) return;
+    onMoveWorkItem(item.id, stageId);
+  }
+
+  function generateWorktree() {
+    const branch = (worktreeBranches[item.id] || defaultWorktreeBranch(item)).trim();
+    if (!branch || loading) return;
+    openMenu = "";
+    onGenerateWorktree({ workItemId: item.id, branch });
+  }
+
+  function selectAgent(value: string) {
+    if (!project) return;
+    agentSelections = { ...agentSelections, [launchPreset]: value };
+    onSetPhaseAgent(project.id, launchPreset, value);
+  }
+
+  function setInteractiveAgentShell(enabled: boolean) {
+    if (!project) return;
+    onSetInteractiveAgentShell(project.id, enabled);
+  }
+
+  function submitPlan() {
+    const value = (planBodies[item.id] ?? "").trim();
+    if (!value || loading) return;
+    onSubmitPlan({ workItemId: item.id, runId: detailLatestRun?.id ?? "", title: "Plan", body: value });
+    planBodies = { ...planBodies, [item.id]: "" };
+  }
+
+  function submitFeedback() {
+    const value = (feedbackBodies[item.id] ?? "").trim();
+    if (!value || loading) return;
+    onSubmitReviewFeedback({ workItemId: item.id, runId: detailLatestRun?.id ?? "", body: value });
+    feedbackBodies = { ...feedbackBodies, [item.id]: "" };
+  }
+
+  function askWorkflowQuestion() {
+    const prompt = (questionPrompts[item.id] ?? "").trim();
+    if (!prompt || loading) return;
+    onAskQuestion({ workItemId: item.id, runId: detailLatestRun?.id ?? "", prompt });
+    questionPrompts = { ...questionPrompts, [item.id]: "" };
+  }
+
+  function answerWorkflowQuestion(question: Question) {
+    const answer = (questionAnswers[question.id] ?? "").trim();
+    if (!answer || loading) return;
+    onAnswerQuestion(question.id, answer);
+    questionAnswers = { ...questionAnswers, [question.id]: "" };
+  }
+
+  function completeGate(gate: GateReport, status: string) {
+    const overrideReason = (gateOverrideReasons[gate.id] ?? "").trim();
+    if (loading) return;
+    onCompleteGate({ id: gate.id, status, overrideReason });
+    if (status === "overridden") gateOverrideReasons = { ...gateOverrideReasons, [gate.id]: "" };
+  }
+
+  function approveDone() {
+    const reason = (doneReasons[item.id] ?? "").trim();
+    if (loading) return;
+    openMenu = "";
+    onApproveDone(item.id, reason);
+  }
+
+  function sendToReview() {
+    if (loading || !detailLatestRun) return;
+    openMenu = "";
+    onCompleteExecution({ workItemId: item.id, runId: detailLatestRun?.id ?? "", message: "ready for review" });
+  }
+
+  function setDoneReason(value: string) {
+    doneReasons = { ...doneReasons, [item.id]: value };
+  }
+
+  function setWorktreeBranch(value: string) {
+    worktreeBranches = { ...worktreeBranches, [item.id]: value };
+  }
+
+  async function attachFile() {
+    const selected = await Dialogs.OpenFile({
+      Title: "Attach file",
+      ButtonText: "Attach",
+      Directory: project?.rootDir || undefined,
+      CanChooseDirectories: false,
+      CanChooseFiles: true,
+      AllowsMultipleSelection: false,
+    });
+    if (typeof selected === "string" && selected.length > 0) {
+      onAttachFile(item.id, selected);
+    }
+  }
+
+  function deleteWorkItem() {
+    if (loading) return;
+    if (window.confirm(`Delete #${item.number} ${item.title}?`)) {
+      onDeleteWorkItem(item.id);
+      onClose();
+    }
+  }
+
+  function resetDraft() {
+    title = item.title;
+    body = item.bodyMarkdown;
+  }
+
+  function saveDetail() {
+    if (loading || !title.trim()) return;
+    const trimmed = title.trim();
+    title = trimmed;
+    onUpdateWorkItem({ id: item.id, title: trimmed, bodyMarkdown: body });
+  }
+
+  type NextStep = NextStepView & { run: () => void };
+
+  // computeNextStep derives the recommended action (pure logic in deriveNextStep) and wires
+  // the matching handler closure for the primary button.
+  function computeNextStep(
+    target: WorkItem,
+    currentRun: WorkItemRun | null,
+    latestRun: WorkItemRun | null,
+    approved: Artifact | undefined,
+    draft: Artifact | undefined,
+  ): NextStep {
+    const view = deriveNextStep({
+      stageId: target.stageId,
+      runStatus: currentRun?.status ?? "",
+      hasTerminal: canOpenRunTerminal(currentRun),
+      hasApprovedPlan: Boolean(approved),
+      hasDraftPlan: Boolean(draft),
+      hasLatestRun: Boolean(latestRun),
+    });
+
+    const run = () => {
+      switch (view.kind) {
+        case "open-terminal":
+          if (currentRun) openRunTerminal(currentRun);
+          break;
+        case "launch-run":
+          if (currentRun) onLaunchRun(currentRun.id, selectedAgentId);
+          break;
+        case "launch-execution":
+          onLaunchExecution(target.id, selectedAgentId);
+          break;
+        case "approve-plan":
+          if (draft?.id) onApprovePlan(target.id, draft.id);
+          break;
+        case "start-planning":
+        case "retry-planning":
+          onStartPlanning(target.id);
+          break;
+        case "send-to-review":
+          onCompleteExecution({ workItemId: target.id, runId: latestRun?.id ?? "", message: "ready for review" });
+          break;
+        case "mark-done":
+          approveDone();
+          break;
+        default:
+          break;
+      }
+    };
+
+    return { ...view, run };
+  }
+
+  function nextStepToneClass(tone: NextStep["tone"]) {
+    if (tone === "accent") return "border-green/40 bg-green/15 text-green hover:border-green";
+    if (tone === "primary") return "border-amber/45 bg-amber/12 text-amber hover:border-amber";
+    return "border-accent-dim bg-accent-dim text-text-primary hover:border-accent hover:text-accent";
+  }
+
+  function handleKey(event: KeyboardEvent) {
+    if (event.key !== "Escape") return;
+    if (openMenu) {
+      event.preventDefault();
+      openMenu = "";
+      return;
+    }
+    event.preventDefault();
+    onClose();
+  }
+
+  const fieldInput =
+    "h-8 w-full rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent-dim disabled:opacity-60";
+  const subHeader = "text-[11px] font-semibold uppercase text-text-muted";
+</script>
+
+<ModalShell
+  open
+  titleId="work-item-detail-title"
+  titleClass="sr-only"
+  class="flex max-h-[92vh] max-w-[calc(100vw-2rem)] flex-col overflow-hidden shadow-[0_28px_90px_rgba(0,0,0,0.7)] xl:max-w-[1180px]"
+  interactOutsideBehavior="ignore"
+  escapeKeydownBehavior="ignore"
+  onkeydown={handleKey}
+>
+  {#snippet heading()}
+    Work item editor
+  {/snippet}
+
+    <!-- Header -->
+    <div class="shrink-0 border-b border-hairline bg-bg-base px-5 py-3">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 flex-wrap items-center gap-2 text-[12px]">
+            <span class="truncate text-text-muted">{project.name}</span>
+            <span class="opacity-40">·</span>
+            <span class="font-mono text-text-muted">#{item.number}</span>
+            <span class="opacity-40">·</span>
+            <Badge class="bg-bg-surface/60 text-text-secondary">{stageLabel(item.stageId)}</Badge>
+            <StatusDot status={detailCurrentRun?.status || item.runState || "idle"} showLabel />
+          </div>
+          <input
+            class="mt-1.5 w-full bg-transparent text-[18px] font-semibold leading-7 text-text-primary outline-none transition-colors focus:text-accent"
+            type="text"
+            bind:value={title}
+            disabled={loading}
+            aria-label="Work item title"
+          />
+        </div>
+        <div class="flex shrink-0 items-center gap-1">
+          {#if dirty}
+            <Button type="button" variant="outline" size="sm" disabled={loading} onclick={resetDraft}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={loading || !title.trim()}
+              onclick={saveDetail}
+            >
+              Save
+            </Button>
+          {/if}
+          <IconButton label="Close" onclick={onClose}>
+            <X size={16} />
+          </IconButton>
+        </div>
+      </div>
+    </div>
+
+    <!-- Next action bar -->
+    {#if nextStep}
+      <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-hairline bg-bg-base/60 px-5 py-2.5">
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-text-muted">Next</span>
+          <span class="min-w-0 text-[13px] leading-5 text-text-primary">{nextStep.message}</span>
+        </div>
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          {#if nextStep.isLaunch}
+            <select
+              class="h-7 rounded border border-border bg-bg-deep px-1.5 text-[11px] text-text-primary outline-none focus:border-accent-dim disabled:opacity-60"
+              value={selectedAgentId}
+              disabled={loading}
+              aria-label="Agent profile"
+              on:change={(event) => selectAgent(event.currentTarget.value)}
+            >
+              <option value="">Default agent</option>
+              {#each agentProfiles as profile (profile.id)}
+                <option value={profile.id}>{profile.label}</option>
+              {/each}
+            </select>
+            <label class="flex h-7 items-center gap-1.5 rounded border border-border bg-bg-deep px-2 text-[11px] text-text-muted">
+              <input
+                type="checkbox"
+                class="h-3.5 w-3.5 accent-accent"
+                checked={Boolean(project.preferences?.useInteractiveAgentShell)}
+                disabled={loading}
+                aria-label="Use interactive shell for agent runs"
+                on:change={(event) => setInteractiveAgentShell(event.currentTarget.checked)}
+              />
+              Shell
+            </label>
+          {/if}
+          {#if nextStep.label}
+            <button
+              type="button"
+              class="inline-flex h-8 items-center justify-center gap-1.5 rounded border px-3 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 {nextStepToneClass(nextStep.tone)}"
+              disabled={loading}
+              on:click={() => nextStep?.run()}
+            >
+              {nextStep.label}
+            </button>
+          {/if}
+        </div>
+      </div>
+    {/if}
+
+    <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <DetailLayout>
+        {#snippet main()}
+          <!-- Main column -->
+          <!-- Description -->
+          <section class="grid gap-2">
+            <SectionHeader title="Description" />
+            <textarea
+              class="min-h-28 resize-y rounded border border-transparent bg-transparent px-2 py-1.5 text-[14px] leading-6 text-text-primary outline-none transition-colors placeholder:text-text-muted hover:border-border-subtle focus:border-accent-dim focus:bg-bg-deep"
+              bind:value={body}
+              disabled={loading}
+              aria-label="Work item description"
+              placeholder="Add a description…"
+            ></textarea>
+          </section>
+
+          <!-- Plan -->
+          <section class="grid gap-2">
+            <SectionHeader title="Plan">
+              {#if approvedPlan}
+                <span class="inline-flex items-center gap-1 text-[11px] font-medium text-green">
+                  <span>●</span> Approved
+                </span>
+              {:else if latestDraftPlan}
+                <span class="inline-flex items-center gap-1 text-[11px] font-medium text-amber">
+                  <span>●</span> Draft ready
+                </span>
+              {/if}
+            </SectionHeader>
+
+            {#each planArtifacts as artifact (artifact.id)}
+              <article class="grid gap-2 rounded border border-border-subtle bg-bg-surface/30 p-3">
+                <div class="flex min-w-0 items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="flex min-w-0 items-center gap-2 text-[13px] font-medium text-text-primary">
+                      <FileText size={14} class="shrink-0 text-text-muted" />
+                      <span class="truncate">{artifact.title || "Plan"}</span>
+                      <span class="shrink-0 font-mono text-[10px] uppercase text-text-muted">{artifact.status}</span>
+                    </div>
+                    <div class="mt-0.5 truncate text-[11px] text-text-muted">
+                      {formattedTime(artifact.updatedAt || artifact.createdAt)}
+                    </div>
+                  </div>
+                  {#if artifact.status === "draft"}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={loading}
+                      onclick={() => onApprovePlan(item.id, artifact.id)}
+                    >
+                      Approve
+                    </Button>
+                  {/if}
+                </div>
+                {#if artifact.body}
+                  <pre class="app-scrollbar max-h-72 overflow-auto whitespace-pre-wrap rounded border border-hairline bg-bg-deep p-3 font-mono text-[12px] leading-6 text-text-secondary">{artifact.body}</pre>
+                {/if}
+              </article>
+            {:else}
+              <div class="px-2 py-2 text-[12px] text-text-muted">No plan submitted.</div>
+            {/each}
+
+            <details class="rounded border border-border-subtle bg-bg-surface/30">
+              <summary class="cursor-pointer px-3 py-2 text-[12px] font-medium text-text-secondary">
+                New draft plan
+              </summary>
+              <div class="grid gap-2 border-t border-hairline p-3">
+                <textarea
+                  class="min-h-28 resize-y rounded border border-border bg-bg-deep px-2 py-1.5 text-[13px] leading-6 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                  value={planBodies[item.id] ?? ""}
+                  disabled={loading}
+                  placeholder="Draft plan"
+                  on:input={(event) => (planBodies = { ...planBodies, [item.id]: event.currentTarget.value })}
+                ></textarea>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || !(planBodies[item.id] ?? "").trim()}
+                  onclick={submitPlan}
+                >
+                  Submit plan
+                </Button>
+              </div>
+            </details>
+          </section>
+
+          <!-- Dependencies -->
+          <section class="grid gap-2">
+            <SectionHeader title="Dependencies">
+              <span class="text-[11px] text-text-muted">
+                Ready {readyWork.summary?.totalReady ?? 0} · Blocked {readyWork.summary?.totalBlocked ?? 0}
+              </span>
+            </SectionHeader>
+
+            <div class="grid gap-2 rounded border border-border-subtle bg-bg-surface/30 p-3">
+              <div class="grid gap-1.5">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-text-muted">Blocked by</div>
+                {#if blockedExplanation?.blockedBy?.length}
+                  {#each blockedExplanation.blockedBy as blocker (blocker.id)}
+                    <div class="flex min-w-0 items-center gap-2 text-[13px] text-text-secondary">
+                      <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber"></span>
+                      <span class="min-w-0 flex-1 truncate">
+                        {blocker.number ? `#${blocker.number} ` : ""}{blocker.title || blocker.id}
+                      </span>
+                      <span class="shrink-0 rounded border border-border-subtle px-1.5 py-0.5 text-[11px] text-text-muted">
+                        {blocker.stageId || "unknown"}
+                      </span>
+                    </div>
+                  {/each}
+                {:else if blockingLinks.length > 0}
+                  {#each blockingLinks as link (link.id)}
+                    <div class="flex min-w-0 items-center gap-2 text-[13px] text-text-secondary">
+                      <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-green"></span>
+                      <span class="min-w-0 flex-1 truncate">{workItemLabel(link.targetWorkItemId)}</span>
+                      <span class="shrink-0 rounded border border-border-subtle px-1.5 py-0.5 text-[11px] text-text-muted">
+                        {blockerStageLabel(link.targetWorkItemId) || "resolved"}
+                      </span>
+                    </div>
+                  {/each}
+                {:else}
+                  <div class="text-[13px] text-text-muted">No blocking dependencies</div>
+                {/if}
+              </div>
+
+              <div class="grid gap-1.5 border-t border-hairline pt-2">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-text-muted">Ready because</div>
+                <div class="text-[13px] leading-5 text-text-secondary">
+                  {readyExplanation?.reason || (blockedExplanation ? "blocked by unfinished dependency" : "No blocking dependencies")}
+                </div>
+              </div>
+
+              {#if dependentLinks.length > 0}
+                <div class="grid gap-1.5 border-t border-hairline pt-2">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-text-muted">Blocks</div>
+                  {#each dependentLinks as link (link.id)}
+                    <div class="truncate text-[13px] text-text-secondary">{workItemLabel(link.sourceWorkItemId)}</div>
+                  {/each}
+                </div>
+              {/if}
+
+              <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t border-hairline pt-2">
+                <select
+                  class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none focus:border-accent-dim disabled:opacity-60"
+                  value={selectedBlockerId}
+                  disabled={loading || availableBlockers.length === 0}
+                  aria-label="Blocker work item"
+                  on:change={(event) =>
+                    (blockerSelections = { ...blockerSelections, [item.id]: event.currentTarget.value })}
+                >
+                  {#each availableBlockers as candidate (candidate.id)}
+                    <option value={candidate.id}>#{candidate.number} {candidate.title}</option>
+                  {/each}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || !selectedBlockerId}
+                  onclick={addBlocker}
+                >
+                  Add blocker
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Activity (feedback, questions, gates, history) -->
+          <section class="grid gap-4">
+            <SectionHeader title="Activity" />
+
+            <!-- Questions -->
+            <div class="grid gap-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-text-muted">Questions</div>
+              <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                <input
+                  class={fieldInput}
+                  value={questionPrompts[item.id] ?? ""}
+                  disabled={loading}
+                  placeholder="Question for user"
+                  on:input={(event) =>
+                    (questionPrompts = { ...questionPrompts, [item.id]: event.currentTarget.value })}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || !(questionPrompts[item.id] ?? "").trim()}
+                  onclick={askWorkflowQuestion}
+                >
+                  Ask
+                </Button>
+              </div>
+              {#each detailQuestions as question (question.id)}
+                <div class="grid gap-2 border-l border-hairline py-1 pl-3">
+                  <div class="text-[13px] leading-5 text-text-secondary">
+                    <StatusDot status={question.status === "open" ? "queued" : ""} />
+                    {question.prompt}
+                  </div>
+                  {#if question.status === "open"}
+                    <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                      <input
+                        class={fieldInput}
+                        value={questionAnswers[question.id] ?? ""}
+                        disabled={loading}
+                        placeholder="Answer"
+                        on:input={(event) =>
+                          (questionAnswers = { ...questionAnswers, [question.id]: event.currentTarget.value })}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={loading || !(questionAnswers[question.id] ?? "").trim()}
+                        onclick={() => answerWorkflowQuestion(question)}
+                      >
+                        Answer
+                      </Button>
+                    </div>
+                  {:else if question.answer}
+                    <div class="text-[12px] leading-5 text-text-muted">{question.answer}</div>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+
+            <!-- Feedback -->
+            <div class="grid gap-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-text-muted">Feedback</div>
+              <textarea
+                class="min-h-20 resize-y rounded border border-border bg-bg-deep px-2 py-1.5 text-[13px] leading-6 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                value={feedbackBodies[item.id] ?? ""}
+                disabled={loading}
+                placeholder="Review feedback"
+                on:input={(event) =>
+                  (feedbackBodies = { ...feedbackBodies, [item.id]: event.currentTarget.value })}
+              ></textarea>
+              <div class="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || !(feedbackBodies[item.id] ?? "").trim()}
+                  onclick={submitFeedback}
+                >
+                  Send feedback
+                </Button>
+              </div>
+              {#each feedbackArtifacts as artifact (artifact.id)}
+                <div class="border-l border-hairline py-1 pl-3 text-[13px] leading-5 text-text-secondary">
+                  <span class="font-mono text-[11px] text-text-muted">{artifact.status}</span>
+                  {#if artifact.body}<span> {artifact.body}</span>{/if}
+                </div>
+              {/each}
+            </div>
+
+            <!-- Gates -->
+            {#if detailGates.length > 0}
+              <div class="grid gap-2">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-text-muted">Gates</div>
+                {#each detailGates as gate (gate.id)}
+                  <div class="grid gap-2 rounded border border-border-subtle bg-bg-surface/30 px-3 py-2">
+                    <div class="flex items-center justify-between gap-2 text-[13px] text-text-secondary">
+                      <span>{gate.name}</span>
+                      <span class="font-mono text-[11px] text-text-muted">{gate.status}</span>
+                    </div>
+                    <input
+                      class={fieldInput}
+                      value={gateOverrideReasons[gate.id] ?? ""}
+                      disabled={loading}
+                      placeholder="Override reason"
+                      on:input={(event) =>
+                        (gateOverrideReasons = { ...gateOverrideReasons, [gate.id]: event.currentTarget.value })}
+                    />
+                    <div class="grid grid-cols-3 gap-2">
+                      <Button type="button" variant="outline" size="sm" disabled={loading} onclick={() => completeGate(gate, "passed")}>
+                        Pass
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        disabled={loading}
+                        onclick={() => completeGate(gate, "failed")}
+                      >
+                        Fail
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={loading || !(gateOverrideReasons[gate.id] ?? "").trim()}
+                        onclick={() => completeGate(gate, "overridden")}
+                      >
+                        Override
+                      </Button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+
+            <!-- History -->
+            <details class="rounded border border-border-subtle bg-bg-surface/30">
+              <summary class="cursor-pointer px-3 py-2 text-[11px] font-semibold uppercase text-text-muted">
+                History
+              </summary>
+              <div class="grid gap-3 border-t border-hairline p-3">
+                {#if detailPastRuns.length > 0}
+                  <div class="grid gap-1.5">
+                    <div class="text-[12px] font-medium text-text-primary">Run history</div>
+                    {#each detailPastRuns as run (run.id)}
+                      <div class="flex min-w-0 items-center gap-2 text-[12px]">
+                        <StatusDot status={run.status} showLabel />
+                        <span class="truncate text-text-secondary">{run.preset || "agent"} · {run.promptTemplateId || "prompt"}</span>
+                        <span class="ml-auto shrink-0 text-[11px] text-text-muted">{formattedTime(run.createdAt)}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+                {#if detailWorkflowEvents.length > 0}
+                  <div class="grid gap-1.5">
+                    <div class="text-[12px] font-medium text-text-primary">Workflow events</div>
+                    {#each detailWorkflowEvents as event (event.id)}
+                      <div class="flex min-w-0 items-center gap-2 text-[12px] text-text-secondary">
+                        <span>{event.type}</span>
+                        {#if event.actor}<span class="font-mono text-text-muted">{event.actor}</span>{/if}
+                        <span class="ml-auto shrink-0 text-[11px] text-text-muted">{formattedTime(event.at)}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+                <div class="grid gap-1.5">
+                  <div class="text-[12px] font-medium text-text-primary">Item history</div>
+                  {#each item.history as event (event.id)}
+                    <div class="flex min-w-0 items-center gap-2 text-[12px] text-text-secondary">
+                      <span>{event.type}</span>
+                      {#if event.stageId}<span class="font-mono text-text-muted">{event.stageId}</span>{/if}
+                      <span class="ml-auto shrink-0 text-[11px] text-text-muted">
+                        {event.at?.toLocaleString?.() ?? event.at}
+                      </span>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            </details>
+          </section>
+        {/snippet}
+
+        {#snippet aside()}
+          <!-- Properties rail -->
+          <div class="flex items-center justify-between gap-2 pb-1">
+            <h3 class={subHeader}>Properties</h3>
+            <Popover
+              open={openMenu === "actions"}
+              onOpenChange={(open) => setMenuOpen("actions", open)}
+            >
+              {#snippet trigger({ props })}
+                <IconButton {...props} label="More actions" title="More actions">
+                  <Ellipsis size={14} />
+                </IconButton>
+              {/snippet}
+              <Menu class="min-w-44">
+                <MenuItem disabled={loading} onclick={() => { openMenu = ""; onStartPlanning(item.id); }}>
+                  <ClipboardCheck size={13} /> Start planning
+                </MenuItem>
+                <MenuItem disabled={loading || !canExecuteActions} onclick={() => { openMenu = ""; onQueueExecution(item.id); }}>
+                  <Clock3 size={13} /> Queue execution
+                </MenuItem>
+                <MenuItem disabled={loading || !canExecuteActions} onclick={() => { openMenu = ""; onLaunchExecution(item.id, selectedAgentId); }}>
+                  <Play size={13} /> Launch execution
+                </MenuItem>
+                <MenuItem disabled={loading || !detailLatestRun} onclick={sendToReview}>
+                  <Search size={13} /> Send to review
+                </MenuItem>
+                <MenuItem disabled={loading} onclick={approveDone}>
+                  <ClipboardCheck size={13} /> Mark done
+                </MenuItem>
+                <div class="my-1 border-t border-hairline"></div>
+                <div class="px-3 py-1.5">
+                  <TextField
+                    value={doneReasons[item.id] ?? ""}
+                    disabled={loading}
+                    placeholder="Done reason (optional)"
+                    oninput={(event: Event) => setDoneReason((event.currentTarget as HTMLInputElement).value)}
+                  />
+                </div>
+              </Menu>
+            </Popover>
+          </div>
+
+          <div class="divide-y divide-hairline rounded border border-border-subtle bg-bg-surface/20">
+            <!-- Status -->
+            <div class="flex items-center justify-between gap-2 px-3 py-2">
+              <span class={subHeader}>Status</span>
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1 text-[12px]">
+                  <StatusDot status={detailCurrentRun?.status || item.runState || "idle"} showLabel />
+                </span>
+                {#if canCancelRun(detailCurrentRun)}
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    class="h-6 px-1.5 text-[11px]"
+                    disabled={loading}
+                    onclick={() => detailCurrentRun && onCancelRun(detailCurrentRun.id)}
+                  >
+                    <Square size={11} /> Cancel
+                  </Button>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Stage -->
+            <div class="flex items-center justify-between gap-2 px-3 py-2">
+              <span class={subHeader}>Stage</span>
+              <Popover
+                open={openMenu === "stage"}
+                onOpenChange={(open) => setMenuOpen("stage", open)}
+              >
+                {#snippet trigger({ props })}
+                  <Button
+                    {...props}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="max-w-[60%] border-transparent px-1.5 py-1 text-[12px] text-text-primary hover:border-border-subtle hover:bg-bg-surface/60 hover:text-text-primary"
+                    disabled={loading}
+                  >
+                    <span class="truncate">{stageLabel(item.stageId)}</span>
+                    <ChevronDown size={12} class="shrink-0 text-text-muted" />
+                  </Button>
+                {/snippet}
+                <Menu class="min-w-44">
+                  {#each stages as targetStage (targetStage.id)}
+                    {@const allowed = canMoveToStage(item, targetStage)}
+                    <MenuItem
+                      active={targetStage.id === item.stageId}
+                      disabled={loading || !allowed}
+                      onclick={() => moveToStage(targetStage.id)}
+                    >
+                      <span class="truncate">{targetStage.name}</span>
+                      {#if !allowed}<span class="ml-auto text-[10px] text-text-muted">worktree first</span>{/if}
+                    </MenuItem>
+                  {/each}
+                </Menu>
+              </Popover>
+            </div>
+
+            <!-- Branch / worktree -->
+            <div class="relative grid gap-1 px-3 py-2">
+              <div class="flex items-center justify-between gap-2">
+                <span class={subHeader}>Branch</span>
+                {#if !item.worktree}
+                  <Popover
+                    open={openMenu === "branch"}
+                    onOpenChange={(open) => setMenuOpen("branch", open)}
+                    class="w-64 p-2"
+                  >
+                    {#snippet trigger({ props })}
+                      <Button
+                        {...props}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        class="border-transparent px-1.5 py-1 text-[12px] text-text-primary hover:border-border-subtle hover:bg-bg-surface/60 hover:text-text-primary"
+                        disabled={loading}
+                      >
+                        <GitBranch size={12} class="text-text-muted" />
+                        <span class="truncate">Generate</span>
+                      </Button>
+                    {/snippet}
+                    <div class="grid gap-2">
+                      <TextField
+                        value={worktreeBranches[item.id] || defaultWorktreeBranch(item)}
+                        disabled={loading}
+                        aria-label="Worktree branch"
+                        class="font-mono"
+                        oninput={(event: Event) => setWorktreeBranch((event.currentTarget as HTMLInputElement).value)}
+                      />
+                      <Button type="button" variant="primary" disabled={loading} onclick={generateWorktree}>
+                        <GitBranch size={13} /> Generate worktree
+                      </Button>
+                    </div>
+                  </Popover>
+                {/if}
+              </div>
+              {#if item.worktree}
+                <div class="min-w-0">
+                  <div class="truncate font-mono text-[12px] text-text-secondary">{item.worktree.branch}</div>
+                  <div class="truncate font-mono text-[11px] text-text-muted">{item.worktree.worktreePath}</div>
+                </div>
+              {/if}
+            </div>
+
+            <!-- Agent -->
+            <div class="flex items-center justify-between gap-2 px-3 py-2">
+              <span class={subHeader}>Agent</span>
+              <Popover
+                open={openMenu === "agent"}
+                onOpenChange={(open) => setMenuOpen("agent", open)}
+              >
+                {#snippet trigger({ props })}
+                  <Button
+                    {...props}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="max-w-[60%] border-transparent px-1.5 py-1 text-[12px] text-text-primary hover:border-border-subtle hover:bg-bg-surface/60 hover:text-text-primary"
+                    disabled={loading}
+                  >
+                    <span class="truncate">{selectedAgentLabel}</span>
+                    <ChevronDown size={12} class="shrink-0 text-text-muted" />
+                  </Button>
+                {/snippet}
+                <Menu class="min-w-48">
+                  <MenuItem
+                    active={selectedAgentId === ""}
+                    disabled={loading}
+                    onclick={() => { openMenu = ""; selectAgent(""); }}
+                  >
+                    Default agent
+                  </MenuItem>
+                  {#each agentProfiles as profile (profile.id)}
+                    <MenuItem
+                      active={selectedAgentId === profile.id}
+                      disabled={loading}
+                      onclick={() => { openMenu = ""; selectAgent(profile.id); }}
+                    >
+                      {profile.label}
+                    </MenuItem>
+                  {/each}
+                  <div class="my-1 border-t border-hairline"></div>
+                  <Checkbox
+                    class="px-3 py-1.5 text-[12px]"
+                    checked={Boolean(project.preferences?.useInteractiveAgentShell)}
+                    disabled={loading}
+                    onCheckedChange={setInteractiveAgentShell}
+                  >
+                    Interactive shell
+                  </Checkbox>
+                </Menu>
+              </Popover>
+            </div>
+
+            <!-- Run -->
+            {#if detailCurrentRun}
+              <div class="grid gap-1.5 px-3 py-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class={subHeader}>Run</span>
+                  {#if detailPastRuns.length > 0}
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 text-[11px] text-text-muted transition-colors hover:text-text-primary"
+                      on:click={() => (runHistoryOpen = !runHistoryOpen)}
+                    >
+                      <History size={12} /> {detailPastRuns.length}
+                    </button>
+                  {/if}
+                </div>
+                <button
+                  type="button"
+                  class="grid min-w-0 gap-1 rounded border border-border-subtle bg-bg-surface/40 p-2 text-left transition-colors hover:border-accent/40 hover:bg-bg-surface/70 disabled:cursor-default disabled:hover:border-border-subtle disabled:hover:bg-bg-surface/40"
+                  disabled={!canOpenRunTerminal(detailCurrentRun)}
+                  title={canOpenRunTerminal(detailCurrentRun) ? "Open terminal" : "No terminal linked"}
+                  on:click={() => openRunTerminal(detailCurrentRun)}
+                >
+                  <div class="flex min-w-0 items-center gap-2">
+                    <StatusDot status={detailCurrentRun.status} />
+                    <span class="truncate text-[13px] font-medium text-text-primary">{detailCurrentRun.preset || "agent"}</span>
+                    {#if canOpenRunTerminal(detailCurrentRun)}
+                      <SquareTerminal size={13} class="ml-auto shrink-0 text-text-muted" />
+                    {/if}
+                  </div>
+                  <div class="truncate text-[11px] text-text-muted">{detailCurrentRun.promptTemplateId || "prompt"}</div>
+                  <div class="inline-flex items-center gap-1 text-[11px] text-text-muted">
+                    <Clock3 size={11} /> {formattedTime(detailCurrentRun.createdAt)}
+                  </div>
+                </button>
+                {#if runHistoryOpen}
+                  <div class="grid gap-1 border-l border-hairline pl-2">
+                    {#each detailPastRuns as run (run.id)}
+                      <div class="flex min-w-0 items-center gap-2 text-[11px]">
+                        <StatusDot status={run.status} />
+                        <span class="truncate text-text-muted">{run.preset || "agent"}</span>
+                        <span class="ml-auto shrink-0 text-text-muted">{formattedTime(run.createdAt)}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
+            <!-- Attachments -->
+            <div class="grid gap-1.5 px-3 py-2">
+              <div class="flex items-center justify-between gap-2">
+                <span class={subHeader}>Attachments</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="max-w-[60%] border-transparent px-1.5 py-1 text-[12px] text-text-primary hover:border-border-subtle hover:bg-bg-surface/60 hover:text-text-primary"
+                  disabled={loading}
+                  onclick={attachFile}
+                >
+                  <Paperclip size={12} class="text-text-muted" />
+                  <span>Attach</span>
+                </Button>
+              </div>
+              {#if item.attachments.length > 0}
+                <div class="grid gap-1">
+                  {#each item.attachments as attachment (attachment.id)}
+                    <div class="truncate font-mono text-[11px] text-text-muted">
+                      {attachment.path || attachment.url || attachment.note}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/snippet}
+      </DetailLayout>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex shrink-0 items-center justify-between gap-2 border-t border-hairline bg-bg-base px-5 py-3">
+      <Button
+        type="button"
+        variant="danger-ghost"
+        disabled={loading}
+        onclick={deleteWorkItem}
+      >
+        <Trash2 size={14} /> Delete
+      </Button>
+      <Button type="button" variant="outline" onclick={onClose}>
+        Close
+      </Button>
+    </div>
+</ModalShell>

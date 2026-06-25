@@ -109,7 +109,7 @@
 
   <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
     {#if !hasRows}
-      <div class="flex h-full items-center justify-center px-4 text-center text-sm text-text-muted">
+      <div class="flex h-full items-center justify-center px-4 text-center text-[13px] text-text-muted">
         No unread notifications.
       </div>
     {:else}
@@ -123,7 +123,7 @@
             <div class="flex min-w-0 items-start gap-2">
               <button
                 type="button"
-                class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-accent transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+                class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-accent transition-colors hover:bg-bg-surface/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
                 aria-label={expanded ? "Collapse response controls" : "Expand response controls"}
                 aria-expanded={expanded}
                 on:click={() => toggleExpanded(prompt.id)}
@@ -287,7 +287,7 @@
             <div class="flex min-w-0 items-start gap-2 px-2.5 py-2">
               <button
                 type="button"
-                class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-muted transition-colors hover:bg-white/5 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
+                class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-muted transition-colors hover:bg-bg-surface/60 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
                 aria-label={expanded ? "Collapse notification details" : "Expand notification details"}
                 aria-expanded={expanded}
                 on:click={() => toggleExpanded(row.id)}

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "20",
+    "version": "21",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -2435,6 +2435,46 @@
         }
       }
     },
+    "/v1/ready-work": {
+      "get": {
+        "operationId": "readyWork",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyWorkExplanation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/sessions": {
       "get": {
         "operationId": "listSessions",
@@ -3152,6 +3192,87 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StatusEvent"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/work-item-links": {
+      "get": {
+        "operationId": "listWorkItemLinks",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkItemLink"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addWorkItemLink",
+        "tags": [
+          "workitems"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWorkItemLinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkItemLink"
                 }
               }
             },
@@ -4516,6 +4637,28 @@
         ],
         "type": "object"
       },
+      "AddWorkItemLinkRequest": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "sourceWorkItemId": {
+            "type": "string"
+          },
+          "targetWorkItemId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceWorkItemId",
+          "targetWorkItemId",
+          "type"
+        ],
+        "type": "object"
+      },
       "AgentBridgeApproval": {
         "properties": {
           "bridgeId": {
@@ -5118,6 +5261,30 @@
           "id",
           "branch",
           "worktreePath"
+        ],
+        "type": "object"
+      },
+      "BlockedWorkItem": {
+        "properties": {
+          "blockedBy": {
+            "items": {
+              "$ref": "#/components/schemas/ReadyBlockerInfo"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "blockedByCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "workItem": {
+            "$ref": "#/components/schemas/WorkItem"
+          }
+        },
+        "required": [
+          "workItem",
+          "blockedBy",
+          "blockedByCount"
         ],
         "type": "object"
       },
@@ -6610,6 +6777,123 @@
         ],
         "type": "object"
       },
+      "ReadyBlockerInfo": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "runState": {
+            "type": "string"
+          },
+          "stageId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "ReadyWorkExplanation": {
+        "properties": {
+          "blocked": {
+            "items": {
+              "$ref": "#/components/schemas/BlockedWorkItem"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "cycles": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "items": {
+              "$ref": "#/components/schemas/ReadyWorkItem"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReadyWorkSummary"
+          }
+        },
+        "required": [
+          "ready",
+          "blocked",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "ReadyWorkItem": {
+        "properties": {
+          "dependencyCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "dependentCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "parentWorkItemId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "resolvedBlockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "workItem": {
+            "$ref": "#/components/schemas/WorkItem"
+          }
+        },
+        "required": [
+          "workItem",
+          "reason",
+          "dependencyCount",
+          "dependentCount"
+        ],
+        "type": "object"
+      },
+      "ReadyWorkSummary": {
+        "properties": {
+          "cycleCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalBlocked": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalReady": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "totalReady",
+          "totalBlocked",
+          "cycleCount"
+        ],
+        "type": "object"
+      },
       "RegistryPlugin": {
         "properties": {
           "description": {
@@ -7539,6 +7823,41 @@
           "history",
           "createdAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "WorkItemLink": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "sourceWorkItemId": {
+            "type": "string"
+          },
+          "targetWorkItemId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "sourceWorkItemId",
+          "targetWorkItemId",
+          "type",
+          "createdAt"
         ],
         "type": "object"
       },

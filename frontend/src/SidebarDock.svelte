@@ -110,8 +110,8 @@
       >
         <div
           class="min-h-0 max-w-[0.5px] min-w-[0.5px] flex-1 transition-all duration-150 {dragging
-            ? 'bg-white/30'
-            : 'bg-white/20 group-hover:bg-white/40'}"
+            ? 'bg-border'
+            : 'bg-border-subtle group-hover:bg-border-hairline'}"
         ></div>
       </button>
     {/if}
@@ -198,8 +198,8 @@
       >
         <div
           class="min-h-0 max-w-[0.5px] min-w-[0.5px] flex-1 transition-all duration-150 {dragging
-            ? 'bg-white/30'
-            : 'bg-white/20 group-hover:bg-white/40'}"
+            ? 'bg-border'
+            : 'bg-border-subtle group-hover:bg-border-hairline'}"
         ></div>
       </button>
     {/if}

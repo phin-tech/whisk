@@ -34,6 +34,9 @@
     sessionNameSuffix,
     sortRunsRecent,
   } from "./projectView";
+  import EmptyState from "./ui/EmptyState.svelte";
+  import SectionHeader from "./ui/SectionHeader.svelte";
+  import StatusDot from "./ui/StatusDot.svelte";
 
   export let projects: Project[] = [];
   export let activeProjectId = "";
@@ -151,13 +154,6 @@
     if (value instanceof Date) return value.toLocaleString();
     const parsed = new Date(String(value));
     return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
-  }
-
-  function runStatusDot(status: string) {
-    if (status === "running" || status === "awaiting_input") return "text-green";
-    if (status === "queued") return "text-blue";
-    if (status === "failed" || status === "cancelled") return "text-red";
-    return "text-text-muted";
   }
 
   function saveProject() {
@@ -286,12 +282,6 @@
     { id: "runs", label: "Runs", count: () => counts.runs },
   ];
 </script>
-
-{#snippet emptyState(text: string)}
-  <div class="px-3 py-3 text-[12px] text-text-muted">
-    {text}
-  </div>
-{/snippet}
 
 <div class="h-full min-h-0 bg-bg-deep">
   <section class="flex h-full min-w-0 flex-col">
@@ -467,7 +457,7 @@
               </div>
               <div class="divide-y divide-hairline">
                 {#if recentSessions.length === 0}
-                  {@render emptyState("No sessions.")}
+                  <EmptyState message="No sessions." />
                 {:else}
                   {#each recentSessions as session (session.id)}
                     <button
@@ -518,7 +508,7 @@
               </div>
               <div class="divide-y divide-hairline">
                 {#if recentWorkItems.length === 0}
-                  {@render emptyState("No cards.")}
+                  <EmptyState message="No cards." />
                 {:else}
                   {#each recentWorkItems as item (item.id)}
                     <button
@@ -558,7 +548,7 @@
               </div>
               <div class="divide-y divide-hairline">
                 {#if recentRuns.length === 0}
-                  {@render emptyState("No runs.")}
+                  <EmptyState message="No runs." />
                 {:else}
                   {#each recentRuns as run (run.id)}
                     <button
@@ -569,8 +559,7 @@
                     >
                       <div class="flex min-w-0 items-center gap-2">
                         <div class="min-w-0 flex-1 truncate text-[13px] font-medium text-text-primary">{runLabel(run)}</div>
-                        <span class="shrink-0 text-[11px] {runStatusDot(run.status)}">●</span>
-                        <span class="shrink-0 text-[11px] text-text-muted">{run.status}</span>
+                        <StatusDot status={run.status} showLabel class="shrink-0 text-[11px]" />
                       </div>
                       <div class="truncate text-[11px] text-text-muted">{workItemTitle(run.workItemId)}</div>
                     </button>
@@ -591,7 +580,7 @@
 
         {:else if activeTab === "attachments"}
           <section>
-            <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Attachments</div>
+            <SectionHeader title="Attachments" class="mb-2" />
             <div class="mb-2 border border-border-subtle bg-bg-surface/25 p-2">
               <div class="flex flex-wrap gap-1.5">
                 {#each ["file", "url", "note"] as mode}
@@ -699,7 +688,7 @@
             </div>
             <div class="divide-y divide-hairline">
               {#if attachments.length === 0}
-                {@render emptyState("No attachments.")}
+                <EmptyState message="No attachments." />
               {:else}
                 {#each attachments as attachment (attachment.id)}
                   <div class="grid grid-cols-[96px_minmax(0,1fr)_72px_32px_32px_32px] items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-surface/40">
@@ -756,7 +745,7 @@
 
         {:else if activeTab === "cards"}
           <section>
-            <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Cards</div>
+            <SectionHeader title="Cards" class="mb-2" />
             <div class="mb-2 grid gap-2 border border-border-subtle bg-bg-surface/25 p-2">
               <input
                 class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent-dim"
@@ -791,7 +780,7 @@
             </div>
             <div class="divide-y divide-hairline">
               {#if workItems.length === 0}
-                {@render emptyState("No cards.")}
+                <EmptyState message="No cards." />
               {:else}
                 {#each workItems as item (item.id)}
                   <div
@@ -829,8 +818,7 @@
 
         {:else if activeTab === "sessions"}
           <section>
-            <div class="mb-2 flex items-center justify-between gap-2">
-              <div class="text-[11px] font-semibold uppercase text-text-muted">Sessions</div>
+            <SectionHeader title="Sessions" class="mb-2">
               <button
                 type="button"
                 class="inline-flex h-7 items-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
@@ -840,10 +828,10 @@
                 <Plus size={13} />
                 <span>Add</span>
               </button>
-            </div>
+            </SectionHeader>
             <div class="divide-y divide-hairline">
               {#if sessions.length === 0}
-                {@render emptyState("No sessions.")}
+                <EmptyState message="No sessions." />
               {:else}
                 {#each sessions as session (session.id)}
                   {@const sessionRun = sortedRuns.find((r) => r.sessionId === session.id) ?? null}
@@ -869,10 +857,7 @@
                       {/if}
                     </div>
                     {#if sessionRun}
-                      <div class="flex shrink-0 items-center gap-1 text-[11px]">
-                        <span class="{runStatusDot(sessionRun.status)}">●</span>
-                        <span class="text-text-muted">{sessionRun.status}</span>
-                      </div>
+                      <StatusDot status={sessionRun.status} showLabel class="shrink-0 text-[11px]" />
                     {/if}
                     <button
                       type="button"
@@ -900,10 +885,10 @@
 
         {:else if activeTab === "runs"}
           <section>
-            <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Runs</div>
+            <SectionHeader title="Runs" class="mb-2" />
             <div class="divide-y divide-hairline">
               {#if runs.length === 0}
-                {@render emptyState("No runs.")}
+                <EmptyState message="No runs." />
               {:else}
                 {#each sortedRuns as run (run.id)}
                   <div class="grid grid-cols-[minmax(0,1fr)_auto_88px] items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-surface/40">
@@ -923,10 +908,7 @@
                         </div>
                       {/if}
                     </div>
-                    <div class="flex shrink-0 items-center gap-1.5 text-[11px]">
-                      <span class="{runStatusDot(run.status)}">●</span>
-                      <span class="text-text-muted">{run.status}</span>
-                    </div>
+                    <StatusDot status={run.status} showLabel class="shrink-0 text-[11px]" />
                     <button
                       type="button"
                       class="h-7 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"

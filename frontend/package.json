@@ -5,10 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:e2e": "vite --mode e2e",
     "build:dev": "vite build --minify false --mode development",
     "build": "vite build --mode production",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e:install": "playwright install chromium webkit",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@lucide/svelte": "^1.17.0",
@@ -16,9 +20,11 @@
     "@wailsio/runtime": "latest",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^5.5.0",
+    "bits-ui": "^2.18.1",
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@tsconfig/svelte": "^5.0.8",
     "svelte": "^5.46.4",

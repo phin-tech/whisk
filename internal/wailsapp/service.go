@@ -419,6 +419,18 @@ func (s *Service) MoveWorkItem(ctx context.Context, req protocol.MoveWorkItemReq
 	return s.client.MoveWorkItem(ctx, req)
 }
 
+func (s *Service) AddWorkItemLink(ctx context.Context, req protocol.AddWorkItemLinkRequest) (protocol.WorkItemLink, error) {
+	return s.client.AddWorkItemLink(ctx, req)
+}
+
+func (s *Service) ListWorkItemLinks(ctx context.Context, workItemID string) ([]protocol.WorkItemLink, error) {
+	return s.client.ListWorkItemLinks(ctx, workItemID)
+}
+
+func (s *Service) ReadyWork(ctx context.Context, req protocol.ReadyWorkRequest) (protocol.ReadyWorkExplanation, error) {
+	return s.client.ReadyWork(ctx, req)
+}
+
 func (s *Service) StartPlanning(ctx context.Context, req protocol.StartPlanningRequest) (protocol.WorkItemRun, error) {
 	return s.client.StartPlanning(ctx, req)
 }

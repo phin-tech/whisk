@@ -117,6 +117,17 @@ type MoveWorkItemRequest struct {
 	Actor   string
 }
 
+type AddWorkItemLinkRequest struct {
+	SourceWorkItemID string
+	TargetWorkItemID string
+	Type             string
+	Actor            string
+}
+
+type ReadyWorkRequest struct {
+	ProjectID string
+}
+
 type BindWorkItemWorktreeRequest struct {
 	ID           string
 	Branch       string
@@ -598,6 +609,37 @@ func (r *Runtime) MoveWorkItem(ctx context.Context, req MoveWorkItemRequest) (wo
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	return item, nil
+}
+
+func (r *Runtime) ListWorkItemLinks(_ context.Context, workItemID string) ([]workitem.WorkItemLink, error) {
+	return r.workItems.ListWorkItemLinks(workItemID), nil
+}
+
+func (r *Runtime) AddWorkItemLink(ctx context.Context, req AddWorkItemLinkRequest) (workitem.WorkItemLink, error) {
+	link, err := r.workItems.AddWorkItemLink(workitem.AddWorkItemLink{
+		ID:               r.ids(),
+		SourceWorkItemID: req.SourceWorkItemID,
+		TargetWorkItemID: req.TargetWorkItemID,
+		Type:             req.Type,
+		Actor:            req.Actor,
+		Now:              time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.WorkItemLink{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkItemLink{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return link, nil
+}
+
+func (r *Runtime) ReadyWork(_ context.Context, req ReadyWorkRequest) (workitem.ReadyWorkExplanation, error) {
+	return workitem.BuildReadyWorkExplanation(workitem.ReadyWorkInput{
+		ProjectID: req.ProjectID,
+		WorkItems: r.workItems.ListWorkItems(req.ProjectID),
+		Links:     r.workItems.ListWorkItemLinks(""),
+	}), nil
 }
 
 func (r *Runtime) BindWorkItemWorktree(ctx context.Context, req BindWorkItemWorktreeRequest) (workitem.WorkItem, error) {

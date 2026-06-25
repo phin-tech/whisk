@@ -8,6 +8,9 @@
   import type { Project } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { sessionGroups, type SessionGroupMode } from "./sessionView";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
+  import Button from "./ui/Button.svelte";
+  import IconButton from "./ui/IconButton.svelte";
+  import ModalShell from "./ui/ModalShell.svelte";
 
   export let sessions: Session[] = [];
   export let projects: Project[] = [];
@@ -85,8 +88,12 @@
     projectPickerSessionId = "";
   }
 
-  function closeProjectPickerOnBackdrop(event: MouseEvent) {
-    if (event.target === event.currentTarget) projectPickerSessionId = "";
+  function closeProjectPicker() {
+    projectPickerSessionId = "";
+  }
+
+  function handleProjectPickerOpenChange(open: boolean) {
+    if (!open && projectPickerSession) closeProjectPicker();
   }
 </script>
 
@@ -109,7 +116,7 @@
 
   <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
     {#if sessions.length === 0}
-      <div class="flex h-full items-center justify-center px-4 text-center text-sm text-text-muted">
+      <div class="flex h-full items-center justify-center px-4 text-center text-[13px] text-text-muted">
         No sessions yet.
       </div>
     {:else}
@@ -264,53 +271,54 @@
 {/if}
 
 {#if projectPickerSession}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Move session to project"
-    tabindex="-1"
-    on:click={closeProjectPickerOnBackdrop}
-    on:keydown={handleKey}
+  <ModalShell
+    open={true}
+    titleId="move-session-project-title"
+    titleClass="sr-only"
+    class="max-w-sm overflow-hidden bg-bg-base shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+    onOpenChange={handleProjectPickerOpenChange}
+    onEscapeKeydown={(event) => {
+      event.preventDefault();
+      closeProjectPicker();
+    }}
   >
-    <div
-      class="w-full max-w-sm rounded-lg border border-border bg-bg-base shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
-    >
-      <div class="flex h-11 items-center justify-between border-b border-hairline px-4">
-        <div class="min-w-0">
-          <div class="truncate text-sm font-semibold text-text-primary">Move to project</div>
-          <div class="truncate text-[11px] text-text-muted">{projectPickerSession.name}</div>
-        </div>
-        <button
-          type="button"
-          aria-label="Close"
-          class="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary"
-          on:click={() => (projectPickerSessionId = "")}
-        >
-          <X size={14} />
-        </button>
+    {#snippet heading()}
+      Move session to project
+    {/snippet}
+
+    <div class="flex h-11 items-center justify-between border-b border-hairline px-4">
+      <div class="min-w-0">
+        <div class="truncate text-[13px] font-semibold text-text-primary">Move to project</div>
+        <div class="truncate text-[11px] text-text-muted">{projectPickerSession.name}</div>
       </div>
-      <div class="app-scrollbar max-h-80 overflow-y-auto p-2">
-        {#if projects.length === 0}
-          <div class="px-3 py-4 text-center text-[12px] text-text-muted">No projects.</div>
-        {:else}
-          <div class="grid gap-1">
-            {#each projects as project (project.id)}
-              <button
-                type="button"
-                class="rounded border px-3 py-2 text-left transition-colors {projectPickerSession.projectId ===
-                project.id
-                  ? 'border-accent-dim bg-bg-active text-text-primary'
-                  : 'border-border-subtle bg-bg-surface/25 text-text-secondary hover:border-border hover:bg-bg-surface/50 hover:text-text-primary'}"
-                on:click={() => assignProject(project.id)}
-              >
-                <div class="truncate text-[13px] font-medium">{project.name}</div>
-                <div class="truncate font-mono text-[10px] text-text-muted">{project.rootDir}</div>
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
+      <IconButton label="Close" onclick={closeProjectPicker}>
+        <X size={14} />
+      </IconButton>
     </div>
-  </div>
+
+    <div class="app-scrollbar max-h-80 overflow-y-auto p-2">
+      {#if projects.length === 0}
+        <div class="px-3 py-4 text-center text-[12px] text-text-muted">No projects.</div>
+      {:else}
+        <div class="grid gap-1">
+          {#each projects as project (project.id)}
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              align="start"
+              class="h-auto w-full flex-col items-start gap-0 px-3 py-2 {projectPickerSession.projectId ===
+                project.id
+                  ? 'border-accent-dim bg-bg-active text-text-primary hover:text-text-primary'
+                  : 'border-border-subtle bg-bg-surface/25 text-text-secondary hover:border-border hover:bg-bg-surface/50 hover:text-text-primary'}"
+              onclick={() => assignProject(project.id)}
+            >
+              <span class="w-full truncate text-[13px] font-medium">{project.name}</span>
+              <span class="w-full truncate font-mono text-[10px] text-text-muted">{project.rootDir}</span>
+            </Button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </ModalShell>
 {/if}

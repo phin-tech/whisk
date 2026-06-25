@@ -38,11 +38,11 @@
 
   <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
     {#if (loading || loadingHistory) && rows.length === 0 && historyRows.length === 0}
-      <div class="flex h-full items-center justify-center text-sm text-text-muted">
+      <div class="flex h-full items-center justify-center text-[13px] text-text-muted">
         Loading PTYs...
       </div>
     {:else if rows.length === 0 && historyRows.length === 0}
-      <div class="flex h-full items-center justify-center text-sm text-text-muted">
+      <div class="flex h-full items-center justify-center text-[13px] text-text-muted">
         No daemon PTYs or history
       </div>
     {:else}
@@ -54,7 +54,7 @@
             </div>
             {#each rows as row (row.id)}
               <div
-                class="rounded-lg border border-border-subtle/60 bg-bg-surface/35 px-2 py-1.5 text-xs"
+                class="rounded-lg border border-border-subtle/60 bg-bg-surface/35 px-2 py-1.5 text-[12px]"
               >
                 <div class="flex min-w-0 items-center gap-2">
                   <span
@@ -107,7 +107,7 @@
             {#each historyRows as row (row.id)}
               <button
                 type="button"
-                class="w-full rounded-lg border border-border-subtle/60 bg-bg-surface/25 px-2 py-1.5 text-left text-xs transition-colors hover:border-accent/40 hover:bg-bg-hover focus:outline-none focus:ring-1 focus:ring-accent-dim/50"
+                class="w-full rounded-lg border border-border-subtle/60 bg-bg-surface/25 px-2 py-1.5 text-left text-[12px] transition-colors hover:border-accent/40 hover:bg-bg-hover focus:outline-none focus:ring-1 focus:ring-accent-dim/50"
                 on:click={() => onSelectHistory(row.id)}
               >
                 <div class="flex min-w-0 items-center gap-2">

@@ -10,6 +10,8 @@
   import type { Pane } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import { ResizePTY } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import { terminalInputRefreshDelays, terminalInputShouldRefreshOutput } from "./ptyStream";
+  import Button from "./ui/Button.svelte";
+  import IconButton from "./ui/IconButton.svelte";
 
   export let pane: Pane;
   export let outputChunks: string[] = [];
@@ -33,6 +35,19 @@
   let copiedPtyId = "";
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
   let renderedPtyId = "";
+
+  function cssToken(name: string, fallback: string) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+  }
+
+  function terminalTheme() {
+    return {
+      background: cssToken("--color-bg-deep", "rgb(9, 9, 11)"),
+      foreground: cssToken("--color-text-primary", "rgb(250, 250, 250)"),
+      cursor: cssToken("--color-accent", "rgb(125, 211, 252)"),
+      selectionBackground: cssToken("--color-bg-active", "rgba(39, 39, 42, 0.72)"),
+    };
+  }
 
   function fitAndResize() {
     if (!pane.currentPtyId || !terminal || !fitAddon || !host.offsetWidth || !host.offsetHeight) return;
@@ -103,12 +118,7 @@
       fontFamily: "SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       fontSize,
       lineHeight: 1.16,
-      theme: {
-        background: "#09090b",
-        foreground: "#fafafa",
-        cursor: "#7dd3fc",
-        selectionBackground: "#27272acc",
-      },
+      theme: terminalTheme(),
     });
     fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
@@ -159,13 +169,16 @@
     <span class="truncate font-medium text-text-secondary">{pane.id}</span>
     <div class="ml-auto flex min-w-0 items-center gap-1">
       {#if pane.currentPtyId}
-        <button
+        <Button
           type="button"
-          class="inline-flex min-w-0 items-center gap-1 rounded border border-transparent px-1 py-0.5 font-mono text-[10px] text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-surface hover:text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+          variant="ghost"
+          size="sm"
+          align="start"
+          class="h-5 min-w-0 px-1 py-0.5 font-mono text-[10px]"
           aria-label={`Copy PTY id ${pane.currentPtyId}`}
           title={`Copy PTY id: ${pane.currentPtyId}`}
-          on:click={copyPtyId}
-          on:keydown|stopPropagation
+          onclick={copyPtyId}
+          onkeydown={(event: KeyboardEvent) => event.stopPropagation()}
         >
           <span class="truncate">{pane.currentPtyId}</span>
           {#if copiedPtyId === pane.currentPtyId}
@@ -173,35 +186,34 @@
           {:else}
             <Clipboard size={11} />
           {/if}
-        </button>
-        <button
-          type="button"
-          class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-red hover:bg-bg-surface hover:text-red focus:outline-none focus:ring-1 focus:ring-red"
-          aria-label={`Kill PTY ${pane.currentPtyId}`}
+        </Button>
+        <IconButton
+          label={`Kill PTY ${pane.currentPtyId}`}
           title={`Kill PTY ${pane.currentPtyId}`}
-          on:click={killPTY}
-          on:keydown|stopPropagation
+          tone="danger"
+          size="sm"
+          onclick={killPTY}
+          onkeydown={(event: KeyboardEvent) => event.stopPropagation()}
         >
           <CircleStop size={12} />
-        </button>
+        </IconButton>
       {:else}
         <small class="truncate font-mono text-[10px] text-text-muted">empty</small>
       {/if}
-      <button
-        type="button"
-        class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-surface hover:text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-35"
-        aria-label={`Close pane ${pane.id}`}
+      <IconButton
+        label={`Close pane ${pane.id}`}
         title={canClose
           ? pane.currentPtyId
             ? `Close pane ${pane.id} and kill PTY ${pane.currentPtyId}`
             : `Close pane ${pane.id}`
           : "Cannot close the last pane"}
         disabled={!canClose}
-        on:click={closePane}
-        on:keydown|stopPropagation
+        size="sm"
+        onclick={closePane}
+        onkeydown={(event: KeyboardEvent) => event.stopPropagation()}
       >
         <X size={12} />
-      </button>
+      </IconButton>
     </div>
   </div>
   <div bind:this={host} class="min-h-0 min-w-0 flex-1 overflow-hidden"></div>

@@ -116,6 +116,32 @@ func (c *HTTPClient) MoveWorkItem(ctx context.Context, req protocol.MoveWorkItem
 	return item, err
 }
 
+func (c *HTTPClient) AddWorkItemLink(ctx context.Context, req protocol.AddWorkItemLinkRequest) (protocol.WorkItemLink, error) {
+	var link protocol.WorkItemLink
+	err := c.post(ctx, "/v1/work-item-links", req, &link)
+	return link, err
+}
+
+func (c *HTTPClient) ListWorkItemLinks(ctx context.Context, workItemID string) ([]protocol.WorkItemLink, error) {
+	query := url.Values{}
+	if workItemID != "" {
+		query.Set("workItemId", workItemID)
+	}
+	var links []protocol.WorkItemLink
+	err := c.get(ctx, "/v1/work-item-links", query, &links)
+	return links, err
+}
+
+func (c *HTTPClient) ReadyWork(ctx context.Context, req protocol.ReadyWorkRequest) (protocol.ReadyWorkExplanation, error) {
+	query := url.Values{}
+	if req.ProjectID != "" {
+		query.Set("projectId", req.ProjectID)
+	}
+	var ready protocol.ReadyWorkExplanation
+	err := c.get(ctx, "/v1/ready-work", query, &ready)
+	return ready, err
+}
+
 func (c *HTTPClient) StartPlanning(ctx context.Context, req protocol.StartPlanningRequest) (protocol.WorkItemRun, error) {
 	var run protocol.WorkItemRun
 	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/start-planning"

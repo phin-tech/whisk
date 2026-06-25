@@ -187,7 +187,7 @@
         </button>
       </section>
     {:else}
-      <div class="flex min-h-[180px] items-center justify-center px-4 text-center text-sm text-text-muted">
+      <div class="flex min-h-[180px] items-center justify-center px-4 text-center text-[13px] text-text-muted">
         Select a project.
       </div>
     {/if}

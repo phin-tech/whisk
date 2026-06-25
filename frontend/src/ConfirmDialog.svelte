@@ -1,70 +1,74 @@
 <script lang="ts">
-  export let visible = false;
-  export let title = "";
-  export let message = "";
-  export let confirmLabel = "Confirm";
-  export let cancelLabel = "Cancel";
-  export let checkboxLabel = "";
-  export let onconfirm: (checked: boolean) => void;
-  export let oncancel: () => void;
+  import Button from "./ui/Button.svelte";
+  import Checkbox from "./ui/Checkbox.svelte";
+  import ModalShell from "./ui/ModalShell.svelte";
 
-  let dialog: HTMLDivElement;
-  let checked = false;
+  type Props = {
+    visible?: boolean;
+    title?: string;
+    message?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    checkboxLabel?: string;
+    onconfirm: (checked: boolean) => void;
+    oncancel: () => void;
+  };
 
-  function handleKey(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      oncancel();
-    }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      onconfirm(checked);
-    }
+  let {
+    visible = false,
+    title = "",
+    message = "",
+    confirmLabel = "Confirm",
+    cancelLabel = "Cancel",
+    checkboxLabel = "",
+    onconfirm,
+    oncancel,
+  }: Props = $props();
+
+  let checked = $state(false);
+
+  function handleEscape(event: KeyboardEvent) {
+    event.preventDefault();
+    oncancel();
   }
 
-  $: if (!visible) checked = false;
-  $: if (visible) requestAnimationFrame(() => dialog?.focus());
+  function handleKey(event: KeyboardEvent) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    onconfirm(checked);
+  }
+
+  function handleOpenChange(open: boolean) {
+    if (!open && visible) oncancel();
+  }
+
+  $effect(() => {
+    if (!visible) checked = false;
+  });
 </script>
 
-{#if visible}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
-    <div
-      bind:this={dialog}
-      class="w-full max-w-[300px] rounded-xl border border-white/20 bg-[#1c1c1f] px-4 py-4 text-text-primary shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-dialog-title"
-      tabindex="-1"
-      on:keydown={handleKey}
-    >
-      <h2 id="confirm-dialog-title" class="text-[13px] font-bold leading-4">{title}</h2>
-      <p class="mt-2.5 whitespace-pre-line text-[12px] font-medium leading-4 text-text-secondary">{message}</p>
-      {#if checkboxLabel}
-        <label class="mt-3 flex items-center gap-2 text-[10px] text-text-secondary">
-          <input
-            type="checkbox"
-            class="h-3.5 w-3.5 rounded border-border-subtle bg-bg-surface accent-accent"
-            bind:checked
-          />
-          <span>{checkboxLabel}</span>
-        </label>
-      {/if}
-      <div class="mt-4 grid grid-cols-2 gap-2.5">
-        <button
-          type="button"
-          class="h-9 rounded-full bg-white/10 text-[12px] font-semibold text-text-primary transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          on:click={oncancel}
-        >
-          {cancelLabel}
-        </button>
-        <button
-          type="button"
-          class="h-9 rounded-full bg-blue-500 text-[12px] font-semibold text-white transition-colors hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          on:click={() => onconfirm(checked)}
-        >
-          {confirmLabel}
-        </button>
-      </div>
-    </div>
+<ModalShell
+  open={visible}
+  titleId="confirm-dialog-title"
+  class="max-w-[300px] bg-bg-surface px-4 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+  interactOutsideBehavior="ignore"
+  onOpenChange={handleOpenChange}
+  onEscapeKeydown={handleEscape}
+  onkeydown={handleKey}
+>
+  {#snippet heading()}
+    {title}
+  {/snippet}
+  <p class="mt-2.5 whitespace-pre-line text-[12px] font-medium leading-4 text-text-secondary">{message}</p>
+  {#if checkboxLabel}
+    <Checkbox class="mt-3" bind:checked>{checkboxLabel}</Checkbox>
+  {/if}
+  <div class="mt-4 grid grid-cols-2 gap-2.5">
+    <Button type="button" variant="outline" size="lg" class="w-full" onclick={oncancel}>
+      {cancelLabel}
+    </Button>
+    <Button type="button" variant="primary" size="lg" class="w-full" onclick={() => onconfirm(checked)}>
+      {confirmLabel}
+    </Button>
   </div>
-{/if}
+</ModalShell>

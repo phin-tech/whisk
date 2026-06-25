@@ -28,16 +28,16 @@
       type="button"
       aria-label={item.label}
       aria-pressed={activeSidebar === item.id}
-      class="group relative flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-white/5 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 {activeSidebar ===
+      class="group relative flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-surface/60 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 {activeSidebar ===
       item.id
-        ? 'bg-white/10 text-text-primary'
+        ? 'bg-bg-surface text-text-primary'
         : ''}"
       on:click={() => onSidebar(item.id)}
     >
       <Icon size={16} />
       {#if item.id === "notifications" && notificationCount > 0}
         <span
-          class="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-bg-base bg-red px-0.5 text-[8px] font-bold leading-none text-white"
+          class="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-bg-base bg-red px-0.5 text-[8px] font-bold leading-none text-text-primary"
           aria-label="{notificationCount} unread notifications"
         >
           {notificationCount > 9 ? "9+" : notificationCount}
@@ -56,8 +56,8 @@
     type="button"
     aria-label="Settings"
     aria-pressed={settingsOpen}
-    class="group relative flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-white/5 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 {settingsOpen
-      ? 'bg-white/10 text-text-primary'
+    class="group relative flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-surface/60 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 {settingsOpen
+      ? 'bg-bg-surface text-text-primary'
       : ''}"
     on:click={onSettings}
   >

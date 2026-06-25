@@ -4,6 +4,7 @@ from .add_project_attachment_request import AddProjectAttachmentRequest
 from .add_project_attachment_request_meta import AddProjectAttachmentRequestMeta
 from .add_pty_bookmark_request import AddPTYBookmarkRequest
 from .add_work_item_attachment_request import AddWorkItemAttachmentRequest
+from .add_work_item_link_request import AddWorkItemLinkRequest
 from .agent_bridge_approval import AgentBridgeApproval
 from .agent_bridge_approval_tool_input import AgentBridgeApprovalToolInput
 from .agent_bridge_event import AgentBridgeEvent
@@ -30,6 +31,7 @@ from .ask_question_request import AskQuestionRequest
 from .attachment import Attachment
 from .attachment_meta import AttachmentMeta
 from .bind_work_item_worktree_request import BindWorkItemWorktreeRequest
+from .blocked_work_item import BlockedWorkItem
 from .bookmark import Bookmark
 from .cancel_work_item_run_request import CancelWorkItemRunRequest
 from .clear_daemon_request import ClearDaemonRequest
@@ -91,6 +93,10 @@ from .pty_history_summary import PTYHistorySummary
 from .pty_info import PTYInfo
 from .question import Question
 from .queue_execution_request import QueueExecutionRequest
+from .ready_blocker_info import ReadyBlockerInfo
+from .ready_work_explanation import ReadyWorkExplanation
+from .ready_work_item import ReadyWorkItem
+from .ready_work_summary import ReadyWorkSummary
 from .registry_plugin import RegistryPlugin
 from .remove_worktree_request import RemoveWorktreeRequest
 from .report_status_request import ReportStatusRequest
@@ -138,6 +144,7 @@ from .update_project_request_default_phase_agents import (
 )
 from .update_work_item_request import UpdateWorkItemRequest
 from .work_item import WorkItem
+from .work_item_link import WorkItemLink
 from .work_item_metadata import WorkItemMetadata
 from .work_item_run import WorkItemRun
 from .work_item_run_metadata import WorkItemRunMetadata
@@ -155,6 +162,7 @@ __all__ = (
     "AddProjectAttachmentRequestMeta",
     "AddPTYBookmarkRequest",
     "AddWorkItemAttachmentRequest",
+    "AddWorkItemLinkRequest",
     "AgentBridgeApproval",
     "AgentBridgeApprovalToolInput",
     "AgentBridgeEvent",
@@ -181,6 +189,7 @@ __all__ = (
     "Attachment",
     "AttachmentMeta",
     "BindWorkItemWorktreeRequest",
+    "BlockedWorkItem",
     "Bookmark",
     "CancelWorkItemRunRequest",
     "ClearDaemonRequest",
@@ -240,6 +249,10 @@ __all__ = (
     "PTYInfo",
     "Question",
     "QueueExecutionRequest",
+    "ReadyBlockerInfo",
+    "ReadyWorkExplanation",
+    "ReadyWorkItem",
+    "ReadyWorkSummary",
     "RegistryPlugin",
     "RemoveWorktreeRequest",
     "ReportStatusRequest",
@@ -284,6 +297,7 @@ __all__ = (
     "WorkflowStage",
     "WorkflowTemplate",
     "WorkItem",
+    "WorkItemLink",
     "WorkItemMetadata",
     "WorkItemRun",
     "WorkItemRunMetadata",

@@ -141,5 +141,29 @@ Imperative shell tests:
 For daemon/client work, prefer typed-client tests against a real in-process
 server. This catches protocol drift without booting the desktop app.
 
+Frontend/Wails renderer tests:
+
+- Use `npm --prefix frontend run test:e2e` for Playwright coverage of the
+  Wails renderer. Install browsers with
+  `npm --prefix frontend run test:e2e:install` when the local cache is missing.
+- This lane runs the Vite/Wails frontend in `e2e` mode at
+  `http://127.0.0.1:9245` and exercises Chromium plus WebKit. Treat WebKit as
+  a close renderer proxy, not a native Safari or packaged Wails smoke test.
+- Keep `frontend/e2e/wailsRuntimeFake.ts` as an in-memory fake at the
+  `@wailsio/runtime` boundary. Do not introduce mocking frameworks or bypass
+  generated Wails bindings.
+- Use renderer E2E for UI flows, layout regressions, dialogs, events, and
+  generated binding calls. Keep daemon behavior in Go integration tests against
+  a real in-process server.
+- Avoid live daemon, PTY, and WebSocket dependencies in renderer E2E unless the
+  test is explicitly promoted to a separate desktop/native smoke lane.
+
+For agentbridge and hook tests, use `go tool testagent` (pinned in `go.mod`)
+to drive scripted Claude/Codex hook sequences through the real HTTP layer
+without an API key or a running model. Wire a `settings.json` to the bridge's
+`hook.sh` (written by `bridgeinstaller.Install` to the agent working dir) and
+pipe tool-use sequences on stdin; the daemon processes them identically to real
+agent traffic. See `internal/app/agentbridge_testagent_test.go` for the pattern.
+
 Do not start runtime features with Svelte state, Wails-only commands, or
 desktop-local persistence.

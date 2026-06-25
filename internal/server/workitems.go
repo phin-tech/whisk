@@ -553,6 +553,44 @@ func (s *HTTPServer) moveWorkItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func (s *HTTPServer) listWorkItemLinks(w http.ResponseWriter, r *http.Request) {
+	links, err := s.runtime.ListWorkItemLinks(r.Context(), r.URL.Query().Get("workItemId"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, links)
+}
+
+func (s *HTTPServer) addWorkItemLink(w http.ResponseWriter, r *http.Request) {
+	var req protocol.AddWorkItemLinkRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	link, err := s.runtime.AddWorkItemLink(r.Context(), app.AddWorkItemLinkRequest{
+		SourceWorkItemID: req.SourceWorkItemID,
+		TargetWorkItemID: req.TargetWorkItemID,
+		Type:             req.Type,
+		Actor:            req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, link)
+}
+
+func (s *HTTPServer) readyWork(w http.ResponseWriter, r *http.Request) {
+	ready, err := s.runtime.ReadyWork(r.Context(), app.ReadyWorkRequest{
+		ProjectID: r.URL.Query().Get("projectId"),
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ready)
+}
+
 func (s *HTTPServer) bindWorkItemWorktree(w http.ResponseWriter, r *http.Request) {
 	var req protocol.BindWorkItemWorktreeRequest
 	if !decodeJSON(w, r, &req) {

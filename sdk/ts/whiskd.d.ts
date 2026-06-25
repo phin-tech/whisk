@@ -914,6 +914,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ready-work": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["readyWork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -1116,6 +1132,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["markStatusEventRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/work-item-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listWorkItemLinks"];
+        put?: never;
+        post: operations["addWorkItemLink"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1557,6 +1589,12 @@ export interface components {
             url?: string;
             workItemId: string;
         };
+        AddWorkItemLinkRequest: {
+            actor?: string;
+            sourceWorkItemId: string;
+            targetWorkItemId: string;
+            type: string;
+        };
         AgentBridgeApproval: {
             bridgeId: string;
             /** Format: date-time */
@@ -1749,6 +1787,12 @@ export interface components {
             branch: string;
             id: string;
             worktreePath: string;
+        };
+        BlockedWorkItem: {
+            blockedBy: components["schemas"]["ReadyBlockerInfo"][] | null;
+            /** Format: int64 */
+            blockedByCount: number;
+            workItem: components["schemas"]["WorkItem"];
         };
         Bookmark: {
             /** Format: date-time */
@@ -2167,6 +2211,38 @@ export interface components {
             actor?: string;
             workItemId: string;
         };
+        ReadyBlockerInfo: {
+            id: string;
+            /** Format: int64 */
+            number?: number;
+            runState?: string;
+            stageId?: string;
+            title?: string;
+        };
+        ReadyWorkExplanation: {
+            blocked: components["schemas"]["BlockedWorkItem"][] | null;
+            cycles?: string[][];
+            ready: components["schemas"]["ReadyWorkItem"][] | null;
+            summary: components["schemas"]["ReadyWorkSummary"];
+        };
+        ReadyWorkItem: {
+            /** Format: int64 */
+            dependencyCount: number;
+            /** Format: int64 */
+            dependentCount: number;
+            parentWorkItemId?: string | null;
+            reason: string;
+            resolvedBlockers?: string[];
+            workItem: components["schemas"]["WorkItem"];
+        };
+        ReadyWorkSummary: {
+            /** Format: int64 */
+            cycleCount: number;
+            /** Format: int64 */
+            totalBlocked: number;
+            /** Format: int64 */
+            totalReady: number;
+        };
         RegistryPlugin: {
             description?: string;
             id: string;
@@ -2434,6 +2510,16 @@ export interface components {
             /** Format: int64 */
             workflowVersion: number;
             worktree?: components["schemas"]["WorktreeBinding"] | null;
+        };
+        WorkItemLink: {
+            /** Format: date-time */
+            createdAt: string;
+            createdBy?: string;
+            id: string;
+            projectId: string;
+            sourceWorkItemId: string;
+            targetWorkItemId: string;
+            type: string;
         };
         WorkItemRun: {
             /** Format: date-time */
@@ -4404,6 +4490,37 @@ export interface operations {
             };
         };
     };
+    readyWork: {
+        parameters: {
+            query?: {
+                projectId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadyWorkExplanation"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listSessions: {
         parameters: {
             query?: never;
@@ -4874,6 +4991,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusEvent"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listWorkItemLinks: {
+        parameters: {
+            query?: {
+                workItemId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemLink"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    addWorkItemLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddWorkItemLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemLink"];
                 };
             };
             /** @description error */
