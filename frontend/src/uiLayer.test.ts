@@ -6,6 +6,7 @@ import newProjectDialogSource from "./NewProjectDialog.svelte?raw";
 import newSessionDialogSource from "./NewSessionDialog.svelte?raw";
 import onboardingPanelSource from "./OnboardingPanel.svelte?raw";
 import projectsPanelSource from "./ProjectsPanel.svelte?raw";
+import ptysPanelSource from "./PtysPanel.svelte?raw";
 import workItemDetailSource from "./WorkItemDetail.svelte?raw";
 import workItemsPanelSource from "./WorkItemsPanel.svelte?raw";
 
@@ -247,6 +248,13 @@ describe("local UI layer", () => {
     expect(projectsPanelSource).toContain('from "./ui/TextField.svelte"');
     expect(projectsPanelSource).not.toMatch(/<(button|input|textarea|select)\b/);
     expect(projectsPanelSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("migrates PtysPanel buttons onto the local UI layer", () => {
+    expect(ptysPanelSource).toContain('from "./ui/Button.svelte"');
+    expect(ptysPanelSource).toContain('from "./ui/IconButton.svelte"');
+    expect(ptysPanelSource).not.toMatch(/<button\b/);
+    expect(ptysPanelSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {
