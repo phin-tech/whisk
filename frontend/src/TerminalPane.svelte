@@ -155,8 +155,8 @@
   class="group flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-border-subtle/70 bg-bg-deep text-left text-text-primary outline-none transition-[filter,border-color] duration-150 {focused
     ? 'border-accent-dim brightness-105'
     : 'brightness-90 hover:brightness-100'}"
-  on:click={focusTerminal}
-  on:keydown={(event) => {
+  onclick={focusTerminal}
+  onkeydown={(event) => {
     if (event.key === "Enter" || event.key === " ") focusTerminal();
   }}
   role="button"

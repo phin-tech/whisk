@@ -16,6 +16,7 @@ import sessionsPanelSource from "./SessionsPanel.svelte?raw";
 import sidebarPanelHeaderSource from "./SidebarPanelHeader.svelte?raw";
 import sidebarDockSource from "./SidebarDock.svelte?raw";
 import settingsViewSource from "./SettingsView.svelte?raw";
+import terminalPaneSource from "./TerminalPane.svelte?raw";
 import workItemDetailSource from "./WorkItemDetail.svelte?raw";
 import workItemsPanelSource from "./WorkItemsPanel.svelte?raw";
 
@@ -332,6 +333,10 @@ describe("local UI layer", () => {
     expect(settingsViewSource).toContain('from "./ui/TextField.svelte"');
     expect(settingsViewSource).not.toMatch(/<(button|input|textarea|select)\b/);
     expect(settingsViewSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("keeps TerminalPane on Svelte 5 event attributes", () => {
+    expect(terminalPaneSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {
