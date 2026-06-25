@@ -11,6 +11,7 @@ import newSessionDialogSource from "./NewSessionDialog.svelte?raw";
 import onboardingPanelSource from "./OnboardingPanel.svelte?raw";
 import projectsPanelSource from "./ProjectsPanel.svelte?raw";
 import ptysPanelSource from "./PtysPanel.svelte?raw";
+import sessionsPanelSource from "./SessionsPanel.svelte?raw";
 import sidebarPanelHeaderSource from "./SidebarPanelHeader.svelte?raw";
 import sidebarDockSource from "./SidebarDock.svelte?raw";
 import workItemDetailSource from "./WorkItemDetail.svelte?raw";
@@ -302,6 +303,14 @@ describe("local UI layer", () => {
     expect(appSource).toContain('from "./ui/Button.svelte"');
     expect(appSource).not.toMatch(/<button\b/);
     expect(appSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("migrates SessionsPanel controls onto the local UI layer", () => {
+    expect(sessionsPanelSource).toContain('from "./ui/Button.svelte"');
+    expect(sessionsPanelSource).toContain('from "./ui/IconButton.svelte"');
+    expect(sessionsPanelSource).toContain('from "./ui/TextField.svelte"');
+    expect(sessionsPanelSource).not.toMatch(/<(button|input|textarea|select)\b/);
+    expect(sessionsPanelSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {
