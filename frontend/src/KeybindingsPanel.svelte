@@ -7,6 +7,10 @@
     SaveKeybindings,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import { displayAccelerator, findConflicts, formatAccelerator } from "./keybindingsView";
+  import Button from "./ui/Button.svelte";
+  import IconButton from "./ui/IconButton.svelte";
+  import List from "./ui/List.svelte";
+  import ListRow from "./ui/ListRow.svelte";
 
   export let visible = false;
 
@@ -148,11 +152,11 @@
       <div class="mb-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted">
         {group.category}
       </div>
-      <div class="divide-y divide-hairline border-y border-hairline">
+      <List class="border-y border-hairline">
         {#each group.commands as command}
           {@const accelerator = command.editable ? (draft[command.id] ?? "") : command.default}
           {@const conflicting = conflictingIds.has(command.id)}
-          <div class="flex items-center justify-between gap-3 py-2">
+          <ListRow class="flex items-center justify-between gap-3">
             <div class="min-w-0">
               <div class="truncate text-[13px] text-text-primary">{command.label}</div>
               {#if conflicting}
@@ -161,33 +165,31 @@
             </div>
             {#if command.editable}
               <div class="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  class="min-w-[84px] rounded border px-2 py-1 text-center font-mono text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/60 {recordingId ===
+                <Button
+                  size="sm"
+                  class="min-w-[84px] font-mono {recordingId ===
                   command.id
-                    ? 'border-accent bg-accent-dim/20 text-accent'
+                    ? '!border-accent !bg-accent-dim/20 !text-accent'
                     : conflicting
-                      ? 'border-red/40 bg-red/10 text-red hover:border-red'
-                      : 'border-border bg-bg-deep text-text-primary hover:border-accent-dim'}"
-                  on:click={(event) => startRecording(command.id, event)}
-                  on:keydown={(event) => onRecordKey(event, command.id)}
-                  on:blur={() => recordingId === command.id && (recordingId = null)}
+                      ? '!border-red/40 !bg-red/10 !text-red hover:!border-red'
+                      : '!border-border !bg-bg-deep !text-text-primary hover:!border-accent-dim'}"
+                  onclick={(event) => startRecording(command.id, event)}
+                  onkeydown={(event: KeyboardEvent) => onRecordKey(event, command.id)}
+                  onblur={() => recordingId === command.id && (recordingId = null)}
                 >
                   {#if recordingId === command.id}
                     Press keys…
                   {:else}
                     {displayAccelerator(accelerator) || "Unset"}
                   {/if}
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Reset ${command.label} to default`}
-                  class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:opacity-40"
+                </Button>
+                <IconButton
+                  label={`Reset ${command.label} to default`}
                   disabled={accelerator === command.default}
-                  on:click={() => resetToDefault(command)}
+                  onclick={() => resetToDefault(command)}
                 >
                   <RotateCcw size={13} />
-                </button>
+                </IconButton>
               </div>
             {:else}
               <div
@@ -196,21 +198,20 @@
                 {displayAccelerator(accelerator)}
               </div>
             {/if}
-          </div>
+          </ListRow>
         {/each}
-      </div>
+      </List>
     </div>
   {/each}
 
   <div class="mt-5 flex items-center gap-3">
-    <button
-      type="button"
-      class="inline-flex h-8 items-center justify-center rounded border border-accent bg-accent-dim/30 px-3 text-[12px] font-medium text-text-primary transition-colors hover:bg-accent-dim/50 disabled:cursor-not-allowed disabled:border-border disabled:bg-bg-deep disabled:text-text-muted"
+    <Button
+      variant="primary"
       disabled={saving || hasConflicts || !dirty}
-      on:click={save}
+      onclick={save}
     >
       {saving ? "Saving…" : "Save Shortcuts"}
-    </button>
+    </Button>
     {#if hasConflicts}
       <span class="text-[11px] text-red">Resolve conflicts before saving.</span>
     {:else if saveError}

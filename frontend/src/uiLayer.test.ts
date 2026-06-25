@@ -4,6 +4,7 @@ import commandPaletteSource from "./CommandPalette.svelte?raw";
 import activityRailSource from "./ActivityRail.svelte?raw";
 import confirmDialogSource from "./ConfirmDialog.svelte?raw";
 import daemonSettingsSource from "./DaemonSettings.svelte?raw";
+import keybindingsPanelSource from "./KeybindingsPanel.svelte?raw";
 import newProjectDialogSource from "./NewProjectDialog.svelte?raw";
 import newSessionDialogSource from "./NewSessionDialog.svelte?raw";
 import onboardingPanelSource from "./OnboardingPanel.svelte?raw";
@@ -276,6 +277,16 @@ describe("local UI layer", () => {
     expect(daemonSettingsSource).toContain('from "./ui/TextField.svelte"');
     expect(daemonSettingsSource).not.toMatch(/<(button|input|textarea|select)\b/);
     expect(daemonSettingsSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("migrates keybindings panel controls and rows onto the local UI layer", () => {
+    expect(keybindingsPanelSource).toContain('from "./ui/Button.svelte"');
+    expect(keybindingsPanelSource).toContain('from "./ui/IconButton.svelte"');
+    expect(keybindingsPanelSource).toContain('from "./ui/List.svelte"');
+    expect(keybindingsPanelSource).toContain('from "./ui/ListRow.svelte"');
+    expect(keybindingsPanelSource).not.toMatch(/<button\b/);
+    expect(keybindingsPanelSource).not.toMatch(/divide-y divide-hairline/);
+    expect(keybindingsPanelSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {
