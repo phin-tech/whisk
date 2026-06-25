@@ -37,3 +37,11 @@ export function clearNavigationStack(state: NavigationState): NavigationState {
     workBoardOpenItemId: "",
   };
 }
+
+export function selectMainView(state: NavigationState, target: MainView): NavigationState {
+  return {
+    activeMain: target,
+    navigationStack: [],
+    workBoardOpenItemId: "",
+  };
+}

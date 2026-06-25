@@ -115,18 +115,14 @@
     ListRegistryPlugins,
     InstallPlugin,
   } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
-  import ActivityRail from "./ActivityRail.svelte";
-  import Button from "./ui/Button.svelte";
+  import AppSidebar from "./AppSidebar.svelte";
   import CommandPalette from "./CommandPalette.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
-  import LayoutView from "./LayoutView.svelte";
+  import MainRouter from "./MainRouter.svelte";
   import NewProjectDialog from "./NewProjectDialog.svelte";
   import NewSessionDialog from "./NewSessionDialog.svelte";
   import OnboardingPanel from "./OnboardingPanel.svelte";
-  import ProjectsView from "./ProjectsView.svelte";
   import SettingsView from "./SettingsView.svelte";
-  import SidebarDock from "./SidebarDock.svelte";
-  import WorkBoard from "./WorkBoard.svelte";
   import { agentHookNotificationClickTarget, isAgentHookNotification, upsertAgentHookIntegration as upsertAgentHookIntegrationView } from "./agentHooksView";
   import type { Command } from "./commands";
   import { runCommand } from "./commands";
@@ -135,6 +131,7 @@
     clearNavigationStack as clearNavigationStackState,
     navigateBack as navigateBackState,
     navigateTo as navigateToState,
+    selectMainView,
     type MainView,
     type NavigationState,
   } from "./navigation";
@@ -221,6 +218,10 @@
 
   function clearNavigationStack() {
     applyNavigationState(clearNavigationStackState(currentNavigationState()));
+  }
+
+  function selectMain(target: MainView) {
+    applyNavigationState(selectMainView(currentNavigationState(), target));
   }
   let activeSidebar: SidebarId | null = "sessions";
   let commandPaletteOpen = false;
@@ -350,7 +351,7 @@
 
   function applyStartupView(view: StartupView) {
     const target = startupTarget(view);
-    activeMain = target.main;
+    selectMain(target.main);
     activeSidebar = target.sidebar;
   }
 
@@ -762,7 +763,7 @@
     pendingSessionProjectId = "";
     pendingSessionRootDir = "";
     pendingSessionWorkingDir = "";
-    activeMain = "session";
+    selectMain("session");
     newSessionOpen = true;
   }
 
@@ -802,13 +803,13 @@
       sessions = [created.session, ...sessions.filter((session) => session.id !== created.session.id)];
       if (pendingSessionProjectId) {
         activeProjectId = pendingSessionProjectId;
-        activeMain = "projects";
+        selectMain("projects");
         activeSidebar = null;
         await refreshProjects();
       } else {
         activeSessionId = created.session.id;
         activePaneId = created.paneId;
-        activeMain = "session";
+        selectMain("session");
         activeSidebar = "sessions";
       }
       pendingSessionProjectId = "";
@@ -1064,8 +1065,7 @@
   }
 
   function selectSession(session: Session) {
-    clearNavigationStack();
-    activeMain = "session";
+    selectMain("session");
     activeSessionId = session.id;
     activePaneId = firstPaneId(session);
     void refreshVisibleOutput().catch((err) => {
@@ -1093,8 +1093,7 @@
   }
 
   function selectProject(projectId: string) {
-    clearNavigationStack();
-    activeMain = "work";
+    selectMain("work");
     activeProjectId = projectId;
     workFilterQuery = "";
     workFilterStageId = "";
@@ -1105,8 +1104,7 @@
   }
 
   function selectProjectDetail(projectId: string) {
-    clearNavigationStack();
-    activeMain = "projects";
+    selectMain("projects");
     activeSidebar = "projects";
     activeProjectId = projectId;
     void Promise.all([refreshProjectDetail(), refreshWorkState()]).catch((err) => {
@@ -1115,13 +1113,12 @@
   }
 
   async function selectStatusEvent(event: StatusEvent) {
-    clearNavigationStack();
     const target = targetForStatusEvent(event, sessions);
     if (target.main === "work") {
-      activeMain = "work";
+      selectMain("work");
       activeSidebar = "work";
     } else {
-      activeMain = "session";
+      selectMain("session");
       if (target.sessionId) activeSessionId = target.sessionId;
       if (target.paneId) activePaneId = target.paneId;
     }
@@ -1136,9 +1133,8 @@
   }
 
   async function selectAgentBridgeEvent(event: AgentBridgeEvent) {
-    clearNavigationStack();
     const target = agentHookNotificationClickTarget(event, sessions);
-    activeMain = "session";
+    selectMain("session");
     if (target.sessionId) activeSessionId = target.sessionId;
     if (target.paneId) activePaneId = target.paneId;
     try {
@@ -1156,8 +1152,7 @@
   }
 
   async function selectAgentPrompt(prompt: AgentPrompt) {
-    clearNavigationStack();
-    activeMain = "session";
+    selectMain("session");
     if (prompt.sessionId) activeSessionId = prompt.sessionId;
     const session = sessions.find((candidate) => candidate.id === prompt.sessionId);
     const paneId = paneIdForPty(session, prompt.ptyId || "");
@@ -1194,7 +1189,6 @@
   }
 
   async function openWorkItemRun(run: WorkItemRun) {
-    clearNavigationStack();
     try {
       const nextSessions = await ListSessions();
       sessions = nextSessions;
@@ -1207,7 +1201,7 @@
         },
         nextSessions,
       );
-      activeMain = "session";
+      selectMain("session");
       activeSidebar = "sessions";
       if (target.sessionId) activeSessionId = target.sessionId;
       if (target.paneId) activePaneId = target.paneId;
@@ -1218,9 +1212,8 @@
   }
 
   function openNewProject() {
-    clearNavigationStack();
     if (activeMain !== "projects") {
-      activeMain = "work";
+      selectMain("work");
       activeSidebar = "work";
     }
     newProjectOpen = true;
@@ -1238,7 +1231,7 @@
       });
       activeProjectId = project.id;
       await refreshProjects();
-      activeMain = nextMain;
+      selectMain(nextMain);
       activeSidebar = nextMain === "work" ? "work" : null;
       newProjectOpen = false;
     } catch (err) {
@@ -1879,18 +1872,16 @@
   async function openSessionById(sessionId: string) {
     await refreshSessions();
     const session = sessions.find((candidate) => candidate.id === sessionId);
-    clearNavigationStack();
     activeSessionId = sessionId;
     activePaneId = firstPaneId(session);
-    activeMain = "session";
+    selectMain("session");
     activeSidebar = "sessions";
     await refreshVisibleOutput().catch((err) => (error = backendError(err)));
   }
 
   function toggleSidebar(id: SidebarId) {
-    clearNavigationStack();
     if (id === "projects") {
-      activeMain = "projects";
+      selectMain("projects");
       activeSidebar = activeSidebar === "projects" ? null : "projects";
       settingsOpen = false;
       void Promise.all([refreshProjects(), refreshProjectDetail()]).catch((err) => {
@@ -1899,12 +1890,12 @@
       return;
     }
     if (id === "work") {
-      activeMain = "work";
+      selectMain("work");
       void refreshVisibleWorkState().catch((err) => {
         error = backendError(err);
       });
     }
-    if (id === "sessions" || id === "ptys") activeMain = "session";
+    if (id === "sessions" || id === "ptys") selectMain("session");
     activeSidebar = activeSidebar === id ? null : id;
     settingsOpen = false;
   }
@@ -2004,62 +1995,56 @@
 
 <main class="flex h-screen flex-col overflow-hidden bg-bg-deep text-text-primary">
   <div class="flex min-h-0 flex-1 flex-row">
-    {#if railSide === "left"}
-      <div class="flex h-full w-[36px] shrink-0 flex-col border-r border-hairline bg-bg-base/96">
-        <ActivityRail
-          activeSidebar={activeSidebar ??
-            (activeMain === "work" ? "work" : activeMain === "projects" ? "projects" : null)}
-          {settingsOpen}
-          {notificationCount}
-          onSidebar={toggleSidebar}
-          onSettings={toggleSettings}
-        />
-      </div>
-      <SidebarDock
-        activePanel={activeSidebar}
-        {sessions}
-        {ptys}
-        {ptyHistory}
-        {selectedPTYHistory}
-        {projects}
-        {workItems}
-        {statusEvents}
-        {agentBridgeApprovals}
-        {agentPrompts}
-        {agentBridgeEvents}
-        {activeSessionId}
-        {activeProjectId}
-        bind:workFilterQuery
-        bind:workFilterStageId
-        bind:workFilterRunState
-        {loadingSession}
-        {loadingPtys}
-        {loadingPTYHistory}
-        {loadingWork}
-        {loadingStatusEvents}
-        {railSide}
-        onClose={() => (activeSidebar = null)}
-        onNewSession={openNewSession}
-        onSelectSession={selectSession}
-        onCloseSession={closeSession}
-        onSetSessionProject={(sessionId, projectId) => void setSessionProject(sessionId, projectId)}
-        onRefreshPtys={() => void refreshPTYs()}
-        onKillPTY={(ptyId) => void killPTY(ptyId)}
-        onDeletePTY={(ptyId) => void deletePTY(ptyId)}
-        onSelectPTYHistory={(ptyId) => void selectPTYHistory(ptyId)}
-        onRefreshStatusEvents={() => void refreshStatusEvents()}
-        onClearNotifications={() => void executeCommand("notifications.clear")}
-        onSelectStatusEvent={(event) => void selectStatusEvent(event)}
-        onSelectAgentPrompt={(prompt) => void selectAgentPrompt(prompt)}
-        onSelectAgentBridgeEvent={(event) => void selectAgentBridgeEvent(event)}
-        onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
-        onResolveAgentPrompt={(prompt, answer, tuiInput) => void resolveAgentPrompt(prompt, answer, tuiInput)}
-        onRefreshWork={() => void refreshProjects()}
-        onNewProject={openNewProject}
-        onSelectProject={activeSidebar === "projects" ? selectProjectDetail : selectProject}
-        onCreateWorkItem={createWorkItem}
-      />
-    {/if}
+    <AppSidebar
+      side={railSide}
+      {activeMain}
+      {activeSidebar}
+      {settingsOpen}
+      {notificationCount}
+      {sessions}
+      {ptys}
+      {ptyHistory}
+      {selectedPTYHistory}
+      {projects}
+      {workItems}
+      {statusEvents}
+      {agentBridgeApprovals}
+      {agentPrompts}
+      {agentBridgeEvents}
+      {activeSessionId}
+      {activeProjectId}
+      bind:workFilterQuery
+      bind:workFilterStageId
+      bind:workFilterRunState
+      {loadingSession}
+      {loadingPtys}
+      {loadingPTYHistory}
+      {loadingWork}
+      {loadingStatusEvents}
+      onSidebar={toggleSidebar}
+      onSettings={toggleSettings}
+      onClose={() => (activeSidebar = null)}
+      onNewSession={openNewSession}
+      onSelectSession={selectSession}
+      onCloseSession={closeSession}
+      onSetSessionProject={(sessionId, projectId) => void setSessionProject(sessionId, projectId)}
+      onRefreshPtys={() => void refreshPTYs()}
+      onKillPTY={(ptyId) => void killPTY(ptyId)}
+      onDeletePTY={(ptyId) => void deletePTY(ptyId)}
+      onSelectPTYHistory={(ptyId) => void selectPTYHistory(ptyId)}
+      onRefreshStatusEvents={() => void refreshStatusEvents()}
+      onClearNotifications={() => void executeCommand("notifications.clear")}
+      onSelectStatusEvent={(event) => void selectStatusEvent(event)}
+      onSelectAgentPrompt={(prompt) => void selectAgentPrompt(prompt)}
+      onSelectAgentBridgeEvent={(event) => void selectAgentBridgeEvent(event)}
+      onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
+      onResolveAgentPrompt={(prompt, answer, tuiInput) => void resolveAgentPrompt(prompt, answer, tuiInput)}
+      onRefreshWork={() => void refreshProjects()}
+      onNewProject={openNewProject}
+      onSelectProject={selectProject}
+      onSelectProjectDetail={selectProjectDetail}
+      onCreateWorkItem={createWorkItem}
+    />
 
     <section class="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-bg-deep">
       <header class="flex h-10 shrink-0 items-center justify-between border-b border-hairline bg-bg-base/80 px-3">
@@ -2082,117 +2067,80 @@
       {/if}
 
       <div class="relative flex min-h-0 flex-1 flex-col">
-        {#if activeMain === "projects"}
-          <ProjectsView
-            {projects}
-            detail={projectDetail}
-            {activeProjectId}
-            loading={loadingWork || loadingSession}
-            onUpdateProject={(projectId, request) => void updateProject(projectId, request)}
-            onDeleteProject={(projectId) => void deleteProject(projectId)}
-            onNewSession={(projectId) => openNewProjectSession(projectId)}
-            onOpenSession={(sessionId) => void openSessionById(sessionId)}
-            onRemoveSession={(sessionId) => void unassignProjectSession(sessionId)}
-            onCreateWorkItem={createWorkItem}
-            onDeleteWorkItem={deleteWorkItem}
-            onOpenWorkItem={(workItemId) => navigateTo("work", { openItemId: workItemId })}
-            onOpenRunTerminal={(run) => void openWorkItemRun(run)}
-            pluginAttachmentTemplates={projectAttachmentTemplates}
-            onAddProjectAttachment={addProjectAttachment}
-            onRunPluginProjectAttachmentTemplate={runPluginProjectAttachmentTemplate}
-            onUpdateProjectAttachment={updateProjectAttachment}
-            onDeleteProjectAttachment={deleteProjectAttachment}
-          />
-        {:else if activeMain === "work"}
-          <WorkBoard
-            openItemId={workBoardOpenItemId}
-            onDetailClose={navigationStack.length > 0 ? navigateBack : null}
-            {projects}
-            {workItems}
-            workItemLinks={workItemLinks}
-            readyWork={readyWork}
-            {workItemRuns}
-            {artifacts}
-            {questions}
-            {gateReports}
-            {workflowEvents}
-            {agentProfiles}
-            {activeProjectId}
-            filterQuery={workFilterQuery}
-            filterStageId={workFilterStageId}
-            filterRunState={workFilterRunState}
-            loading={loadingWork}
-            onRefresh={() => void refreshProjects()}
-            onCreateWorkItem={createWorkItem}
-            onUpdateWorkItem={updateWorkItem}
-            onMoveWorkItem={moveWorkItem}
-            onAddWorkItemLink={addWorkItemLink}
-            onGenerateWorktree={generateWorktree}
-            onAttachFile={attachFile}
-            onDeleteWorkItem={deleteWorkItem}
-            onCancelRun={cancelWorkItemRun}
-            onLaunchRun={launchWorkItemRun}
-            onOpenRunTerminal={(run) => void openWorkItemRun(run)}
-            onStartPlanning={startPlanning}
-            onSubmitPlan={submitPlan}
-            onApprovePlan={approvePlan}
-            onQueueExecution={queueExecution}
-            onLaunchExecution={launchExecution}
-            onSetPhaseAgent={setPhaseAgent}
-            onSetInteractiveAgentShell={setInteractiveAgentShell}
-            onCompleteExecution={completeExecution}
-            onSubmitReviewFeedback={submitReviewFeedback}
-            onAskQuestion={askQuestion}
-            onAnswerQuestion={answerQuestion}
-            onCompleteGate={completeGate}
-            onApproveDone={approveDone}
-          />
-        {:else if activeSession}
-          {#if activeSessionWindow}
-            <LayoutView
-              node={activeSessionWindow.layout}
-              panes={activeSession.panes}
-              {outputChunks}
-              {activePaneId}
-              {terminalFontSize}
-              {terminalCursorBlink}
-              onFocus={(paneId) => (activePaneId = paneId)}
-              onInput={(ptyId) => refreshOutput(ptyId).catch((err) => {
-                if (!isStalePTYError(err)) error = backendError(err);
-              })}
-              onWriteInput={writePTYInput}
-              onClose={(paneId) => void closePane(paneId)}
-              onKillPTY={(paneId) => void killPanePTY(paneId)}
-              canClose={(paneId) =>
-                Boolean(closePaneTarget(activeSession, activeSessionWindow?.id ?? "", paneId))}
-            />
-          {/if}
-        {:else}
-          <div class="flex flex-1 flex-col items-center justify-center gap-4 text-center text-text-secondary">
-            <div
-              class="flex h-16 w-16 items-center justify-center rounded-2xl border border-border-subtle bg-bg-surface/80 text-accent shadow-[0_18px_40px_rgba(2,6,23,0.45)]"
-            >
-              <span class="text-[30px]">W</span>
-            </div>
-            <div class="space-y-1">
-              <p class="text-[14px] font-semibold tracking-tight text-text-primary">
-                No active sessions
-              </p>
-              <p class="text-[13px] text-text-secondary">
-                Start a daemon-owned shell session.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="lg"
-              class="shadow-[0_18px_40px_rgba(2,6,23,0.45)]"
-              disabled={loadingSession}
-              onclick={openNewSession}
-            >
-              New Session
-            </Button>
-          </div>
-        {/if}
+        <MainRouter
+          {activeMain}
+          {activeSession}
+          {activeSessionWindow}
+          {outputChunks}
+          {activePaneId}
+          {terminalFontSize}
+          {terminalCursorBlink}
+          {loadingSession}
+          {projects}
+          projectDetail={projectDetail}
+          {activeProjectId}
+          {loadingWork}
+          {workBoardOpenItemId}
+          canNavigateBack={navigationStack.length > 0}
+          {workItems}
+          {workItemLinks}
+          {readyWork}
+          {workItemRuns}
+          {artifacts}
+          {questions}
+          {gateReports}
+          {workflowEvents}
+          {agentProfiles}
+          {workFilterQuery}
+          {workFilterStageId}
+          {workFilterRunState}
+          pluginAttachmentTemplates={projectAttachmentTemplates}
+          onUpdateProject={(projectId, request) => void updateProject(projectId, request)}
+          onDeleteProject={(projectId) => void deleteProject(projectId)}
+          onNewProjectSession={(projectId) => openNewProjectSession(projectId)}
+          onOpenSession={(sessionId) => void openSessionById(sessionId)}
+          onRemoveSession={(sessionId) => void unassignProjectSession(sessionId)}
+          onCreateWorkItem={createWorkItem}
+          onDeleteWorkItem={deleteWorkItem}
+          onOpenWorkItem={(workItemId) => navigateTo("work", { openItemId: workItemId })}
+          onOpenRunTerminal={(run) => void openWorkItemRun(run)}
+          onAddProjectAttachment={addProjectAttachment}
+          onRunPluginProjectAttachmentTemplate={runPluginProjectAttachmentTemplate}
+          onUpdateProjectAttachment={updateProjectAttachment}
+          onDeleteProjectAttachment={deleteProjectAttachment}
+          onDetailClose={navigateBack}
+          onRefreshWork={() => void refreshProjects()}
+          onUpdateWorkItem={updateWorkItem}
+          onMoveWorkItem={moveWorkItem}
+          onAddWorkItemLink={addWorkItemLink}
+          onGenerateWorktree={generateWorktree}
+          onAttachFile={attachFile}
+          onCancelRun={cancelWorkItemRun}
+          onLaunchRun={launchWorkItemRun}
+          onStartPlanning={startPlanning}
+          onSubmitPlan={submitPlan}
+          onApprovePlan={approvePlan}
+          onQueueExecution={queueExecution}
+          onLaunchExecution={launchExecution}
+          onSetPhaseAgent={setPhaseAgent}
+          onSetInteractiveAgentShell={setInteractiveAgentShell}
+          onCompleteExecution={completeExecution}
+          onSubmitReviewFeedback={submitReviewFeedback}
+          onAskQuestion={askQuestion}
+          onAnswerQuestion={answerQuestion}
+          onCompleteGate={completeGate}
+          onApproveDone={approveDone}
+          onFocusPane={(paneId) => (activePaneId = paneId)}
+          onPtyInput={(ptyId) => refreshOutput(ptyId).catch((err) => {
+            if (!isStalePTYError(err)) error = backendError(err);
+          })}
+          onWriteInput={writePTYInput}
+          onClosePane={(paneId) => void closePane(paneId)}
+          onKillPanePTY={(paneId) => void killPanePTY(paneId)}
+          canClosePane={(paneId) =>
+            Boolean(closePaneTarget(activeSession, activeSessionWindow?.id ?? "", paneId))}
+          onNewSession={openNewSession}
+        />
 
         <NewSessionDialog
           visible={newSessionOpen}
@@ -2271,63 +2219,6 @@
         />
       </div>
     </section>
-
-    {#if railSide === "right"}
-      <SidebarDock
-        activePanel={activeSidebar}
-        {sessions}
-        {ptys}
-        {ptyHistory}
-        {selectedPTYHistory}
-        {projects}
-        {workItems}
-        {statusEvents}
-        {agentBridgeApprovals}
-        {agentPrompts}
-        {agentBridgeEvents}
-        {activeSessionId}
-        {activeProjectId}
-        bind:workFilterQuery
-        bind:workFilterStageId
-        bind:workFilterRunState
-        {loadingSession}
-        {loadingPtys}
-        {loadingPTYHistory}
-        {loadingWork}
-        {loadingStatusEvents}
-        {railSide}
-        onClose={() => (activeSidebar = null)}
-        onNewSession={openNewSession}
-        onSelectSession={selectSession}
-        onCloseSession={closeSession}
-        onSetSessionProject={(sessionId, projectId) => void setSessionProject(sessionId, projectId)}
-        onRefreshPtys={() => void refreshPTYs()}
-        onKillPTY={(ptyId) => void killPTY(ptyId)}
-        onDeletePTY={(ptyId) => void deletePTY(ptyId)}
-        onSelectPTYHistory={(ptyId) => void selectPTYHistory(ptyId)}
-        onRefreshStatusEvents={() => void refreshStatusEvents()}
-        onClearNotifications={() => void executeCommand("notifications.clear")}
-        onSelectStatusEvent={(event) => void selectStatusEvent(event)}
-        onSelectAgentPrompt={(prompt) => void selectAgentPrompt(prompt)}
-        onSelectAgentBridgeEvent={(event) => void selectAgentBridgeEvent(event)}
-        onResolveAgentBridgeApproval={(id, action) => void resolveAgentBridgeApproval(id, action)}
-        onResolveAgentPrompt={(prompt, answer, tuiInput) => void resolveAgentPrompt(prompt, answer, tuiInput)}
-        onRefreshWork={() => void refreshProjects()}
-        onNewProject={openNewProject}
-        onSelectProject={activeSidebar === "projects" ? selectProjectDetail : selectProject}
-        onCreateWorkItem={createWorkItem}
-      />
-      <div class="flex h-full w-[36px] shrink-0 flex-col border-l border-hairline bg-bg-base/96">
-        <ActivityRail
-          activeSidebar={activeSidebar ??
-            (activeMain === "work" ? "work" : activeMain === "projects" ? "projects" : null)}
-          {settingsOpen}
-          {notificationCount}
-          onSidebar={toggleSidebar}
-          onSettings={toggleSettings}
-        />
-      </div>
-    {/if}
   </div>
   <CommandPalette
     visible={commandPaletteOpen}

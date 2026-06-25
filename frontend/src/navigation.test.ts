@@ -3,6 +3,7 @@ import {
   clearNavigationStack,
   navigateBack,
   navigateTo,
+  selectMainView,
   type NavigationState,
 } from "./navigation";
 
@@ -72,6 +73,20 @@ describe("navigation state", () => {
 
     expect(navigateBack(state)).toEqual({
       activeMain: "work",
+      navigationStack: [],
+      workBoardOpenItemId: "",
+    });
+  });
+
+  it("selects a root main view and clears deep-link return context", () => {
+    const state: NavigationState = {
+      activeMain: "work",
+      navigationStack: ["projects"],
+      workBoardOpenItemId: "item-1",
+    };
+
+    expect(selectMainView(state, "session")).toEqual({
+      activeMain: "session",
       navigationStack: [],
       workBoardOpenItemId: "",
     });

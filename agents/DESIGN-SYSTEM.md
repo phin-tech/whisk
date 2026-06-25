@@ -296,10 +296,10 @@ count `font-mono text-[10px] text-text-muted`.
 
 Cross-view navigation uses a **navigation stack** so a deep-linked target can
 return to its origin (`navigation.ts`: `navigateTo`, `navigateBack`,
-`clearNavigationStack` over `NavigationState`). A card click calls
+`selectMainView`, `clearNavigationStack` over `NavigationState`). A card click calls
 `onOpenWorkItem(id)` → `navigateTo("work", { openItemId: id })`; the work board
 opens that item and `onDetailClose` pops back. Any user-initiated nav
-(`selectSession`, `selectProject`, …) calls `clearNavigationStack()` so the
+(`selectSession`, `selectProject`, …) uses `selectMainView()` so the
 breadcrumb doesn't surprise the user. Keep deep-link wiring in `App.svelte`.
 
 ---
@@ -472,6 +472,8 @@ files.
 - [x] `SettingsView.svelte` is now a shell over `settings/GeneralSettings`,
       `settings/TerminalSettings`, `settings/PluginsSettings`, and
       `settings/IntegrationsSettings`.
+- [x] `App.svelte` delegates shell composition to `AppSidebar.svelte` and the
+      active main-view switch to `MainRouter.svelte`.
 - [x] `SessionsPanel`, `NotificationsPanel`, `SettingsView`, `DaemonSettings`,
       `KeybindingsPanel`, sidebar chrome, and `TerminalPane` now use local UI
       primitives or Svelte 5 event attributes at the feature boundary.
@@ -480,11 +482,9 @@ files.
 These compose Tier 1/2; they're not reusable across the app but make the giant
 files legible and testable.
 
-- **`App.svelte` (~2k lines)** — the priority decomposition. Pull out:
-  `MainRouter` (the `activeMain` switch), `Sidebar` (dock + panels), and lift the
-  inline `navigateTo/navigateBack` into the already-tested `navigation.ts`
-  (App currently reimplements them — see the Projects audit note). Move toast /
-  command-palette / settings wiring into their own already-existing panels.
+- **`App.svelte`** — `MainRouter` and `AppSidebar` are extracted; keep moving toast /
+  command-palette / settings wiring out when those flows need work. Root main-view
+  selection routes through the tested `navigation.ts` helpers.
 - **`WorkBoard.svelte`** — split into `WorkBoardColumn.svelte` (stage column +
   collapse) and `WorkItemCard.svelte` (the kanban card, incl. attention rail +
   hover actions). `WorkItemDetail.svelte` is already extracted. Follow-up work:

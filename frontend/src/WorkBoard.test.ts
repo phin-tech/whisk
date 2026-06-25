@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import appSource from "./App.svelte?raw";
+import mainRouterSource from "./MainRouter.svelte?raw";
 import boardSource from "./WorkBoard.svelte?raw";
 import detailSource from "./WorkItemDetail.svelte?raw";
 import projectSource from "./ProjectsView.svelte?raw";
@@ -163,8 +164,12 @@ describe("App work item dependencies", () => {
     expect(appSource).toContain("ReadyWork");
     expect(appSource).toContain("let workItemLinks");
     expect(appSource).toContain("let readyWork");
-    expect(appSource).toContain("workItemLinks={workItemLinks}");
-    expect(appSource).toContain("readyWork={readyWork}");
+    expect(appSource).toContain("{workItemLinks}");
+    expect(appSource).toContain("{readyWork}");
     expect(appSource).toContain("onAddWorkItemLink={addWorkItemLink}");
+    expect(mainRouterSource).toContain('from "./WorkBoard.svelte"');
+    expect(mainRouterSource).toContain("{workItemLinks}");
+    expect(mainRouterSource).toContain("{readyWork}");
+    expect(mainRouterSource).toContain("{onAddWorkItemLink}");
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import designSystemDoc from "../../agents/DESIGN-SYSTEM.md?raw";
 import appSource from "./App.svelte?raw";
+import appSidebarSource from "./AppSidebar.svelte?raw";
 import commandPaletteSource from "./CommandPalette.svelte?raw";
 import activityRailSource from "./ActivityRail.svelte?raw";
 import confirmDialogSource from "./ConfirmDialog.svelte?raw";
@@ -19,6 +20,7 @@ import settingsViewSource from "./SettingsView.svelte?raw";
 import terminalPaneSource from "./TerminalPane.svelte?raw";
 import workItemDetailSource from "./WorkItemDetail.svelte?raw";
 import workItemsPanelSource from "./WorkItemsPanel.svelte?raw";
+import mainRouterSource from "./MainRouter.svelte?raw";
 
 const svelteSources = import.meta.glob("./**/*.svelte", {
   eager: true,
@@ -303,9 +305,51 @@ describe("local UI layer", () => {
   });
 
   it("migrates App empty-state actions onto the local UI layer", () => {
-    expect(appSource).toContain('from "./ui/Button.svelte"');
+    expect(mainRouterSource).toContain('from "./ui/Button.svelte"');
     expect(appSource).not.toMatch(/<button\b/);
     expect(appSource).not.toMatch(/\son:[a-z]/);
+    expect(mainRouterSource).not.toMatch(/<button\b/);
+    expect(mainRouterSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("splits App shell into sidebar and main router feature components", () => {
+    expect(Object.keys(svelteSources)).toEqual(
+      expect.arrayContaining(["./AppSidebar.svelte", "./MainRouter.svelte"]),
+    );
+    expect(appSource).toContain('from "./AppSidebar.svelte"');
+    expect(appSource).toContain('from "./MainRouter.svelte"');
+    expect(appSource).toContain("<AppSidebar");
+    expect(appSource).toContain("<MainRouter");
+    expect(appSource).not.toContain('from "./ActivityRail.svelte"');
+    expect(appSource).not.toContain('from "./SidebarDock.svelte"');
+    expect(appSource).not.toContain('from "./LayoutView.svelte"');
+    expect(appSource).not.toContain('from "./ProjectsView.svelte"');
+    expect(appSource).not.toContain('from "./WorkBoard.svelte"');
+    expect(appSource).not.toContain("{#if railSide === \"left\"}");
+    expect(appSource).not.toContain("{#if activeMain === \"projects\"}");
+    expect(appSource).not.toContain("<SidebarDock");
+    expect(appSource).not.toContain("<ActivityRail");
+    expect(appSource).not.toContain("<LayoutView");
+    expect(appSource).not.toContain("<ProjectsView");
+    expect(appSource).not.toContain("<WorkBoard");
+
+    expect(appSidebarSource).toContain('from "./ActivityRail.svelte"');
+    expect(appSidebarSource).toContain('from "./SidebarDock.svelte"');
+    expect(appSidebarSource).toContain("<ActivityRail");
+    expect(appSidebarSource).toContain("<SidebarDock");
+    expect(appSidebarSource).toContain('side === "left"');
+    expect(appSidebarSource).toContain('side === "right"');
+    expect(appSidebarSource).not.toMatch(/<button\b/);
+    expect(appSidebarSource).not.toMatch(/\son:[a-z]/);
+
+    expect(mainRouterSource).toContain('from "./LayoutView.svelte"');
+    expect(mainRouterSource).toContain('from "./ProjectsView.svelte"');
+    expect(mainRouterSource).toContain('from "./WorkBoard.svelte"');
+    expect(mainRouterSource).toContain("<ProjectsView");
+    expect(mainRouterSource).toContain("<WorkBoard");
+    expect(mainRouterSource).toContain("<LayoutView");
+    expect(mainRouterSource).not.toMatch(/<button\b/);
+    expect(mainRouterSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("migrates SessionsPanel controls onto the local UI layer", () => {
@@ -392,5 +436,6 @@ describe("local UI layer", () => {
     expect(designSystemDoc).toContain("`ResizeHandle.svelte`");
     expect(designSystemDoc).toContain('"danger-ghost"');
     expect(designSystemDoc).toContain("`SettingsView.svelte` is now a shell over");
+    expect(designSystemDoc).toContain("`App.svelte` delegates shell composition");
   });
 });
