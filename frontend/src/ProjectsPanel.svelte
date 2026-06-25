@@ -4,6 +4,11 @@
   import Search from "@lucide/svelte/icons/search";
   import type { Project } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
+  import Button from "./ui/Button.svelte";
+  import IconButton from "./ui/IconButton.svelte";
+  import List from "./ui/List.svelte";
+  import ListRow from "./ui/ListRow.svelte";
+  import TextField from "./ui/TextField.svelte";
 
   export let projects: Project[] = [];
   export let activeProjectId = "";
@@ -28,59 +33,56 @@
 <div class="flex h-full min-h-0 w-full flex-col bg-bg-deep">
   <SidebarPanelHeader title="Projects" {onclose}>
     <div slot="actions" class="flex items-center gap-1">
-      <button
-        type="button"
-        class="inline-flex h-6 w-6 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-not-allowed disabled:opacity-60"
+      <IconButton
         disabled={loading}
-        aria-label="New project"
-        title="New project"
-        on:click={onNewProject}
+        label="New project"
+        size="sm"
+        onclick={onNewProject}
       >
         <Plus size={13} />
-      </button>
-      <button
-        type="button"
-        class="inline-flex h-6 w-6 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-wait disabled:opacity-60"
+      </IconButton>
+      <IconButton
         disabled={loading}
-        aria-label="Refresh projects"
-        title="Refresh projects"
-        on:click={onRefresh}
+        label="Refresh projects"
+        size="sm"
+        onclick={onRefresh}
       >
         <RefreshCw size={13} class={loading ? "animate-spin" : ""} />
-      </button>
+      </IconButton>
     </div>
   </SidebarPanelHeader>
 
   <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
     {#if projects.length === 0}
-      <button
-        type="button"
-        class="flex h-9 w-full items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[12px] font-medium text-text-primary transition-colors hover:border-accent hover:text-accent"
+      <Button
+        size="lg"
+        class="w-full"
         disabled={loading}
-        on:click={onNewProject}
+        onclick={onNewProject}
       >
         <Plus size={13} />
         <span>New project</span>
-      </button>
+      </Button>
     {:else}
-      <label class="mb-2 grid h-8 grid-cols-[14px_minmax(0,1fr)] items-center gap-2 rounded border border-border-subtle bg-bg-surface/35 px-2 text-text-muted focus-within:border-accent-dim">
+      <div class="mb-2 grid h-8 grid-cols-[14px_minmax(0,1fr)] items-center gap-2 rounded border border-border-subtle bg-bg-surface/35 px-2 text-text-muted focus-within:border-accent-dim">
         <Search size={14} />
-        <input
-          class="min-w-0 bg-transparent text-[12px] text-text-primary outline-none placeholder:text-text-muted"
+        <TextField
+          variant="seamless"
           bind:value={query}
           placeholder="Search projects"
           aria-label="Search projects"
+          class="min-w-0 border-transparent bg-transparent p-0 text-[12px]"
         />
-      </label>
-      <div class="grid gap-1">
+      </div>
+      <List class="grid gap-1 divide-y-0">
         {#each filteredProjects as project (project.id)}
-          <button
-            type="button"
-            class="flex min-h-12 w-full min-w-0 items-center gap-2 rounded border px-2 py-1.5 text-left transition-colors {project.id ===
+          <ListRow
+            as="button"
+            class="flex min-h-12 items-center gap-2 rounded border px-2 py-1.5 {project.id ===
             activeProjectId
               ? 'border-accent-dim bg-accent-dim/20 text-text-primary'
               : 'border-transparent bg-transparent text-text-secondary hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary'}"
-            on:click={() => onSelectProject(project.id)}
+            onclick={() => onSelectProject(project.id)}
           >
             <span
               class="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface font-mono text-[11px] text-accent"
@@ -94,12 +96,12 @@
                 {project.rootDir}
               </span>
             </span>
-          </button>
+          </ListRow>
         {/each}
         {#if filteredProjects.length === 0}
           <div class="px-2 py-3 text-[12px] text-text-muted">No matching projects.</div>
         {/if}
-      </div>
+      </List>
     {/if}
   </div>
 </div>

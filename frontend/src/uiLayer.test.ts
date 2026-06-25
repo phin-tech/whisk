@@ -5,6 +5,7 @@ import confirmDialogSource from "./ConfirmDialog.svelte?raw";
 import newProjectDialogSource from "./NewProjectDialog.svelte?raw";
 import newSessionDialogSource from "./NewSessionDialog.svelte?raw";
 import onboardingPanelSource from "./OnboardingPanel.svelte?raw";
+import projectsPanelSource from "./ProjectsPanel.svelte?raw";
 import workItemDetailSource from "./WorkItemDetail.svelte?raw";
 import workItemsPanelSource from "./WorkItemsPanel.svelte?raw";
 
@@ -236,6 +237,16 @@ describe("local UI layer", () => {
     expect(workItemsPanelSource).toContain('from "./ui/TextField.svelte"');
     expect(workItemsPanelSource).not.toMatch(/<(button|input|textarea|select)\b/);
     expect(workItemsPanelSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("migrates ProjectsPanel controls onto the local UI layer", () => {
+    expect(projectsPanelSource).toContain('from "./ui/Button.svelte"');
+    expect(projectsPanelSource).toContain('from "./ui/IconButton.svelte"');
+    expect(projectsPanelSource).toContain('from "./ui/List.svelte"');
+    expect(projectsPanelSource).toContain('from "./ui/ListRow.svelte"');
+    expect(projectsPanelSource).toContain('from "./ui/TextField.svelte"');
+    expect(projectsPanelSource).not.toMatch(/<(button|input|textarea|select)\b/);
+    expect(projectsPanelSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {
