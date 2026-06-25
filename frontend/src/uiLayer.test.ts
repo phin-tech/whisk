@@ -8,6 +8,7 @@ import daemonSettingsSource from "./DaemonSettings.svelte?raw";
 import keybindingsPanelSource from "./KeybindingsPanel.svelte?raw";
 import newProjectDialogSource from "./NewProjectDialog.svelte?raw";
 import newSessionDialogSource from "./NewSessionDialog.svelte?raw";
+import notificationsPanelSource from "./NotificationsPanel.svelte?raw";
 import onboardingPanelSource from "./OnboardingPanel.svelte?raw";
 import projectsPanelSource from "./ProjectsPanel.svelte?raw";
 import ptysPanelSource from "./PtysPanel.svelte?raw";
@@ -311,6 +312,14 @@ describe("local UI layer", () => {
     expect(sessionsPanelSource).toContain('from "./ui/TextField.svelte"');
     expect(sessionsPanelSource).not.toMatch(/<(button|input|textarea|select)\b/);
     expect(sessionsPanelSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("migrates NotificationsPanel controls onto the local UI layer", () => {
+    expect(notificationsPanelSource).toContain('from "./ui/Button.svelte"');
+    expect(notificationsPanelSource).toContain('from "./ui/IconButton.svelte"');
+    expect(notificationsPanelSource).toContain('from "./ui/TextField.svelte"');
+    expect(notificationsPanelSource).not.toMatch(/<(button|input|textarea|select)\b/);
+    expect(notificationsPanelSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {

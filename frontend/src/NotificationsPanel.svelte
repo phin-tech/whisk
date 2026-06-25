@@ -13,6 +13,9 @@
   import { agentHookNotificationRows } from "./agentHooksView";
   import { notificationClearEnabled, notificationDetailRows, notificationRows } from "./notificationsView";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
+  import Button from "./ui/Button.svelte";
+  import IconButton from "./ui/IconButton.svelte";
+  import TextField from "./ui/TextField.svelte";
 
   export let sessions: Session[] = [];
   export let statusEvents: StatusEvent[] = [];
@@ -79,31 +82,57 @@
     const tuiInput = prompt.provider === "claude" && prompt.toolName === "AskUserQuestion" ? `${index + 1}\r` : "";
     onResolveAgentPrompt(prompt, answer, tuiInput);
   }
+
+  function selectAgentPromptFromDoubleClick(event: MouseEvent, prompt: AgentPrompt) {
+    event.stopPropagation();
+    onSelectAgentPrompt(prompt);
+  }
+
+  function resolveOptionPromptFromClick(
+    event: MouseEvent,
+    prompt: AgentPrompt,
+    answer: string,
+    index: number,
+  ) {
+    event.stopPropagation();
+    resolveOptionPrompt(prompt, answer, index);
+  }
+
+  function resolveTextPromptFromSubmit(event: SubmitEvent, prompt: AgentPrompt) {
+    event.preventDefault();
+    resolveTextPrompt(prompt);
+  }
+
+  function selectAgentBridgeEventById(id: string) {
+    const event = agentBridgeEvents.find((candidate) => candidate.id === id);
+    if (event) onSelectAgentBridgeEvent(event);
+  }
+
+  function toggleExpandedFromDoubleClick(event: MouseEvent, id: string) {
+    event.stopPropagation();
+    toggleExpanded(id);
+  }
 </script>
 
 <div class="flex h-full min-h-0 w-full flex-col bg-bg-deep">
   <SidebarPanelHeader title="Notifications" {onclose}>
     <div slot="actions" class="flex items-center gap-1">
-      <button
-        type="button"
-        class="inline-flex h-6 w-6 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-default disabled:opacity-60"
+      <IconButton
+        label="Clear notifications"
+        size="sm"
         disabled={loading || !canClear}
-        aria-label="Clear notifications"
-        title="Clear notifications"
-        on:click={onClearNotifications}
+        onclick={onClearNotifications}
       >
         <Trash2 size={13} />
-      </button>
-      <button
-        type="button"
-        class="inline-flex h-6 w-6 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50 disabled:cursor-default disabled:opacity-60"
+      </IconButton>
+      <IconButton
+        label="Refresh notifications"
+        size="sm"
         disabled={loading}
-        aria-label="Refresh notifications"
-        title="Refresh notifications"
-        on:click={onRefresh}
+        onclick={onRefresh}
       >
         <RefreshCw size={13} class={loading ? "animate-spin" : ""} />
-      </button>
+      </IconButton>
     </div>
   </SidebarPanelHeader>
 
@@ -121,21 +150,22 @@
             class="rounded border border-accent-dim/50 bg-accent-dim/10 px-2.5 py-2 text-text-primary"
           >
             <div class="flex min-w-0 items-start gap-2">
-              <button
-                type="button"
-                class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-accent transition-colors hover:bg-bg-surface/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-                aria-label={expanded ? "Collapse response controls" : "Expand response controls"}
+              <IconButton
+                label={expanded ? "Collapse response controls" : "Expand response controls"}
+                size="sm"
                 aria-expanded={expanded}
-                on:click={() => toggleExpanded(prompt.id)}
+                class="mt-0.5 !h-4 !w-4 shrink-0 !border-transparent !bg-transparent !text-accent hover:!bg-bg-surface/60"
+                onclick={() => toggleExpanded(prompt.id)}
               >
                 <ChevronRight size={13} class="transition-transform {expanded ? 'rotate-90' : ''}" />
-              </button>
+              </IconButton>
               <div class="min-w-0 flex-1">
-                <button
-                  type="button"
-                  class="w-full min-w-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-                  on:click={() => toggleExpanded(prompt.id)}
-                  on:dblclick|stopPropagation={() => onSelectAgentPrompt(prompt)}
+                <Button
+                  variant="ghost"
+                  align="start"
+                  class="!h-auto w-full min-w-0 flex-col !items-start gap-0 !border-transparent !bg-transparent !px-0 !py-0 text-left hover:!bg-transparent hover:!text-inherit"
+                  onclick={() => toggleExpanded(prompt.id)}
+                  ondblclick={(event: MouseEvent) => selectAgentPromptFromDoubleClick(event, prompt)}
                 >
                   <div class="flex min-w-0 items-center justify-between gap-2">
                     <div class="truncate text-[12px] font-semibold">
@@ -154,21 +184,22 @@
                   {#if !expanded}
                     <div class="mt-1 text-[10px] text-text-muted">Click to respond</div>
                   {/if}
-                </button>
+                </Button>
                 {#if expanded}
                   {#if hasOptions}
                     <div class="mt-2 grid grid-cols-2 gap-1">
                       {#each prompt.options || [] as option, index}
-                        <button
-                          type="button"
-                          class="inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded border text-[12px] font-semibold text-text-primary transition-colors disabled:cursor-default disabled:opacity-60 {option.value ===
+                        <Button
+                          size="sm"
+                          class="h-7 min-w-0 {option.value ===
                           'allow'
-                            ? 'border-green/30 bg-green/10 hover:border-green/60 hover:bg-green/15'
+                            ? '!border-green/30 !bg-green/10 hover:!border-green/60 hover:!bg-green/15'
                             : option.value === 'deny'
-                              ? 'border-red/30 bg-red/10 hover:border-red/60 hover:bg-red/15'
-                              : 'border-accent-dim/50 bg-accent-dim/15 hover:border-accent hover:bg-accent-dim/20'}"
+                              ? '!border-red/30 !bg-red/10 hover:!border-red/60 hover:!bg-red/15'
+                              : '!border-accent-dim/50 !bg-accent-dim/15 hover:!border-accent hover:!bg-accent-dim/20'}"
                           disabled={loading}
-                          on:click|stopPropagation={() => resolveOptionPrompt(prompt, option.value, index)}
+                          onclick={(event) =>
+                            resolveOptionPromptFromClick(event, prompt, option.value, index)}
                         >
                           {#if option.value === "allow"}
                             <CheckCircle2 size={13} />
@@ -176,24 +207,25 @@
                             <Ban size={13} />
                           {/if}
                           <span class="truncate">{option.label}</span>
-                        </button>
+                        </Button>
                       {/each}
                     </div>
                   {:else}
-                    <form class="mt-2 flex min-w-0 gap-1" on:submit|preventDefault={() => resolveTextPrompt(prompt)}>
-                      <input
-                        class="min-w-0 flex-1 rounded border border-border-subtle bg-bg-base px-2 py-1 text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
+                    <form class="mt-2 flex min-w-0 gap-1" onsubmit={(event) => resolveTextPromptFromSubmit(event, prompt)}>
+                      <TextField
+                        class="min-w-0 flex-1"
                         placeholder="Type response"
                         value={promptAnswers[prompt.id] || ""}
-                        on:input={(event) => setPromptAnswer(prompt.id, event)}
+                        oninput={(event: Event) => setPromptAnswer(prompt.id, event)}
                       />
-                      <button
+                      <Button
                         type="submit"
-                        class="shrink-0 rounded border border-accent-dim/50 bg-accent-dim/15 px-2 py-1 text-[12px] font-semibold text-text-primary transition-colors hover:border-accent disabled:cursor-default disabled:opacity-60"
+                        size="sm"
+                        class="shrink-0"
                         disabled={loading || !promptAnswer(prompt.id)}
                       >
                         Send
-                      </button>
+                      </Button>
                     </form>
                   {/if}
                 {/if}
@@ -221,24 +253,24 @@
                   {approval.sessionId || "unowned"} / {approval.ptyId || "no pty"}
                 </div>
                 <div class="mt-2 grid grid-cols-2 gap-1">
-                  <button
-                    type="button"
-                    class="inline-flex h-7 items-center justify-center gap-1 rounded border border-green/30 bg-green/10 text-[12px] font-semibold text-text-primary transition-colors hover:border-green/60 hover:bg-green/15 disabled:cursor-default disabled:opacity-60"
+                  <Button
+                    size="sm"
+                    class="h-7 !border-green/30 !bg-green/10 hover:!border-green/60 hover:!bg-green/15"
                     disabled={loading}
-                    on:click={() => onResolveAgentBridgeApproval(approval.id, "allow")}
+                    onclick={() => onResolveAgentBridgeApproval(approval.id, "allow")}
                   >
                     <CheckCircle2 size={13} />
                     Allow
-                  </button>
-                  <button
-                    type="button"
-                    class="inline-flex h-7 items-center justify-center gap-1 rounded border border-red/30 bg-red/10 text-[12px] font-semibold text-text-primary transition-colors hover:border-red/60 hover:bg-red/15 disabled:cursor-default disabled:opacity-60"
+                  </Button>
+                  <Button
+                    size="sm"
+                    class="h-7 !border-red/30 !bg-red/10 hover:!border-red/60 hover:!bg-red/15"
                     disabled={loading}
-                    on:click={() => onResolveAgentBridgeApproval(approval.id, "deny")}
+                    onclick={() => onResolveAgentBridgeApproval(approval.id, "deny")}
                   >
                     <Ban size={13} />
                     Deny
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -246,13 +278,11 @@
         {/each}
         {#each hookRows as hook (hook.id)}
           <div class="rounded border border-accent-dim/40 bg-accent-dim/10 px-2.5 py-2 text-text-primary">
-            <button
-              type="button"
-              class="flex w-full min-w-0 items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-              on:click={() => {
-                const event = agentBridgeEvents.find((candidate) => candidate.id === hook.id);
-                if (event) onSelectAgentBridgeEvent(event);
-              }}
+            <Button
+              variant="ghost"
+              align="start"
+              class="!h-auto w-full min-w-0 !items-start gap-2 !border-transparent !bg-transparent !px-0 !py-0 text-left hover:!bg-transparent hover:!text-inherit"
+              onclick={() => selectAgentBridgeEventById(hook.id)}
             >
               <CircleHelp size={14} class="mt-0.5 shrink-0 text-accent" />
               <div class="min-w-0 flex-1">
@@ -269,7 +299,7 @@
                   {hook.meta}
                 </div>
               </div>
-            </button>
+            </Button>
           </div>
         {/each}
         {#each rows as row (row.id)}
@@ -285,20 +315,21 @@
                 : 'border-accent-dim/40 bg-accent-dim/10 text-text-primary hover:border-accent hover:bg-accent-dim/15'}"
           >
             <div class="flex min-w-0 items-start gap-2 px-2.5 py-2">
-              <button
-                type="button"
-                class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-muted transition-colors hover:bg-bg-surface/60 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-                aria-label={expanded ? "Collapse notification details" : "Expand notification details"}
+              <IconButton
+                label={expanded ? "Collapse notification details" : "Expand notification details"}
+                size="sm"
                 aria-expanded={expanded}
-                on:click={() => toggleExpanded(row.id)}
+                class="mt-0.5 !h-4 !w-4 shrink-0 !border-transparent !bg-transparent !text-text-muted hover:!bg-bg-surface/60 hover:!text-text-primary"
+                onclick={() => toggleExpanded(row.id)}
               >
                 <ChevronRight size={13} class="transition-transform {expanded ? 'rotate-90' : ''}" />
-              </button>
-              <button
-                type="button"
-                class="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-                on:click={() => event && onSelectStatusEvent(event)}
-                on:dblclick|stopPropagation={() => toggleExpanded(row.id)}
+              </IconButton>
+              <Button
+                variant="ghost"
+                align="start"
+                class="!h-auto min-w-0 flex-1 !items-start !border-transparent !bg-transparent !px-0 !py-0 text-left hover:!bg-transparent hover:!text-inherit"
+                onclick={() => event && onSelectStatusEvent(event)}
+                ondblclick={(clickEvent: MouseEvent) => toggleExpandedFromDoubleClick(clickEvent, row.id)}
               >
                 <div class="flex min-w-0 items-start gap-2">
                   <Icon size={14} class="mt-0.5 shrink-0" />
@@ -315,7 +346,7 @@
                     </div>
                   </div>
                 </div>
-              </button>
+              </Button>
             </div>
             {#if expanded && event}
               <div class="border-t border-hairline px-2.5 py-2">
