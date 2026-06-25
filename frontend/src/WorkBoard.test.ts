@@ -3,6 +3,13 @@ import appSource from "./App.svelte?raw";
 import boardSource from "./WorkBoard.svelte?raw";
 import detailSource from "./WorkItemDetail.svelte?raw";
 import projectSource from "./ProjectsView.svelte?raw";
+import projectAttachmentsSource from "./projects/ProjectAttachments.svelte?raw";
+import projectOverviewSource from "./projects/ProjectOverview.svelte?raw";
+import projectRunsSource from "./projects/ProjectRuns.svelte?raw";
+import projectSessionsSource from "./projects/ProjectSessions.svelte?raw";
+import listSource from "./ui/List.svelte?raw";
+import boardColumnSource from "./workboard/WorkBoardColumn.svelte?raw";
+import itemCardSource from "./workboard/WorkItemCard.svelte?raw";
 
 describe("WorkBoard", () => {
   it("delegates the work item detail to the extracted component", () => {
@@ -37,11 +44,13 @@ describe("WorkBoard", () => {
   });
 
   it("renders board card status as dots and muted labels instead of filled badges", () => {
-    expect(boardSource).toContain('from "./ui/StatusDot.svelte"');
+    expect(itemCardSource).toContain('from "../ui/StatusDot.svelte"');
     expect(detailSource).toContain('from "./ui/StatusDot.svelte"');
-    expect(projectSource).toContain('from "./ui/StatusDot.svelte"');
-    expect(boardSource).toContain("●");
-    expect(boardSource).toContain("text-text-muted");
+    expect(projectOverviewSource).toContain('from "../ui/StatusDot.svelte"');
+    expect(projectRunsSource).toContain('from "../ui/StatusDot.svelte"');
+    expect(projectSessionsSource).toContain('from "../ui/StatusDot.svelte"');
+    expect(itemCardSource).toContain("●");
+    expect(itemCardSource).toContain("text-text-muted");
     expect(boardSource).not.toContain("function runStatusDot");
     expect(detailSource).not.toContain("function runStatusDot");
     expect(projectSource).not.toContain("function runStatusDot");
@@ -50,7 +59,8 @@ describe("WorkBoard", () => {
   });
 
   it("uses hairline-separated rows instead of bordered item cards", () => {
-    expect(boardSource).toContain("divide-y divide-hairline");
+    expect(listSource).toContain("divide-y divide-hairline");
+    expect(boardColumnSource).toContain("<List");
     expect(boardSource).not.toContain("grid min-w-0 content-start gap-2 p-2");
     expect(boardSource).not.toContain("rounded-md border border-border-subtle bg-bg-surface/60 transition-colors");
   });
@@ -73,9 +83,10 @@ describe("WorkBoard", () => {
     expect(detailSource).toContain('<SectionHeader title="Plan"');
     expect(detailSource).toContain('<SectionHeader title="Dependencies"');
     expect(detailSource).toContain('<SectionHeader title="Activity"');
-    expect(projectSource).toContain('from "./ui/SectionHeader.svelte"');
-    expect(projectSource).toContain('<SectionHeader title="Attachments"');
-    expect(projectSource).toContain('<SectionHeader title="Runs"');
+    expect(projectAttachmentsSource).toContain('from "../ui/SectionHeader.svelte"');
+    expect(projectRunsSource).toContain('from "../ui/SectionHeader.svelte"');
+    expect(projectAttachmentsSource).toContain('<SectionHeader title="Attachments"');
+    expect(projectRunsSource).toContain('<SectionHeader title="Runs"');
     expect(detailSource).toContain('const subHeader = "text-[11px] font-semibold uppercase text-text-muted"');
   });
 

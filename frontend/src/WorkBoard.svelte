@@ -1,15 +1,14 @@
 <script lang="ts">
-  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
-  import ArrowRight from "@lucide/svelte/icons/arrow-right";
-  import Clock3 from "@lucide/svelte/icons/clock-3";
-  import GitBranch from "@lucide/svelte/icons/git-branch";
   import MoreHorizontal from "@lucide/svelte/icons/ellipsis";
-  import Play from "@lucide/svelte/icons/play";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
-  import SquareTerminal from "@lucide/svelte/icons/square-terminal";
+  import WorkBoardColumn from "./workboard/WorkBoardColumn.svelte";
+  import WorkItemCard from "./workboard/WorkItemCard.svelte";
   import WorkItemDetail from "./WorkItemDetail.svelte";
+  import Button from "./ui/Button.svelte";
   import EmptyState from "./ui/EmptyState.svelte";
-  import StatusDot from "./ui/StatusDot.svelte";
+  import IconButton from "./ui/IconButton.svelte";
+  import TextArea from "./ui/TextArea.svelte";
+  import TextField from "./ui/TextField.svelte";
   import type { WorkflowStage } from "../bindings/github.com/phin-tech/whisk/internal/domain/workitem/models";
   import type {
     AgentProfile,
@@ -17,11 +16,11 @@
     GateReport,
     Project,
     Question,
+    ReadyWorkExplanation,
     WorkItem,
     WorkItemLink,
     WorkItemRun,
     WorkflowEvent,
-    ReadyWorkExplanation,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
     adjacentStageTargets,
@@ -319,70 +318,52 @@
     <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
       {#if activeProject}
         <div class="flex min-w-[260px] max-w-[520px] flex-1 items-center overflow-hidden rounded-md border border-border-subtle bg-bg-surface/60 focus-within:border-accent-dim">
-          <input
-            class="h-9 min-w-0 flex-1 bg-transparent px-3 text-[14px] text-text-primary outline-none placeholder:text-text-muted"
-            type="text"
+          <TextField
             bind:value={newItemTitle}
+            variant="seamless"
             placeholder="Create work item"
             disabled={loading}
+            class="h-9 min-w-0 flex-1 border-transparent bg-transparent px-3 text-[14px]"
           />
-          <button
-            type="button"
-            class="inline-flex h-8 w-8 shrink-0 items-center justify-center text-text-muted transition-colors hover:text-text-primary"
-            aria-label={createBodyOpen ? "Hide work item body" : "Add work item body"}
+          <IconButton
+            label={createBodyOpen ? "Hide work item body" : "Add work item body"}
             title={createBodyOpen ? "Hide body" : "Add body"}
-            on:click={() => (createBodyOpen = !createBodyOpen)}
+            class="border-transparent hover:border-transparent"
+            onclick={() => (createBodyOpen = !createBodyOpen)}
           >
             <MoreHorizontal size={16} />
-          </button>
-          <button
-            type="button"
-            class="mr-1 inline-flex h-7 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] font-semibold text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
+          </IconButton>
+          <Button
+            size="sm"
+            class="mr-1 shrink-0"
             disabled={loading || !newItemTitle.trim()}
-            on:click={createWorkItem}
+            onclick={createWorkItem}
           >
             Create
-          </button>
+          </Button>
         </div>
       {/if}
-      <button
-        type="button"
-        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-surface hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
-        disabled={loading}
-        aria-label="Refresh work board"
-        title="Refresh work board"
-        on:click={onRefresh}
-      >
+      <IconButton label="Refresh work board" disabled={loading} class="h-9 w-9" onclick={onRefresh}>
         <RefreshCw size={15} class={loading ? "animate-spin" : ""} />
-      </button>
-      <button
-        type="button"
-        class="hidden h-9 items-center justify-center rounded-md border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] font-medium text-text-secondary transition-colors hover:bg-bg-surface hover:text-text-primary sm:inline-flex"
-        disabled={loading || boardStages.length === 0}
-        on:click={() => setAllColumnsCollapsed(false)}
-      >
+      </IconButton>
+      <Button size="lg" class="hidden sm:inline-flex" disabled={loading || boardStages.length === 0} onclick={() => setAllColumnsCollapsed(false)}>
         Expand
-      </button>
-      <button
-        type="button"
-        class="hidden h-9 items-center justify-center rounded-md border border-border-subtle bg-bg-surface/60 px-2.5 text-[12px] font-medium text-text-secondary transition-colors hover:bg-bg-surface hover:text-text-primary sm:inline-flex"
-        disabled={loading || boardStages.length === 0}
-        on:click={() => setAllColumnsCollapsed(true)}
-      >
+      </Button>
+      <Button size="lg" class="hidden sm:inline-flex" disabled={loading || boardStages.length === 0} onclick={() => setAllColumnsCollapsed(true)}>
         Collapse
-      </button>
+      </Button>
     </div>
   </div>
 
   {#if activeProject}
     {#if createBodyOpen}
       <div class="shrink-0 border-b border-hairline bg-bg-base px-3 py-2">
-        <textarea
-          class="h-20 w-full resize-none rounded-md border border-border bg-bg-deep px-3 py-2 text-[13px] leading-5 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+        <TextArea
           bind:value={newItemBody}
           placeholder="Markdown body"
           disabled={loading}
-        ></textarea>
+          class="h-20 resize-none text-[13px] leading-5"
+        />
       </div>
     {/if}
 
@@ -392,188 +373,43 @@
           {@const stageItems = itemsByStage[stage.id] ?? []}
           {@const collapsed = collapsedStageIds.has(stage.id)}
           {@const stageHasAttention = hasStageAttention(stage)}
-          {#if collapsed}
-            <button
-              type="button"
-              class="flex min-h-[420px] w-12 shrink-0 flex-col items-center justify-between rounded-md border border-border-subtle bg-bg-base px-2 py-3 text-text-secondary transition-colors hover:border-border hover:bg-bg-surface hover:text-text-primary"
-              aria-label={`Expand ${stage.name}`}
-              title={`Expand ${stage.name}`}
-              on:click={() => toggleStageCollapsed(stage.id)}
-            >
-              <span class="writing-vertical truncate text-[13px] font-semibold">{stage.name}</span>
-              <span class="flex flex-col items-center gap-2">
-                {#if stageHasAttention}
-                  <span class="h-2 w-2 rounded-full {stageAttentionClass(stage)}"></span>
-                {/if}
-                <span class="rounded border border-border-subtle bg-bg-deep/80 px-1.5 py-1 font-mono text-[12px]">
-                  {stageItems.length}
-                </span>
-              </span>
-            </button>
-          {:else}
-            <section class="flex min-h-[420px] w-[320px] shrink-0 flex-col overflow-hidden rounded-md border border-border-subtle bg-bg-base">
-              <div class="flex h-12 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-hairline px-3">
-                <div class="flex min-w-0 items-center gap-2">
-                  {#if stageHasAttention}
-                    <span class="h-2 w-2 shrink-0 rounded-full {stageAttentionClass(stage)}"></span>
-                  {/if}
-                  <button
-                    type="button"
-                    class="min-w-0 truncate text-left text-[13px] font-semibold text-text-primary outline-none focus-visible:text-accent"
-                    aria-label={`Collapse ${stage.name}`}
-                    title="Double-click to collapse"
-                    on:dblclick={() => toggleStageCollapsed(stage.id)}
-                  >
-                    {stage.name}
-                  </button>
-                  <div class="rounded border border-hairline bg-bg-deep/70 px-1.5 py-0.5 font-mono text-[12px] text-text-secondary">
-                    {stageItems.length}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-transparent text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-surface/60 hover:text-text-primary"
-                  aria-label={`Collapse ${stage.name}`}
-                  title={`Collapse ${stage.name}`}
-                  on:click={() => toggleStageCollapsed(stage.id)}
-                >
-                  <ArrowLeft size={13} />
-                </button>
-              </div>
-
-              <div class="min-w-0 flex-1 divide-y divide-hairline">
-                {#if stageItems.length === 0}
-                  <EmptyState
-                    message="Empty"
-                    class="flex min-h-24 items-center justify-center py-7 text-center text-[13px]"
-                  />
-                {:else}
-                  {#each stageItems as item (item.id)}
-                    {@const targets = adjacentStageTargets(item, stages)}
-                    {@const latestRun = (runsByItem[item.id] ?? [])[0] ?? null}
-                    {@const canExecute = canQueueOrLaunchExecution(item, latestRun)}
-                    {@const attention = attentionFor(item, stage)}
-                    {@const terminalRun = attention.terminalRunId
-                      ? (runsByItem[item.id] ?? []).find((run) => run.id === attention.terminalRunId)
-                      : null}
-                    <article class="group relative min-h-[76px] overflow-hidden bg-bg-base transition-colors hover:bg-bg-surface/60 focus-within:bg-bg-surface/60">
-                      <div class="absolute inset-y-3 left-0 w-1 rounded-r {cardRailClass(attention.severity)}"></div>
-                      <div class="grid gap-2 px-3 py-3 pl-4">
-                        <div class="flex min-w-0 items-start gap-2">
-                          <button
-                            type="button"
-                            class="work-card-title min-w-0 flex-1 text-left text-[14px] font-semibold leading-5 text-text-primary outline-none transition-colors hover:text-accent focus-visible:text-accent"
-                            on:click={() => openDetail(item)}
-                          >
-                            <span class="font-mono text-[12px] font-medium text-text-muted">#{item.number}</span>
-                            {item.title}
-                          </button>
-                          {#if terminalRun}
-                            <button
-                              type="button"
-                              aria-label="Open running terminal"
-                              title="Open running terminal"
-                              class="inline-flex h-7 w-7 shrink-0 animate-pulse items-center justify-center rounded border border-green/45 bg-green/12 text-green transition-colors hover:border-green disabled:cursor-not-allowed"
-                              disabled={loading}
-                              on:click={() => openRunTerminal(terminalRun)}
-                            >
-                              <SquareTerminal size={14} />
-                            </button>
-                          {/if}
-                          <div class="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                            {#if latestRun?.status === "queued"}
-                              <button
-                                type="button"
-                                aria-label="Launch queued run"
-                                title="Launch queued run"
-                                class="inline-flex h-7 w-7 items-center justify-center rounded border border-blue/35 bg-blue/10 text-blue transition-colors hover:border-blue disabled:cursor-not-allowed"
-                                disabled={loading}
-                                on:click={() => onLaunchRun(latestRun.id)}
-                              >
-                                <Play size={13} />
-                              </button>
-                            {/if}
-                            {#if canExecute}
-                              <button
-                                type="button"
-                                aria-label="Queue execution"
-                                title="Queue execution"
-                                class="inline-flex h-7 w-7 items-center justify-center rounded border border-blue/35 bg-blue/10 text-blue transition-colors hover:border-blue disabled:cursor-not-allowed"
-                                disabled={loading}
-                                on:click={() => onQueueExecution(item.id)}
-                              >
-                                <Clock3 size={13} />
-                              </button>
-                              <button
-                                type="button"
-                                aria-label="Launch execution"
-                                title="Launch execution"
-                                class="inline-flex h-7 w-7 items-center justify-center rounded border border-green/35 bg-green/10 text-green transition-colors hover:border-green disabled:cursor-not-allowed"
-                                disabled={loading}
-                                on:click={() => onLaunchExecution(item.id)}
-                              >
-                                <Play size={13} />
-                              </button>
-                            {/if}
-                            {#if targets.blockedNext && !item.worktree}
-                              <button
-                                type="button"
-                                aria-label="Generate worktree"
-                                title="Generate worktree"
-                                class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed"
-                                disabled={loading}
-                                on:click={() => generateWorktree(item)}
-                              >
-                                <GitBranch size={13} />
-                              </button>
-                            {/if}
-                            <button
-                              type="button"
-                              aria-label="Move previous"
-                              title="Move previous"
-                              class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-surface hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-                              disabled={loading || !targets.previous}
-                              on:click={() => movePrevious(item)}
-                            >
-                              <ArrowLeft size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={targets.blockedNext ? "Generate worktree before moving" : "Move next"}
-                              title={targets.blockedNext ? "Generate worktree before moving" : "Move next"}
-                              class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-surface hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-                              disabled={loading || !targets.next}
-                              on:click={() => moveNext(item)}
-                            >
-                              <ArrowRight size={13} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-                          {#if attention.signals.length > 0}
-                            {#each attention.signals as signal (signal.id)}
-                              <span class="inline-flex min-w-0 items-center gap-1 text-[12px]">
-                                <span class={attentionDotClass(signal.tone)}>●</span>
-                                <span class="truncate text-text-muted">{signal.label}</span>
-                              </span>
-                            {/each}
-                          {:else}
-                            <StatusDot
-                              status={item.runState || "idle"}
-                              label={item.runState || "Idle"}
-                              showLabel
-                              class="text-[12px]"
-                            />
-                          {/if}
-                        </div>
-                      </div>
-                    </article>
-                  {/each}
-                {/if}
-              </div>
-            </section>
-          {/if}
+          <WorkBoardColumn
+            {stage}
+            count={stageItems.length}
+            {collapsed}
+            hasAttention={stageHasAttention}
+            attentionClass={stageAttentionClass(stage)}
+            onToggle={toggleStageCollapsed}
+          >
+            {#each stageItems as item (item.id)}
+              {@const targets = adjacentStageTargets(item, stages)}
+              {@const latestRun = (runsByItem[item.id] ?? [])[0] ?? null}
+              {@const canExecute = canQueueOrLaunchExecution(item, latestRun)}
+              {@const attention = attentionFor(item, stage)}
+              {@const terminalRun = attention.terminalRunId
+                ? (runsByItem[item.id] ?? []).find((run) => run.id === attention.terminalRunId) ?? null
+                : null}
+              <WorkItemCard
+                {item}
+                {targets}
+                {latestRun}
+                {terminalRun}
+                {attention}
+                {canExecute}
+                {loading}
+                {cardRailClass}
+                {attentionDotClass}
+                onOpenDetail={openDetail}
+                onOpenRunTerminal={openRunTerminal}
+                {onLaunchRun}
+                {onQueueExecution}
+                onLaunchExecution={(workItemId) => onLaunchExecution(workItemId)}
+                onGenerateWorktree={generateWorktree}
+                onMovePrevious={movePrevious}
+                onMoveNext={moveNext}
+              />
+            {/each}
+          </WorkBoardColumn>
         {/each}
       </div>
     </div>

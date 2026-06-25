@@ -438,7 +438,7 @@ files.
 | `Popover.svelte` | popover + backdrop catcher + one-open logic | `open` (bindable), `align: "left"\|"right"`; slots `trigger` + default; handles outside-click + Escape-closes-popover-first |
 | `Menu.svelte` / `MenuItem.svelte` | overflow menu items + divider | `MenuItem`: `icon`, `tone`, `active`, `disabled`, `on:select` |
 | `SectionHeader.svelte` | `text-[11px] font-semibold uppercase` eyebrow | slot, optional trailing slot |
-| `ListRow.svelte` | borderless `divide-y` row | `as: "button"\|"div"`, `cols` (grid template), `on:click`; container `List.svelte` applies `divide-hairline` |
+| `List.svelte` / `ListRow.svelte` | borderless `divide-y` row | `List` owns `divide-y divide-hairline`; `ListRow` exposes `as: "button"\|"div"`, `cols` (grid template), `onclick` |
 | `EmptyState.svelte` | `px-3 py-3 text-[12px] text-text-muted` | slot |
 
 ### Tier 2 — layout shells
@@ -451,6 +451,16 @@ files.
 | `PanelHeader.svelte` | §5 compact header bar | inline-edit name, mono meta strip, ⓘ/⋯ slots (generalize the existing `SidebarPanelHeader.svelte`) |
 | `NextActionBar.svelte` | the "what's next" bar | takes a `NextStepView` + runs its action |
 
+### Landed splits (2026-06-25)
+- [x] `List.svelte` / `ListRow.svelte`, `Tabs.svelte`, and `PanelHeader.svelte`
+      live in `frontend/src/ui/`.
+- [x] `ProjectsView.svelte` is now a shell over `projects/ProjectOverview`,
+      `ProjectAttachments`, `ProjectCards`, `ProjectSessions`, and `ProjectRuns`.
+- [x] `WorkBoard.svelte` delegates board chrome/card rendering to
+      `workboard/WorkBoardColumn.svelte` and `workboard/WorkItemCard.svelte`.
+- [x] The extracted `ProjectsView` and `WorkBoard` feature components use local
+      UI primitives for buttons, text fields, text areas, lists, rows, and tabs.
+
 ### Tier 3 — feature components (decompose the big views)
 These compose Tier 1/2; they're not reusable across the app but make the giant
 files legible and testable.
@@ -462,15 +472,17 @@ files legible and testable.
   command-palette / settings wiring into their own already-existing panels.
 - **`WorkBoard.svelte`** — split into `WorkBoardColumn.svelte` (stage column +
   collapse) and `WorkItemCard.svelte` (the kanban card, incl. attention rail +
-  hover actions). `WorkItemDetail.svelte` is already extracted. Do this together
-  with the P1 token migration (§11) so the card is restyled as it's extracted.
+  hover actions). `WorkItemDetail.svelte` is already extracted. Follow-up work:
+  move more card/column derivations into tested `.ts` helpers only if the parent
+  starts accumulating duplicated view logic again.
 - **`WorkItemDetail.svelte`** — once Tier 1/2 exist, lift its sub-blocks:
   `WorkItemPlan.svelte`, `WorkItemActivity.svelte` (questions/feedback/gates/
   history), and `WorkItemProperties.svelte` (the rail). Replace the hoisted
   recipe `const`s with `<Button>`/`<IconButton>`/`<Popover>`.
-- **`ProjectsView.svelte` (~950 lines)** — split per tab: `ProjectOverview`,
-  `ProjectCards`, `ProjectAttachments`, `ProjectSessions`, sharing `List`/
-  `ListRow`/`PanelHeader`/`Tabs`.
+- **`ProjectsView.svelte`** — split per tab: `ProjectOverview`, `ProjectCards`,
+  `ProjectAttachments`, `ProjectSessions`, and `ProjectRuns`, sharing `List`/
+  `ListRow`/`PanelHeader`/`Tabs`. Follow-up work: keep business derivations in
+  `projectView.ts` as tab components get richer.
 - **Dialogs** (`ConfirmDialog`, `NewProjectDialog`, `NewSessionDialog`, …) — all
   reskin onto `ModalShell` + `Button` + `TextField`; clears most of the P2 punch
   list as a side effect.
