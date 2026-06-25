@@ -325,14 +325,53 @@ describe("local UI layer", () => {
   });
 
   it("migrates SettingsView controls onto the local UI layer", () => {
+    const settingsSectionSources = [
+      "./settings/GeneralSettings.svelte",
+      "./settings/TerminalSettings.svelte",
+      "./settings/PluginsSettings.svelte",
+      "./settings/IntegrationsSettings.svelte",
+    ].map((path) => String(svelteSources[path])).join("\n");
+
     expect(settingsViewSource).toContain('from "./ui/Button.svelte"');
     expect(settingsViewSource).toContain('from "./ui/IconButton.svelte"');
-    expect(settingsViewSource).toContain('from "./ui/List.svelte"');
-    expect(settingsViewSource).toContain('from "./ui/ListRow.svelte"');
-    expect(settingsViewSource).toContain('from "./ui/Switch.svelte"');
-    expect(settingsViewSource).toContain('from "./ui/TextField.svelte"');
+    expect(settingsSectionSources).toContain('from "../ui/List.svelte"');
+    expect(settingsSectionSources).toContain('from "../ui/ListRow.svelte"');
+    expect(settingsSectionSources).toContain('from "../ui/Switch.svelte"');
+    expect(settingsSectionSources).toContain('from "../ui/TextField.svelte"');
     expect(settingsViewSource).not.toMatch(/<(button|input|textarea|select)\b/);
     expect(settingsViewSource).not.toMatch(/\son:[a-z]/);
+    expect(settingsSectionSources).not.toMatch(/<(button|input|textarea|select)\b/);
+    expect(settingsSectionSources).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("splits SettingsView sections into focused feature components", () => {
+    const settingsSections = [
+      "./settings/GeneralSettings.svelte",
+      "./settings/TerminalSettings.svelte",
+      "./settings/PluginsSettings.svelte",
+      "./settings/IntegrationsSettings.svelte",
+    ];
+
+    expect(Object.keys(svelteSources)).toEqual(expect.arrayContaining(settingsSections));
+    expect(settingsViewSource).toContain('from "./settings/GeneralSettings.svelte"');
+    expect(settingsViewSource).toContain('from "./settings/TerminalSettings.svelte"');
+    expect(settingsViewSource).toContain('from "./settings/PluginsSettings.svelte"');
+    expect(settingsViewSource).toContain('from "./settings/IntegrationsSettings.svelte"');
+    expect(settingsViewSource).toContain("<GeneralSettings");
+    expect(settingsViewSource).toContain("<TerminalSettings");
+    expect(settingsViewSource).toContain("<PluginsSettings");
+    expect(settingsViewSource).toContain("<IntegrationsSettings");
+    expect(settingsViewSource).not.toContain("registryGroups =");
+    expect(settingsViewSource).not.toContain("function pluginStatusClass");
+    expect(settingsViewSource).not.toContain("function updateTerminalFontSize");
+    expect(settingsViewSource).not.toContain("agentHookDebugRows");
+
+    for (const path of settingsSections) {
+      const source = String(svelteSources[path]);
+      expect(source, path).toContain("$props()");
+      expect(source, path).not.toMatch(/<(button|input|textarea|select)\b/);
+      expect(source, path).not.toMatch(/\son:[a-z]/);
+    }
   });
 
   it("keeps TerminalPane on Svelte 5 event attributes", () => {
@@ -352,5 +391,6 @@ describe("local UI layer", () => {
     expect(designSystemDoc).toContain("Properties rails use `PropertyRow`");
     expect(designSystemDoc).toContain("`ResizeHandle.svelte`");
     expect(designSystemDoc).toContain('"danger-ghost"');
+    expect(designSystemDoc).toContain("`SettingsView.svelte` is now a shell over");
   });
 });

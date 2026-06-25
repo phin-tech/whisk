@@ -469,6 +469,9 @@ files.
       UI primitives for buttons, text fields, text areas, lists, rows, and tabs.
 - [x] `WorkItemDetail.svelte` uses `NextActionBar` for the primary next action
       and `PropertyRow` for simple properties rail rows.
+- [x] `SettingsView.svelte` is now a shell over `settings/GeneralSettings`,
+      `settings/TerminalSettings`, `settings/PluginsSettings`, and
+      `settings/IntegrationsSettings`.
 - [x] `SessionsPanel`, `NotificationsPanel`, `SettingsView`, `DaemonSettings`,
       `KeybindingsPanel`, sidebar chrome, and `TerminalPane` now use local UI
       primitives or Svelte 5 event attributes at the feature boundary.
