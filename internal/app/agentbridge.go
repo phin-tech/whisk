@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
+	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
 type AgentBridgeHookRequest struct {
@@ -75,6 +77,15 @@ func (r *Runtime) HandleAgentBridgeHook(ctx context.Context, req AgentBridgeHook
 	if provider == "" {
 		provider = bridge.Provider
 	}
+	if r.shouldStopPlanningExitPlanMode(bridge, req) {
+		decision := agentbridge.EvaluationDecision{
+			Action: agentbridge.PolicyDeny,
+			Reason: "Whisk planning run: ExitPlanMode approval only approves the plan text. Submit the approved plan to Whisk first with `${WHISK_CLI:-whisk} workflow submit-plan -body '<plan markdown>'`. Do not write files, edit code, run tests, install dependencies, or begin implementation in this planning session.",
+		}
+		_, _ = r.recordAgentBridgeEvent(ctx, req, bridge, "plan_submission_required")
+		output, _ := agentbridge.EvaluationDecisionToProviderOutput(provider, req.EventName, decision)
+		return AgentBridgeHookResponse{Output: output}, nil
+	}
 	if isAgentPromptHook(req) {
 		answer, err := r.requestAgentPrompt(ctx, bridge, req)
 		if err != nil {
@@ -119,6 +130,16 @@ func (r *Runtime) HandleAgentBridgeHook(ctx context.Context, req AgentBridgeHook
 
 func isAgentPromptHook(req AgentBridgeHookRequest) bool {
 	return req.EventName == "Elicitation" || ((req.EventName == "PreToolUse" || req.EventName == "PermissionRequest") && req.ToolName == "AskUserQuestion")
+}
+
+func (r *Runtime) shouldStopPlanningExitPlanMode(bridge agentbridge.Bridge, req AgentBridgeHookRequest) bool {
+	if bridge.Provider != agentbridge.ProviderClaude || req.EventName != "PreToolUse" || req.ToolName != "ExitPlanMode" || strings.TrimSpace(bridge.RunID) == "" {
+		return false
+	}
+	r.mu.Lock()
+	run, ok := r.workItems.GetRun(bridge.RunID)
+	r.mu.Unlock()
+	return ok && run.PromptTemplateID == workitem.PromptTemplatePlan && run.Preset == workitem.RunPresetReader
 }
 
 var ErrUnauthorizedAgentBridgeHook = fmt.Errorf("unauthorized agent bridge hook")

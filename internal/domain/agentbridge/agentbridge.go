@@ -86,6 +86,7 @@ type Bridge struct {
 	ID        string
 	SessionID string
 	PTYID     string
+	RunID     string
 	Provider  Provider
 	TokenHash string
 }
@@ -510,7 +511,8 @@ func (s State) Bridge(id string) (Bridge, bool) {
 }
 
 func (s State) RecordPendingQuestion(req RecordPendingQuestion) (State, Question, error) {
-	if _, ok := s.bridges[req.BridgeID]; !ok {
+	bridge, ok := s.bridges[req.BridgeID]
+	if !ok {
 		return State{}, Question{}, fmt.Errorf("bridge %s not found", req.BridgeID)
 	}
 	if strings.TrimSpace(req.ID) == "" {
@@ -523,7 +525,7 @@ func (s State) RecordPendingQuestion(req RecordPendingQuestion) (State, Question
 	question := Question{
 		ID:       req.ID,
 		BridgeID: req.BridgeID,
-		RunID:    strings.TrimSpace(req.RunID),
+		RunID:    firstNonEmptyString(bridge.RunID, req.RunID),
 		Prompt:   strings.TrimSpace(req.Prompt),
 		Status:   QuestionPending,
 	}
@@ -555,7 +557,7 @@ func (s State) RecordPendingApproval(req RecordPendingApproval) (State, Approval
 		BridgeID:  req.BridgeID,
 		SessionID: bridge.SessionID,
 		PTYID:     bridge.PTYID,
-		RunID:     strings.TrimSpace(req.RunID),
+		RunID:     firstNonEmptyString(bridge.RunID, req.RunID),
 		Provider:  bridge.Provider,
 		EventName: strings.TrimSpace(req.EventName),
 		ToolName:  strings.TrimSpace(req.ToolName),
@@ -594,7 +596,7 @@ func (s State) RecordPendingPrompt(req RecordPendingPrompt) (State, Prompt, erro
 		BridgeID:      strings.TrimSpace(req.BridgeID),
 		SessionID:     bridge.SessionID,
 		PTYID:         bridge.PTYID,
-		RunID:         strings.TrimSpace(req.RunID),
+		RunID:         firstNonEmptyString(bridge.RunID, req.RunID),
 		Provider:      bridge.Provider,
 		Kind:          req.Kind,
 		EventName:     strings.TrimSpace(req.EventName),

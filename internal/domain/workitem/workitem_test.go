@@ -625,6 +625,8 @@ func TestPlanPromptTellsAgentToSubmitDraftPlan(t *testing.T) {
 		!strings.Contains(run.PromptSnapshot, "-body '<plan markdown>'") ||
 		!strings.Contains(run.PromptSnapshot, "If an external plan review tool opens") ||
 		!strings.Contains(run.PromptSnapshot, "Do not submit drafts to Whisk before external plan approval") ||
+		!strings.Contains(run.PromptSnapshot, "ExitPlanMode approval does not authorize implementation") ||
+		!strings.Contains(run.PromptSnapshot, "Do not write files, edit code, run tests, install dependencies, or begin implementation in this stage") ||
 		!strings.Contains(run.PromptSnapshot, "Do not treat the plan as complete") {
 		t.Fatalf("prompt snapshot = %q", run.PromptSnapshot)
 	}
@@ -665,7 +667,9 @@ func TestSnapshotLoadRefreshesBuiltinPromptTemplates(t *testing.T) {
 	}
 	if !strings.Contains(byID[PromptTemplatePlan].Body, "${WHISK_CLI:-whisk} workflow submit-plan") ||
 		!strings.Contains(byID[PromptTemplatePlan].Body, "If an external plan review tool opens") ||
-		!strings.Contains(byID[PromptTemplatePlan].Body, "Do not submit drafts to Whisk before external plan approval") {
+		!strings.Contains(byID[PromptTemplatePlan].Body, "Do not submit drafts to Whisk before external plan approval") ||
+		!strings.Contains(byID[PromptTemplatePlan].Body, "ExitPlanMode approval does not authorize implementation") ||
+		!strings.Contains(byID[PromptTemplatePlan].Body, "Do not write files, edit code, run tests, install dependencies, or begin implementation in this stage") {
 		t.Fatalf("plan template = %q", byID[PromptTemplatePlan].Body)
 	}
 	if byID["custom"].Body != custom.Body {

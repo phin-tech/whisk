@@ -2,6 +2,7 @@ package client_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -546,6 +547,76 @@ func TestHTTPClientAgentBridgeAndHookLog(t *testing.T) {
 	}
 }
 
+func TestHTTPClientExitPlanModeHookStopsPlanningRunAtWhiskSubmission(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	nextID := 0
+	ptyBackend := &clientMemoryPTYBackend{records: map[string]app.PTYRecord{}}
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		PTYBackend: ptyBackend,
+		DaemonURL:  "http://127.0.0.1:8787",
+		CLIPath:    "/usr/local/bin/whisk",
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	t.Cleanup(httpServer.Close)
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx := context.Background()
+
+	project, err := daemon.CreateProject(ctx, protocol.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := daemon.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{ProjectID: project.ID, Title: "Plan first"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	run, err := daemon.StartPlanning(ctx, protocol.StartPlanningRequest{
+		WorkItemID:     item.ID,
+		Launch:         true,
+		AgentProfileID: "claude-plan",
+		Actor:          "agent",
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	if run.PromptTemplateID != workitem.PromptTemplatePlan {
+		t.Fatalf("run = %#v", run)
+	}
+	if len(ptyBackend.spawns) != 1 {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	env := ptyBackend.spawns[0].Env
+	bridgeID, token := env["WHISK_AGENT_BRIDGE_ID"], env["WHISK_AGENT_BRIDGE_TOKEN"]
+	if bridgeID == "" || token == "" {
+		t.Fatalf("missing bridge credentials: env = %#v", env)
+	}
+
+	resp, err := daemon.AgentBridgeHook(ctx, bridgeID, protocol.AgentBridgeHookRequest{
+		Token:     token,
+		Provider:  "claude",
+		EventName: "PreToolUse",
+		ToolName:  "ExitPlanMode",
+		ToolInput: map[string]any{"plan": "## Plan\nDo it."},
+	})
+	if err != nil {
+		t.Fatalf("agent bridge hook: %v", err)
+	}
+	hookSpecific, ok := resp.Output["hookSpecificOutput"].(map[string]any)
+	if !ok {
+		t.Fatalf("response = %#v", resp.Output)
+	}
+	reason, _ := hookSpecific["permissionDecisionReason"].(string)
+	if hookSpecific["permissionDecision"] != "deny" ||
+		!strings.Contains(reason, "Whisk planning run") ||
+		!strings.Contains(reason, "workflow submit-plan") {
+		t.Fatalf("hookSpecificOutput = %#v", hookSpecific)
+	}
+}
+
 func TestHTTPClientOpenAgentHookLog(t *testing.T) {
 	// Use a stub server so the client method is exercised without the daemon actually shelling out
 	// to open the log file.
@@ -699,4 +770,69 @@ func clientTestAgentHookPaths(t *testing.T) agenthooks.Paths {
 		ClaudeSettingsPath: filepath.Join(root, ".claude", "settings.json"),
 		CodexHooksPath:     filepath.Join(root, ".codex", "hooks.json"),
 	}
+}
+
+type clientMemoryPTYBackend struct {
+	spawns  []app.SpawnPTYRequest
+	records map[string]app.PTYRecord
+}
+
+func (b *clientMemoryPTYBackend) Spawn(_ context.Context, req app.SpawnPTYRequest) (app.PTYRecord, error) {
+	b.spawns = append(b.spawns, req)
+	record := app.PTYRecord{
+		ID:         req.ID,
+		WorkingDir: req.WorkingDir,
+		Cols:       req.Cols,
+		Rows:       req.Rows,
+		Running:    true,
+	}
+	b.records[record.ID] = record
+	return record, nil
+}
+
+func (b *clientMemoryPTYBackend) Write(context.Context, string, []byte) error {
+	return nil
+}
+
+func (b *clientMemoryPTYBackend) Resize(context.Context, string, app.PTYSize) error {
+	return nil
+}
+
+func (b *clientMemoryPTYBackend) Kill(_ context.Context, ptyID string) (app.PTYRecord, error) {
+	record, ok := b.records[ptyID]
+	if !ok {
+		return app.PTYRecord{}, fmt.Errorf("pty %s not found", ptyID)
+	}
+	record.Running = false
+	b.records[ptyID] = record
+	return record, nil
+}
+
+func (b *clientMemoryPTYBackend) Delete(_ context.Context, ptyID string) error {
+	delete(b.records, ptyID)
+	return nil
+}
+
+func (b *clientMemoryPTYBackend) Attach(context.Context, app.AttachPTYRequest) (*app.PTYAttach, error) {
+	return nil, fmt.Errorf("attach unsupported")
+}
+
+func (b *clientMemoryPTYBackend) Output(_ context.Context, ptyID string, _ uint64) (app.PTYOutputSnapshot, error) {
+	record, ok := b.records[ptyID]
+	if !ok {
+		return app.PTYOutputSnapshot{}, fmt.Errorf("pty %s not found", ptyID)
+	}
+	return app.PTYOutputSnapshot{Record: record}, nil
+}
+
+func (b *clientMemoryPTYBackend) List(context.Context) ([]app.PTYRecord, error) {
+	out := make([]app.PTYRecord, 0, len(b.records))
+	for _, record := range b.records {
+		out = append(out, record)
+	}
+	return out, nil
+}
+
+func (b *clientMemoryPTYBackend) Shutdown(context.Context) error {
+	return nil
 }

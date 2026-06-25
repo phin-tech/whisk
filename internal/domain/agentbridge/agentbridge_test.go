@@ -271,17 +271,21 @@ func TestBridgeStateTracksApprovalLifecycle(t *testing.T) {
 		ID:        "bridge_01",
 		SessionID: "sess_01",
 		PTYID:     "pty_01",
+		RunID:     "run_01",
 		Provider:  agentbridge.ProviderClaude,
 		TokenHash: agentbridge.HashHookToken("secret-token"),
 	})
 	if err != nil {
 		t.Fatalf("new state: %v", err)
 	}
+	bridge, ok := state.Bridge("bridge_01")
+	if !ok || bridge.RunID != "run_01" {
+		t.Fatalf("bridge = %#v, ok = %v", bridge, ok)
+	}
 
 	pendingState, approval, err := state.RecordPendingApproval(agentbridge.RecordPendingApproval{
 		ID:        "approval_01",
 		BridgeID:  "bridge_01",
-		RunID:     "run_01",
 		EventName: "PreToolUse",
 		ToolName:  "Bash",
 		ToolInput: map[string]any{"command": "pwd"},
@@ -293,6 +297,7 @@ func TestBridgeStateTracksApprovalLifecycle(t *testing.T) {
 	if approval.Status != agentbridge.ApprovalPending ||
 		approval.SessionID != "sess_01" ||
 		approval.PTYID != "pty_01" ||
+		approval.RunID != "run_01" ||
 		approval.Provider != agentbridge.ProviderClaude ||
 		approval.ToolInput["command"] != "pwd" {
 		t.Fatalf("approval = %#v", approval)

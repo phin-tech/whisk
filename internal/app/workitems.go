@@ -95,7 +95,6 @@ type ProjectContextItem struct {
 	Error        string
 }
 
-
 type CreateWorkItemRequest struct {
 	ProjectID    string
 	WorkflowID   string
@@ -1377,6 +1376,7 @@ func prepareAgentBridgeLaunchForProvider(r *Runtime, bridgeProvider agentbridge.
 		},
 		Bridge: agentbridge.Bridge{
 			ID:        bridgeID,
+			RunID:     runID,
 			Provider:  bridgeProvider,
 			TokenHash: agentbridge.HashHookToken(token),
 		},

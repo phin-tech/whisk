@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -224,6 +225,96 @@ func toolCallHook(bridgeID, token string) app.AgentBridgeHookRequest {
 		EventName: "PermissionRequest",
 		ToolName:  "Bash",
 		ToolInput: map[string]any{"command": "ls"},
+	}
+}
+
+func launchPlanningAgentBridge(t *testing.T) (*app.Runtime, string, string) {
+	t.Helper()
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	nextID := 0
+	ptyBackend := newMemoryPTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: &memoryWorkItemStore{},
+		PTYBackend:    ptyBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(ctx) })
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Plan first"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	if _, err := runtime.StartPlanning(ctx, app.StartPlanningRequest{
+		WorkItemID:     item.ID,
+		Launch:         true,
+		AgentProfileID: "claude-plan",
+		Actor:          "agent",
+	}); err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	if len(ptyBackend.spawns) != 1 {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	env := ptyBackend.spawns[0].Env
+	bridgeID, token := env["WHISK_AGENT_BRIDGE_ID"], env["WHISK_AGENT_BRIDGE_TOKEN"]
+	if bridgeID == "" || token == "" {
+		t.Fatalf("missing bridge credentials: env = %#v", env)
+	}
+	return runtime, bridgeID, token
+}
+
+func TestRuntimeExitPlanModeHookStopsPlanningRunAtWhiskSubmission(t *testing.T) {
+	runtime, bridgeID, token := launchPlanningAgentBridge(t)
+	ctx := context.Background()
+
+	resp, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+		BridgeID:  bridgeID,
+		Token:     token,
+		Provider:  "claude",
+		EventName: "PreToolUse",
+		ToolName:  "ExitPlanMode",
+		ToolInput: map[string]any{"plan": "## Plan\nDo it."},
+	})
+	if err != nil {
+		t.Fatalf("hook: %v", err)
+	}
+	hookSpecific, ok := resp.Output["hookSpecificOutput"].(map[string]any)
+	if !ok {
+		t.Fatalf("response = %#v", resp.Output)
+	}
+	reason, _ := hookSpecific["permissionDecisionReason"].(string)
+	if hookSpecific["hookEventName"] != "PreToolUse" ||
+		hookSpecific["permissionDecision"] != "deny" ||
+		!strings.Contains(reason, "Whisk planning run") ||
+		!strings.Contains(reason, "workflow submit-plan") ||
+		!strings.Contains(reason, "Do not") {
+		t.Fatalf("hookSpecificOutput = %#v", hookSpecific)
+	}
+
+	executionRuntime, executionBridgeID, executionToken := launchAgentBridge(t, time.Second)
+	executionResp, err := executionRuntime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+		BridgeID:  executionBridgeID,
+		Token:     executionToken,
+		Provider:  "claude",
+		EventName: "PreToolUse",
+		ToolName:  "ExitPlanMode",
+		ToolInput: map[string]any{"plan": "## Plan\nDo it."},
+	})
+	if err != nil {
+		t.Fatalf("execution hook: %v", err)
+	}
+	if executionResp.Output != nil {
+		t.Fatalf("execution response = %#v", executionResp.Output)
 	}
 }
 
