@@ -15,6 +15,7 @@ import ptysPanelSource from "./PtysPanel.svelte?raw";
 import sessionsPanelSource from "./SessionsPanel.svelte?raw";
 import sidebarPanelHeaderSource from "./SidebarPanelHeader.svelte?raw";
 import sidebarDockSource from "./SidebarDock.svelte?raw";
+import settingsViewSource from "./SettingsView.svelte?raw";
 import workItemDetailSource from "./WorkItemDetail.svelte?raw";
 import workItemsPanelSource from "./WorkItemsPanel.svelte?raw";
 
@@ -320,6 +321,17 @@ describe("local UI layer", () => {
     expect(notificationsPanelSource).toContain('from "./ui/TextField.svelte"');
     expect(notificationsPanelSource).not.toMatch(/<(button|input|textarea|select)\b/);
     expect(notificationsPanelSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("migrates SettingsView controls onto the local UI layer", () => {
+    expect(settingsViewSource).toContain('from "./ui/Button.svelte"');
+    expect(settingsViewSource).toContain('from "./ui/IconButton.svelte"');
+    expect(settingsViewSource).toContain('from "./ui/List.svelte"');
+    expect(settingsViewSource).toContain('from "./ui/ListRow.svelte"');
+    expect(settingsViewSource).toContain('from "./ui/Switch.svelte"');
+    expect(settingsViewSource).toContain('from "./ui/TextField.svelte"');
+    expect(settingsViewSource).not.toMatch(/<(button|input|textarea|select)\b/);
+    expect(settingsViewSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {

@@ -17,6 +17,12 @@
   import { agentHookDebugDetailRows, agentHookDebugRows, agentHookIntegrationFor } from "./agentHooksView";
   import DaemonSettings from "./DaemonSettings.svelte";
   import KeybindingsPanel from "./KeybindingsPanel.svelte";
+  import Button from "./ui/Button.svelte";
+  import IconButton from "./ui/IconButton.svelte";
+  import List from "./ui/List.svelte";
+  import ListRow from "./ui/ListRow.svelte";
+  import Switch from "./ui/Switch.svelte";
+  import TextField from "./ui/TextField.svelte";
 
   export let visible = false;
   export let railSide: "left" | "right" = "right";
@@ -156,9 +162,13 @@
     return (plugin.resolvers ?? []).map((resolver) => resolver.provider).join(", ");
   }
 
+  function updateTerminalFontSize(event: Event) {
+    onTerminalFontSize(Number((event.currentTarget as HTMLInputElement).value));
+  }
+
 </script>
 
-<svelte:window on:keydown={visible ? handleKey : undefined} />
+<svelte:window onkeydown={visible ? handleKey : undefined} />
 
 {#if visible}
   <div
@@ -168,14 +178,13 @@
   >
     <aside class="flex w-[180px] shrink-0 flex-col border-r border-hairline bg-bg-surface/30 py-3">
       <div class="flex items-center gap-2 px-3 pb-2">
-        <button
-          type="button"
-          aria-label="Close settings"
-          class="rounded border border-transparent bg-transparent p-1 text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-          on:click={onclose}
+        <IconButton
+          label="Close settings"
+          size="sm"
+          onclick={onclose}
         >
           <X size={14} />
-        </button>
+        </IconButton>
         <div class="text-[11px] font-semibold uppercase tracking-widest text-text-muted">
           Preferences
         </div>
@@ -183,17 +192,19 @@
       <nav class="flex flex-col gap-0.5 px-2">
         {#each categories as category}
           {@const Icon = category.icon}
-          <button
-            type="button"
-            class="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors {selected ===
+          <Button
+            variant={selected === category.id ? "primary" : "ghost"}
+            size="sm"
+            align="start"
+            class="h-8 w-full gap-2 border-transparent text-[13px] {selected ===
             category.id
-              ? 'bg-accent-dim text-text-primary'
-              : 'text-text-secondary hover:bg-bg-hover'}"
-            on:click={() => (selected = category.id)}
+              ? ''
+              : 'bg-transparent text-text-secondary'}"
+            onclick={() => (selected = category.id)}
           >
             <Icon size={14} />
             <span>{category.label}</span>
-          </button>
+          </Button>
         {/each}
       </nav>
     </aside>
@@ -230,17 +241,15 @@
             </div>
             <div class="flex overflow-hidden rounded border border-border bg-bg-deep">
               {#each [{ id: "sessions", label: "Sessions" }, { id: "kanban", label: "Kanban" }] as option}
-                <button
-                  type="button"
-                  class="px-2.5 py-1 text-[11px] transition-colors {startupView ===
-                  option.id
-                    ? 'bg-accent-dim text-text-primary'
-                    : 'text-text-secondary hover:bg-bg-hover'}"
+                <Button
+                  variant={startupView === option.id ? "primary" : "ghost"}
+                  size="sm"
+                  class="h-7 rounded-none border-transparent text-[11px] {startupView === option.id ? '' : 'bg-transparent'}"
                   aria-pressed={startupView === option.id}
-                  on:click={() => onStartupView(option.id as "sessions" | "kanban")}
+                  onclick={() => onStartupView(option.id as "sessions" | "kanban")}
                 >
                   {option.label}
-                </button>
+                </Button>
               {/each}
             </div>
           </div>
@@ -252,14 +261,13 @@
                 Agent hooks, skills, and plugin trust.
               </div>
             </div>
-            <button
-              type="button"
-              class="inline-flex h-7 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-primary transition-colors hover:border-accent hover:text-accent"
-              on:click={onRunOnboarding}
+            <Button
+              size="sm"
+              onclick={onRunOnboarding}
             >
               <RefreshCw size={13} />
               <span>Re-run</span>
-            </button>
+            </Button>
           </div>
 
           <div class="mt-4 flex items-center justify-between py-2">
@@ -271,17 +279,15 @@
             </div>
             <div class="flex overflow-hidden rounded border border-border bg-bg-deep">
               {#each ["left", "right"] as side}
-                <button
-                  type="button"
-                  class="px-2.5 py-1 text-[11px] transition-colors {railSide ===
-                  side
-                    ? 'bg-accent-dim text-text-primary'
-                    : 'text-text-secondary hover:bg-bg-hover'}"
+                <Button
+                  variant={railSide === side ? "primary" : "ghost"}
+                  size="sm"
+                  class="h-7 rounded-none border-transparent text-[11px] {railSide === side ? '' : 'bg-transparent'}"
                   aria-pressed={railSide === side}
-                  on:click={() => onRailSide(side as "left" | "right")}
+                  onclick={() => onRailSide(side as "left" | "right")}
                 >
                   {side}
-                </button>
+                </Button>
               {/each}
             </div>
           </div>
@@ -312,14 +318,13 @@
         {:else if selected === "terminal"}
           <div class="flex items-center justify-between py-2">
             <span class="text-[13px]">Font size</span>
-            <input
-              class="w-20 rounded border border-border bg-bg-deep px-2 py-1 text-right text-[12px] text-text-primary outline-none focus:border-accent-dim"
+            <TextField
+              class="w-20 text-right"
               type="number"
               min="10"
               max="20"
-              value={terminalFontSize}
-              on:input={(event) =>
-                onTerminalFontSize(Number(event.currentTarget.value))}
+              value={String(terminalFontSize)}
+              oninput={updateTerminalFontSize}
             />
           </div>
 
@@ -330,20 +335,11 @@
                 Applies to newly mounted terminal panes.
               </div>
             </div>
-            <button
-              type="button"
-              aria-label="Toggle cursor blink"
-              class="relative h-5 w-9 rounded-full border transition-all {terminalCursorBlink
-                ? 'border-accent bg-accent-dim'
-                : 'border-border bg-bg-deep'}"
-              on:click={() => onTerminalCursorBlink(!terminalCursorBlink)}
-            >
-              <div
-                class="absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all {terminalCursorBlink
-                  ? 'left-[18px] bg-accent'
-                  : 'left-0.5 bg-text-secondary'}"
-              ></div>
-            </button>
+            <Switch
+              label="Toggle cursor blink"
+              checked={terminalCursorBlink}
+              onCheckedChange={onTerminalCursorBlink}
+            />
           </div>
         {:else if selected === "shortcuts"}
           <KeybindingsPanel visible={visible && selected === "shortcuts"} />
@@ -357,22 +353,21 @@
                 Daemon-loaded plugins from configured plugin directories.
               </div>
             </div>
-            <button
-              type="button"
-              aria-label="Rescan plugins"
-              class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-              on:click={onRefreshPlugins}
+            <IconButton
+              label="Rescan plugins"
+              class="shrink-0"
+              onclick={onRefreshPlugins}
             >
               <RefreshCw size={14} />
-            </button>
+            </IconButton>
           </div>
 
-          <div class="divide-y divide-hairline border-y border-hairline">
+          <List class="border-y border-hairline">
             {#if plugins.length === 0}
               <div class="py-3 text-[12px] text-text-muted">No plugins found.</div>
             {:else}
               {#each plugins as plugin (plugin.id)}
-                <div class="grid gap-3 py-3 md:grid-cols-[minmax(180px,240px)_1fr_auto] md:items-start">
+                <ListRow class="grid gap-3 py-3 md:grid-cols-[minmax(180px,240px)_1fr_auto] md:items-start">
                   <div class="min-w-0">
                     <div class="flex items-center gap-2">
                       <Plug size={14} class="shrink-0 text-text-muted" />
@@ -411,25 +406,16 @@
                     {/if}
                   </div>
 
-                  <button
-                    type="button"
-                    aria-label={`${plugin.trusted ? "Untrust" : "Trust"} ${plugin.name || plugin.id}`}
-                    class="relative h-5 w-9 rounded-full border transition-all {plugin.trusted
-                      ? 'border-accent bg-accent-dim'
-                      : 'border-border bg-bg-deep'}"
+                  <Switch
+                    label={`${plugin.trusted ? "Untrust" : "Trust"} ${plugin.name || plugin.id}`}
+                    checked={plugin.trusted}
                     disabled={!plugin.valid}
-                    on:click={() => onSetPluginTrusted(plugin.id, !plugin.trusted)}
-                  >
-                    <div
-                      class="absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all {plugin.trusted
-                        ? 'left-[18px] bg-accent'
-                        : 'left-0.5 bg-text-secondary'}"
-                    ></div>
-                  </button>
-                </div>
+                    onCheckedChange={(trusted) => onSetPluginTrusted(plugin.id, trusted)}
+                  />
+                </ListRow>
               {/each}
             {/if}
-          </div>
+          </List>
 
           <div class="mt-6 flex items-center justify-between gap-3 pb-3">
             <div>
@@ -438,14 +424,13 @@
                 Installable from the configured plugin registries. Installed plugins start untrusted.
               </div>
             </div>
-            <button
-              type="button"
-              aria-label="Refresh registries"
-              class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-              on:click={onRefreshRegistry}
+            <IconButton
+              label="Refresh registries"
+              class="shrink-0"
+              onclick={onRefreshRegistry}
             >
               <RefreshCw size={14} />
-            </button>
+            </IconButton>
           </div>
 
           {#if registryPlugins.length === 0}
@@ -453,9 +438,9 @@
           {:else}
             {#each registryGroups as [registry, entries] (registry)}
               <div class="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">{registry}</div>
-              <div class="divide-y divide-hairline border-y border-hairline">
+              <List class="border-y border-hairline">
                 {#each entries as entry (entry.id)}
-                  <div class="grid gap-3 py-3 md:grid-cols-[minmax(180px,240px)_1fr_auto] md:items-start">
+                  <ListRow class="grid gap-3 py-3 md:grid-cols-[minmax(180px,240px)_1fr_auto] md:items-start">
                     <div class="min-w-0">
                       <div class="flex items-center gap-2">
                         <Plug size={14} class="shrink-0 text-text-muted" />
@@ -478,18 +463,17 @@
                       {/if}
                     </div>
 
-                    <button
-                      type="button"
-                      class="inline-flex h-7 items-center gap-1.5 rounded border border-border-subtle bg-bg-surface/60 px-2.5 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:opacity-50"
+                    <Button
+                      size="sm"
                       disabled={entry.installed || installingPluginId === `${entry.registry}/${entry.id}`}
-                      on:click={() => onInstallPlugin(entry.registry, entry.id)}
+                      onclick={() => onInstallPlugin(entry.registry, entry.id)}
                     >
                       <Download size={12} />
                       {installingPluginId === `${entry.registry}/${entry.id}` ? "Installing…" : entry.installed ? "Installed" : "Install"}
-                    </button>
-                  </div>
+                    </Button>
+                  </ListRow>
                 {/each}
-              </div>
+              </List>
             {/each}
           {/if}
         {:else if selected === "integrations"}
@@ -500,15 +484,14 @@
                 Global provider hooks managed under <span class="font-mono">~/.config/whisk</span>.
               </div>
             </div>
-            <button
-              type="button"
-              aria-label="Refresh agent hook integrations"
-              class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+            <IconButton
+              label="Refresh agent hook integrations"
+              class="shrink-0"
               disabled={agentHookAction !== ""}
-              on:click={onRefreshAgentHookIntegrations}
+              onclick={onRefreshAgentHookIntegrations}
             >
               <RefreshCw size={14} />
-            </button>
+            </IconButton>
           </div>
 
           {#if agentHookNotice}
@@ -519,11 +502,11 @@
             </div>
           {/if}
 
-          <div class="divide-y divide-hairline border-y border-hairline">
+          <List class="border-y border-hairline">
             {#each providers as provider}
               {@const integration = integrationFor(provider.id)}
               {@const installed = isInstalled(integration)}
-              <div class="grid gap-3 py-3 md:grid-cols-[minmax(160px,220px)_1fr_auto] md:items-start">
+              <ListRow class="grid gap-3 py-3 md:grid-cols-[minmax(160px,220px)_1fr_auto] md:items-start">
                 <div class="flex min-w-0 items-start gap-2">
                   <Plug size={14} class="mt-0.5 shrink-0 text-text-muted" />
                   <div class="min-w-0">
@@ -557,38 +540,34 @@
                 </div>
 
                 <div class="flex items-center gap-1 md:justify-end">
-                  <button
-                    type="button"
-                    aria-label={`Check ${provider.label} hooks`}
-                    class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+                  <IconButton
+                    label={`Check ${provider.label} hooks`}
                     disabled={actionBusy(provider.id)}
-                    on:click={() => onCheckAgentHookIntegration(provider.id)}
+                    onclick={() => onCheckAgentHookIntegration(provider.id)}
                   >
                     <Check size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`${installLabel(integration.status)} ${provider.label} hooks`}
-                    class="inline-flex h-7 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-wait disabled:opacity-60"
+                  </IconButton>
+                  <Button
+                    size="sm"
                     disabled={actionBusy(provider.id)}
-                    on:click={() => onInstallAgentHookIntegration(provider.id)}
+                    aria-label={`${installLabel(integration.status)} ${provider.label} hooks`}
+                    onclick={() => onInstallAgentHookIntegration(provider.id)}
                   >
                     <Download size={13} />
                     <span>{installLabel(integration.status)}</span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${provider.label} hooks`}
-                    class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:border-red/40 hover:text-red disabled:cursor-wait disabled:opacity-50"
+                  </Button>
+                  <IconButton
+                    label={`Remove ${provider.label} hooks`}
+                    tone="danger"
                     disabled={!installed || actionBusy(provider.id)}
-                    on:click={() => onRemoveAgentHookIntegration(provider.id)}
+                    onclick={() => onRemoveAgentHookIntegration(provider.id)}
                   >
                     <Trash2 size={13} />
-                  </button>
+                  </IconButton>
                 </div>
-              </div>
+              </ListRow>
             {/each}
-          </div>
+          </List>
 
           <div class="mt-5 border-y border-hairline py-3">
             <div class="flex items-start justify-between gap-3">
@@ -598,21 +577,12 @@
                   Redacted JSONL hook payloads for debugging.
                 </div>
               </div>
-              <button
-                type="button"
-                aria-label="Toggle hook logging"
-                class="relative h-5 w-9 rounded-full border transition-all {agentHookLogStatus?.enabled
-                  ? 'border-accent bg-accent-dim'
-                  : 'border-border bg-bg-deep'}"
+              <Switch
+                label="Toggle hook logging"
+                checked={agentHookLogStatus?.enabled ?? true}
                 disabled={agentHookAction !== ""}
-                on:click={() => onHookLogEnabled(!(agentHookLogStatus?.enabled ?? true))}
-              >
-                <div
-                  class="absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all {agentHookLogStatus?.enabled
-                    ? 'left-[18px] bg-accent'
-                    : 'left-0.5 bg-text-secondary'}"
-                ></div>
-              </button>
+                onCheckedChange={onHookLogEnabled}
+              />
             </div>
 
             <div class="mt-3 rounded border border-border-subtle bg-bg-surface/25 p-2">
@@ -625,33 +595,31 @@
             </div>
 
             <div class="mt-2 flex flex-wrap gap-1">
-              <button
-                type="button"
-                class="inline-flex h-7 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-wait disabled:opacity-60"
+              <Button
+                size="sm"
                 disabled={!agentHookLogStatus?.path || agentHookAction !== ""}
-                on:click={() => agentHookLogStatus?.path && onCopyAgentHookLogPath(agentHookLogStatus.path)}
+                onclick={() => agentHookLogStatus?.path && onCopyAgentHookLogPath(agentHookLogStatus.path)}
               >
                 <Copy size={13} />
                 <span>Copy Location</span>
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-7 items-center justify-center gap-1 rounded border border-border-subtle bg-bg-surface/60 px-2 text-[11px] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-wait disabled:opacity-60"
+              </Button>
+              <Button
+                size="sm"
                 disabled={agentHookAction !== ""}
-                on:click={onOpenAgentHookLog}
+                onclick={onOpenAgentHookLog}
               >
                 <ExternalLink size={13} />
                 <span>Open in Editor</span>
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-7 items-center justify-center gap-1 rounded border border-red/30 bg-red/10 px-2 text-[11px] text-red transition-colors hover:border-red disabled:cursor-wait disabled:opacity-60"
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
                 disabled={agentHookAction !== ""}
-                on:click={onClearAgentHookLog}
+                onclick={onClearAgentHookLog}
               >
                 <Trash2 size={13} />
                 <span>Clear Log</span>
-              </button>
+              </Button>
             </div>
 
             <div class="mt-3 flex items-center justify-between gap-3 py-1">
@@ -661,21 +629,12 @@
                   Remove hook logs when the daemon shuts down.
                 </div>
               </div>
-              <button
-                type="button"
-                aria-label="Toggle clear hook log after session"
-                class="relative h-5 w-9 rounded-full border transition-all {agentHookLogStatus?.clearAfterSession
-                  ? 'border-accent bg-accent-dim'
-                  : 'border-border bg-bg-deep'}"
+              <Switch
+                label="Toggle clear hook log after session"
+                checked={agentHookLogStatus?.clearAfterSession ?? false}
                 disabled={agentHookAction !== ""}
-                on:click={() => onClearHookLogAfterSession(!(agentHookLogStatus?.clearAfterSession ?? false))}
-              >
-                <div
-                  class="absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all {agentHookLogStatus?.clearAfterSession
-                    ? 'left-[18px] bg-accent'
-                    : 'left-0.5 bg-text-secondary'}"
-                ></div>
-              </button>
+                onCheckedChange={onClearHookLogAfterSession}
+              />
             </div>
 
             <div class="mt-4 border-t border-hairline pt-3">
@@ -687,24 +646,21 @@
                   </div>
                 </div>
                 <div class="flex items-center gap-1">
-                  <button
-                    type="button"
-                    aria-label="Refresh hook events"
-                    class="inline-flex h-7 w-7 items-center justify-center rounded border border-border-subtle bg-bg-surface/60 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+                  <IconButton
+                    label="Refresh hook events"
                     disabled={agentHookAction !== ""}
-                    on:click={onRefreshAgentHookEvents}
+                    onclick={onRefreshAgentHookEvents}
                   >
                     <RefreshCw size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Clear hook events"
-                    class="inline-flex h-7 w-7 items-center justify-center rounded border border-red/30 bg-red/10 text-red transition-colors hover:border-red disabled:cursor-wait disabled:opacity-60"
+                  </IconButton>
+                  <IconButton
+                    label="Clear hook events"
+                    tone="danger"
                     disabled={hookEventRows.length === 0 || agentHookAction !== ""}
-                    on:click={onClearAgentHookEvents}
+                    onclick={onClearAgentHookEvents}
                   >
                     <Trash2 size={13} />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
 
@@ -713,21 +669,20 @@
                   No pending hook events.
                 </div>
               {:else}
-                <div class="mt-3 divide-y divide-hairline border-y border-hairline">
+                <List class="mt-3 border-y border-hairline">
                   {#each hookEventRows as event (event.id)}
                     {@const rawEvent = hookEventById(event.id)}
                     {@const expanded = isHookEventExpanded(event.id)}
-                    <div class="py-2">
+                    <ListRow class="py-2">
                       <div class="grid gap-2 md:grid-cols-[20px_92px_1fr]">
-                        <button
-                          type="button"
-                          class="inline-flex h-5 w-5 items-center justify-center rounded text-text-muted transition-colors hover:bg-bg-surface/60 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-                          aria-label={expanded ? "Collapse hook event details" : "Expand hook event details"}
+                        <IconButton
+                          label={expanded ? "Collapse hook event details" : "Expand hook event details"}
+                          size="sm"
                           aria-expanded={expanded}
-                          on:click={() => toggleHookEventExpanded(event.id)}
+                          onclick={() => toggleHookEventExpanded(event.id)}
                         >
                           <ChevronRight size={13} class="transition-transform {expanded ? 'rotate-90' : ''}" />
-                        </button>
+                        </IconButton>
                         <div class="min-w-0">
                           <div class="truncate text-[11px] font-semibold uppercase text-text-muted">
                             {event.provider || "unknown"}
@@ -736,10 +691,11 @@
                             {event.createdAt}
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          class="min-w-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim/50"
-                          on:dblclick={() => toggleHookEventExpanded(event.id)}
+                        <Button
+                          variant="ghost"
+                          align="start"
+                          class="!h-auto min-w-0 flex-col !items-start gap-0 !border-transparent !bg-transparent !px-0 !py-0 text-left hover:!bg-transparent hover:!text-inherit"
+                          ondblclick={() => toggleHookEventExpanded(event.id)}
                         >
                           <div class="truncate text-[12px] text-text-primary">{event.title}</div>
                           <div class="mt-0.5 truncate text-[11px] text-text-secondary">
@@ -748,7 +704,7 @@
                           <div class="mt-0.5 truncate font-mono text-[10px] text-text-muted">
                             {event.meta}
                           </div>
-                        </button>
+                        </Button>
                       </div>
                       {#if expanded && rawEvent}
                         <div class="mt-2 border-t border-hairline pt-2 md:ml-[112px]">
@@ -762,9 +718,9 @@
                           </div>
                         </div>
                       {/if}
-                    </div>
+                    </ListRow>
                   {/each}
-                </div>
+                </List>
               {/if}
             </div>
           </div>
