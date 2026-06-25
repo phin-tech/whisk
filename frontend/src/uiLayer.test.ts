@@ -6,6 +6,7 @@ import newProjectDialogSource from "./NewProjectDialog.svelte?raw";
 import newSessionDialogSource from "./NewSessionDialog.svelte?raw";
 import onboardingPanelSource from "./OnboardingPanel.svelte?raw";
 import workItemDetailSource from "./WorkItemDetail.svelte?raw";
+import workItemsPanelSource from "./WorkItemsPanel.svelte?raw";
 
 const svelteSources = import.meta.glob("./**/*.svelte", {
   eager: true,
@@ -225,6 +226,16 @@ describe("local UI layer", () => {
     expect(workItemDetailSource).toContain("<SelectField");
     expect(workItemDetailSource).toContain("<Button");
     expect(workItemDetailSource).toContain("<IconButton");
+  });
+
+  it("migrates WorkItemsPanel controls onto the local UI layer", () => {
+    expect(workItemsPanelSource).toContain('from "./ui/Button.svelte"');
+    expect(workItemsPanelSource).toContain('from "./ui/IconButton.svelte"');
+    expect(workItemsPanelSource).toContain('from "./ui/SelectField.svelte"');
+    expect(workItemsPanelSource).toContain('from "./ui/TextArea.svelte"');
+    expect(workItemsPanelSource).toContain('from "./ui/TextField.svelte"');
+    expect(workItemsPanelSource).not.toMatch(/<(button|input|textarea|select)\b/);
+    expect(workItemsPanelSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {
