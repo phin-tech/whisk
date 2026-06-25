@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import designSystemDoc from "../../agents/DESIGN-SYSTEM.md?raw";
 import commandPaletteSource from "./CommandPalette.svelte?raw";
+import activityRailSource from "./ActivityRail.svelte?raw";
 import confirmDialogSource from "./ConfirmDialog.svelte?raw";
 import newProjectDialogSource from "./NewProjectDialog.svelte?raw";
 import newSessionDialogSource from "./NewSessionDialog.svelte?raw";
 import onboardingPanelSource from "./OnboardingPanel.svelte?raw";
 import projectsPanelSource from "./ProjectsPanel.svelte?raw";
 import ptysPanelSource from "./PtysPanel.svelte?raw";
+import sidebarPanelHeaderSource from "./SidebarPanelHeader.svelte?raw";
 import workItemDetailSource from "./WorkItemDetail.svelte?raw";
 import workItemsPanelSource from "./WorkItemsPanel.svelte?raw";
 
@@ -255,6 +257,15 @@ describe("local UI layer", () => {
     expect(ptysPanelSource).toContain('from "./ui/IconButton.svelte"');
     expect(ptysPanelSource).not.toMatch(/<button\b/);
     expect(ptysPanelSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("migrates sidebar chrome buttons onto the local UI layer", () => {
+    expect(sidebarPanelHeaderSource).toContain('from "./ui/IconButton.svelte"');
+    expect(activityRailSource).toContain('from "./ui/IconButton.svelte"');
+    expect(sidebarPanelHeaderSource).not.toMatch(/<button\b/);
+    expect(activityRailSource).not.toMatch(/<button\b/);
+    expect(sidebarPanelHeaderSource).not.toMatch(/\son:[a-z]/);
+    expect(activityRailSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {
