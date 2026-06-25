@@ -434,7 +434,7 @@ files.
 ### Tier 1 — primitives (`frontend/src/ui/`)
 | Component | Replaces recipe (§4) | Key props |
 |---|---|---|
-| `Button.svelte` | primary / outline buttons | Bits-backed; `variant: "primary"\|"outline"\|"ghost"\|"danger"`, `size`, `align`, `disabled`, snippet content |
+| `Button.svelte` | primary / outline buttons | Bits-backed; `variant: "primary"\|"outline"\|"ghost"\|"danger"\|"danger-ghost"`, `size`, `align`, `disabled`, snippet content |
 | `IconButton.svelte` | ghost / destructive icon button | Bits-backed via `Button`; `label` (a11y), `tone: "default"\|"danger"`, `size`, `disabled` |
 | `StatusDot.svelte` | ● status convention + `runStatusDot` | `status`, `showLabel` |
 | `Badge.svelte` | stage chip / mono status pill | `tone`, `mono`, slot |
@@ -442,10 +442,11 @@ files.
 | `Switch.svelte` | binary toggle | Bits-backed; `checked` (bindable), `label`, `disabled` |
 | `SelectField.svelte` | compact single select | Bits-backed; `value` (bindable), `label`, `options`, `disabled` |
 | `Popover.svelte` | popover + backdrop catcher + one-open logic | `open` (bindable), `align: "left"\|"right"`; slots `trigger` + default; handles outside-click + Escape-closes-popover-first |
-| `Menu.svelte` / `MenuItem.svelte` | overflow menu items + divider | `MenuItem`: `icon`, `tone`, `active`, `disabled`, `on:select` |
+| `Menu.svelte` / `MenuItem.svelte` | overflow menu items + divider | `MenuItem`: `tone`, `active`, `disabled`, `onclick` |
 | `SectionHeader.svelte` | `text-[11px] font-semibold uppercase` eyebrow | slot, optional trailing slot |
 | `List.svelte` / `ListRow.svelte` | borderless `divide-y` row | `List` owns `divide-y divide-hairline`; `ListRow` exposes `as: "button"\|"div"`, `cols` (grid template), `onclick` |
 | `EmptyState.svelte` | `px-3 py-3 text-[12px] text-text-muted` | slot |
+| `ResizeHandle.svelte` | sidebar resize rail button | `dragging`, `label`, `onmousedown` |
 
 ### Tier 2 — layout shells
 | Component | Replaces | Notes |
@@ -468,6 +469,9 @@ files.
       UI primitives for buttons, text fields, text areas, lists, rows, and tabs.
 - [x] `WorkItemDetail.svelte` uses `NextActionBar` for the primary next action
       and `PropertyRow` for simple properties rail rows.
+- [x] `SessionsPanel`, `NotificationsPanel`, `SettingsView`, `DaemonSettings`,
+      `KeybindingsPanel`, sidebar chrome, and `TerminalPane` now use local UI
+      primitives or Svelte 5 event attributes at the feature boundary.
 
 ### Tier 3 — feature components (decompose the big views)
 These compose Tier 1/2; they're not reusable across the app but make the giant

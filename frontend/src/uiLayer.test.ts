@@ -350,5 +350,7 @@ describe("local UI layer", () => {
     expect(designSystemDoc).toContain("Detail-view content/rail layouts use `DetailLayout`");
     expect(designSystemDoc).toContain("Primary action bars use `NextActionBar`");
     expect(designSystemDoc).toContain("Properties rails use `PropertyRow`");
+    expect(designSystemDoc).toContain("`ResizeHandle.svelte`");
+    expect(designSystemDoc).toContain('"danger-ghost"');
   });
 });
