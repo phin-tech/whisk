@@ -37,8 +37,11 @@
   import Menu from "./ui/Menu.svelte";
   import MenuItem from "./ui/MenuItem.svelte";
   import ModalShell from "./ui/ModalShell.svelte";
+  import NextActionBar from "./ui/NextActionBar.svelte";
   import Popover from "./ui/Popover.svelte";
+  import PropertyRow from "./ui/PropertyRow.svelte";
   import SectionHeader from "./ui/SectionHeader.svelte";
+  import SelectField from "./ui/SelectField.svelte";
   import StatusDot from "./ui/StatusDot.svelte";
   import TextField from "./ui/TextField.svelte";
 
@@ -157,6 +160,10 @@
   $: selectedAgentId = agentSelections[launchPreset] ?? phaseAgentDefault;
   $: selectedAgentLabel =
     agentProfiles.find((profile) => profile.id === selectedAgentId)?.label ?? "Default agent";
+  $: agentOptions = [
+    { value: "", label: "Default agent" },
+    ...agentProfiles.map((profile) => ({ value: profile.id, label: profile.label })),
+  ];
 
   $: nextStep = computeNextStep(item, detailCurrentRun, detailLatestRun, approvedPlan, latestDraftPlan);
 
@@ -402,12 +409,6 @@
     return { ...view, run };
   }
 
-  function nextStepToneClass(tone: NextStep["tone"]) {
-    if (tone === "accent") return "border-green/40 bg-green/15 text-green hover:border-green";
-    if (tone === "primary") return "border-amber/45 bg-amber/12 text-amber hover:border-amber";
-    return "border-accent-dim bg-accent-dim text-text-primary hover:border-accent hover:text-accent";
-  }
-
   function handleKey(event: KeyboardEvent) {
     if (event.key !== "Escape") return;
     if (openMenu) {
@@ -478,51 +479,29 @@
       </div>
     </div>
 
-    <!-- Next action bar -->
     {#if nextStep}
-      <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-hairline bg-bg-base/60 px-5 py-2.5">
-        <div class="flex min-w-0 items-center gap-2">
-          <span class="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-text-muted">Next</span>
-          <span class="min-w-0 text-[13px] leading-5 text-text-primary">{nextStep.message}</span>
-        </div>
-        <div class="flex shrink-0 flex-wrap items-center gap-2">
+      <NextActionBar step={nextStep} disabled={loading}>
+        {#snippet controls()}
           {#if nextStep.isLaunch}
-            <select
-              class="h-7 rounded border border-border bg-bg-deep px-1.5 text-[11px] text-text-primary outline-none focus:border-accent-dim disabled:opacity-60"
+            <SelectField
               value={selectedAgentId}
+              label="Agent profile"
+              options={agentOptions}
               disabled={loading}
-              aria-label="Agent profile"
-              on:change={(event) => selectAgent(event.currentTarget.value)}
+              class="h-7 text-[11px]"
+              onValueChange={selectAgent}
+            />
+            <Checkbox
+              checked={Boolean(project.preferences?.useInteractiveAgentShell)}
+              disabled={loading}
+              class="h-7 rounded border border-border bg-bg-deep px-2 text-[11px]"
+              onCheckedChange={setInteractiveAgentShell}
             >
-              <option value="">Default agent</option>
-              {#each agentProfiles as profile (profile.id)}
-                <option value={profile.id}>{profile.label}</option>
-              {/each}
-            </select>
-            <label class="flex h-7 items-center gap-1.5 rounded border border-border bg-bg-deep px-2 text-[11px] text-text-muted">
-              <input
-                type="checkbox"
-                class="h-3.5 w-3.5 accent-accent"
-                checked={Boolean(project.preferences?.useInteractiveAgentShell)}
-                disabled={loading}
-                aria-label="Use interactive shell for agent runs"
-                on:change={(event) => setInteractiveAgentShell(event.currentTarget.checked)}
-              />
               Shell
-            </label>
+            </Checkbox>
           {/if}
-          {#if nextStep.label}
-            <button
-              type="button"
-              class="inline-flex h-8 items-center justify-center gap-1.5 rounded border px-3 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 {nextStepToneClass(nextStep.tone)}"
-              disabled={loading}
-              on:click={() => nextStep?.run()}
-            >
-              {nextStep.label}
-            </button>
-          {/if}
-        </div>
-      </div>
+        {/snippet}
+      </NextActionBar>
     {/if}
 
     <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-5">
@@ -918,9 +897,7 @@
           </div>
 
           <div class="divide-y divide-hairline rounded border border-border-subtle bg-bg-surface/20">
-            <!-- Status -->
-            <div class="flex items-center justify-between gap-2 px-3 py-2">
-              <span class={subHeader}>Status</span>
+            <PropertyRow label="Status">
               <div class="flex items-center gap-2">
                 <span class="inline-flex items-center gap-1 text-[12px]">
                   <StatusDot status={detailCurrentRun?.status || item.runState || "idle"} showLabel />
@@ -938,11 +915,9 @@
                   </Button>
                 {/if}
               </div>
-            </div>
+            </PropertyRow>
 
-            <!-- Stage -->
-            <div class="flex items-center justify-between gap-2 px-3 py-2">
-              <span class={subHeader}>Stage</span>
+            <PropertyRow label="Stage">
               <Popover
                 open={openMenu === "stage"}
                 onOpenChange={(open) => setMenuOpen("stage", open)}
@@ -974,7 +949,7 @@
                   {/each}
                 </Menu>
               </Popover>
-            </div>
+            </PropertyRow>
 
             <!-- Branch / worktree -->
             <div class="relative grid gap-1 px-3 py-2">
@@ -1022,9 +997,7 @@
               {/if}
             </div>
 
-            <!-- Agent -->
-            <div class="flex items-center justify-between gap-2 px-3 py-2">
-              <span class={subHeader}>Agent</span>
+            <PropertyRow label="Agent">
               <Popover
                 open={openMenu === "agent"}
                 onOpenChange={(open) => setMenuOpen("agent", open)}
@@ -1070,7 +1043,7 @@
                   </Checkbox>
                 </Menu>
               </Popover>
-            </div>
+            </PropertyRow>
 
             <!-- Run -->
             {#if detailCurrentRun}
@@ -1120,10 +1093,8 @@
               </div>
             {/if}
 
-            <!-- Attachments -->
-            <div class="grid gap-1.5 px-3 py-2">
-              <div class="flex items-center justify-between gap-2">
-                <span class={subHeader}>Attachments</span>
+            <div class="grid gap-1.5">
+              <PropertyRow label="Attachments">
                 <Button
                   type="button"
                   variant="ghost"
@@ -1135,9 +1106,9 @@
                   <Paperclip size={12} class="text-text-muted" />
                   <span>Attach</span>
                 </Button>
-              </div>
+              </PropertyRow>
               {#if item.attachments.length > 0}
-                <div class="grid gap-1">
+                <div class="grid gap-1 px-3 pb-2">
                   {#each item.attachments as attachment (attachment.id)}
                     <div class="truncate font-mono text-[11px] text-text-muted">
                       {attachment.path || attachment.url || attachment.note}

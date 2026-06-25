@@ -137,6 +137,12 @@ markup, or local empty-state snippets once these wrappers fit.
 Detail-view content/rail layouts use `DetailLayout` from `frontend/src/ui/`;
 feature components should not repeat the `minmax(0,1fr)_280px` grid recipe once
 the detail-view archetype applies.
+Properties rails use `PropertyRow` from `frontend/src/ui/`; feature components
+should not repeat the label/value row recipe once a rail row is a simple split
+row.
+Primary action bars use `NextActionBar` from `frontend/src/ui/`; feature
+components should derive the action in a pure `.ts` view-model and pass the view
+state plus callback into the primitive.
 
 Icons are `@lucide/svelte/icons/*` at `size={12–16}`. In long components, a
 temporary hoisted recipe string can keep legacy markup readable, but migrate it
@@ -460,6 +466,8 @@ files.
       `workboard/WorkBoardColumn.svelte` and `workboard/WorkItemCard.svelte`.
 - [x] The extracted `ProjectsView` and `WorkBoard` feature components use local
       UI primitives for buttons, text fields, text areas, lists, rows, and tabs.
+- [x] `WorkItemDetail.svelte` uses `NextActionBar` for the primary next action
+      and `PropertyRow` for simple properties rail rows.
 
 ### Tier 3 — feature components (decompose the big views)
 These compose Tier 1/2; they're not reusable across the app but make the giant

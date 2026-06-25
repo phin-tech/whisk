@@ -14,6 +14,7 @@
     options: Option[];
     placeholder?: string;
     disabled?: boolean;
+    onValueChange?: (value: string) => void;
     class?: string;
   };
 
@@ -23,6 +24,7 @@
     options,
     placeholder = "Select",
     disabled = false,
+    onValueChange = () => {},
     class: className = "",
   }: Props = $props();
 
@@ -33,9 +35,14 @@
     "z-[60] min-w-[var(--bits-select-anchor-width)] rounded border border-border-subtle bg-bg-surface py-1 shadow-lg";
   const itemClass =
     "flex cursor-default select-none items-center justify-between gap-2 px-2 py-1.5 text-[12px] text-text-secondary outline-none transition-colors data-[highlighted]:bg-bg-hover data-[highlighted]:text-text-primary data-[selected]:text-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+
+  function handleValueChange(next: string) {
+    value = next;
+    onValueChange(next);
+  }
 </script>
 
-<Select.Root type="single" bind:value items={options} {disabled}>
+<Select.Root type="single" bind:value items={options} {disabled} onValueChange={handleValueChange}>
   <Select.Trigger aria-label={label} class={triggerClass}>
     <Select.Value {placeholder} class="min-w-0 truncate" />
     <ChevronDown size={13} class="shrink-0 text-text-muted" />

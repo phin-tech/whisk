@@ -46,6 +46,8 @@ describe("local UI layer", () => {
         "./ui/Badge.svelte",
         "./ui/SectionHeader.svelte",
         "./ui/EmptyState.svelte",
+        "./ui/PropertyRow.svelte",
+        "./ui/NextActionBar.svelte",
       ]),
     );
   });
@@ -98,6 +100,8 @@ describe("local UI layer", () => {
     expect(String(svelteSources["./ui/Switch.svelte"])).toContain("$bindable(false)");
     expect(String(svelteSources["./ui/TextArea.svelte"])).toContain('$bindable("")');
     expect(String(svelteSources["./ui/TextField.svelte"])).toContain('$bindable("")');
+    expect(String(svelteSources["./ui/PropertyRow.svelte"])).toContain("label");
+    expect(String(svelteSources["./ui/NextActionBar.svelte"])).toContain("NextStepView");
   });
 
   it("uses snippets where primitives expose child content", () => {
@@ -113,6 +117,8 @@ describe("local UI layer", () => {
       "./ui/SectionHeader.svelte",
       "./ui/EmptyState.svelte",
       "./ui/Badge.svelte",
+      "./ui/PropertyRow.svelte",
+      "./ui/NextActionBar.svelte",
     ]) {
       expect(String(svelteSources[path]), path).toContain("{@render");
     }
@@ -199,6 +205,17 @@ describe("local UI layer", () => {
     expect(workItemDetailSource).toContain("<MenuItem");
   });
 
+  it("migrates WorkItemDetail rail rows and next action bar onto local layout primitives", () => {
+    expect(workItemDetailSource).toContain('from "./ui/PropertyRow.svelte"');
+    expect(workItemDetailSource).toContain('from "./ui/NextActionBar.svelte"');
+    expect(workItemDetailSource).toContain('from "./ui/SelectField.svelte"');
+    expect(workItemDetailSource).toContain("<NextActionBar");
+    expect(workItemDetailSource).toContain("<PropertyRow");
+    expect(workItemDetailSource).not.toContain("function nextStepToneClass");
+    expect(workItemDetailSource).not.toContain('class="flex items-center justify-between gap-2 px-3 py-2"');
+    expect(workItemDetailSource).not.toContain('<!-- Next action bar -->');
+  });
+
   it("documents the Bits UI boundary as a design-system rule", () => {
     expect(designSystemDoc).toContain("`bits-ui` is the behavior foundation");
     expect(designSystemDoc).toContain("Feature components must not import from `bits-ui` directly");
@@ -208,5 +225,7 @@ describe("local UI layer", () => {
     expect(designSystemDoc).toContain("Popover/menu controls use local wrappers (`Popover`, `Menu`, `MenuItem`)");
     expect(designSystemDoc).toContain("Display primitives use local wrappers (`StatusDot`, `Badge`, `SectionHeader`,");
     expect(designSystemDoc).toContain("Detail-view content/rail layouts use `DetailLayout`");
+    expect(designSystemDoc).toContain("Primary action bars use `NextActionBar`");
+    expect(designSystemDoc).toContain("Properties rails use `PropertyRow`");
   });
 });
