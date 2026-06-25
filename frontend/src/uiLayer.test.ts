@@ -11,6 +11,7 @@ import onboardingPanelSource from "./OnboardingPanel.svelte?raw";
 import projectsPanelSource from "./ProjectsPanel.svelte?raw";
 import ptysPanelSource from "./PtysPanel.svelte?raw";
 import sidebarPanelHeaderSource from "./SidebarPanelHeader.svelte?raw";
+import sidebarDockSource from "./SidebarDock.svelte?raw";
 import workItemDetailSource from "./WorkItemDetail.svelte?raw";
 import workItemsPanelSource from "./WorkItemsPanel.svelte?raw";
 
@@ -287,6 +288,13 @@ describe("local UI layer", () => {
     expect(keybindingsPanelSource).not.toMatch(/<button\b/);
     expect(keybindingsPanelSource).not.toMatch(/divide-y divide-hairline/);
     expect(keybindingsPanelSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("migrates sidebar resize handles onto the local UI layer", () => {
+    expect(Object.keys(svelteSources)).toContain("./ui/ResizeHandle.svelte");
+    expect(sidebarDockSource).toContain('from "./ui/ResizeHandle.svelte"');
+    expect(sidebarDockSource).not.toMatch(/<button\b/);
+    expect(sidebarDockSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {

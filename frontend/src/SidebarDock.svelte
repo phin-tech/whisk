@@ -6,6 +6,7 @@
   import ProjectsPanel from "./ProjectsPanel.svelte";
   import PtysPanel from "./PtysPanel.svelte";
   import SessionsPanel from "./SessionsPanel.svelte";
+  import ResizeHandle from "./ui/ResizeHandle.svelte";
   import WorkItemsPanel from "./WorkItemsPanel.svelte";
 
   export let activePanel: "sessions" | "ptys" | "work" | "projects" | "notifications" | null = "sessions";
@@ -102,18 +103,7 @@
 {#if activePanel}
   <div class="relative flex shrink-0">
     {#if railSide === "right"}
-      <button
-        type="button"
-        aria-label="Resize sidebar"
-        class="group relative flex w-1 shrink-0 cursor-col-resize self-stretch flex-col items-center border-0 bg-transparent p-0"
-        on:mousedown={startDrag}
-      >
-        <div
-          class="min-h-0 max-w-[0.5px] min-w-[0.5px] flex-1 transition-all duration-150 {dragging
-            ? 'bg-border'
-            : 'bg-border-subtle group-hover:bg-border-hairline'}"
-        ></div>
-      </button>
+      <ResizeHandle {dragging} onmousedown={startDrag} />
     {/if}
     <div
       class="dock-panel relative h-full shrink-0 bg-bg-deep"
@@ -190,18 +180,7 @@
       {/if}
     </div>
     {#if railSide === "left"}
-      <button
-        type="button"
-        aria-label="Resize sidebar"
-        class="group relative flex w-1 shrink-0 cursor-col-resize self-stretch flex-col items-center border-0 bg-transparent p-0"
-        on:mousedown={startDrag}
-      >
-        <div
-          class="min-h-0 max-w-[0.5px] min-w-[0.5px] flex-1 transition-all duration-150 {dragging
-            ? 'bg-border'
-            : 'bg-border-subtle group-hover:bg-border-hairline'}"
-        ></div>
-      </button>
+      <ResizeHandle {dragging} onmousedown={startDrag} />
     {/if}
   </div>
 {/if}
