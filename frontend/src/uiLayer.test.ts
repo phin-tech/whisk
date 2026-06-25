@@ -216,6 +216,17 @@ describe("local UI layer", () => {
     expect(workItemDetailSource).not.toContain('<!-- Next action bar -->');
   });
 
+  it("keeps WorkItemDetail off raw native controls once local wrappers exist", () => {
+    expect(workItemDetailSource).not.toMatch(/<(button|input|textarea|select)\b/);
+    expect(workItemDetailSource).toContain('from "./ui/TextArea.svelte"');
+    expect(workItemDetailSource).toContain('from "./ui/SelectField.svelte"');
+    expect(workItemDetailSource).toContain("<TextField");
+    expect(workItemDetailSource).toContain("<TextArea");
+    expect(workItemDetailSource).toContain("<SelectField");
+    expect(workItemDetailSource).toContain("<Button");
+    expect(workItemDetailSource).toContain("<IconButton");
+  });
+
   it("documents the Bits UI boundary as a design-system rule", () => {
     expect(designSystemDoc).toContain("`bits-ui` is the behavior foundation");
     expect(designSystemDoc).toContain("Feature components must not import from `bits-ui` directly");

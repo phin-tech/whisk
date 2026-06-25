@@ -43,6 +43,7 @@
   import SectionHeader from "./ui/SectionHeader.svelte";
   import SelectField from "./ui/SelectField.svelte";
   import StatusDot from "./ui/StatusDot.svelte";
+  import TextArea from "./ui/TextArea.svelte";
   import TextField from "./ui/TextField.svelte";
 
   export let item: WorkItem;
@@ -152,6 +153,10 @@
       !blockingLinks.some((link) => link.targetWorkItemId === candidate.id),
   );
   $: selectedBlockerId = blockerSelections[item.id] || availableBlockers[0]?.id || "";
+  $: blockerOptions = availableBlockers.map((candidate) => ({
+    value: candidate.id,
+    label: `#${candidate.number} ${candidate.title}`,
+  }));
 
   // Agent selection: the preset a launch runs under and the project's remembered default.
   $: executionStage = stages.find((stage) => stage.kind === "execution" || stage.id === "execution") ?? null;
@@ -222,6 +227,10 @@
   function blockerStageLabel(workItemId: string) {
     const linked = workItems.find((candidate) => candidate.id === workItemId);
     return linked ? stageLabel(linked.stageId) : "";
+  }
+
+  function selectBlocker(value: string) {
+    blockerSelections = { ...blockerSelections, [item.id]: value };
   }
 
   function addBlocker() {
@@ -420,8 +429,6 @@
     onClose();
   }
 
-  const fieldInput =
-    "h-8 w-full rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent-dim disabled:opacity-60";
   const subHeader = "text-[11px] font-semibold uppercase text-text-muted";
 </script>
 
@@ -450,12 +457,12 @@
             <Badge class="bg-bg-surface/60 text-text-secondary">{stageLabel(item.stageId)}</Badge>
             <StatusDot status={detailCurrentRun?.status || item.runState || "idle"} showLabel />
           </div>
-          <input
-            class="mt-1.5 w-full bg-transparent text-[18px] font-semibold leading-7 text-text-primary outline-none transition-colors focus:text-accent"
-            type="text"
+          <TextField
+            variant="seamless"
             bind:value={title}
             disabled={loading}
             aria-label="Work item title"
+            class="mt-1.5 w-full px-0 text-[18px] font-semibold leading-7 focus:text-accent"
           />
         </div>
         <div class="flex shrink-0 items-center gap-1">
@@ -511,13 +518,14 @@
           <!-- Description -->
           <section class="grid gap-2">
             <SectionHeader title="Description" />
-            <textarea
-              class="min-h-28 resize-y rounded border border-transparent bg-transparent px-2 py-1.5 text-[14px] leading-6 text-text-primary outline-none transition-colors placeholder:text-text-muted hover:border-border-subtle focus:border-accent-dim focus:bg-bg-deep"
+            <TextArea
+              variant="seamless"
               bind:value={body}
               disabled={loading}
               aria-label="Work item description"
               placeholder="Add a description…"
-            ></textarea>
+              class="min-h-28 text-[14px] leading-6"
+            />
           </section>
 
           <!-- Plan -->
@@ -572,13 +580,14 @@
                 New draft plan
               </summary>
               <div class="grid gap-2 border-t border-hairline p-3">
-                <textarea
-                  class="min-h-28 resize-y rounded border border-border bg-bg-deep px-2 py-1.5 text-[13px] leading-6 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+                <TextArea
                   value={planBodies[item.id] ?? ""}
                   disabled={loading}
                   placeholder="Draft plan"
-                  on:input={(event) => (planBodies = { ...planBodies, [item.id]: event.currentTarget.value })}
-                ></textarea>
+                  class="min-h-28 py-1.5 text-[13px] leading-6"
+                  oninput={(event: Event) =>
+                    (planBodies = { ...planBodies, [item.id]: (event.currentTarget as HTMLTextAreaElement).value })}
+                />
                 <Button
                   type="button"
                   variant="outline"
@@ -647,18 +656,14 @@
               {/if}
 
               <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t border-hairline pt-2">
-                <select
-                  class="h-8 min-w-0 rounded border border-border bg-bg-deep px-2 text-[12px] text-text-primary outline-none focus:border-accent-dim disabled:opacity-60"
+                <SelectField
                   value={selectedBlockerId}
+                  label="Blocker work item"
+                  options={blockerOptions}
+                  placeholder="Blocker work item"
                   disabled={loading || availableBlockers.length === 0}
-                  aria-label="Blocker work item"
-                  on:change={(event) =>
-                    (blockerSelections = { ...blockerSelections, [item.id]: event.currentTarget.value })}
-                >
-                  {#each availableBlockers as candidate (candidate.id)}
-                    <option value={candidate.id}>#{candidate.number} {candidate.title}</option>
-                  {/each}
-                </select>
+                  onValueChange={selectBlocker}
+                />
                 <Button
                   type="button"
                   variant="outline"
@@ -680,13 +685,12 @@
             <div class="grid gap-2">
               <div class="text-[11px] font-medium uppercase tracking-wide text-text-muted">Questions</div>
               <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                <input
-                  class={fieldInput}
+                <TextField
                   value={questionPrompts[item.id] ?? ""}
                   disabled={loading}
                   placeholder="Question for user"
-                  on:input={(event) =>
-                    (questionPrompts = { ...questionPrompts, [item.id]: event.currentTarget.value })}
+                  oninput={(event: Event) =>
+                    (questionPrompts = { ...questionPrompts, [item.id]: (event.currentTarget as HTMLInputElement).value })}
                 />
                 <Button
                   type="button"
@@ -706,13 +710,12 @@
                   </div>
                   {#if question.status === "open"}
                     <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                      <input
-                        class={fieldInput}
+                      <TextField
                         value={questionAnswers[question.id] ?? ""}
                         disabled={loading}
                         placeholder="Answer"
-                        on:input={(event) =>
-                          (questionAnswers = { ...questionAnswers, [question.id]: event.currentTarget.value })}
+                        oninput={(event: Event) =>
+                          (questionAnswers = { ...questionAnswers, [question.id]: (event.currentTarget as HTMLInputElement).value })}
                       />
                       <Button
                         type="button"
@@ -734,14 +737,14 @@
             <!-- Feedback -->
             <div class="grid gap-2">
               <div class="text-[11px] font-medium uppercase tracking-wide text-text-muted">Feedback</div>
-              <textarea
-                class="min-h-20 resize-y rounded border border-border bg-bg-deep px-2 py-1.5 text-[13px] leading-6 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-dim"
+              <TextArea
                 value={feedbackBodies[item.id] ?? ""}
                 disabled={loading}
                 placeholder="Review feedback"
-                on:input={(event) =>
-                  (feedbackBodies = { ...feedbackBodies, [item.id]: event.currentTarget.value })}
-              ></textarea>
+                class="min-h-20 py-1.5 text-[13px] leading-6"
+                oninput={(event: Event) =>
+                  (feedbackBodies = { ...feedbackBodies, [item.id]: (event.currentTarget as HTMLTextAreaElement).value })}
+              />
               <div class="flex justify-end">
                 <Button
                   type="button"
@@ -771,13 +774,12 @@
                       <span>{gate.name}</span>
                       <span class="font-mono text-[11px] text-text-muted">{gate.status}</span>
                     </div>
-                    <input
-                      class={fieldInput}
+                    <TextField
                       value={gateOverrideReasons[gate.id] ?? ""}
                       disabled={loading}
                       placeholder="Override reason"
-                      on:input={(event) =>
-                        (gateOverrideReasons = { ...gateOverrideReasons, [gate.id]: event.currentTarget.value })}
+                      oninput={(event: Event) =>
+                        (gateOverrideReasons = { ...gateOverrideReasons, [gate.id]: (event.currentTarget as HTMLInputElement).value })}
                     />
                     <div class="grid grid-cols-3 gap-2">
                       <Button type="button" variant="outline" size="sm" disabled={loading} onclick={() => completeGate(gate, "passed")}>
@@ -1051,21 +1053,23 @@
                 <div class="flex items-center justify-between gap-2">
                   <span class={subHeader}>Run</span>
                   {#if detailPastRuns.length > 0}
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       class="inline-flex items-center gap-1 text-[11px] text-text-muted transition-colors hover:text-text-primary"
-                      on:click={() => (runHistoryOpen = !runHistoryOpen)}
+                      onclick={() => (runHistoryOpen = !runHistoryOpen)}
                     >
                       <History size={12} /> {detailPastRuns.length}
-                    </button>
+                    </Button>
                   {/if}
                 </div>
-                <button
-                  type="button"
-                  class="grid min-w-0 gap-1 rounded border border-border-subtle bg-bg-surface/40 p-2 text-left transition-colors hover:border-accent/40 hover:bg-bg-surface/70 disabled:cursor-default disabled:hover:border-border-subtle disabled:hover:bg-bg-surface/40"
+                <Button
+                  variant="ghost"
+                  align="start"
+                  class="grid w-full min-w-0 gap-1 rounded border-border-subtle bg-bg-surface/40 p-2 text-left hover:border-accent/40 hover:bg-bg-surface/70 disabled:cursor-default disabled:hover:border-border-subtle disabled:hover:bg-bg-surface/40"
                   disabled={!canOpenRunTerminal(detailCurrentRun)}
                   title={canOpenRunTerminal(detailCurrentRun) ? "Open terminal" : "No terminal linked"}
-                  on:click={() => openRunTerminal(detailCurrentRun)}
+                  onclick={() => openRunTerminal(detailCurrentRun)}
                 >
                   <div class="flex min-w-0 items-center gap-2">
                     <StatusDot status={detailCurrentRun.status} />
@@ -1078,7 +1082,7 @@
                   <div class="inline-flex items-center gap-1 text-[11px] text-text-muted">
                     <Clock3 size={11} /> {formattedTime(detailCurrentRun.createdAt)}
                   </div>
-                </button>
+                </Button>
                 {#if runHistoryOpen}
                   <div class="grid gap-1 border-l border-hairline pl-2">
                     {#each detailPastRuns as run (run.id)}

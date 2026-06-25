@@ -30,7 +30,8 @@ test("adds a blocker link from the detail dependency section", async ({ page }) 
   await expect(dialog.getByText("Ready because")).toBeVisible();
   await expect(dialog.getByText("no blocking dependencies", { exact: true })).toBeVisible();
 
-  await dialog.getByLabel("Blocker work item").selectOption("wi_dependency");
+  await dialog.getByLabel("Blocker work item").click();
+  await page.getByRole("option", { name: /Map dependency graph/ }).click();
   await dialog.getByRole("button", { name: "Add blocker" }).click();
 
   await expect(dialog.getByText("Map dependency graph")).toBeVisible();
