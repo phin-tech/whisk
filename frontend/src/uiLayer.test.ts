@@ -3,6 +3,7 @@ import designSystemDoc from "../../agents/DESIGN-SYSTEM.md?raw";
 import commandPaletteSource from "./CommandPalette.svelte?raw";
 import activityRailSource from "./ActivityRail.svelte?raw";
 import confirmDialogSource from "./ConfirmDialog.svelte?raw";
+import daemonSettingsSource from "./DaemonSettings.svelte?raw";
 import newProjectDialogSource from "./NewProjectDialog.svelte?raw";
 import newSessionDialogSource from "./NewSessionDialog.svelte?raw";
 import onboardingPanelSource from "./OnboardingPanel.svelte?raw";
@@ -266,6 +267,15 @@ describe("local UI layer", () => {
     expect(activityRailSource).not.toMatch(/<button\b/);
     expect(sidebarPanelHeaderSource).not.toMatch(/\son:[a-z]/);
     expect(activityRailSource).not.toMatch(/\son:[a-z]/);
+  });
+
+  it("migrates daemon settings controls onto the local UI layer", () => {
+    expect(daemonSettingsSource).toContain('from "./ui/Button.svelte"');
+    expect(daemonSettingsSource).toContain('from "./ui/IconButton.svelte"');
+    expect(daemonSettingsSource).toContain('from "./ui/Switch.svelte"');
+    expect(daemonSettingsSource).toContain('from "./ui/TextField.svelte"');
+    expect(daemonSettingsSource).not.toMatch(/<(button|input|textarea|select)\b/);
+    expect(daemonSettingsSource).not.toMatch(/\son:[a-z]/);
   });
 
   it("documents the Bits UI boundary as a design-system rule", () => {

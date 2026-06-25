@@ -4,6 +4,10 @@
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import RotateCw from "@lucide/svelte/icons/rotate-cw";
   import Square from "@lucide/svelte/icons/square";
+  import Button from "./ui/Button.svelte";
+  import IconButton from "./ui/IconButton.svelte";
+  import Switch from "./ui/Switch.svelte";
+  import TextField from "./ui/TextField.svelte";
   import {
     DaemonStatus as FetchDaemonStatus,
     RestartDaemon,
@@ -114,42 +118,39 @@
         {status?.address ?? "—"}{versionLabel ? ` · ${versionLabel}` : ""}
       </div>
     </div>
-    <button
-      type="button"
-      aria-label="Refresh daemon status"
-      class="shrink-0 rounded border border-transparent p-1 text-text-muted transition-colors hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary disabled:opacity-50"
+    <IconButton
+      label="Refresh daemon status"
+      size="sm"
+      class="shrink-0"
       disabled={busy}
-      on:click={() => void refresh()}
+      onclick={() => void refresh()}
     >
       <RefreshCw size={14} class={busy ? "animate-spin" : ""} />
-    </button>
+    </IconButton>
   </div>
 
   <div class="mt-3 flex items-center gap-2">
-    <button
-      type="button"
-      class="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-bg-surface/80 px-3 py-1.5 text-[12px] font-semibold text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border-subtle disabled:hover:text-text-secondary"
+    <Button
+      size="sm"
       disabled={busy || running}
-      on:click={start}
+      onclick={start}
     >
       <Play size={13} /> Start
-    </button>
-    <button
-      type="button"
-      class="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-bg-surface/80 px-3 py-1.5 text-[12px] font-semibold text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border-subtle disabled:hover:text-text-secondary"
+    </Button>
+    <Button
+      size="sm"
       disabled={busy || !running}
-      on:click={stop}
+      onclick={stop}
     >
       <Square size={13} /> Stop
-    </button>
-    <button
-      type="button"
-      class="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-bg-surface/80 px-3 py-1.5 text-[12px] font-semibold text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border-subtle disabled:hover:text-text-secondary"
+    </Button>
+    <Button
+      size="sm"
       disabled={busy}
-      on:click={restart}
+      onclick={restart}
     >
       <RotateCw size={13} /> Restart
-    </button>
+    </Button>
   </div>
 
   {#if actionError}
@@ -165,13 +166,13 @@
         Path used when generating worktrees.
       </div>
     </div>
-    <input
-      class="w-[260px] rounded border border-border bg-bg-deep px-2 py-1 text-right font-mono text-[12px] text-text-primary outline-none focus:border-accent-dim"
+    <TextField
+      class="w-[260px] text-right font-mono"
       type="text"
       bind:value={pendingWorktrunkPath}
       placeholder="/opt/homebrew/bin/wt"
-      on:blur={saveWorktrunkPath}
-      on:keydown={pathKey}
+      onblur={saveWorktrunkPath}
+      onkeydown={pathKey}
       aria-label="Worktrunk binary path"
     />
   </div>
@@ -185,18 +186,9 @@
       daemon Whisk started is stopped on quit.
     </div>
   </div>
-  <button
-    type="button"
-    aria-label="Toggle keep daemon running"
-    class="relative h-5 w-9 shrink-0 rounded-full border transition-all {keepDaemonAlive
-      ? 'border-accent bg-accent-dim'
-      : 'border-border bg-bg-deep'}"
-    on:click={() => onKeepDaemonAlive(!keepDaemonAlive)}
-  >
-    <div
-      class="absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all {keepDaemonAlive
-        ? 'left-[18px] bg-accent'
-        : 'left-0.5 bg-text-secondary'}"
-    ></div>
-  </button>
+  <Switch
+    label="Toggle keep daemon running"
+    checked={keepDaemonAlive}
+    onCheckedChange={onKeepDaemonAlive}
+  />
 </div>
