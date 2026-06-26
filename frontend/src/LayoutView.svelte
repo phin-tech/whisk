@@ -12,6 +12,7 @@
   export let terminalFontSize = 13;
   export let terminalCursorBlink = true;
   export let onFocus: (paneId: string) => void;
+  export let onAddBookmark: (ptyId: string) => void;
   export let onBookmark: (bookmark: PTYBookmark) => void;
   export let onInput: (ptyId: string) => void;
   export let onWriteInput: (ptyId: string, data: string) => Promise<void>;
@@ -33,6 +34,7 @@
         fontSize={terminalFontSize}
         cursorBlink={terminalCursorBlink}
         onFocus={() => onFocus(pane.id)}
+        onAddBookmark={onAddBookmark}
         onBookmark={onBookmark}
         onInput={onInput}
         onWriteInput={onWriteInput}
@@ -61,6 +63,7 @@
         {terminalFontSize}
         {terminalCursorBlink}
         onFocus={onFocus}
+        onAddBookmark={onAddBookmark}
         onBookmark={onBookmark}
         onInput={onInput}
         onWriteInput={onWriteInput}

@@ -53,6 +53,9 @@ func TestControllerBuildIncludesNativeCommandAccelerators(t *testing.T) {
 		"Split Pane Horizontally": "Cmd+Shift+D",
 		"Close Pane":              "Cmd+W",
 		"Close Session":           "Cmd+Shift+W",
+		"Add Bookmark":            "Cmd+B",
+		"Previous Bookmark":       "Cmd+Option+LEFT",
+		"Next Bookmark":           "Cmd+Option+RIGHT",
 	}
 	for label, want := range cases {
 		item := menu.FindByLabel(label)

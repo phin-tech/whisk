@@ -176,6 +176,7 @@
   export let onCompleteGate: (request: { id: string; status: string; overrideReason: string }) => void;
   export let onApproveDone: (workItemId: string, reason: string) => void;
   export let onFocusPane: (paneId: string) => void;
+  export let onAddBookmark: (ptyId: string) => void;
   export let onSelectBookmark: (bookmark: PTYBookmark) => void;
   export let onPtyInput: (ptyId: string) => void;
   export let onWriteInput: (ptyId: string, data: string) => Promise<void>;
@@ -275,6 +276,7 @@
       {terminalFontSize}
       {terminalCursorBlink}
       onFocus={onFocusPane}
+      onAddBookmark={onAddBookmark}
       onBookmark={onSelectBookmark}
       onInput={onPtyInput}
       onWriteInput={onWriteInput}

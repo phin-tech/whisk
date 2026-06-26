@@ -96,6 +96,8 @@ export type BookmarkJumpTarget = {
   offset: number;
 };
 
+export type BookmarkDirection = "previous" | "next";
+
 export type ClosePaneRequestLike = {
   sessionId: string;
   windowId: string;
@@ -253,6 +255,31 @@ export async function safeBookmarksByPty<T extends { id: string }, B>(
     }),
   );
   return Object.fromEntries(entries);
+}
+
+export function nextBookmarkTarget<T extends PtyBookmarkLike>(
+  bookmarks: T[],
+  activeBookmarkId: string,
+  currentOffset: number,
+  direction: BookmarkDirection,
+): T | null {
+  const sorted = [...bookmarks].sort((a, b) => a.offset - b.offset || a.id.localeCompare(b.id));
+  if (sorted.length === 0) return null;
+
+  const activeIndex = sorted.findIndex((bookmark) => bookmark.id === activeBookmarkId);
+  if (activeIndex >= 0) {
+    const delta = direction === "next" ? 1 : -1;
+    return sorted[(activeIndex + delta + sorted.length) % sorted.length];
+  }
+
+  const offset = Math.max(0, currentOffset);
+  if (direction === "next") {
+    return sorted.find((bookmark) => bookmark.offset > offset) ?? sorted[0];
+  }
+  for (let i = sorted.length - 1; i >= 0; i -= 1) {
+    if (sorted[i].offset < offset) return sorted[i];
+  }
+  return sorted[sorted.length - 1];
 }
 
 export function bookmarkJumpTarget(

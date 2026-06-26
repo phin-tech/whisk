@@ -9,6 +9,7 @@ import {
   paneIds,
   ptyHistoryRows,
   ptyRowsFromInventory,
+  nextBookmarkTarget,
   resetOutputReplayForBookmark,
   runtimeRefreshTargets,
   safeBookmarksByPty,
@@ -299,6 +300,30 @@ describe("safeBookmarksByPty", () => {
         },
       ],
     });
+  });
+});
+
+describe("nextBookmarkTarget", () => {
+  const bookmarks = [
+    { id: "bm_30", ptyId: "pty_01", offset: 30 },
+    { id: "bm_10", ptyId: "pty_01", offset: 10 },
+    { id: "bm_20", ptyId: "pty_01", offset: 20 },
+  ];
+
+  it("steps through sorted bookmarks by active bookmark id", () => {
+    expect(nextBookmarkTarget(bookmarks, "bm_10", 0, "next")?.id).toBe("bm_20");
+    expect(nextBookmarkTarget(bookmarks, "bm_10", 0, "previous")?.id).toBe("bm_30");
+  });
+
+  it("uses the replay offset when no active bookmark is selected", () => {
+    expect(nextBookmarkTarget(bookmarks, "", 15, "next")?.id).toBe("bm_20");
+    expect(nextBookmarkTarget(bookmarks, "", 15, "previous")?.id).toBe("bm_10");
+  });
+
+  it("wraps at the ends", () => {
+    expect(nextBookmarkTarget(bookmarks, "bm_30", 0, "next")?.id).toBe("bm_10");
+    expect(nextBookmarkTarget(bookmarks, "", 35, "next")?.id).toBe("bm_10");
+    expect(nextBookmarkTarget(bookmarks, "", 5, "previous")?.id).toBe("bm_30");
   });
 });
 

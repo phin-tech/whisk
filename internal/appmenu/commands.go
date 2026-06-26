@@ -15,6 +15,7 @@ import (
 const (
 	CategoryApplication = "Application"
 	CategorySessions    = "Sessions"
+	CategoryTerminal    = "Terminal"
 	CategoryStandard    = "Standard"
 )
 
@@ -28,6 +29,9 @@ const (
 	CommandSplitPaneHorizontal = "split-pane-horizontal"
 	CommandClosePane           = "close-pane"
 	CommandCloseSession        = "close-session"
+	CommandAddBookmark         = "bookmark.add"
+	CommandPreviousBookmark    = "bookmark.previous"
+	CommandNextBookmark        = "bookmark.next"
 	selectSessionPrefix        = "select-session-"
 )
 
@@ -80,7 +84,7 @@ func defaultSessionAccelerator(i int) string {
 // Commands returns the full registry in display order: the editable app commands first, then the
 // read-only standard macOS items surfaced for reference in the panel.
 func Commands() []Command {
-	commands := make([]Command, 0, 7+SessionSlots+8)
+	commands := make([]Command, 0, 10+SessionSlots+8)
 	commands = append(commands, Command{
 		ID:       CommandOpenPreferences,
 		Label:    "Open Preferences",
@@ -129,6 +133,29 @@ func Commands() []Command {
 			Label:    "Close Session",
 			Category: CategorySessions,
 			Default:  "CmdOrCtrl+Shift+W",
+			Editable: true,
+		},
+	)
+	commands = append(commands,
+		Command{
+			ID:       CommandAddBookmark,
+			Label:    "Add Bookmark",
+			Category: CategoryTerminal,
+			Default:  "CmdOrCtrl+B",
+			Editable: true,
+		},
+		Command{
+			ID:       CommandPreviousBookmark,
+			Label:    "Previous Bookmark",
+			Category: CategoryTerminal,
+			Default:  "CmdOrCtrl+Alt+Left",
+			Editable: true,
+		},
+		Command{
+			ID:       CommandNextBookmark,
+			Label:    "Next Bookmark",
+			Category: CategoryTerminal,
+			Default:  "CmdOrCtrl+Alt+Right",
 			Editable: true,
 		},
 	)

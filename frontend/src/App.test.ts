@@ -9,9 +9,15 @@ describe("App notification refresh", () => {
 
   it("loads pty bookmarks and resets output replay when jumping to one", () => {
     expect(source).toContain("ListPTYBookmarks");
+    expect(source).toContain("AddPTYBookmark");
     expect(source).toContain("bookmarksByPty");
     expect(source).toContain("jumpToBookmark");
+    expect(source).toContain("createPTYBookmark");
+    expect(source).toContain("jumpBookmarkByDirection");
     expect(source).toContain("resetOutputReplayForBookmark");
     expect(source).toContain("bookmarkJumpTarget");
+    expect(source).toContain("bookmark.add");
+    expect(source).toContain("bookmark.previous");
+    expect(source).toContain("bookmark.next");
   });
 });

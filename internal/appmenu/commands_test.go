@@ -64,6 +64,41 @@ func TestCommandsIncludeSessionActionShortcuts(t *testing.T) {
 	}
 }
 
+func TestCommandsIncludeBookmarkShortcuts(t *testing.T) {
+	commands := Commands()
+	byID := make(map[string]Command, len(commands))
+	for _, cmd := range commands {
+		byID[cmd.ID] = cmd
+	}
+
+	cases := map[string]struct {
+		label    string
+		shortcut string
+	}{
+		CommandAddBookmark:      {"Add Bookmark", "CmdOrCtrl+B"},
+		CommandPreviousBookmark: {"Previous Bookmark", "CmdOrCtrl+Alt+Left"},
+		CommandNextBookmark:     {"Next Bookmark", "CmdOrCtrl+Alt+Right"},
+	}
+	for id, want := range cases {
+		cmd, ok := byID[id]
+		if !ok {
+			t.Fatalf("registry missing bookmark command %q", id)
+		}
+		if cmd.Label != want.label {
+			t.Fatalf("%s label = %q, want %q", id, cmd.Label, want.label)
+		}
+		if cmd.Category != CategoryTerminal {
+			t.Fatalf("%s category = %q, want %q", id, cmd.Category, CategoryTerminal)
+		}
+		if cmd.Default != want.shortcut {
+			t.Fatalf("%s shortcut = %q, want %q", id, cmd.Default, want.shortcut)
+		}
+		if !cmd.Editable {
+			t.Fatalf("%s should be editable", id)
+		}
+	}
+}
+
 func TestCommandsIncludeCommandPaletteShortcut(t *testing.T) {
 	commands := Commands()
 	byID := make(map[string]Command, len(commands))

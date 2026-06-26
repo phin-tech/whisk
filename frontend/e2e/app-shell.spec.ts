@@ -21,16 +21,21 @@ test("shows pty bookmarks and jumps terminal replay to their offsets", async ({ 
 
   await expect(page.getByRole("button", { name: /Seeded Session/ })).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("seeded terminal output");
+  await expect(page.getByRole("button", { name: "Add bookmark for pty_01" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Jump to bookmark Agent handoff/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add bookmark for pty_01" }).click();
+  await expect(page.getByRole("button", { name: /Jump to bookmark Bookmark @23/ })).toBeVisible();
 
   await page.getByRole("button", { name: "PTYs" }).click();
   await expect(page.getByRole("button", { name: /Jump to bookmark Agent handoff from PTYs/ })).toBeVisible();
 
-  await page.getByRole("button", { name: /Jump to bookmark Agent handoff from PTYs/ }).click();
+  await page.evaluate(() => window.__WHISK_E2E__.emitCommand("bookmark.previous"));
   await expect(page.locator(".xterm-rows")).toContainText("bookmarked output");
 
-  const outputCalls = await page.evaluate(() =>
-    window.__WHISK_E2E__.calls().filter((call) => call.method.endsWith(".Output")),
-  );
+  const calls = await page.evaluate(() => window.__WHISK_E2E__.calls());
+  const outputCalls = calls.filter((call) => call.method.endsWith(".Output"));
+  const addBookmarkCalls = calls.filter((call) => call.method.endsWith(".AddPTYBookmark"));
   expect(outputCalls.some((call) => (call.args[0] as { fromOffset?: number }).fromOffset === 12)).toBe(true);
+  expect(addBookmarkCalls.some((call) => (call.args[0] as { offset?: number }).offset === 23)).toBe(true);
 });

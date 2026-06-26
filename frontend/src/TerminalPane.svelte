@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { FitAddon } from "@xterm/addon-fit";
   import BookmarkIcon from "@lucide/svelte/icons/bookmark";
+  import BookmarkPlus from "@lucide/svelte/icons/bookmark-plus";
   import Check from "@lucide/svelte/icons/check";
   import CircleStop from "@lucide/svelte/icons/circle-stop";
   import Clipboard from "@lucide/svelte/icons/clipboard";
@@ -26,6 +27,7 @@
   export let onFocus: () => void;
   export let onInput: (ptyId: string) => void;
   export let onWriteInput: (ptyId: string, data: string) => Promise<void>;
+  export let onAddBookmark: (ptyId: string) => void;
   export let onBookmark: (bookmark: PTYBookmark) => void;
   export let onClose: () => void;
   export let onKillPTY: () => void;
@@ -104,6 +106,11 @@
     event.stopPropagation();
     const bookmark = bookmarks.find((candidate) => candidate.id === bookmarkId);
     if (bookmark) onBookmark(bookmark);
+  }
+
+  function addBookmark(event: MouseEvent) {
+    event.stopPropagation();
+    if (pane.currentPtyId) onAddBookmark(pane.currentPtyId);
   }
 
   function writeBase64Chunk(chunk: string) {
@@ -223,6 +230,15 @@
             <Clipboard size={11} />
           {/if}
         </Button>
+        <IconButton
+          label={`Add bookmark for ${pane.currentPtyId}`}
+          title={`Add bookmark for ${pane.currentPtyId}`}
+          size="sm"
+          onclick={addBookmark}
+          onkeydown={(event: KeyboardEvent) => event.stopPropagation()}
+        >
+          <BookmarkPlus size={12} />
+        </IconButton>
         <IconButton
           label={`Kill PTY ${pane.currentPtyId}`}
           title={`Kill PTY ${pane.currentPtyId}`}

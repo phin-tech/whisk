@@ -23,9 +23,12 @@ describe("TerminalPane", () => {
   });
 
   it("renders bookmark jump controls and scrolls to the replay start after a jump", () => {
+    expect(source).toContain("bookmark-plus");
     expect(source).toContain("export let bookmarks");
     expect(source).toContain("export let jumpRevision");
+    expect(source).toContain("onAddBookmark");
     expect(source).toContain("onBookmark");
+    expect(source).toContain("Add bookmark for");
     expect(source).toContain("scrollToTop");
     expect(source).toContain('replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, jumpRevision)');
   });

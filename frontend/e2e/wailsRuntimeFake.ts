@@ -704,6 +704,25 @@ function dispatch(methodName: string, args: unknown[]) {
       return clone(state.ptys);
     case "ListPTYBookmarks":
       return clone(state.bookmarks.filter((bookmark) => bookmark.ptyId === args[0]));
+    case "AddPTYBookmark": {
+      const req = (args[0] ?? {}) as { ptyId?: string; offset?: number; kind?: string; label?: string };
+      const pty = state.ptys.find((candidate) => candidate.id === req.ptyId);
+      const session = state.sessions.find((candidate) => candidate.id === pty?.sessionId);
+      const windowId = Object.values(session?.windows ?? {})[0]?.id ?? "";
+      const bookmark: PTYBookmark = {
+        id: `bm_${String(state.bookmarks.length + 1).padStart(2, "0")}`,
+        ptyId: req.ptyId ?? "",
+        sessionId: pty?.sessionId ?? "",
+        windowId,
+        paneId: pty?.paneId ?? "",
+        offset: req.offset ?? 0,
+        kind: req.kind || "manual",
+        label: req.label || "",
+        createdAt: state.now,
+      };
+      state.bookmarks = [...state.bookmarks, bookmark];
+      return clone(bookmark);
+    }
     case "ListPTYHistory":
       return clone(state.ptyHistory);
     case "ReadPTYHistory":

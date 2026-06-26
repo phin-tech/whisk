@@ -36,6 +36,7 @@
     ReadyWorkExplanation,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
+    AddPTYBookmark,
     AddProjectAttachment,
     AddWorkItemLink,
     AddWorkItemAttachment,
@@ -158,7 +159,7 @@
     writePTYInputOverSocket,
   } from "./ptyStream";
   import { sessionSplitCommands } from "./sessionCommands";
-  import { activeWindow, bookmarkJumpTarget, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, resetOutputReplayForBookmark, runtimeRefreshTargets, safeBookmarksByPty, visiblePtyIds } from "./sessionView";
+  import { activeWindow, bookmarkJumpTarget, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, nextBookmarkTarget, resetOutputReplayForBookmark, runtimeRefreshTargets, safeBookmarksByPty, visiblePtyIds, type BookmarkDirection } from "./sessionView";
   import {
     normalizeStartupView,
     startupTarget,
@@ -275,6 +276,7 @@
   let outputChunks: Record<string, string[]> = {};
   let offsets: Record<string, number> = {};
   let bookmarkJumpRevisions: Record<string, number> = {};
+  let activeBookmarkIdsByPty: Record<string, string> = {};
   let bookmarkLoadRevision = 0;
   let daemonAddress = "";
   let ptyStreams: Record<string, WebSocket> = {};
@@ -291,6 +293,7 @@
 
   $: activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   $: activeSessionWindow = activeWindow(activeSession, activePaneId);
+  $: activePtyId = activeSession?.panes[activePaneId]?.currentPtyId ?? "";
   $: visiblePTYIds = visiblePtyIds(sessions, activeSessionId, activePaneId);
   $: notificationCount = notificationSurfaceCount(statusEvents, agentPrompts, agentBridgeEvents);
   $: projectAttachmentTemplates = plugins.flatMap((plugin) =>
@@ -348,6 +351,27 @@
       close: () => closePane(activePaneId),
       closeSession: closeActiveSession,
     }),
+    {
+      id: "bookmark.add",
+      title: "Add Bookmark",
+      shortcut: "Cmd/Ctrl B",
+      enabled: () => Boolean(activePtyId),
+      run: () => createPTYBookmark(activePtyId),
+    },
+    {
+      id: "bookmark.previous",
+      title: "Previous Bookmark",
+      shortcut: "Cmd/Ctrl Alt Left",
+      enabled: () => Boolean(activePtyId && (bookmarksByPty[activePtyId] ?? []).length > 0),
+      run: () => jumpBookmarkByDirection("previous"),
+    },
+    {
+      id: "bookmark.next",
+      title: "Next Bookmark",
+      shortcut: "Cmd/Ctrl Alt Right",
+      enabled: () => Boolean(activePtyId && (bookmarksByPty[activePtyId] ?? []).length > 0),
+      run: () => jumpBookmarkByDirection("next"),
+    },
     // Session-switch commands mirror the native Sessions menu (Cmd 1..0). They are gated on the
     // session count so only reachable slots appear in the palette.
     ...Array.from({ length: 10 }, (_, i) => ({
@@ -514,12 +538,41 @@
     }
   }
 
+  function upsertPTYBookmark(bookmark: PTYBookmark) {
+    bookmarksByPty = {
+      ...bookmarksByPty,
+      [bookmark.ptyId]: [
+        ...(bookmarksByPty[bookmark.ptyId] ?? []).filter((candidate) => candidate.id !== bookmark.id),
+        bookmark,
+      ],
+    };
+  }
+
+  async function createPTYBookmark(ptyId: string) {
+    if (!ptyId) return;
+    error = "";
+    const offset = offsets[ptyId] ?? 0;
+    try {
+      const bookmark = await AddPTYBookmark({
+        ptyId,
+        offset,
+        kind: "manual",
+        label: `Bookmark @${offset}`,
+      });
+      upsertPTYBookmark(bookmark);
+      activeBookmarkIdsByPty = { ...activeBookmarkIdsByPty, [ptyId]: bookmark.id };
+    } catch (err) {
+      error = `Add bookmark failed: ${backendError(err)}`;
+    }
+  }
+
   async function jumpToBookmark(bookmark: PTYBookmark) {
     const target = bookmarkJumpTarget(sessions, bookmark);
     if (!target) {
       error = `Bookmark target not found: ${bookmark.ptyId}`;
       return;
     }
+    activeBookmarkIdsByPty = { ...activeBookmarkIdsByPty, [bookmark.ptyId]: bookmark.id };
     const socket = ptyStreams[target.ptyId];
     if (socket) socket.close();
     const replay = resetOutputReplayForBookmark(
@@ -537,6 +590,21 @@
     } catch (err) {
       if (!isStalePTYError(err)) error = `Jump to bookmark failed: ${backendError(err)}`;
     }
+  }
+
+  async function jumpBookmarkByDirection(direction: BookmarkDirection) {
+    if (!activePtyId) return;
+    const bookmark = nextBookmarkTarget(
+      bookmarksByPty[activePtyId] ?? [],
+      activeBookmarkIdsByPty[activePtyId] ?? "",
+      offsets[activePtyId] ?? 0,
+      direction,
+    );
+    if (!bookmark) {
+      error = `No bookmarks for ${activePtyId}`;
+      return;
+    }
+    await jumpToBookmark(bookmark);
   }
 
   async function refreshProjects() {
@@ -2312,6 +2380,7 @@
           onCompleteGate={completeGate}
           onApproveDone={approveDone}
           onFocusPane={(paneId) => (activePaneId = paneId)}
+          onAddBookmark={(ptyId) => void createPTYBookmark(ptyId)}
           onSelectBookmark={(bookmark) => void jumpToBookmark(bookmark)}
           onPtyInput={(ptyId) => refreshOutput(ptyId).catch((err) => {
             if (!isStalePTYError(err)) error = backendError(err);
