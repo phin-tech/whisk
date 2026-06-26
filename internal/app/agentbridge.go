@@ -102,7 +102,15 @@ func (r *Runtime) HandleAgentBridgeHook(ctx context.Context, req AgentBridgeHook
 		ToolOutput: req.ToolOutput,
 	})
 	if !ok {
-		if _, err := r.recordAgentBridgeEvent(ctx, req, bridge, "logged"); err != nil {
+		result := "logged"
+		completed, err := r.completeAgentBridgeExecutionFromHook(ctx, bridge, req)
+		if err != nil {
+			return AgentBridgeHookResponse{}, err
+		}
+		if completed {
+			result = "execution_completed"
+		}
+		if _, err := r.recordAgentBridgeEvent(ctx, req, bridge, result); err != nil {
 			return AgentBridgeHookResponse{}, err
 		}
 		return AgentBridgeHookResponse{}, nil
@@ -130,6 +138,70 @@ func (r *Runtime) HandleAgentBridgeHook(ctx context.Context, req AgentBridgeHook
 
 func isAgentPromptHook(req AgentBridgeHookRequest) bool {
 	return req.EventName == "Elicitation" || ((req.EventName == "PreToolUse" || req.EventName == "PermissionRequest") && req.ToolName == "AskUserQuestion")
+}
+
+func (r *Runtime) completeAgentBridgeExecutionFromHook(ctx context.Context, bridge agentbridge.Bridge, req AgentBridgeHookRequest) (bool, error) {
+	if !isSuccessfulAgentCompletionHook(req) || strings.TrimSpace(bridge.RunID) == "" {
+		return false, nil
+	}
+	r.mu.Lock()
+	run, runOK := r.workItems.GetRun(bridge.RunID)
+	var item workitem.WorkItem
+	itemOK := false
+	if runOK {
+		item, itemOK = r.workItems.GetWorkItem(run.WorkItemID)
+	}
+	r.mu.Unlock()
+	if !runOK || !itemOK ||
+		run.PromptTemplateID != workitem.PromptTemplateImplement ||
+		run.Status != workitem.RunStateRunning ||
+		item.StageID != workitem.StageExecution {
+		return false, nil
+	}
+	if _, err := r.CompleteExecution(ctx, CompleteExecutionRequest{
+		RunID:   run.ID,
+		Actor:   "agent",
+		Message: "agent session completed",
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func isSuccessfulAgentCompletionHook(req AgentBridgeHookRequest) bool {
+	switch req.EventName {
+	case "Stop":
+		return !rawBoolField(req.RawPayload, "stop_hook_active")
+	case "SessionEnd":
+	default:
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(rawStringField(req.RawPayload, "reason", "status", "result"))) {
+	case "completed", "complete", "success", "succeeded", "successful":
+		return true
+	default:
+		return false
+	}
+}
+
+func rawBoolField(raw map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		value, _ := raw[key].(bool)
+		if value {
+			return true
+		}
+	}
+	return false
+}
+
+func rawStringField(raw map[string]any, keys ...string) string {
+	for _, key := range keys {
+		value, _ := raw[key].(string)
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func (r *Runtime) shouldStopPlanningExitPlanMode(bridge agentbridge.Bridge, req AgentBridgeHookRequest) bool {

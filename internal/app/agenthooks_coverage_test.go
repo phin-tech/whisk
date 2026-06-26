@@ -217,6 +217,67 @@ func launchAgentBridge(t *testing.T, approvalTimeout time.Duration) (*app.Runtim
 	return runtime, bridgeID, token
 }
 
+func launchExecutionAgentBridge(t *testing.T) (*app.Runtime, string, string) {
+	t.Helper()
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	nextID := 0
+	ptyBackend := newMemoryPTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: &memoryWorkItemStore{},
+		PTYBackend:    ptyBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(ctx) })
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Auto review"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	planningRun, err := runtime.StartPlanning(ctx, app.StartPlanningRequest{WorkItemID: item.ID, Actor: "agent"})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	draft, err := runtime.SubmitDraftPlan(ctx, app.SubmitDraftPlanRequest{
+		WorkItemID: item.ID,
+		RunID:      planningRun.ID,
+		Body:       "Implement it.",
+		Actor:      "agent",
+	})
+	if err != nil {
+		t.Fatalf("submit draft plan: %v", err)
+	}
+	if _, err := runtime.ApprovePlan(ctx, app.ApprovePlanRequest{WorkItemID: item.ID, ArtifactID: draft.ID, Actor: "human"}); err != nil {
+		t.Fatalf("approve plan: %v", err)
+	}
+	if _, err := runtime.StartExecution(ctx, app.StartExecutionRequest{
+		WorkItemID:     item.ID,
+		Launch:         true,
+		AgentProfileID: "claude",
+		Actor:          "agent",
+	}); err != nil {
+		t.Fatalf("start execution: %v", err)
+	}
+	if len(ptyBackend.spawns) != 1 {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	env := ptyBackend.spawns[0].Env
+	bridgeID, token := env["WHISK_AGENT_BRIDGE_ID"], env["WHISK_AGENT_BRIDGE_TOKEN"]
+	if bridgeID == "" || token == "" {
+		t.Fatalf("missing bridge credentials: env = %#v", env)
+	}
+	return runtime, bridgeID, token
+}
+
 func toolCallHook(bridgeID, token string) app.AgentBridgeHookRequest {
 	return app.AgentBridgeHookRequest{
 		BridgeID:  bridgeID,
@@ -343,6 +404,90 @@ func TestRuntimeAgentBridgeLogsClaudePreToolUseWithoutApproval(t *testing.T) {
 	if len(approvals) != 0 {
 		t.Fatalf("approvals = %#v", approvals)
 	}
+}
+
+func TestRuntimeAgentBridgeStopCompletesExecutionRun(t *testing.T) {
+	runtime, bridgeID, token := launchExecutionAgentBridge(t)
+	ctx := context.Background()
+
+	if _, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+		BridgeID:  bridgeID,
+		Token:     token,
+		Provider:  "claude",
+		EventName: "Stop",
+		RawPayload: map[string]any{
+			"hook_event_name":        "Stop",
+			"last_assistant_message": "Implemented and tested.",
+			"stop_hook_active":       false,
+		},
+	}); err != nil {
+		t.Fatalf("stop hook: %v", err)
+	}
+
+	items, err := runtime.ListWorkItems(ctx, "")
+	if err != nil {
+		t.Fatalf("list work items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].StageID != workitem.StageReview {
+		t.Fatalf("item stage = %q, want review", items[0].StageID)
+	}
+	runs, err := runtime.ListWorkItemRuns(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("list runs: %v", err)
+	}
+	run, ok := executionRun(runs)
+	if !ok || run.Status != workitem.RunStateCompleted {
+		t.Fatalf("runs = %#v", runs)
+	}
+}
+
+func TestRuntimeAgentBridgeInterruptedSessionEndDoesNotCompleteExecutionRun(t *testing.T) {
+	runtime, bridgeID, token := launchExecutionAgentBridge(t)
+	ctx := context.Background()
+
+	if _, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+		BridgeID:  bridgeID,
+		Token:     token,
+		Provider:  "claude",
+		EventName: "SessionEnd",
+		RawPayload: map[string]any{
+			"hook_event_name": "SessionEnd",
+			"reason":          "interrupted",
+		},
+	}); err != nil {
+		t.Fatalf("session end hook: %v", err)
+	}
+
+	items, err := runtime.ListWorkItems(ctx, "")
+	if err != nil {
+		t.Fatalf("list work items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].StageID == workitem.StageReview {
+		t.Fatalf("interrupted run moved to review: %#v", items[0])
+	}
+	runs, err := runtime.ListWorkItemRuns(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("list runs: %v", err)
+	}
+	run, ok := executionRun(runs)
+	if !ok || run.Status != workitem.RunStateRunning {
+		t.Fatalf("runs = %#v", runs)
+	}
+}
+
+func executionRun(runs []workitem.WorkItemRun) (workitem.WorkItemRun, bool) {
+	for _, run := range runs {
+		if run.PromptTemplateID == workitem.PromptTemplateImplement {
+			return run, true
+		}
+	}
+	return workitem.WorkItemRun{}, false
 }
 
 func TestRuntimeAgentBridgeApprovalLifecycle(t *testing.T) {
