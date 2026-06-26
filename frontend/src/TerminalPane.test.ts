@@ -39,6 +39,16 @@ describe("TerminalPane", () => {
     expect(source).toContain('replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, jumpRevision)');
   });
 
+  it("renders visible xterm decorations for bookmark markers", () => {
+    expect(source).toContain("allowProposedApi: true");
+    expect(source).toContain("overviewRulerWidth");
+    expect(source).toContain("registerDecoration");
+    expect(source).toContain("bookmarkDecorations");
+    expect(source).toContain("terminal-bookmark-decoration");
+    expect(source).toContain("terminal-bookmark-ruler-color");
+    expect(source).toContain("clearBookmarkDecorations");
+  });
+
   it("scrolls back to the terminal bottom when requested", () => {
     expect(source).toContain("export let bottomRevision");
     expect(source).toContain("applyBottomRevision");

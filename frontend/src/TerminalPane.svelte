@@ -7,7 +7,7 @@
   import CircleStop from "@lucide/svelte/icons/circle-stop";
   import Clipboard from "@lucide/svelte/icons/clipboard";
   import X from "@lucide/svelte/icons/x";
-  import { Terminal, type IMarker } from "@xterm/xterm";
+  import { Terminal, type IDecoration, type IMarker } from "@xterm/xterm";
   import "@xterm/xterm/css/xterm.css";
   import type { Pane } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import type { PTYBookmark } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
@@ -55,6 +55,7 @@
   let terminalWriting = false;
   let pendingTerminalOperations: TerminalOperation[] = [];
   let bookmarkMarkers = new Map<string, IMarker>();
+  let bookmarkDecorations = new Map<string, IDecoration>();
 
   type TerminalOperation =
     | { kind: "write"; bytes: Uint8Array }
@@ -77,6 +78,10 @@
       cursor: cssToken("--color-accent", "rgb(125, 211, 252)"),
       selectionBackground: cssToken("--color-bg-active", "rgba(39, 39, 42, 0.72)"),
     };
+  }
+
+  function terminalBookmarkRulerColor() {
+    return cssToken("--terminal-bookmark-ruler-color", cssToken("--color-accent", "rgb(125, 211, 252)"));
   }
 
   function fitAndResize() {
@@ -159,12 +164,41 @@
   function clearBookmarkMarkers() {
     for (const marker of bookmarkMarkers.values()) marker.dispose();
     bookmarkMarkers.clear();
+    clearBookmarkDecorations();
+  }
+
+  function clearBookmarkDecorations() {
+    for (const decoration of bookmarkDecorations.values()) decoration.dispose();
+    bookmarkDecorations.clear();
+  }
+
+  function registerBookmarkDecoration(bookmarkId: string, marker: IMarker) {
+    if (!terminal || bookmarkDecorations.has(bookmarkId)) return;
+    const decoration = terminal.registerDecoration({
+      marker,
+      anchor: "left",
+      width: 1,
+      overviewRulerOptions: {
+        color: terminalBookmarkRulerColor(),
+        position: "full",
+      },
+    });
+    if (!decoration) return;
+    bookmarkDecorations.set(bookmarkId, decoration);
+    decoration.onRender((element) => {
+      element.classList.add("terminal-bookmark-decoration");
+      element.title = "Bookmark";
+    });
+    decoration.onDispose(() => {
+      if (bookmarkDecorations.get(bookmarkId) === decoration) bookmarkDecorations.delete(bookmarkId);
+    });
   }
 
   function registerBookmarkMarker(bookmarkId: string) {
     if (!terminal || liveMarker(bookmarkId)) return;
     const marker = terminal.registerMarker(0);
     bookmarkMarkers.set(bookmarkId, marker);
+    registerBookmarkDecoration(bookmarkId, marker);
     marker.onDispose(() => {
       if (bookmarkMarkers.get(bookmarkId) === marker) bookmarkMarkers.delete(bookmarkId);
     });
@@ -292,10 +326,12 @@
 
   onMount(() => {
     terminal = new Terminal({
+      allowProposedApi: true,
       cursorBlink,
       fontFamily: "SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       fontSize,
       lineHeight: 1.16,
+      overviewRulerWidth: 8,
       theme: terminalTheme(),
     });
     fitAddon = new FitAddon();
@@ -435,3 +471,22 @@
   {/if}
   <div bind:this={host} class="min-h-0 min-w-0 flex-1 overflow-hidden"></div>
 </div>
+
+<style>
+  :global(.xterm .terminal-bookmark-decoration) {
+    pointer-events: none;
+    position: relative;
+  }
+
+  :global(.xterm .terminal-bookmark-decoration::before) {
+    background: var(--terminal-bookmark-ruler-color);
+    border-radius: 999px;
+    bottom: 15%;
+    box-shadow: 0 0 0 1px var(--color-bg-deep), 0 0 8px var(--color-accent-dim);
+    content: "";
+    left: 0;
+    position: absolute;
+    top: 15%;
+    width: 3px;
+  }
+</style>
