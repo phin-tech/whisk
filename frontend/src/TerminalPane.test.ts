@@ -49,6 +49,10 @@ describe("TerminalPane", () => {
     expect(source).toContain("bookmarkDecorations");
     expect(source).toContain("terminal-bookmark-decoration");
     expect(source).toContain("terminal-bookmark-ruler-color");
+    expect(source).toContain("terminalBookmarkCellBackgroundColor");
+    expect(source).toContain("backgroundColor");
+    expect(source).toContain("foregroundColor");
+    expect(source).toContain('layer: "top"');
     expect(source).toContain("clearBookmarkDecorations");
     expect(source).toContain("clickBookmarkDecoration");
     expect(source).toContain("element.onclick");

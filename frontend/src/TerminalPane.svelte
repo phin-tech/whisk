@@ -79,6 +79,10 @@
     return cssToken("--terminal-bookmark-ruler-color", cssToken("--color-accent", "rgb(125, 211, 252)"));
   }
 
+  function terminalBookmarkCellBackgroundColor() {
+    return cssToken("--color-accent-dim", "rgb(14, 165, 233)");
+  }
+
   function fitAndResize() {
     if (!pane.currentPtyId || !terminal || !fitAddon || !host.offsetWidth || !host.offsetHeight) return;
     fitAddon.fit();
@@ -178,6 +182,9 @@
       marker,
       anchor: "left",
       width: 1,
+      backgroundColor: terminalBookmarkCellBackgroundColor(),
+      foregroundColor: terminalBookmarkRulerColor(),
+      layer: "top",
       overviewRulerOptions: {
         color: terminalBookmarkRulerColor(),
         position: "full",
