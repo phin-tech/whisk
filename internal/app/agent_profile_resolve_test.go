@@ -19,6 +19,8 @@ func TestResolveAgentProfileID(t *testing.T) {
 		{name: "explicit wins over project default", explicit: "claude", phaseAgents: phaseAgents, preset: workitem.RunPresetWriter, want: "claude"},
 		{name: "whitespace explicit is ignored", explicit: "  ", phaseAgents: phaseAgents, preset: workitem.RunPresetWriter, want: "codex"},
 		{name: "project per-phase default used when no explicit", explicit: "", phaseAgents: phaseAgents, preset: workitem.RunPresetWriter, want: "codex"},
+		{name: "explicit codex reader uses codex plan profile", explicit: "codex", phaseAgents: phaseAgents, preset: workitem.RunPresetReader, want: "codex-plan"},
+		{name: "project codex reader default uses codex plan profile", explicit: "", phaseAgents: map[string]string{workitem.RunPresetReader: "codex"}, preset: workitem.RunPresetReader, want: "codex-plan"},
 		{name: "no phase default falls back to preset default", explicit: "", phaseAgents: phaseAgents, preset: workitem.RunPresetReader, want: defaultAgentProfileForPreset(workitem.RunPresetReader)},
 		{name: "nil phase agents falls back to preset default", explicit: "", phaseAgents: nil, preset: workitem.RunPresetWriter, want: defaultAgentProfileForPreset(workitem.RunPresetWriter)},
 	}

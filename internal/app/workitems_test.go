@@ -206,6 +206,64 @@ func TestRuntimeStartWorkItemRunLaunchesAgentPTY(t *testing.T) {
 	}
 }
 
+func TestRuntimeStartPlanningUsesCodexPlanProfileForCodexReaderDefault(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	root := t.TempDir()
+	ptyBackend := newMemoryPTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: &memoryWorkItemStore{},
+		PTYBackend:    ptyBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{
+		Name:    "App",
+		RootDir: root,
+		Preferences: workitem.ProjectPreferences{
+			DefaultPhaseAgents: map[string]string{
+				workitem.RunPresetReader: "codex",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Plan with Codex"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+
+	run, err := runtime.StartPlanning(ctx, app.StartPlanningRequest{
+		WorkItemID: item.ID,
+		Launch:     true,
+		Actor:      "agent",
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	if run.Status != workitem.RunStateRunning {
+		t.Fatalf("run = %#v", run)
+	}
+	if len(ptyBackend.spawns) != 1 {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	spawn := ptyBackend.spawns[0]
+	if spawn.Command != "codex" ||
+		!containsArg(spawn.Args, "--sandbox") ||
+		!containsArg(spawn.Args, "read-only") ||
+		!containsArgWith(spawn.Args, "Plan the work item.") ||
+		!containsArgWith(spawn.Args, "Plan with Codex") {
+		t.Fatalf("spawn command/args = %q %#v", spawn.Command, spawn.Args)
+	}
+}
+
 func TestRuntimeStartWorkItemRunUsesInteractiveAgentShellWhenEnabled(t *testing.T) {
 	t.Setenv("SHELL", "/bin/zsh")
 	ctx := context.Background()

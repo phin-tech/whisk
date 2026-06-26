@@ -86,6 +86,22 @@ func TestCodexLaunchUsesInstructionsConfig(t *testing.T) {
 	}
 }
 
+func TestCodexPlanLaunchUsesReadOnlySandboxAndInstructionsConfig(t *testing.T) {
+	launch, err := BuildLaunch(LaunchRequest{
+		ProfileID:    "codex-plan",
+		WorkingDir:   "/repo",
+		SystemPrompt: "Be terse",
+		Prompt:       "Plan it",
+	})
+	if err != nil {
+		t.Fatalf("BuildLaunch error: %v", err)
+	}
+	wantArgs := []string{"--sandbox", "read-only", "-c", "instructions=Be terse", "Plan it"}
+	if launch.Command != "codex" || !reflect.DeepEqual(launch.Args, wantArgs) || launch.Stdin != "" {
+		t.Fatalf("launch = %#v", launch)
+	}
+}
+
 func TestCodexLaunchAddsCommonAgentPaths(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -165,7 +181,7 @@ func TestProfileListReturnsOrderedBuiltinProfilesWithLabels(t *testing.T) {
 	for i, p := range profiles {
 		gotIDs[i] = p.ID
 	}
-	wantIDs := []string{"claude", "claude-plan", "claude-openrouter", "codex", "plain-shell", "prompt-capture"}
+	wantIDs := []string{"claude", "claude-plan", "claude-openrouter", "codex", "codex-plan", "plain-shell", "prompt-capture"}
 	if !reflect.DeepEqual(gotIDs, wantIDs) {
 		t.Fatalf("profile ids = %#v, want %#v", gotIDs, wantIDs)
 	}

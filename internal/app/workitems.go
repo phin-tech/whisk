@@ -1531,14 +1531,21 @@ func worktreeBranchSlug(value string) string {
 // is used; otherwise it falls back to the preset's builtin default.
 func resolveAgentProfileID(explicit string, phaseAgents map[string]string, preset string) string {
 	if id := strings.TrimSpace(explicit); id != "" {
-		return id
+		return normalizeAgentProfileForPreset(id, preset)
 	}
 	if phaseAgents != nil {
 		if id := strings.TrimSpace(phaseAgents[preset]); id != "" {
-			return id
+			return normalizeAgentProfileForPreset(id, preset)
 		}
 	}
-	return defaultAgentProfileForPreset(preset)
+	return normalizeAgentProfileForPreset(defaultAgentProfileForPreset(preset), preset)
+}
+
+func normalizeAgentProfileForPreset(profileID string, preset string) string {
+	if preset == workitem.RunPresetReader && profileID == "codex" {
+		return "codex-plan"
+	}
+	return profileID
 }
 
 // ListAgentProfiles returns the selectable builtin agent profiles as a read model.

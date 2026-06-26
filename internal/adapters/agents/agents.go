@@ -33,6 +33,7 @@ var profileCatalog = []ProfileInfo{
 	{ID: "claude-plan", Provider: ProviderClaude, Label: "Claude Code (plan mode)", Description: "Claude Code restricted to plan mode."},
 	{ID: "claude-openrouter", Provider: ProviderClaude, Label: "Claude Code (OpenRouter)", Description: "Claude Code routed through OpenRouter with a budget cap."},
 	{ID: "codex", Provider: ProviderCodex, Label: "Codex", Description: "OpenAI Codex CLI."},
+	{ID: "codex-plan", Provider: ProviderCodex, Label: "Codex (plan mode)", Description: "Codex CLI in read-only planning mode."},
 	{ID: "plain-shell", Provider: ProviderShell, Label: "Shell", Description: "Plain interactive shell, no agent."},
 	{ID: "prompt-capture", Provider: ProviderShell, Label: "Prompt capture", Description: "Echoes the prompt via cat for smoke tests."},
 }
@@ -212,6 +213,13 @@ func BuiltinProfiles() map[string]Profile {
 			ID:       "codex",
 			Provider: ProviderCodex,
 			Command:  "codex",
+			Env:      agentEnv,
+		},
+		"codex-plan": {
+			ID:       "codex-plan",
+			Provider: ProviderCodex,
+			Command:  "codex",
+			Args:     []string{"--sandbox", "read-only"},
 			Env:      agentEnv,
 		},
 	}
