@@ -835,7 +835,11 @@ function dispatch(methodName: string, args: unknown[]) {
       return clone(state.agentPrompts);
     case "Output": {
       const req = (args[0] ?? {}) as { ptyId?: string; fromOffset?: number };
-      const output = req.fromOffset === 12 ? "bookmarked output\n" : "";
+      const output = req.fromOffset === 12
+        ? "bookmarked output\n"
+        : req.fromOffset === 0
+          ? "seeded terminal output\n"
+          : "";
       return {
         ptyId: req.ptyId,
         offset: (req.fromOffset ?? 0) + output.length,
@@ -1090,6 +1094,52 @@ function reset() {
   openedURLs = [];
 }
 
+class E2EWebSocket extends EventTarget {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+
+  readonly url: string;
+  readonly protocol = "";
+  readonly extensions = "";
+  binaryType: BinaryType = "blob";
+  readyState = E2EWebSocket.CONNECTING;
+  onopen: ((this: WebSocket, event: Event) => unknown) | null = null;
+  onmessage: ((this: WebSocket, event: MessageEvent) => unknown) | null = null;
+  onerror: ((this: WebSocket, event: Event) => unknown) | null = null;
+  onclose: ((this: WebSocket, event: CloseEvent) => unknown) | null = null;
+
+  constructor(url: string | URL) {
+    super();
+    this.url = String(url);
+    window.setTimeout(() => {
+      if (this.readyState !== E2EWebSocket.CONNECTING) return;
+      this.readyState = E2EWebSocket.OPEN;
+      const event = new Event("open");
+      this.dispatchEvent(event);
+      this.onopen?.call(this as unknown as WebSocket, event);
+    }, 0);
+  }
+
+  send(_data: string | ArrayBufferLike | Blob | ArrayBufferView) {
+    return;
+  }
+
+  close(_code?: number, _reason?: string) {
+    if (this.readyState === E2EWebSocket.CLOSED || this.readyState === E2EWebSocket.CLOSING) return;
+    this.readyState = E2EWebSocket.CLOSING;
+    window.setTimeout(() => {
+      this.readyState = E2EWebSocket.CLOSED;
+      const event = typeof CloseEvent === "function"
+        ? new CloseEvent("close")
+        : (new Event("close") as CloseEvent);
+      this.dispatchEvent(event);
+      this.onclose?.call(this as unknown as WebSocket, event);
+    }, 0);
+  }
+}
+
 declare global {
   interface Window {
     __WHISK_E2E__: {
@@ -1103,6 +1153,7 @@ declare global {
 }
 
 if (typeof window !== "undefined") {
+  window.WebSocket = E2EWebSocket as unknown as typeof WebSocket;
   window.__WHISK_E2E__ = {
     calls: () => clone(calls),
     openedURLs: () => clone(openedURLs),

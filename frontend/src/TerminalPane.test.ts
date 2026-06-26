@@ -27,5 +27,6 @@ describe("TerminalPane", () => {
     expect(source).toContain("export let jumpRevision");
     expect(source).toContain("onBookmark");
     expect(source).toContain("scrollToTop");
+    expect(source).toContain('replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, jumpRevision)');
   });
 });

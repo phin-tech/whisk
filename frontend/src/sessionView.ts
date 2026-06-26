@@ -239,6 +239,22 @@ export function ptyBookmarkRowsByPty(bookmarks: PtyBookmarkLike[]) {
   return grouped;
 }
 
+export async function safeBookmarksByPty<T extends { id: string }, B>(
+  ptys: T[],
+  load: (ptyId: string) => Promise<B[]>,
+): Promise<Record<string, B[]>> {
+  const entries = await Promise.all(
+    ptys.map(async (pty) => {
+      try {
+        return [pty.id, await load(pty.id)] as const;
+      } catch {
+        return [pty.id, []] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
 export function bookmarkJumpTarget(
   sessions: SessionLike[],
   bookmark: PtyBookmarkLike,

@@ -20,12 +20,14 @@ test("shows pty bookmarks and jumps terminal replay to their offsets", async ({ 
   await page.goto("/?e2ePty");
 
   await expect(page.getByRole("button", { name: /Seeded Session/ })).toBeVisible();
+  await expect(page.locator(".xterm-rows")).toContainText("seeded terminal output");
   await expect(page.getByRole("button", { name: /Jump to bookmark Agent handoff/ })).toBeVisible();
 
   await page.getByRole("button", { name: "PTYs" }).click();
   await expect(page.getByRole("button", { name: /Jump to bookmark Agent handoff from PTYs/ })).toBeVisible();
 
   await page.getByRole("button", { name: /Jump to bookmark Agent handoff from PTYs/ }).click();
+  await expect(page.locator(".xterm-rows")).toContainText("bookmarked output");
 
   const outputCalls = await page.evaluate(() =>
     window.__WHISK_E2E__.calls().filter((call) => call.method.endsWith(".Output")),

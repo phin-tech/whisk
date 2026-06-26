@@ -11,6 +11,7 @@ import {
   ptyRowsFromInventory,
   resetOutputReplayForBookmark,
   runtimeRefreshTargets,
+  safeBookmarksByPty,
   sessionGroups,
   visiblePtyIds,
 } from "./sessionView";
@@ -258,6 +259,43 @@ describe("ptyBookmarkRowsByPty", () => {
           offsetLabel: "@5",
           detail: "unowned / detached",
           kind: "",
+        },
+      ],
+    });
+  });
+});
+
+describe("safeBookmarksByPty", () => {
+  it("keeps other PTYs renderable when one bookmark load fails", async () => {
+    const bookmarks = await safeBookmarksByPty(
+      [{ id: "whisk_000265" }, { id: "pty_ok" }],
+      async (ptyId) => {
+        if (ptyId === "whisk_000265") throw new Error("bookmark store failed");
+        return [
+          {
+            id: "bm_01",
+            ptyId,
+            sessionId: "sess_01",
+            paneId: "pane_01",
+            offset: 12,
+            kind: "manual",
+            label: "Agent handoff",
+          },
+        ];
+      },
+    );
+
+    expect(bookmarks).toEqual({
+      whisk_000265: [],
+      pty_ok: [
+        {
+          id: "bm_01",
+          ptyId: "pty_ok",
+          sessionId: "sess_01",
+          paneId: "pane_01",
+          offset: 12,
+          kind: "manual",
+          label: "Agent handoff",
         },
       ],
     });

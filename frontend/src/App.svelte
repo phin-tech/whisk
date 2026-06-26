@@ -158,7 +158,7 @@
     writePTYInputOverSocket,
   } from "./ptyStream";
   import { sessionSplitCommands } from "./sessionCommands";
-  import { activeWindow, bookmarkJumpTarget, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, resetOutputReplayForBookmark, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
+  import { activeWindow, bookmarkJumpTarget, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, resetOutputReplayForBookmark, runtimeRefreshTargets, safeBookmarksByPty, visiblePtyIds } from "./sessionView";
   import {
     normalizeStartupView,
     startupTarget,
@@ -275,6 +275,7 @@
   let outputChunks: Record<string, string[]> = {};
   let offsets: Record<string, number> = {};
   let bookmarkJumpRevisions: Record<string, number> = {};
+  let bookmarkLoadRevision = 0;
   let daemonAddress = "";
   let ptyStreams: Record<string, WebSocket> = {};
   let ptyTraceEnabled = false;
@@ -479,11 +480,7 @@
   }
 
   async function loadBookmarksByPty(nextPtys: PTYInfo[]) {
-    if (nextPtys.length === 0) return {};
-    const entries = await Promise.all(
-      nextPtys.map(async (pty) => [pty.id, await ListPTYBookmarks(pty.id)] as const),
-    );
-    return Object.fromEntries(entries);
+    return safeBookmarksByPty(nextPtys, ListPTYBookmarks);
   }
 
   async function refreshPTYs() {
@@ -491,10 +488,15 @@
     loadingPTYHistory = true;
     try {
       const [nextPtys, nextHistory] = await Promise.all([ListPTYs(), ListPTYHistory()]);
-      const nextBookmarksByPty = await loadBookmarksByPty(nextPtys);
+      const loadRevision = ++bookmarkLoadRevision;
       ptys = nextPtys;
-      bookmarksByPty = nextBookmarksByPty;
       ptyHistory = nextHistory;
+      bookmarksByPty = Object.fromEntries(
+        nextPtys.map((pty) => [pty.id, bookmarksByPty[pty.id] ?? []]),
+      );
+      void loadBookmarksByPty(nextPtys).then((nextBookmarksByPty) => {
+        if (bookmarkLoadRevision === loadRevision) bookmarksByPty = nextBookmarksByPty;
+      });
       if (selectedPTYHistory && !nextHistory.some((item) => item.ptyId === selectedPTYHistory?.ptyId)) {
         selectedPTYHistory = null;
       }

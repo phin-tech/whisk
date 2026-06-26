@@ -130,19 +130,19 @@
     writtenChunks = chunks.length;
   }
 
-  function applyJumpRevision() {
-    if (!terminal || appliedJumpRevision === jumpRevision) return;
-    appliedJumpRevision = jumpRevision;
+  function applyJumpRevision(nextPtyId: string, nextJumpRevision: number) {
+    if (!terminal || appliedJumpRevision === nextJumpRevision) return;
+    appliedJumpRevision = nextJumpRevision;
     scrollToReplayStart = true;
     terminal.reset();
     writtenChunks = 0;
-    renderedPtyId = pane.currentPtyId ?? "";
+    renderedPtyId = nextPtyId;
   }
 
-  function replayAndMaybeScroll() {
-    applyJumpRevision();
-    replayOutputChunks(pane.currentPtyId ?? "", outputChunks);
-    if (scrollToReplayStart && outputChunks.length > 0) {
+  function replayAndMaybeScroll(nextPtyId: string, chunks: string[], nextJumpRevision: number) {
+    applyJumpRevision(nextPtyId, nextJumpRevision);
+    replayOutputChunks(nextPtyId, chunks);
+    if (scrollToReplayStart && chunks.length > 0) {
       terminal.scrollToTop();
       scrollToReplayStart = false;
     }
@@ -175,14 +175,14 @@
         })
         .catch(console.error);
     });
-    replayAndMaybeScroll();
+    replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, jumpRevision);
     return () => {
       resizeObserver.disconnect();
       terminal.dispose();
     };
   });
 
-  $: if (terminal) replayAndMaybeScroll();
+  $: if (terminal) replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, jumpRevision);
   $: if (focused && terminal) terminal.focus();
 </script>
 
