@@ -1169,6 +1169,35 @@ export class DetectWorktrunkRequest {
     }
 }
 
+export class ExportWorkflowDefinitionFileRequest {
+    "id": string;
+    "version": number;
+    "path": string;
+
+    /** Creates a new ExportWorkflowDefinitionFileRequest instance. */
+    constructor($$source: Partial<ExportWorkflowDefinitionFileRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("version" in $$source)) {
+            this["version"] = 0;
+        }
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ExportWorkflowDefinitionFileRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ExportWorkflowDefinitionFileRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ExportWorkflowDefinitionFileRequest($$parsedSource as Partial<ExportWorkflowDefinitionFileRequest>);
+    }
+}
+
 export const GateReport = workitem$0.GateReport;
 export type GateReport = workitem$0.GateReport;
 
@@ -1202,6 +1231,27 @@ export class HTTPForward {
     static createFrom($$source: any = {}): HTTPForward {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new HTTPForward($$parsedSource as Partial<HTTPForward>);
+    }
+}
+
+export class ImportWorkflowDefinitionFileRequest {
+    "path": string;
+
+    /** Creates a new ImportWorkflowDefinitionFileRequest instance. */
+    constructor($$source: Partial<ImportWorkflowDefinitionFileRequest> = {}) {
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ImportWorkflowDefinitionFileRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ImportWorkflowDefinitionFileRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ImportWorkflowDefinitionFileRequest($$parsedSource as Partial<ImportWorkflowDefinitionFileRequest>);
     }
 }
 
@@ -1767,6 +1817,31 @@ export class PTYInfo {
     static createFrom($$source: any = {}): PTYInfo {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new PTYInfo($$parsedSource as Partial<PTYInfo>);
+    }
+}
+
+export class PlanProjectWorkflowMigrationRequest {
+    "id": string;
+    "version": number;
+
+    /** Creates a new PlanProjectWorkflowMigrationRequest instance. */
+    constructor($$source: Partial<PlanProjectWorkflowMigrationRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("version" in $$source)) {
+            this["version"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PlanProjectWorkflowMigrationRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PlanProjectWorkflowMigrationRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PlanProjectWorkflowMigrationRequest($$parsedSource as Partial<PlanProjectWorkflowMigrationRequest>);
     }
 }
 
@@ -3055,6 +3130,52 @@ export class UpdateWorkItemRequest {
     }
 }
 
+export class ValidateWorkflowDefinitionFileRequest {
+    "path": string;
+
+    /** Creates a new ValidateWorkflowDefinitionFileRequest instance. */
+    constructor($$source: Partial<ValidateWorkflowDefinitionFileRequest> = {}) {
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ValidateWorkflowDefinitionFileRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ValidateWorkflowDefinitionFileRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ValidateWorkflowDefinitionFileRequest($$parsedSource as Partial<ValidateWorkflowDefinitionFileRequest>);
+    }
+}
+
+export class ValidateWorkflowDefinitionRequest {
+    "definition": WorkflowDefinition;
+
+    /** Creates a new ValidateWorkflowDefinitionRequest instance. */
+    constructor($$source: Partial<ValidateWorkflowDefinitionRequest> = {}) {
+        if (!("definition" in $$source)) {
+            this["definition"] = (new WorkflowDefinition());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ValidateWorkflowDefinitionRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ValidateWorkflowDefinitionRequest {
+        const $$createField0_0 = $$createType10;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("definition" in $$parsedSource) {
+            $$parsedSource["definition"] = $$createField0_0($$parsedSource["definition"]);
+        }
+        return new ValidateWorkflowDefinitionRequest($$parsedSource as Partial<ValidateWorkflowDefinitionRequest>);
+    }
+}
+
 export const WorkItem = workitem$0.WorkItem;
 export type WorkItem = workitem$0.WorkItem;
 
@@ -3063,6 +3184,9 @@ export type WorkItemLink = workitem$0.WorkItemLink;
 
 export const WorkItemRun = workitem$0.WorkItemRun;
 export type WorkItemRun = workitem$0.WorkItemRun;
+
+export const WorkflowActionAvailability = workitem$0.WorkflowActionAvailability;
+export type WorkflowActionAvailability = workitem$0.WorkflowActionAvailability;
 
 export const WorkflowDefinition = workitem$0.WorkflowDefinition;
 export type WorkflowDefinition = workitem$0.WorkflowDefinition;
@@ -3073,8 +3197,14 @@ export type WorkflowDefinitionRecord = workitem$0.WorkflowDefinitionRecord;
 export const WorkflowEvent = workitem$0.WorkflowEvent;
 export type WorkflowEvent = workitem$0.WorkflowEvent;
 
+export const WorkflowMigrationPlan = workitem$0.WorkflowMigrationPlan;
+export type WorkflowMigrationPlan = workitem$0.WorkflowMigrationPlan;
+
 export const WorkflowTemplate = workitem$0.WorkflowTemplate;
 export type WorkflowTemplate = workitem$0.WorkflowTemplate;
+
+export const WorkflowValidationReport = workitem$0.WorkflowValidationReport;
+export type WorkflowValidationReport = workitem$0.WorkflowValidationReport;
 
 export class Worktree {
     "branch": string;

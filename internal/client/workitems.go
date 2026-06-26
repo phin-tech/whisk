@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 
 	"github.com/phin-tech/whisk/internal/protocol"
@@ -47,6 +48,13 @@ func (c *HTTPClient) SetProjectWorkflowDefinition(ctx context.Context, projectID
 	return project, err
 }
 
+func (c *HTTPClient) PlanProjectWorkflowMigration(ctx context.Context, projectID string, req protocol.PlanProjectWorkflowMigrationRequest) (protocol.WorkflowMigrationPlan, error) {
+	var plan protocol.WorkflowMigrationPlan
+	path := "/v1/projects/" + url.PathEscape(projectID) + "/workflow-migration-plan"
+	err := c.post(ctx, path, req, &plan)
+	return plan, err
+}
+
 func (c *HTTPClient) AddProjectAttachment(ctx context.Context, req protocol.AddProjectAttachmentRequest) (protocol.Project, error) {
 	var project protocol.Project
 	path := "/v1/projects/" + url.PathEscape(req.ProjectID) + "/attachments"
@@ -87,9 +95,38 @@ func (c *HTTPClient) ListWorkflowDefinitions(ctx context.Context) ([]protocol.Wo
 	return definitions, err
 }
 
+func (c *HTTPClient) ValidateWorkflowDefinition(ctx context.Context, req protocol.ValidateWorkflowDefinitionRequest) (protocol.WorkflowValidationReport, error) {
+	var report protocol.WorkflowValidationReport
+	err := c.post(ctx, "/v1/workflow-definitions/validate", req, &report)
+	return report, err
+}
+
+func (c *HTTPClient) ValidateWorkflowDefinitionFile(ctx context.Context, req protocol.ValidateWorkflowDefinitionFileRequest) (protocol.WorkflowValidationReport, error) {
+	var report protocol.WorkflowValidationReport
+	err := c.post(ctx, "/v1/workflow-definitions/validate-file", req, &report)
+	return report, err
+}
+
 func (c *HTTPClient) ImportWorkflowDefinition(ctx context.Context, req protocol.ImportWorkflowDefinitionRequest) (protocol.WorkflowDefinitionRecord, error) {
 	var record protocol.WorkflowDefinitionRecord
 	err := c.post(ctx, "/v1/workflow-definitions/import", req, &record)
+	return record, err
+}
+
+func (c *HTTPClient) ImportWorkflowDefinitionFile(ctx context.Context, req protocol.ImportWorkflowDefinitionFileRequest) (protocol.WorkflowDefinitionRecord, error) {
+	var record protocol.WorkflowDefinitionRecord
+	err := c.post(ctx, "/v1/workflow-definitions/import-file", req, &record)
+	return record, err
+}
+
+func (c *HTTPClient) ExportWorkflowDefinitionFile(ctx context.Context, req protocol.ExportWorkflowDefinitionFileRequest) error {
+	return c.post(ctx, "/v1/workflow-definitions/export-file", req, nil)
+}
+
+func (c *HTTPClient) DeleteWorkflowDefinition(ctx context.Context, id string, version int) (protocol.WorkflowDefinitionRecord, error) {
+	var record protocol.WorkflowDefinitionRecord
+	path := "/v1/workflow-definitions/" + url.PathEscape(id) + "/" + url.PathEscape(fmt.Sprintf("%d", version)) + "/delete"
+	err := c.post(ctx, path, nil, &record)
 	return record, err
 }
 
@@ -133,6 +170,13 @@ func (c *HTTPClient) MoveWorkItem(ctx context.Context, req protocol.MoveWorkItem
 	path := "/v1/work-items/" + url.PathEscape(req.ID) + "/move"
 	err := c.post(ctx, path, req, &item)
 	return item, err
+}
+
+func (c *HTTPClient) ListWorkItemWorkflowActions(ctx context.Context, workItemID string) ([]protocol.WorkflowActionAvailability, error) {
+	var actions []protocol.WorkflowActionAvailability
+	path := "/v1/work-items/" + url.PathEscape(workItemID) + "/workflow-actions"
+	err := c.get(ctx, path, nil, &actions)
+	return actions, err
 }
 
 func (c *HTTPClient) AddWorkItemLink(ctx context.Context, req protocol.AddWorkItemLinkRequest) (protocol.WorkItemLink, error) {

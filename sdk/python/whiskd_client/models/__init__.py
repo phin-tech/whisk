@@ -54,10 +54,12 @@ from .detach_pane_pty_request import DetachPanePTYRequest
 from .detached_pane_pty import DetachedPanePTY
 from .detect_worktrunk_request import DetectWorktrunkRequest
 from .error_response import ErrorResponse
+from .export_workflow_definition_file_request import ExportWorkflowDefinitionFileRequest
 from .gate_config import GateConfig
 from .gate_report import GateReport
 from .history_event import HistoryEvent
 from .http_forward import HTTPForward
+from .import_workflow_definition_file_request import ImportWorkflowDefinitionFileRequest
 from .import_workflow_definition_request import ImportWorkflowDefinitionRequest
 from .install_registry_plugin_request import InstallRegistryPluginRequest
 from .item import Item
@@ -74,6 +76,7 @@ from .onboarding_apply_request import OnboardingApplyRequest
 from .onboarding_status import OnboardingStatus
 from .output_snapshot import OutputSnapshot
 from .pane import Pane
+from .plan_project_workflow_migration_request import PlanProjectWorkflowMigrationRequest
 from .plugin_resolver import PluginResolver
 from .plugin_status import PluginStatus
 from .plugin_template_field import PluginTemplateField
@@ -145,11 +148,16 @@ from .update_project_request_default_phase_agents import (
     UpdateProjectRequestDefaultPhaseAgents,
 )
 from .update_work_item_request import UpdateWorkItemRequest
+from .validate_workflow_definition_file_request import (
+    ValidateWorkflowDefinitionFileRequest,
+)
+from .validate_workflow_definition_request import ValidateWorkflowDefinitionRequest
 from .work_item import WorkItem
 from .work_item_link import WorkItemLink
 from .work_item_metadata import WorkItemMetadata
 from .work_item_run import WorkItemRun
 from .work_item_run_metadata import WorkItemRunMetadata
+from .workflow_action_availability import WorkflowActionAvailability
 from .workflow_action_definition import WorkflowActionDefinition
 from .workflow_artifact_effect import WorkflowArtifactEffect
 from .workflow_artifact_requirement import WorkflowArtifactRequirement
@@ -157,10 +165,14 @@ from .workflow_definition import WorkflowDefinition
 from .workflow_definition_record import WorkflowDefinitionRecord
 from .workflow_event import WorkflowEvent
 from .workflow_gate_definition import WorkflowGateDefinition
+from .workflow_migration_item import WorkflowMigrationItem
+from .workflow_migration_plan import WorkflowMigrationPlan
 from .workflow_question_policy import WorkflowQuestionPolicy
 from .workflow_run_effect import WorkflowRunEffect
 from .workflow_stage import WorkflowStage
 from .workflow_template import WorkflowTemplate
+from .workflow_validation_error import WorkflowValidationError
+from .workflow_validation_report import WorkflowValidationReport
 from .worktree import Worktree
 from .worktree_binding import WorktreeBinding
 from .worktrunk_binary import WorktrunkBinary
@@ -222,10 +234,12 @@ __all__ = (
     "DetachPanePTYRequest",
     "DetectWorktrunkRequest",
     "ErrorResponse",
+    "ExportWorkflowDefinitionFileRequest",
     "GateConfig",
     "GateReport",
     "HistoryEvent",
     "HTTPForward",
+    "ImportWorkflowDefinitionFileRequest",
     "ImportWorkflowDefinitionRequest",
     "InstallRegistryPluginRequest",
     "Item",
@@ -242,6 +256,7 @@ __all__ = (
     "OnboardingStatus",
     "OutputSnapshot",
     "Pane",
+    "PlanProjectWorkflowMigrationRequest",
     "PluginResolver",
     "PluginStatus",
     "PluginTemplateField",
@@ -305,6 +320,9 @@ __all__ = (
     "UpdateProjectRequest",
     "UpdateProjectRequestDefaultPhaseAgents",
     "UpdateWorkItemRequest",
+    "ValidateWorkflowDefinitionFileRequest",
+    "ValidateWorkflowDefinitionRequest",
+    "WorkflowActionAvailability",
     "WorkflowActionDefinition",
     "WorkflowArtifactEffect",
     "WorkflowArtifactRequirement",
@@ -312,10 +330,14 @@ __all__ = (
     "WorkflowDefinitionRecord",
     "WorkflowEvent",
     "WorkflowGateDefinition",
+    "WorkflowMigrationItem",
+    "WorkflowMigrationPlan",
     "WorkflowQuestionPolicy",
     "WorkflowRunEffect",
     "WorkflowStage",
     "WorkflowTemplate",
+    "WorkflowValidationError",
+    "WorkflowValidationReport",
     "WorkItem",
     "WorkItemLink",
     "WorkItemMetadata",

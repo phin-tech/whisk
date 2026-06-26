@@ -178,7 +178,24 @@
       : selectedWorkflowConfig?.kind === "gate"
         ? "Gate config"
         : "Stage config";
+  $: selectedWorkflowConfigEntries = Object.entries(selectedWorkflowConfig?.config ?? {});
   $: selectedWorkflowConfigJson = JSON.stringify(selectedWorkflowConfig?.config ?? {}, null, 2);
+
+  function formatConfigValue(value: unknown): string {
+    if (value === null || value === undefined || value === "") return "none";
+    if (typeof value === "boolean") return value ? "yes" : "no";
+    if (Array.isArray(value)) {
+      if (value.length === 0) return "none";
+      return value.map((entry) => formatConfigValue(entry)).join(", ");
+    }
+    if (isRecord(value)) {
+      const entries = Object.entries(value)
+        .filter(([, entry]) => entry !== undefined && entry !== null && !(Array.isArray(entry) && entry.length === 0));
+      if (entries.length === 0) return "none";
+      return entries.map(([key, entry]) => `${key}: ${formatConfigValue(entry)}`).join("; ");
+    }
+    return String(value);
+  }
 
   function selectWorkflowNode({ node }: { node: Node }) {
     const config = node.data?.config;
@@ -299,7 +316,25 @@
         </div>
 
         <div class="app-scrollbar min-h-0 flex-1 overflow-auto p-3">
-          <pre class="app-scrollbar max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border border-hairline bg-bg-base/70 p-2 font-mono text-[11px] leading-5 text-text-secondary">{selectedWorkflowConfigJson}</pre>
+          <div class="grid gap-1.5">
+            {#each selectedWorkflowConfigEntries as [key, value]}
+              <div class="grid grid-cols-[108px_minmax(0,1fr)] gap-2 rounded border border-hairline bg-bg-surface/30 px-2 py-1.5 text-[11px]">
+                <dt class="truncate font-mono text-text-muted">{key}</dt>
+                <dd class="min-w-0 break-words text-text-secondary">{formatConfigValue(value)}</dd>
+              </div>
+            {:else}
+              <div class="rounded border border-hairline bg-bg-surface/30 px-2 py-1.5 text-[11px] text-text-muted">
+                No config.
+              </div>
+            {/each}
+          </div>
+
+          <details class="mt-3 rounded border border-hairline bg-bg-base/50">
+            <summary class="cursor-pointer px-2 py-1.5 text-[11px] font-semibold uppercase text-text-muted">
+              Raw config
+            </summary>
+            <pre class="app-scrollbar max-h-52 overflow-auto whitespace-pre-wrap break-words border-t border-hairline p-2 font-mono text-[11px] leading-5 text-text-secondary">{selectedWorkflowConfigJson}</pre>
+          </details>
 
           <div class="mt-3 border-t border-hairline pt-3">
             <div class="mb-2 text-[11px] font-semibold uppercase text-text-muted">Gates</div>

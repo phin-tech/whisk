@@ -399,12 +399,36 @@ func (s *Service) ListWorkflowDefinitions(ctx context.Context) ([]protocol.Workf
 	return s.client.ListWorkflowDefinitions(ctx)
 }
 
+func (s *Service) ValidateWorkflowDefinition(ctx context.Context, req protocol.ValidateWorkflowDefinitionRequest) (protocol.WorkflowValidationReport, error) {
+	return s.client.ValidateWorkflowDefinition(ctx, req)
+}
+
+func (s *Service) ValidateWorkflowDefinitionFile(ctx context.Context, req protocol.ValidateWorkflowDefinitionFileRequest) (protocol.WorkflowValidationReport, error) {
+	return s.client.ValidateWorkflowDefinitionFile(ctx, req)
+}
+
 func (s *Service) ImportWorkflowDefinition(ctx context.Context, req protocol.ImportWorkflowDefinitionRequest) (protocol.WorkflowDefinitionRecord, error) {
 	return s.client.ImportWorkflowDefinition(ctx, req)
 }
 
+func (s *Service) ImportWorkflowDefinitionFile(ctx context.Context, req protocol.ImportWorkflowDefinitionFileRequest) (protocol.WorkflowDefinitionRecord, error) {
+	return s.client.ImportWorkflowDefinitionFile(ctx, req)
+}
+
+func (s *Service) ExportWorkflowDefinitionFile(ctx context.Context, req protocol.ExportWorkflowDefinitionFileRequest) error {
+	return s.client.ExportWorkflowDefinitionFile(ctx, req)
+}
+
+func (s *Service) DeleteWorkflowDefinition(ctx context.Context, id string, version int) (protocol.WorkflowDefinitionRecord, error) {
+	return s.client.DeleteWorkflowDefinition(ctx, id, version)
+}
+
 func (s *Service) SetProjectWorkflowDefinition(ctx context.Context, projectID string, req protocol.SetProjectWorkflowDefinitionRequest) (protocol.Project, error) {
 	return s.client.SetProjectWorkflowDefinition(ctx, projectID, req)
+}
+
+func (s *Service) PlanProjectWorkflowMigration(ctx context.Context, projectID string, req protocol.PlanProjectWorkflowMigrationRequest) (protocol.WorkflowMigrationPlan, error) {
+	return s.client.PlanProjectWorkflowMigration(ctx, projectID, req)
 }
 
 func (s *Service) ListPromptTemplates(ctx context.Context) ([]protocol.PromptTemplate, error) {
@@ -429,6 +453,10 @@ func (s *Service) UpdateWorkItem(ctx context.Context, req protocol.UpdateWorkIte
 
 func (s *Service) MoveWorkItem(ctx context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error) {
 	return s.client.MoveWorkItem(ctx, req)
+}
+
+func (s *Service) ListWorkItemWorkflowActions(ctx context.Context, workItemID string) ([]protocol.WorkflowActionAvailability, error) {
+	return s.client.ListWorkItemWorkflowActions(ctx, workItemID)
 }
 
 func (s *Service) AddWorkItemLink(ctx context.Context, req protocol.AddWorkItemLinkRequest) (protocol.WorkItemLink, error) {

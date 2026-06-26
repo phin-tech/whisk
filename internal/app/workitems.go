@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -42,6 +44,35 @@ type ImportWorkflowDefinitionRequest struct {
 	Definition workitem.WorkflowDefinition
 	Source     string
 	SourcePath string
+}
+
+type ValidateWorkflowDefinitionRequest struct {
+	Definition workitem.WorkflowDefinition
+}
+
+type ValidateWorkflowDefinitionFileRequest struct {
+	Path string
+}
+
+type ImportWorkflowDefinitionFileRequest struct {
+	Path string
+}
+
+type ExportWorkflowDefinitionFileRequest struct {
+	ID      string
+	Version int
+	Path    string
+}
+
+type DeleteWorkflowDefinitionRequest struct {
+	ID      string
+	Version int
+}
+
+type PlanProjectWorkflowMigrationRequest struct {
+	ProjectID string
+	ID        string
+	Version   int
 }
 
 type SetProjectWorkflowDefinitionRequest struct {
@@ -354,6 +385,31 @@ func (r *Runtime) ListWorkflowDefinitions(context.Context) ([]workitem.WorkflowD
 	return r.workItems.ListWorkflowDefinitions(), nil
 }
 
+func (r *Runtime) ValidateWorkflowDefinition(_ context.Context, req ValidateWorkflowDefinitionRequest) (workitem.WorkflowValidationReport, error) {
+	return workitem.ValidateWorkflowDefinitionReport(req.Definition), nil
+}
+
+func (r *Runtime) ValidateWorkflowDefinitionFile(_ context.Context, req ValidateWorkflowDefinitionFileRequest) (workitem.WorkflowValidationReport, error) {
+	path := strings.TrimSpace(req.Path)
+	if path == "" {
+		return workitem.WorkflowValidationReport{}, fmt.Errorf("workflow file path required")
+	}
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return workitem.WorkflowValidationReport{}, err
+	}
+	var definition workitem.WorkflowDefinition
+	if err := json.Unmarshal(payload, &definition); err != nil {
+		return workitem.WorkflowValidationReport{
+			Valid: false,
+			Errors: []workitem.WorkflowValidationError{{
+				Message: err.Error(),
+			}},
+		}, nil
+	}
+	return workitem.ValidateWorkflowDefinitionReport(definition), nil
+}
+
 func (r *Runtime) ImportWorkflowDefinition(ctx context.Context, req ImportWorkflowDefinitionRequest) (workitem.WorkflowDefinitionRecord, error) {
 	record, err := r.workItems.ImportWorkflowDefinition(workitem.ImportWorkflowDefinition{
 		Definition: req.Definition,
@@ -371,6 +427,68 @@ func (r *Runtime) ImportWorkflowDefinition(ctx context.Context, req ImportWorkfl
 	return record, nil
 }
 
+func (r *Runtime) ImportWorkflowDefinitionFile(ctx context.Context, req ImportWorkflowDefinitionFileRequest) (workitem.WorkflowDefinitionRecord, error) {
+	path := strings.TrimSpace(req.Path)
+	if path == "" {
+		return workitem.WorkflowDefinitionRecord{}, fmt.Errorf("workflow file path required")
+	}
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return workitem.WorkflowDefinitionRecord{}, err
+	}
+	definition, err := workitem.ParseWorkflowDefinition(payload)
+	if err != nil {
+		return workitem.WorkflowDefinitionRecord{}, err
+	}
+	return r.ImportWorkflowDefinition(ctx, ImportWorkflowDefinitionRequest{
+		Definition: definition,
+		Source:     "file",
+		SourcePath: path,
+	})
+}
+
+func (r *Runtime) ExportWorkflowDefinitionFile(_ context.Context, req ExportWorkflowDefinitionFileRequest) error {
+	path := strings.TrimSpace(req.Path)
+	if path == "" {
+		return fmt.Errorf("workflow file path required")
+	}
+	record, ok := r.workItems.WorkflowDefinition(req.ID, req.Version)
+	if !ok {
+		return fmt.Errorf("workflow definition %s@%d not found", req.ID, req.Version)
+	}
+	payload, err := json.MarshalIndent(record.Definition, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(payload, '\n'), 0o600)
+}
+
+func (r *Runtime) DeleteWorkflowDefinition(ctx context.Context, req DeleteWorkflowDefinitionRequest) (workitem.WorkflowDefinitionRecord, error) {
+	record, err := r.workItems.DeleteWorkflowDefinition(workitem.DeleteWorkflowDefinition{
+		ID:      req.ID,
+		Version: req.Version,
+	})
+	if err != nil {
+		return workitem.WorkflowDefinitionRecord{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkflowDefinitionRecord{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return record, nil
+}
+
+func (r *Runtime) PlanProjectWorkflowMigration(_ context.Context, req PlanProjectWorkflowMigrationRequest) (workitem.WorkflowMigrationPlan, error) {
+	return r.workItems.PlanProjectWorkflowMigration(workitem.PlanProjectWorkflowMigration{
+		ProjectID: req.ProjectID,
+		ID:        req.ID,
+		Version:   req.Version,
+	})
+}
+
 func (r *Runtime) SetProjectWorkflowDefinition(ctx context.Context, req SetProjectWorkflowDefinitionRequest) (workitem.Project, error) {
 	project, err := r.workItems.SetProjectWorkflowDefinition(workitem.SetProjectWorkflowDefinition{
 		ProjectID: req.ProjectID,
@@ -386,6 +504,10 @@ func (r *Runtime) SetProjectWorkflowDefinition(ctx context.Context, req SetProje
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	return project, nil
+}
+
+func (r *Runtime) ListWorkItemWorkflowActions(_ context.Context, workItemID string) ([]workitem.WorkflowActionAvailability, error) {
+	return r.workItems.ListWorkflowActionAvailability(workItemID)
 }
 
 func (r *Runtime) ListPromptTemplates(context.Context) ([]workitem.PromptTemplate, error) {

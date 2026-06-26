@@ -47,48 +47,77 @@ function seedState() {
   const workflowDefinition = {
     id: "plan-execute-review",
     version: 1,
-    stages: ["backlog", "planning", "ready", "execution", "review", "done"],
+    stages: ["backlog", "planning", "ready", "execution", "blocked", "review", "done"],
     actions: [
       {
         id: "start_planning",
         from: ["backlog"],
         to: "planning",
-        requiresHuman: true,
+        createsRun: {
+          phase: "planning",
+          preset: "reader",
+          promptTemplateId: "plan",
+          workingDir: "projectRoot",
+        },
+      },
+      {
+        id: "submit_draft_plan",
+        from: ["planning"],
+        to: "planning",
+        createsArtifact: { kind: "plan", status: "draft" },
       },
       {
         id: "approve_plan",
         from: ["planning"],
         to: "ready",
         requires: [{ kind: "plan", status: "draft" }],
-        createsArtifact: { kind: "plan", status: "approved" },
-        createsGates: ["plan_approval"],
+        updatesArtifact: { kind: "plan", status: "approved" },
         requiresHuman: true,
       },
       {
         id: "start_execution",
         from: ["ready"],
         to: "execution",
+        requires: [{ kind: "plan", status: "approved" }],
         createsRun: {
           phase: "execution",
           preset: "writer",
-          promptTemplateId: "execution",
-          workingDir: "project",
+          promptTemplateId: "implement",
+          workingDir: "worktree",
           autoProvisionWorktree: true,
         },
       },
       {
-        id: "submit_review",
+        id: "complete_execution",
         from: ["execution"],
         to: "review",
-        updatesArtifact: { kind: "implementation", status: "submitted" },
+        completesRun: true,
         createsGates: ["review"],
       },
       {
-        id: "complete",
+        id: "submit_review_feedback",
+        from: ["review"],
+        to: "execution",
+        createsArtifact: { kind: "feedback", status: "approved" },
+        resumesRun: "existing_execution",
+      },
+      {
+        id: "approve_done",
         from: ["review"],
         to: "done",
         requiresPassingBlockingGates: true,
-        completesRun: true,
+        requiresHuman: true,
+      },
+      {
+        id: "report_blocked",
+        from: ["planning", "execution", "review"],
+        to: "blocked",
+        sideStage: true,
+      },
+      {
+        id: "unblock",
+        from: ["blocked"],
+        to: "$previousStage",
       },
     ],
     questions: {
@@ -98,9 +127,23 @@ function seedState() {
       answerClearsAwaitingInputWhenNoOpenQuestionsRemain: true,
     },
     gates: [
-      { id: "plan_approval", phase: "planning", blocking: true },
       { id: "review", phase: "review", blocking: true },
     ],
+  };
+  const leanWorkflowDefinition = {
+    id: "lean-review",
+    version: 1,
+    stages: ["backlog", "ready", "done"],
+    actions: [
+      { id: "ship", from: ["backlog", "ready"], to: "done", requiresHuman: true },
+    ],
+    questions: {
+      enabled: false,
+      moveToBlocked: false,
+      setsRunState: "",
+      answerClearsAwaitingInputWhenNoOpenQuestionsRemain: false,
+    },
+    gates: [],
   };
   const workflow = {
     id: "default",
@@ -114,6 +157,7 @@ function seedState() {
       { id: "planning", name: "Planning", kind: "planning" },
       { id: "ready", name: "Ready", kind: "ready", provisionWorktree: true },
       { id: "execution", name: "Execution", kind: "execution", provisionWorktree: true },
+      { id: "blocked", name: "Blocked", kind: "blocked" },
       { id: "review", name: "Review", kind: "review" },
       { id: "done", name: "Done", kind: "done" },
     ],
@@ -155,6 +199,16 @@ function seedState() {
         sourcePath: "",
         contentHash: "e2e-workflow",
         definition: workflowDefinition,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: leanWorkflowDefinition.id,
+        version: leanWorkflowDefinition.version,
+        source: "file",
+        sourcePath: "/tmp/whisk-e2e/lean-review.json",
+        contentHash: "e2e-lean-workflow",
+        definition: leanWorkflowDefinition,
         createdAt: now,
         updatedAt: now,
       },
@@ -419,6 +473,173 @@ function readyWorkExplanation() {
   };
 }
 
+function workflowDefinitionRecord(id: string, version: number) {
+  return state.workflowDefinitions.find(
+    (candidate) => candidate.id === id && candidate.version === version,
+  );
+}
+
+function workflowTemplateFromDefinition(record: any) {
+  const label = (stage: string) => stage.replace(/_/g, " ").replace(/\b\w/g, (value) => value.toUpperCase());
+  return {
+    id: record.id,
+    templateId: record.id,
+    definitionId: record.id,
+    definitionVersion: record.version,
+    definitionHash: record.contentHash,
+    name: label(record.id),
+    stages: record.definition.stages.map((stage: string) => ({
+      id: stage,
+      name: label(stage),
+      kind: stage,
+      provisionWorktree: stage === "ready" || stage === "execution",
+    })),
+    transitionRules: [],
+  };
+}
+
+function workflowDefinitionForItem(item: WorkItem) {
+  return workflowDefinitionRecord(item.workflowId, item.workflowVersion) ??
+    workflowDefinitionRecord(state.project.workflow.definitionId, state.project.workflow.definitionVersion);
+}
+
+function artifactMatches(itemID: string, requirement: { kind: string; status: string }) {
+  return state.artifacts.some(
+    (artifact: any) =>
+      artifact.workItemId === itemID &&
+      artifact.kind === requirement.kind &&
+      artifact.status === requirement.status,
+  );
+}
+
+function workflowRequirementReason(requirement: { kind: string; status: string }) {
+  if (requirement.kind === "plan" && requirement.status === "draft") return "plan draft required";
+  if (requirement.kind === "plan" && requirement.status === "approved") return "approved plan required";
+  return `${requirement.status} ${requirement.kind} artifact required`;
+}
+
+function workflowActionInputKind(action: any) {
+  if (action.createsRun || action.completesRun) return "run";
+  if (action.createsArtifact) return "artifact";
+  if (action.updatesArtifact) return "artifact_selection";
+  if (action.requiresPassingBlockingGates) return "gate";
+  return "none";
+}
+
+function listWorkItemWorkflowActions(workItemID: string) {
+  const item = state.workItems.find((candidate) => candidate.id === workItemID);
+  if (!item) throw new Error("work item not found");
+  const record = workflowDefinitionForItem(item);
+  if (!record) throw new Error("workflow definition not found");
+
+  return record.definition.actions
+    .filter((action: any) => (action.from ?? []).includes(item.stageId))
+    .map((action: any) => {
+      const missing = (action.requires ?? []).find((requirement: any) => !artifactMatches(item.id, requirement));
+      let enabled = !missing;
+      let reason = missing ? workflowRequirementReason(missing) : "";
+      if (enabled && action.requiresPassingBlockingGates) {
+        const blockingGate = state.gates.find(
+          (gate: any) =>
+            gate.workItemId === item.id &&
+            gate.blocking &&
+            gate.status !== "passed" &&
+            gate.status !== "overridden",
+        );
+        if (blockingGate) {
+          enabled = false;
+          reason = "blocking gates must pass or be overridden";
+        }
+      }
+      return {
+        action: clone(action),
+        enabled,
+        reason,
+        inputKind: workflowActionInputKind(action),
+      };
+    });
+}
+
+function validationReportForDefinition(definition: any) {
+  const errors = [];
+  if (!definition?.id) errors.push({ path: "id", message: "workflow id required" });
+  if (!definition?.version || definition.version <= 0) errors.push({ path: "version", message: "workflow version must be positive" });
+  const stages = new Set(definition?.stages ?? []);
+  for (const [index, action] of (definition?.actions ?? []).entries()) {
+    if (!action.id) errors.push({ path: `actions[${index}].id`, message: "workflow action id required" });
+    for (const [fromIndex, stage] of (action.from ?? []).entries()) {
+      if (!stages.has(stage)) errors.push({ path: `actions[${index}].from[${fromIndex}]`, message: `unknown stage ${stage}` });
+    }
+    if (action.to && !stages.has(action.to) && action.to !== "$previousStage") {
+      errors.push({ path: `actions[${index}].to`, message: `unknown stage ${action.to}` });
+    }
+  }
+  return {
+    valid: errors.length === 0,
+    identity: definition?.id && definition?.version ? `${definition.id}@${definition.version}` : "",
+    errors,
+  };
+}
+
+function workflowDefinitionFromPath(path: string) {
+  const slug = path
+    .split("/")
+    .pop()
+    ?.replace(/\.json$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "imported-workflow";
+  return {
+    id: slug,
+    version: 1,
+    stages: ["backlog", "planning", "ready", "done"],
+    actions: [
+      { id: "start_planning", from: ["backlog"], to: "planning", createsRun: { phase: "planning", preset: "reader", promptTemplateId: "plan", workingDir: "projectRoot" } },
+      { id: "approve_plan", from: ["planning"], to: "ready", requiresHuman: true },
+      { id: "approve_done", from: ["ready"], to: "done", requiresHuman: true },
+    ],
+    questions: {
+      enabled: true,
+      moveToBlocked: false,
+      setsRunState: "awaiting_input",
+      answerClearsAwaitingInputWhenNoOpenQuestionsRemain: true,
+    },
+    gates: [],
+  };
+}
+
+function planWorkflowMigration(req: { id: string; version: number }) {
+  const target = workflowDefinitionRecord(req.id, req.version);
+  if (!target) throw new Error("workflow definition not found");
+  const targetStages = new Set(target.definition.stages);
+  const items = state.workItems.map((item) => {
+    const compatible = targetStages.has(item.stageId);
+    return {
+      workItemId: item.id,
+      number: item.number,
+      title: item.title,
+      currentWorkflowId: item.workflowId,
+      currentWorkflowVersion: item.workflowVersion,
+      currentStageId: item.stageId,
+      targetStageId: compatible ? item.stageId : "",
+      compatible,
+      reason: compatible ? "stage exists in target workflow" : `stage ${item.stageId} not present in target workflow`,
+    };
+  });
+  return {
+    projectId: state.project.id,
+    currentId: state.project.workflow.definitionId,
+    currentVersion: state.project.workflow.definitionVersion,
+    targetId: target.id,
+    targetVersion: target.version,
+    existingItems: items.length,
+    itemsPinnedToCurrentVersion: items.length,
+    compatibleItems: items.filter((item) => item.compatible).length,
+    incompatibleItems: items.filter((item) => !item.compatible).length,
+    items,
+  };
+}
+
 function dispatch(methodName: string, args: unknown[]) {
   const method = methodName.startsWith(methodPrefix) ? methodName.slice(methodPrefix.length) : methodName;
 
@@ -493,6 +714,55 @@ function dispatch(methodName: string, args: unknown[]) {
       return clone(state.projects);
     case "ListWorkflowDefinitions":
       return clone(state.workflowDefinitions);
+    case "ListWorkItemWorkflowActions":
+      return clone(listWorkItemWorkflowActions(args[0] as string));
+    case "ValidateWorkflowDefinition":
+      return validationReportForDefinition((args[0] as any)?.definition);
+    case "ValidateWorkflowDefinitionFile": {
+      const path = String(((args[0] as any)?.path ?? ""));
+      return validationReportForDefinition(workflowDefinitionFromPath(path));
+    }
+    case "ImportWorkflowDefinitionFile": {
+      const path = String(((args[0] as any)?.path ?? ""));
+      const definition = workflowDefinitionFromPath(path);
+      const report = validationReportForDefinition(definition);
+      if (!report.valid) throw new Error(report.errors[0]?.message || "invalid workflow definition");
+      const record = {
+        id: definition.id,
+        version: definition.version,
+        source: "file",
+        sourcePath: path,
+        contentHash: `e2e-${definition.id}`,
+        definition,
+        createdAt: state.now,
+        updatedAt: state.now,
+      };
+      state.workflowDefinitions = [
+        ...state.workflowDefinitions.filter((candidate) => candidate.id !== record.id || candidate.version !== record.version),
+        record,
+      ];
+      return clone(record);
+    }
+    case "ExportWorkflowDefinitionFile":
+      return undefined;
+    case "DeleteWorkflowDefinition": {
+      const id = args[0] as string;
+      const version = args[1] as number;
+      if (state.project.workflow.definitionId === id && state.project.workflow.definitionVersion === version) {
+        throw new Error("workflow definition is active for project");
+      }
+      if (state.workItems.some((item) => item.workflowId === id && item.workflowVersion === version)) {
+        throw new Error("workflow definition is used by work item");
+      }
+      const record = workflowDefinitionRecord(id, version);
+      if (!record) throw new Error("workflow definition not found");
+      state.workflowDefinitions = state.workflowDefinitions.filter(
+        (candidate) => candidate.id !== id || candidate.version !== version,
+      );
+      return clone(record);
+    }
+    case "PlanProjectWorkflowMigration":
+      return planWorkflowMigration(args[1] as { id: string; version: number });
     case "SetProjectWorkflowDefinition": {
       const projectID = args[0] as string;
       const req = args[1] as { id: string; version: number };
@@ -504,12 +774,7 @@ function dispatch(methodName: string, args: unknown[]) {
       }
       state.project = {
         ...state.project,
-        workflow: {
-          ...state.project.workflow,
-          definitionId: definition.id,
-          definitionVersion: definition.version,
-          definitionHash: definition.contentHash,
-        },
+        workflow: workflowTemplateFromDefinition(definition),
       };
       state.projects = state.projects.map((project) => (project.id === state.project.id ? state.project : project));
       return clone(state.project);
@@ -562,6 +827,82 @@ function dispatch(methodName: string, args: unknown[]) {
         item.id === req.id || item.id === req.workItemId ? { ...item, stageId: req.stageId } : item,
       );
       return clone(state.workItems.find((item) => item.id === req.id || item.id === req.workItemId));
+    }
+    case "StartPlanning": {
+      const req = args[0] as any;
+      const item = state.workItems.find((candidate) => candidate.id === req.workItemId);
+      if (!item) throw new Error("work item not found");
+      const run = {
+        id: `run_${state.runs.length + 1}`,
+        workItemId: item.id,
+        projectId: item.projectId,
+        preset: "reader",
+        promptTemplateId: "plan",
+        promptSnapshot: "Plan the work item",
+        status: "running",
+        createdAt: state.now,
+        updatedAt: state.now,
+        history: [],
+      };
+      state.runs = [run, ...state.runs];
+      state.workItems = state.workItems.map((candidate) =>
+        candidate.id === item.id ? { ...candidate, stageId: "planning", runState: "running" } : candidate,
+      );
+      return clone(run);
+    }
+    case "LaunchExecution":
+    case "StartExecution":
+    case "QueueExecution": {
+      const req = args[0] as any;
+      const item = state.workItems.find((candidate) => candidate.id === req.workItemId);
+      if (!item) throw new Error("work item not found");
+      const status = method === "QueueExecution" ? "queued" : "running";
+      const run = {
+        id: `run_${state.runs.length + 1}`,
+        workItemId: item.id,
+        projectId: item.projectId,
+        preset: "writer",
+        promptTemplateId: "implement",
+        promptSnapshot: "Execute the work item",
+        status,
+        createdAt: state.now,
+        updatedAt: state.now,
+        history: [],
+      };
+      state.runs = [run, ...state.runs];
+      state.workItems = state.workItems.map((candidate) =>
+        candidate.id === item.id ? { ...candidate, stageId: "execution", runState: status } : candidate,
+      );
+      return clone(run);
+    }
+    case "CompleteExecution": {
+      const req = args[0] as any;
+      const item = state.workItems.find((candidate) => candidate.id === req.workItemId);
+      if (!item) throw new Error("work item not found");
+      state.workItems = state.workItems.map((candidate) =>
+        candidate.id === item.id ? { ...candidate, stageId: "review", runState: "idle" } : candidate,
+      );
+      state.gates = [
+        ...state.gates,
+        {
+          id: `gate_${state.gates.length + 1}`,
+          workItemId: item.id,
+          name: "Review",
+          blocking: true,
+          status: "pending",
+          message: "",
+          createdAt: state.now,
+          updatedAt: state.now,
+        },
+      ];
+      return clone(state.workItems.find((candidate) => candidate.id === item.id));
+    }
+    case "ApproveDone": {
+      const req = args[0] as any;
+      state.workItems = state.workItems.map((item) =>
+        item.id === req.workItemId ? { ...item, stageId: "done", runState: "completed" } : item,
+      );
+      return clone(state.workItems.find((item) => item.id === req.workItemId));
     }
     case "AddWorkItemLink": {
       const req = args[0] as any;

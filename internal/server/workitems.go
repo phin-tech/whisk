@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/protocol"
@@ -101,6 +102,23 @@ func (s *HTTPServer) setProjectWorkflowDefinition(w http.ResponseWriter, r *http
 		return
 	}
 	writeJSON(w, http.StatusOK, project)
+}
+
+func (s *HTTPServer) planProjectWorkflowMigration(w http.ResponseWriter, r *http.Request) {
+	var req protocol.PlanProjectWorkflowMigrationRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	plan, err := s.runtime.PlanProjectWorkflowMigration(r.Context(), app.PlanProjectWorkflowMigrationRequest{
+		ProjectID: pathValue(r, "projectID", ""),
+		ID:        req.ID,
+		Version:   req.Version,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, plan)
 }
 
 func (s *HTTPServer) addProjectAttachment(w http.ResponseWriter, r *http.Request) {
@@ -486,6 +504,34 @@ func (s *HTTPServer) listWorkflowDefinitions(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, definitions)
 }
 
+func (s *HTTPServer) validateWorkflowDefinition(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ValidateWorkflowDefinitionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	report, err := s.runtime.ValidateWorkflowDefinition(r.Context(), app.ValidateWorkflowDefinitionRequest{
+		Definition: req.Definition,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *HTTPServer) validateWorkflowDefinitionFile(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ValidateWorkflowDefinitionFileRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	report, err := s.runtime.ValidateWorkflowDefinitionFile(r.Context(), app.ValidateWorkflowDefinitionFileRequest{Path: req.Path})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
 func (s *HTTPServer) importWorkflowDefinition(w http.ResponseWriter, r *http.Request) {
 	var req protocol.ImportWorkflowDefinitionRequest
 	if !decodeJSON(w, r, &req) {
@@ -501,6 +547,52 @@ func (s *HTTPServer) importWorkflowDefinition(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, http.StatusCreated, record)
+}
+
+func (s *HTTPServer) importWorkflowDefinitionFile(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ImportWorkflowDefinitionFileRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	record, err := s.runtime.ImportWorkflowDefinitionFile(r.Context(), app.ImportWorkflowDefinitionFileRequest{Path: req.Path})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, record)
+}
+
+func (s *HTTPServer) exportWorkflowDefinitionFile(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ExportWorkflowDefinitionFileRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.runtime.ExportWorkflowDefinitionFile(r.Context(), app.ExportWorkflowDefinitionFileRequest{
+		ID:      req.ID,
+		Version: req.Version,
+		Path:    req.Path,
+	}); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *HTTPServer) deleteWorkflowDefinition(w http.ResponseWriter, r *http.Request) {
+	version, err := strconv.Atoi(pathValue(r, "version", ""))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	record, err := s.runtime.DeleteWorkflowDefinition(r.Context(), app.DeleteWorkflowDefinitionRequest{
+		ID:      pathValue(r, "workflowID", ""),
+		Version: version,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, record)
 }
 
 func (s *HTTPServer) listPromptTemplates(w http.ResponseWriter, r *http.Request) {
@@ -594,6 +686,15 @@ func (s *HTTPServer) moveWorkItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *HTTPServer) listWorkItemWorkflowActions(w http.ResponseWriter, r *http.Request) {
+	actions, err := s.runtime.ListWorkItemWorkflowActions(r.Context(), pathValue(r, "workItemID", ""))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, actions)
 }
 
 func (s *HTTPServer) listWorkItemLinks(w http.ResponseWriter, r *http.Request) {

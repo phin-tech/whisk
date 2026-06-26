@@ -457,6 +457,11 @@ type SetAgentHookLogSettingsRequest struct {
 type Project = workitem.Project
 type WorkflowDefinition = workitem.WorkflowDefinition
 type WorkflowDefinitionRecord = workitem.WorkflowDefinitionRecord
+type WorkflowActionAvailability = workitem.WorkflowActionAvailability
+type WorkflowValidationReport = workitem.WorkflowValidationReport
+type WorkflowValidationError = workitem.WorkflowValidationError
+type WorkflowMigrationPlan = workitem.WorkflowMigrationPlan
+type WorkflowMigrationItem = workitem.WorkflowMigrationItem
 type WorkflowTemplate = workitem.WorkflowTemplate
 type PromptTemplate = workitem.PromptTemplate
 type WorkItem = workitem.WorkItem
@@ -539,6 +544,29 @@ type ImportWorkflowDefinitionRequest struct {
 	Definition WorkflowDefinition `json:"definition"`
 	Source     string             `json:"source,omitempty"`
 	SourcePath string             `json:"sourcePath,omitempty"`
+}
+
+type ValidateWorkflowDefinitionRequest struct {
+	Definition WorkflowDefinition `json:"definition"`
+}
+
+type ValidateWorkflowDefinitionFileRequest struct {
+	Path string `json:"path"`
+}
+
+type ImportWorkflowDefinitionFileRequest struct {
+	Path string `json:"path"`
+}
+
+type ExportWorkflowDefinitionFileRequest struct {
+	ID      string `json:"id"`
+	Version int    `json:"version"`
+	Path    string `json:"path"`
+}
+
+type PlanProjectWorkflowMigrationRequest struct {
+	ID      string `json:"id"`
+	Version int    `json:"version"`
 }
 
 type SetProjectWorkflowDefinitionRequest struct {

@@ -232,6 +232,29 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || len(definitions) != 1 || definitions[0].ID != workitem.WorkflowPlanExecuteReview {
 		t.Fatalf("list workflow definitions = %#v, err = %v", definitions, err)
 	}
+	validation, err := service.ValidateWorkflowDefinition(ctx, protocol.ValidateWorkflowDefinitionRequest{Definition: workitem.DefaultWorkflowDefinition()})
+	if err != nil || !validation.Valid || fake.validateWorkflowDefinitionReq.Definition.ID != workitem.WorkflowPlanExecuteReview {
+		t.Fatalf("validate workflow definition = %#v, req = %#v, err = %v", validation, fake.validateWorkflowDefinitionReq, err)
+	}
+	fileValidation, err := service.ValidateWorkflowDefinitionFile(ctx, protocol.ValidateWorkflowDefinitionFileRequest{Path: "/tmp/workflow.json"})
+	if err != nil || !fileValidation.Valid || fake.validateWorkflowFileReq.Path != "/tmp/workflow.json" {
+		t.Fatalf("validate workflow file = %#v, req = %#v, err = %v", fileValidation, fake.validateWorkflowFileReq, err)
+	}
+	importedFile, err := service.ImportWorkflowDefinitionFile(ctx, protocol.ImportWorkflowDefinitionFileRequest{Path: "/tmp/workflow.json"})
+	if err != nil || importedFile.SourcePath != "/tmp/workflow.json" || fake.importWorkflowFileReq.Path != "/tmp/workflow.json" {
+		t.Fatalf("import workflow file = %#v, req = %#v, err = %v", importedFile, fake.importWorkflowFileReq, err)
+	}
+	if err := service.ExportWorkflowDefinitionFile(ctx, protocol.ExportWorkflowDefinitionFileRequest{ID: "file", Version: 1, Path: "/tmp/out.json"}); err != nil || fake.exportWorkflowFileReq.Path != "/tmp/out.json" {
+		t.Fatalf("export workflow file req = %#v, err = %v", fake.exportWorkflowFileReq, err)
+	}
+	deletedWorkflow, err := service.DeleteWorkflowDefinition(ctx, "file", 1)
+	if err != nil || deletedWorkflow.ID != "file" || fake.deleteWorkflowDefinitionID != "file" || fake.deleteWorkflowDefinitionVersion != 1 {
+		t.Fatalf("delete workflow definition = %#v, id = %q, version = %d, err = %v", deletedWorkflow, fake.deleteWorkflowDefinitionID, fake.deleteWorkflowDefinitionVersion, err)
+	}
+	migrationPlan, err := service.PlanProjectWorkflowMigration(ctx, "proj_01", protocol.PlanProjectWorkflowMigrationRequest{ID: workitem.WorkflowPlanExecuteReview, Version: 1})
+	if err != nil || migrationPlan.ProjectID != "proj_01" || fake.workflowMigrationProjectID != "proj_01" || fake.workflowMigrationReq.ID != workitem.WorkflowPlanExecuteReview {
+		t.Fatalf("workflow migration = %#v, id = %q, req = %#v, err = %v", migrationPlan, fake.workflowMigrationProjectID, fake.workflowMigrationReq, err)
+	}
 	project, err = service.SetProjectWorkflowDefinition(ctx, "proj_01", protocol.SetProjectWorkflowDefinitionRequest{
 		ID:      workitem.WorkflowPlanExecuteReview,
 		Version: 1,
@@ -260,6 +283,10 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	item, err = service.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: "wi_02", StageID: "ready"})
 	if err != nil || item.StageID != "ready" || fake.moveWorkItemReq.StageID != "ready" {
 		t.Fatalf("move work item = %#v, req = %#v, err = %v", item, fake.moveWorkItemReq, err)
+	}
+	workflowActions, err := service.ListWorkItemWorkflowActions(ctx, "wi_02")
+	if err != nil || len(workflowActions) != 1 || fake.listWorkflowActionsWorkItemID != "wi_02" {
+		t.Fatalf("workflow actions = %#v, id = %q, err = %v", workflowActions, fake.listWorkflowActionsWorkItemID, err)
 	}
 	link, err := service.AddWorkItemLink(ctx, protocol.AddWorkItemLinkRequest{
 		SourceWorkItemID: "wi_02",
@@ -674,10 +701,19 @@ type runtimeClientFake struct {
 	updateProjectAttachmentReq      protocol.UpdateProjectAttachmentRequest
 	deleteProjectAttachmentID       string
 	projectContextID                string
+	validateWorkflowDefinitionReq   protocol.ValidateWorkflowDefinitionRequest
+	validateWorkflowFileReq         protocol.ValidateWorkflowDefinitionFileRequest
 	importWorkflowDefinitionReq     protocol.ImportWorkflowDefinitionRequest
+	importWorkflowFileReq           protocol.ImportWorkflowDefinitionFileRequest
+	exportWorkflowFileReq           protocol.ExportWorkflowDefinitionFileRequest
+	deleteWorkflowDefinitionID      string
+	deleteWorkflowDefinitionVersion int
+	workflowMigrationProjectID      string
+	workflowMigrationReq            protocol.PlanProjectWorkflowMigrationRequest
 	setProjectWorkflowDefinitionID  string
 	setProjectWorkflowDefinitionReq protocol.SetProjectWorkflowDefinitionRequest
 	listWorkItemsProjectID          string
+	listWorkflowActionsWorkItemID   string
 	createWorkItemReq               protocol.CreateWorkItemRequest
 	updateWorkItemReq               protocol.UpdateWorkItemRequest
 	moveWorkItemReq                 protocol.MoveWorkItemRequest
@@ -939,6 +975,16 @@ func (f *runtimeClientFake) ListWorkflowDefinitions(context.Context) ([]protocol
 	return f.workflowDefinitions, nil
 }
 
+func (f *runtimeClientFake) ValidateWorkflowDefinition(_ context.Context, req protocol.ValidateWorkflowDefinitionRequest) (protocol.WorkflowValidationReport, error) {
+	f.validateWorkflowDefinitionReq = req
+	return protocol.WorkflowValidationReport{Valid: req.Definition.ID != ""}, nil
+}
+
+func (f *runtimeClientFake) ValidateWorkflowDefinitionFile(_ context.Context, req protocol.ValidateWorkflowDefinitionFileRequest) (protocol.WorkflowValidationReport, error) {
+	f.validateWorkflowFileReq = req
+	return protocol.WorkflowValidationReport{Valid: req.Path != ""}, nil
+}
+
 func (f *runtimeClientFake) ImportWorkflowDefinition(_ context.Context, req protocol.ImportWorkflowDefinitionRequest) (protocol.WorkflowDefinitionRecord, error) {
 	f.importWorkflowDefinitionReq = req
 	record := protocol.WorkflowDefinitionRecord{
@@ -951,6 +997,22 @@ func (f *runtimeClientFake) ImportWorkflowDefinition(_ context.Context, req prot
 	return record, nil
 }
 
+func (f *runtimeClientFake) ImportWorkflowDefinitionFile(_ context.Context, req protocol.ImportWorkflowDefinitionFileRequest) (protocol.WorkflowDefinitionRecord, error) {
+	f.importWorkflowFileReq = req
+	return protocol.WorkflowDefinitionRecord{ID: "file", Version: 1, SourcePath: req.Path}, nil
+}
+
+func (f *runtimeClientFake) ExportWorkflowDefinitionFile(_ context.Context, req protocol.ExportWorkflowDefinitionFileRequest) error {
+	f.exportWorkflowFileReq = req
+	return nil
+}
+
+func (f *runtimeClientFake) DeleteWorkflowDefinition(_ context.Context, id string, version int) (protocol.WorkflowDefinitionRecord, error) {
+	f.deleteWorkflowDefinitionID = id
+	f.deleteWorkflowDefinitionVersion = version
+	return protocol.WorkflowDefinitionRecord{ID: id, Version: version}, nil
+}
+
 func (f *runtimeClientFake) SetProjectWorkflowDefinition(_ context.Context, projectID string, req protocol.SetProjectWorkflowDefinitionRequest) (protocol.Project, error) {
 	f.setProjectWorkflowDefinitionID = projectID
 	f.setProjectWorkflowDefinitionReq = req
@@ -958,6 +1020,12 @@ func (f *runtimeClientFake) SetProjectWorkflowDefinition(_ context.Context, proj
 	project.Workflow.DefinitionID = req.ID
 	project.Workflow.DefinitionVersion = req.Version
 	return project, nil
+}
+
+func (f *runtimeClientFake) PlanProjectWorkflowMigration(_ context.Context, projectID string, req protocol.PlanProjectWorkflowMigrationRequest) (protocol.WorkflowMigrationPlan, error) {
+	f.workflowMigrationProjectID = projectID
+	f.workflowMigrationReq = req
+	return protocol.WorkflowMigrationPlan{ProjectID: projectID, TargetID: req.ID, TargetVersion: req.Version}, nil
 }
 
 func (f *runtimeClientFake) ListAgentProfiles(context.Context) ([]protocol.AgentProfile, error) {
@@ -993,6 +1061,15 @@ func (f *runtimeClientFake) UpdateWorkItem(_ context.Context, req protocol.Updat
 func (f *runtimeClientFake) MoveWorkItem(_ context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error) {
 	f.moveWorkItemReq = req
 	return protocol.WorkItem{ID: req.ID, StageID: req.StageID}, nil
+}
+
+func (f *runtimeClientFake) ListWorkItemWorkflowActions(_ context.Context, workItemID string) ([]protocol.WorkflowActionAvailability, error) {
+	f.listWorkflowActionsWorkItemID = workItemID
+	return []protocol.WorkflowActionAvailability{{
+		Action:    workitem.WorkflowActionDefinition{ID: workitem.WorkflowActionStartPlanning},
+		Enabled:   true,
+		InputKind: workitem.WorkflowActionInputRun,
+	}}, nil
 }
 
 func (f *runtimeClientFake) AddWorkItemLink(_ context.Context, req protocol.AddWorkItemLinkRequest) (protocol.WorkItemLink, error) {

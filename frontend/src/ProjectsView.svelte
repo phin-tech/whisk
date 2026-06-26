@@ -19,6 +19,8 @@
     Project,
     ProjectAttachmentTemplate,
     ProjectDetail,
+    WorkflowMigrationPlan,
+    WorkflowValidationReport,
     WorkflowDefinitionRecord,
     WorkItem,
     WorkItemRun,
@@ -54,6 +56,8 @@
   export let activeProjectId = "";
   export let detail: ProjectDetail | null = null;
   export let workflowDefinitions: WorkflowDefinitionRecord[] = [];
+  export let workflowMigrationPlan: WorkflowMigrationPlan | null = null;
+  export let workflowValidationReport: WorkflowValidationReport | null = null;
   export let artifacts: Artifact[] = [];
   export let gateReports: GateReport[] = [];
   export let loading = false;
@@ -66,6 +70,15 @@
     id: string,
     version: number,
   ) => void;
+  export let onPlanProjectWorkflowMigration: (
+    projectId: string,
+    id: string,
+    version: number,
+  ) => void;
+  export let onValidateWorkflowFile: (path: string) => void;
+  export let onImportWorkflowFile: (path: string) => void;
+  export let onExportWorkflowFile: (id: string, version: number, path: string) => void;
+  export let onDeleteWorkflowDefinition: (id: string, version: number) => void;
   export let onDeleteProject: (projectId: string) => void;
   export let onNewSession: (projectId: string) => void;
   export let onOpenSession: (sessionId: string) => void;
@@ -399,6 +412,8 @@
             project={visibleDetail.project}
             {counts}
             workflowDefinitions={workflowDefinitions}
+            {workflowMigrationPlan}
+            {workflowValidationReport}
             {recentSessions}
             {recentWorkItems}
             {recentRuns}
@@ -406,6 +421,11 @@
             {loading}
             onSelectTab={selectTab}
             onSetWorkflowDefinition={(id, version) => onSetProjectWorkflowDefinition(visibleDetail.project.id, id, version)}
+            onPlanWorkflowMigration={(id, version) => onPlanProjectWorkflowMigration(visibleDetail.project.id, id, version)}
+            {onValidateWorkflowFile}
+            {onImportWorkflowFile}
+            {onExportWorkflowFile}
+            {onDeleteWorkflowDefinition}
             onNewSession={() => onNewSession(visibleDetail.project.id)}
             {onOpenSession}
             {onOpenWorkItem}

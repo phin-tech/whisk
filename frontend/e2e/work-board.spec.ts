@@ -58,7 +58,7 @@ test("opens WorkItemDetail property popovers backed by local menu primitives", a
   await expect(dialog).toBeVisible();
 
   await properties.getByRole("button", { name: "More actions" }).click();
-  await expect(page.getByRole("menu").getByText("Start planning")).toBeVisible();
+  await expect(page.getByRole("menu").getByText("Start Execution")).toBeVisible();
   await page.keyboard.press("Escape");
 
   await properties.getByRole("button", { name: "Ready" }).click();
@@ -67,6 +67,25 @@ test("opens WorkItemDetail property popovers backed by local menu primitives", a
 
   await properties.getByRole("button", { name: "Default agent" }).click();
   await expect(page.getByRole("menu").getByText("Interactive shell")).toBeVisible();
+});
+
+test("runs a daemon-provided workflow action from the detail menu", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Work" }).click();
+  await page.getByRole("button", { name: /Capture app launch smoke/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Work item editor" });
+  await expect(dialog).toBeVisible();
+
+  await dialog.locator("aside").getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: /Start Planning/ }).click();
+
+  await expect(dialog.getByRole("button", { name: "Planning", exact: true })).toBeVisible();
+  const calls = await page.evaluate(() =>
+    window.__WHISK_E2E__.calls().filter((call) => call.method.endsWith(".StartPlanning")),
+  );
+  expect(calls).toHaveLength(1);
+  expect(calls[0].args[0]).toMatchObject({ workItemId: "wi_backlog" });
 });
 
 test("captures WorkBoard and detail screenshots", async ({ page }, testInfo) => {

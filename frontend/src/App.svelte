@@ -27,8 +27,11 @@
     WorkItem,
     WorkItemLink,
     WorkItemRun,
+    WorkflowActionAvailability,
     WorkflowDefinitionRecord,
     WorkflowEvent,
+    WorkflowMigrationPlan,
+    WorkflowValidationReport,
     ReadyWorkExplanation,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
@@ -54,6 +57,8 @@
     DeleteProject,
     DeleteProjectAttachment,
     DeleteWorkItem,
+    DeleteWorkflowDefinition,
+    ExportWorkflowDefinitionFile,
     CheckAgentHookIntegration,
     AgentHookLogStatus as LoadAgentHookLogStatus,
     ApplyOnboarding,
@@ -76,6 +81,7 @@
     ListStatusEvents,
     ListWorkItemLinks,
     ListWorkItemRuns,
+    ListWorkItemWorkflowActions,
     ListWorkflowDefinitions,
     ListWorkItems,
     ListWorkflowEvents,
@@ -90,6 +96,7 @@
     Output,
     OpenAgentHookLog,
     PTYTraceEnabled,
+    PlanProjectWorkflowMigration,
     QueueExecution,
     ReadyWork,
     RemoveAgentHookIntegration,
@@ -112,6 +119,8 @@
     UpdateProject,
     UpdateProjectAttachment,
     UpdateWorkItem,
+    ImportWorkflowDefinitionFile,
+    ValidateWorkflowDefinitionFile,
     WritePTY,
     ListPlugins,
     OnboardingStatus as LoadOnboardingStatus,
@@ -175,6 +184,9 @@
   let questions: Question[] = [];
   let gateReports: GateReport[] = [];
   let workflowDefinitions: WorkflowDefinitionRecord[] = [];
+  let workflowActionsByItem: Record<string, WorkflowActionAvailability[]> = {};
+  let workflowMigrationPlan: WorkflowMigrationPlan | null = null;
+  let workflowValidationReport: WorkflowValidationReport | null = null;
   let workflowEvents: WorkflowEvent[] = [];
   let statusEvents: StatusEvent[] = [];
   let agentBridgeApprovals: AgentBridgeApproval[] = [];
@@ -532,9 +544,21 @@
   async function refreshWorkItems() {
     if (!activeProjectId) {
       workItems = [];
+      workflowActionsByItem = {};
       return;
     }
     workItems = await ListWorkItems(activeProjectId);
+  }
+
+  async function refreshWorkItemWorkflowActions() {
+    if (!workItems.length) {
+      workflowActionsByItem = {};
+      return;
+    }
+    const entries = await Promise.all(
+      workItems.map(async (item) => [item.id, await ListWorkItemWorkflowActions(item.id)] as const),
+    );
+    workflowActionsByItem = Object.fromEntries(entries);
   }
 
   async function refreshWorkItemLinks() {
@@ -577,6 +601,7 @@
 
   async function refreshWorkState() {
     await refreshWorkItems();
+    await refreshWorkItemWorkflowActions();
     await refreshWorkItemLinks();
     await refreshWorkItemRuns();
     await refreshWorkflowRecords();
@@ -1271,10 +1296,87 @@
     error = "";
     loadingWork = true;
     try {
-      await SetProjectWorkflowDefinition(projectId, { id, version });
+      const updatedProject = await SetProjectWorkflowDefinition(projectId, { id, version });
+      workflowMigrationPlan = null;
       await refreshProjects();
+      projects = projects.map((project) => (project.id === updatedProject.id ? updatedProject : project));
+      if (projectDetail?.project.id === updatedProject.id) {
+        projectDetail = { ...projectDetail, project: updatedProject };
+      }
     } catch (err) {
       error = `Set project workflow failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function planProjectWorkflowMigration(projectId: string, id: string, version: number) {
+    if (!projectId || !id || version <= 0) return;
+    error = "";
+    loadingWork = true;
+    try {
+      workflowMigrationPlan = await PlanProjectWorkflowMigration(projectId, { id, version });
+    } catch (err) {
+      error = `Plan workflow migration failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function validateWorkflowFile(path: string) {
+    const trimmed = path.trim();
+    if (!trimmed) return;
+    error = "";
+    loadingWork = true;
+    try {
+      workflowValidationReport = await ValidateWorkflowDefinitionFile({ path: trimmed });
+    } catch (err) {
+      error = `Validate workflow file failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function importWorkflowFile(path: string) {
+    const trimmed = path.trim();
+    if (!trimmed) return;
+    error = "";
+    loadingWork = true;
+    try {
+      await ImportWorkflowDefinitionFile({ path: trimmed });
+      workflowValidationReport = null;
+      await refreshWorkflowDefinitions();
+    } catch (err) {
+      error = `Import workflow file failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function exportWorkflowFile(id: string, version: number, path: string) {
+    const trimmed = path.trim();
+    if (!id || version <= 0 || !trimmed) return;
+    error = "";
+    loadingWork = true;
+    try {
+      await ExportWorkflowDefinitionFile({ id, version, path: trimmed });
+    } catch (err) {
+      error = `Export workflow file failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
+  async function deleteWorkflowDefinition(id: string, version: number) {
+    if (!id || version <= 0) return;
+    error = "";
+    loadingWork = true;
+    try {
+      await DeleteWorkflowDefinition(id, version);
+      workflowMigrationPlan = null;
+      await refreshWorkflowDefinitions();
+    } catch (err) {
+      error = `Delete workflow definition failed: ${backendError(err)}`;
     } finally {
       loadingWork = false;
     }
@@ -2114,6 +2216,9 @@
           {questions}
           {gateReports}
           {workflowDefinitions}
+          {workflowActionsByItem}
+          {workflowMigrationPlan}
+          {workflowValidationReport}
           {workflowEvents}
           {agentProfiles}
           {workFilterQuery}
@@ -2122,6 +2227,11 @@
           pluginAttachmentTemplates={projectAttachmentTemplates}
           onUpdateProject={(projectId, request) => void updateProject(projectId, request)}
           onSetProjectWorkflowDefinition={(projectId, id, version) => void setProjectWorkflowDefinition(projectId, id, version)}
+          onPlanProjectWorkflowMigration={(projectId, id, version) => void planProjectWorkflowMigration(projectId, id, version)}
+          onValidateWorkflowFile={(path) => void validateWorkflowFile(path)}
+          onImportWorkflowFile={(path) => void importWorkflowFile(path)}
+          onExportWorkflowFile={(id, version, path) => void exportWorkflowFile(id, version, path)}
+          onDeleteWorkflowDefinition={(id, version) => void deleteWorkflowDefinition(id, version)}
           onDeleteProject={(projectId) => void deleteProject(projectId)}
           onNewProjectSession={(projectId) => openNewProjectSession(projectId)}
           onOpenSession={(sessionId) => void openSessionById(sessionId)}

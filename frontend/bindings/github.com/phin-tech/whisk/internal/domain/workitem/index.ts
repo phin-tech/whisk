@@ -24,6 +24,7 @@ export {
     WorkItem,
     WorkItemLink,
     WorkItemRun,
+    WorkflowActionAvailability,
     WorkflowActionDefinition,
     WorkflowArtifactEffect,
     WorkflowArtifactRequirement,
@@ -31,9 +32,13 @@ export {
     WorkflowDefinitionRecord,
     WorkflowEvent,
     WorkflowGateDefinition,
+    WorkflowMigrationItem,
+    WorkflowMigrationPlan,
     WorkflowQuestionPolicy,
     WorkflowRunEffect,
     WorkflowStage,
     WorkflowTemplate,
+    WorkflowValidationError,
+    WorkflowValidationReport,
     WorktreeBinding
 } from "./models.js";

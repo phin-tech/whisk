@@ -428,6 +428,42 @@ type SetProjectWorkflowDefinition struct {
 	Now       time.Time
 }
 
+type PlanProjectWorkflowMigration struct {
+	ProjectID string
+	ID        string
+	Version   int
+}
+
+type WorkflowMigrationPlan struct {
+	ProjectID                   string                  `json:"projectId"`
+	CurrentID                   string                  `json:"currentId"`
+	CurrentVersion              int                     `json:"currentVersion"`
+	TargetID                    string                  `json:"targetId"`
+	TargetVersion               int                     `json:"targetVersion"`
+	ExistingItems               int                     `json:"existingItems"`
+	ItemsPinnedToCurrentVersion int                     `json:"itemsPinnedToCurrentVersion"`
+	CompatibleItems             int                     `json:"compatibleItems"`
+	IncompatibleItems           int                     `json:"incompatibleItems"`
+	Items                       []WorkflowMigrationItem `json:"items"`
+}
+
+type WorkflowMigrationItem struct {
+	WorkItemID             string `json:"workItemId"`
+	Number                 int    `json:"number"`
+	Title                  string `json:"title"`
+	CurrentWorkflowID      string `json:"currentWorkflowId"`
+	CurrentWorkflowVersion int    `json:"currentWorkflowVersion"`
+	CurrentStageID         string `json:"currentStageId"`
+	TargetStageID          string `json:"targetStageId,omitempty"`
+	Compatible             bool   `json:"compatible"`
+	Reason                 string `json:"reason,omitempty"`
+}
+
+type DeleteWorkflowDefinition struct {
+	ID      string
+	Version int
+}
+
 type UpdateProject struct {
 	ID                       string
 	Name                     *string
@@ -1124,6 +1160,26 @@ func (s *State) ImportWorkflowDefinition(req ImportWorkflowDefinition) (Workflow
 	return cloneWorkflowDefinitionRecord(record), nil
 }
 
+func (s *State) DeleteWorkflowDefinition(req DeleteWorkflowDefinition) (WorkflowDefinitionRecord, error) {
+	key := workflowDefinitionKey{id: req.ID, version: req.Version}
+	record, ok := s.workflowDefinitions[key]
+	if !ok {
+		return WorkflowDefinitionRecord{}, fmt.Errorf("workflow definition %s@%d not found", req.ID, req.Version)
+	}
+	for _, item := range s.items {
+		if item.WorkflowID == req.ID && item.WorkflowVersion == req.Version {
+			return WorkflowDefinitionRecord{}, fmt.Errorf("workflow definition %s@%d used by work item %s", req.ID, req.Version, item.ID)
+		}
+	}
+	for _, project := range s.projects {
+		if project.Workflow.DefinitionID == req.ID && project.Workflow.DefinitionVersion == req.Version {
+			return WorkflowDefinitionRecord{}, fmt.Errorf("workflow definition %s@%d used by project %s", req.ID, req.Version, project.ID)
+		}
+	}
+	delete(s.workflowDefinitions, key)
+	return cloneWorkflowDefinitionRecord(record), nil
+}
+
 func (s *State) SetProjectWorkflowDefinition(req SetProjectWorkflowDefinition) (Project, error) {
 	project, ok := s.projects[req.ProjectID]
 	if !ok {
@@ -1143,6 +1199,51 @@ func (s *State) SetProjectWorkflowDefinition(req SetProjectWorkflowDefinition) (
 	}
 	s.projects[project.ID] = project
 	return cloneProject(project), nil
+}
+
+func (s *State) PlanProjectWorkflowMigration(req PlanProjectWorkflowMigration) (WorkflowMigrationPlan, error) {
+	project, ok := s.projects[req.ProjectID]
+	if !ok {
+		return WorkflowMigrationPlan{}, fmt.Errorf("project %s not found", req.ProjectID)
+	}
+	target, ok := s.workflowDefinitions[workflowDefinitionKey{id: req.ID, version: req.Version}]
+	if !ok {
+		return WorkflowMigrationPlan{}, fmt.Errorf("workflow definition %s@%d not found", req.ID, req.Version)
+	}
+	targetStages := map[string]struct{}{}
+	for _, stage := range target.Definition.Stages {
+		targetStages[stage] = struct{}{}
+	}
+	plan := WorkflowMigrationPlan{
+		ProjectID:      project.ID,
+		CurrentID:      project.Workflow.DefinitionID,
+		CurrentVersion: project.Workflow.DefinitionVersion,
+		TargetID:       target.ID,
+		TargetVersion:  target.Version,
+		Items:          []WorkflowMigrationItem{},
+	}
+	for _, item := range s.ListWorkItems(project.ID) {
+		migrationItem := WorkflowMigrationItem{
+			WorkItemID:             item.ID,
+			Number:                 item.Number,
+			Title:                  item.Title,
+			CurrentWorkflowID:      item.WorkflowID,
+			CurrentWorkflowVersion: item.WorkflowVersion,
+			CurrentStageID:         item.StageID,
+		}
+		if _, ok := targetStages[item.StageID]; ok {
+			migrationItem.Compatible = true
+			migrationItem.TargetStageID = item.StageID
+			plan.CompatibleItems++
+		} else {
+			migrationItem.Reason = fmt.Sprintf("stage %s not present in target workflow", item.StageID)
+			plan.IncompatibleItems++
+		}
+		plan.ExistingItems++
+		plan.ItemsPinnedToCurrentVersion++
+		plan.Items = append(plan.Items, migrationItem)
+	}
+	return plan, nil
 }
 
 func (s *State) ListPromptTemplates() []PromptTemplate {
@@ -1173,6 +1274,43 @@ func (s *State) ListWorkItems(projectID string) []WorkItem {
 		return out[i].ID < out[j].ID
 	})
 	return out
+}
+
+func (s *State) ListWorkflowActionAvailability(workItemID string) ([]WorkflowActionAvailability, error) {
+	item, ok := s.items[workItemID]
+	if !ok {
+		return nil, fmt.Errorf("work item %s not found", workItemID)
+	}
+	definition, err := s.workflowDefinitionForItem(item)
+	if err != nil {
+		return nil, err
+	}
+	out := []WorkflowActionAvailability{}
+	for _, action := range definition.Actions {
+		if !workflowActionCanStartFrom(action, item.StageID) {
+			continue
+		}
+		availability := WorkflowActionAvailability{
+			Action:    cloneWorkflowActionDefinition(action),
+			Enabled:   true,
+			InputKind: workflowActionInputKind(action),
+		}
+		if missing := s.missingArtifactRequirements(item.ID, action.Requires); len(missing) > 0 {
+			availability.Enabled = false
+			availability.Reason = workflowArtifactRequirementReason(missing[0])
+		}
+		if availability.Enabled && action.RequiresPassingBlockingGates {
+			for _, gate := range s.gateReports {
+				if gate.WorkItemID == item.ID && gate.Blocking && gate.Status != GateStatusPassed && gate.Status != GateStatusOverridden {
+					availability.Enabled = false
+					availability.Reason = "blocking gates must pass or be overridden"
+					break
+				}
+			}
+		}
+		out = append(out, availability)
+	}
+	return out, nil
 }
 
 func (s *State) ListWorkItemLinks(workItemID string) []WorkItemLink {
@@ -3164,6 +3302,11 @@ func (s *State) validateGateReport(gate GateReport) error {
 }
 
 func (s *State) hasRequiredArtifacts(workItemID string, requirements []WorkflowArtifactRequirement) bool {
+	return len(s.missingArtifactRequirements(workItemID, requirements)) == 0
+}
+
+func (s *State) missingArtifactRequirements(workItemID string, requirements []WorkflowArtifactRequirement) []WorkflowArtifactRequirement {
+	missing := []WorkflowArtifactRequirement{}
 	for _, requirement := range requirements {
 		found := false
 		for _, artifact := range s.artifacts {
@@ -3173,10 +3316,10 @@ func (s *State) hasRequiredArtifacts(workItemID string, requirements []WorkflowA
 			}
 		}
 		if !found {
-			return false
+			missing = append(missing, requirement)
 		}
 	}
-	return true
+	return missing
 }
 
 func (s *State) hasOpenQuestionForRun(runID string) bool {
@@ -3215,6 +3358,40 @@ func (s *State) workflowActionForItem(item WorkItem, id string) (WorkflowActionD
 		return WorkflowActionDefinition{}, fmt.Errorf("workflow action %s not found", id)
 	}
 	return action, nil
+}
+
+func workflowActionCanStartFrom(action WorkflowActionDefinition, stageID string) bool {
+	for _, stage := range action.From {
+		if stage == stageID {
+			return true
+		}
+	}
+	return false
+}
+
+func workflowActionInputKind(action WorkflowActionDefinition) string {
+	switch {
+	case action.CreatesRun != nil || action.CompletesRun:
+		return WorkflowActionInputRun
+	case action.CreatesArtifact != nil:
+		return WorkflowActionInputArtifact
+	case action.UpdatesArtifact != nil:
+		return WorkflowActionInputArtifactSelection
+	case action.RequiresPassingBlockingGates:
+		return WorkflowActionInputGate
+	default:
+		return WorkflowActionInputNone
+	}
+}
+
+func workflowArtifactRequirementReason(requirement WorkflowArtifactRequirement) string {
+	if requirement.Kind == ArtifactKindPlan && requirement.Status == ArtifactStatusDraft {
+		return "plan draft required"
+	}
+	if requirement.Kind == ArtifactKindPlan && requirement.Status == ArtifactStatusApproved {
+		return "approved plan required"
+	}
+	return fmt.Sprintf("%s %s artifact required", requirement.Status, requirement.Kind)
 }
 
 func (s *State) backfillProjectWorkflowDefinition(project Project) Project {
@@ -3565,24 +3742,28 @@ func cloneWorkflowDefinition(definition WorkflowDefinition) WorkflowDefinition {
 func cloneWorkflowActionDefinitions(actions []WorkflowActionDefinition) []WorkflowActionDefinition {
 	out := make([]WorkflowActionDefinition, 0, len(actions))
 	for _, action := range actions {
-		action.From = append([]string(nil), action.From...)
-		action.Requires = append([]WorkflowArtifactRequirement(nil), action.Requires...)
-		if action.CreatesArtifact != nil {
-			effect := *action.CreatesArtifact
-			action.CreatesArtifact = &effect
-		}
-		if action.UpdatesArtifact != nil {
-			effect := *action.UpdatesArtifact
-			action.UpdatesArtifact = &effect
-		}
-		if action.CreatesRun != nil {
-			effect := *action.CreatesRun
-			action.CreatesRun = &effect
-		}
-		action.CreatesGates = append([]string(nil), action.CreatesGates...)
-		out = append(out, action)
+		out = append(out, cloneWorkflowActionDefinition(action))
 	}
 	return out
+}
+
+func cloneWorkflowActionDefinition(action WorkflowActionDefinition) WorkflowActionDefinition {
+	action.From = append([]string(nil), action.From...)
+	action.Requires = append([]WorkflowArtifactRequirement(nil), action.Requires...)
+	if action.CreatesArtifact != nil {
+		effect := *action.CreatesArtifact
+		action.CreatesArtifact = &effect
+	}
+	if action.UpdatesArtifact != nil {
+		effect := *action.UpdatesArtifact
+		action.UpdatesArtifact = &effect
+	}
+	if action.CreatesRun != nil {
+		effect := *action.CreatesRun
+		action.CreatesRun = &effect
+	}
+	action.CreatesGates = append([]string(nil), action.CreatesGates...)
+	return action
 }
 
 func cloneWorkItem(item WorkItem) WorkItem {

@@ -720,6 +720,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{projectID}/workflow-migration-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["planProjectWorkflowMigration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/prompt-templates": {
         parameters: {
             query?: never;
@@ -1474,6 +1490,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/work-items/{workItemID}/workflow-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listWorkItemWorkflowActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workflow-definitions": {
         parameters: {
             query?: never;
@@ -1490,6 +1522,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workflow-definitions/export-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["exportWorkflowDefinitionFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workflow-definitions/import": {
         parameters: {
             query?: never;
@@ -1500,6 +1548,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["importWorkflowDefinition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-definitions/import-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["importWorkflowDefinitionFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-definitions/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validateWorkflowDefinition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-definitions/validate-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validateWorkflowDefinitionFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-definitions/{workflowID}/{version}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["deleteWorkflowDefinition"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1967,6 +2079,12 @@ export interface components {
         ErrorResponse: {
             error: string;
         };
+        ExportWorkflowDefinitionFileRequest: {
+            id: string;
+            path: string;
+            /** Format: int64 */
+            version: number;
+        };
         GateConfig: {
             blocking: boolean;
             command?: string;
@@ -2007,6 +2125,9 @@ export interface components {
             stageId?: string;
             type: string;
             worktreePath?: string;
+        };
+        ImportWorkflowDefinitionFileRequest: {
+            path: string;
         };
         ImportWorkflowDefinitionRequest: {
             definition: components["schemas"]["WorkflowDefinition"];
@@ -2141,6 +2262,11 @@ export interface components {
             id: string;
             windowId: string;
             workingDir: string;
+        };
+        PlanProjectWorkflowMigrationRequest: {
+            id: string;
+            /** Format: int64 */
+            version: number;
         };
         PluginResolver: {
             kinds?: string[];
@@ -2549,6 +2675,12 @@ export interface components {
             id: string;
             title?: string | null;
         };
+        ValidateWorkflowDefinitionFileRequest: {
+            path: string;
+        };
+        ValidateWorkflowDefinitionRequest: {
+            definition: components["schemas"]["WorkflowDefinition"];
+        };
         WorkItem: {
             attachments: components["schemas"]["Attachment"][] | null;
             bodyMarkdown: string;
@@ -2603,6 +2735,12 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             workItemId: string;
+        };
+        WorkflowActionAvailability: {
+            action: components["schemas"]["WorkflowActionDefinition"];
+            enabled: boolean;
+            inputKind: string;
+            reason?: string;
         };
         WorkflowActionDefinition: {
             completesRun?: boolean;
@@ -2665,6 +2803,37 @@ export interface components {
             id: string;
             phase: string;
         };
+        WorkflowMigrationItem: {
+            compatible: boolean;
+            currentStageId: string;
+            currentWorkflowId: string;
+            /** Format: int64 */
+            currentWorkflowVersion: number;
+            /** Format: int64 */
+            number: number;
+            reason?: string;
+            targetStageId?: string;
+            title: string;
+            workItemId: string;
+        };
+        WorkflowMigrationPlan: {
+            /** Format: int64 */
+            compatibleItems: number;
+            currentId: string;
+            /** Format: int64 */
+            currentVersion: number;
+            /** Format: int64 */
+            existingItems: number;
+            /** Format: int64 */
+            incompatibleItems: number;
+            items: components["schemas"]["WorkflowMigrationItem"][] | null;
+            /** Format: int64 */
+            itemsPinnedToCurrentVersion: number;
+            projectId: string;
+            targetId: string;
+            /** Format: int64 */
+            targetVersion: number;
+        };
         WorkflowQuestionPolicy: {
             answerClearsAwaitingInputWhenNoOpenQuestionsRemain: boolean;
             enabled: boolean;
@@ -2698,6 +2867,15 @@ export interface components {
             transitionRules: components["schemas"]["TransitionRule"][] | null;
             /** Format: date-time */
             updatedAt: string;
+        };
+        WorkflowValidationError: {
+            message: string;
+            path?: string;
+        };
+        WorkflowValidationReport: {
+            errors?: components["schemas"]["WorkflowValidationError"][];
+            identity?: string;
+            valid: boolean;
         };
         Worktree: {
             branch: string;
@@ -4162,6 +4340,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    planProjectWorkflowMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanProjectWorkflowMigrationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowMigrationPlan"];
                 };
             };
             /** @description error */
@@ -5951,6 +6164,37 @@ export interface operations {
             };
         };
     };
+    listWorkItemWorkflowActions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowActionAvailability"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listWorkflowDefinitions: {
         parameters: {
             query?: never;
@@ -5980,6 +6224,37 @@ export interface operations {
             };
         };
     };
+    exportWorkflowDefinitionFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportWorkflowDefinitionFileRequest"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     importWorkflowDefinition: {
         parameters: {
             query?: never;
@@ -5995,6 +6270,137 @@ export interface operations {
         responses: {
             /** @description success */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionRecord"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    importWorkflowDefinitionFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportWorkflowDefinitionFileRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionRecord"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    validateWorkflowDefinition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateWorkflowDefinitionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowValidationReport"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    validateWorkflowDefinitionFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateWorkflowDefinitionFileRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowValidationReport"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteWorkflowDefinition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflowID: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -16,8 +16,11 @@
     WorkItem,
     WorkItemLink,
     WorkItemRun,
+    WorkflowActionAvailability,
     WorkflowDefinitionRecord,
     WorkflowEvent,
+    WorkflowMigrationPlan,
+    WorkflowValidationReport,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import LayoutView from "./LayoutView.svelte";
   import type { MainView } from "./navigation";
@@ -47,6 +50,9 @@
   export let questions: Question[] = [];
   export let gateReports: GateReport[] = [];
   export let workflowDefinitions: WorkflowDefinitionRecord[] = [];
+  export let workflowActionsByItem: Record<string, WorkflowActionAvailability[]> = {};
+  export let workflowMigrationPlan: WorkflowMigrationPlan | null = null;
+  export let workflowValidationReport: WorkflowValidationReport | null = null;
   export let workflowEvents: WorkflowEvent[] = [];
   export let agentProfiles: AgentProfile[] = [];
   export let workFilterQuery = "";
@@ -62,6 +68,15 @@
     id: string,
     version: number,
   ) => void;
+  export let onPlanProjectWorkflowMigration: (
+    projectId: string,
+    id: string,
+    version: number,
+  ) => void;
+  export let onValidateWorkflowFile: (path: string) => void;
+  export let onImportWorkflowFile: (path: string) => void;
+  export let onExportWorkflowFile: (id: string, version: number, path: string) => void;
+  export let onDeleteWorkflowDefinition: (id: string, version: number) => void;
   export let onDeleteProject: (projectId: string) => void;
   export let onNewProjectSession: (projectId: string) => void;
   export let onOpenSession: (sessionId: string) => void;
@@ -170,11 +185,18 @@
   <ProjectsView
     {projects}
     {workflowDefinitions}
+    {workflowMigrationPlan}
+    {workflowValidationReport}
     detail={projectDetail}
     {activeProjectId}
     loading={loadingWork || loadingSession}
     {onUpdateProject}
     {onSetProjectWorkflowDefinition}
+    {onPlanProjectWorkflowMigration}
+    {onValidateWorkflowFile}
+    {onImportWorkflowFile}
+    {onExportWorkflowFile}
+    {onDeleteWorkflowDefinition}
     {onDeleteProject}
     onNewSession={onNewProjectSession}
     {onOpenSession}
@@ -204,6 +226,7 @@
     {questions}
     {gateReports}
     workflowDefinitions={workflowDefinitions}
+    {workflowActionsByItem}
     {workflowEvents}
     {agentProfiles}
     {activeProjectId}

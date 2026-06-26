@@ -265,6 +265,62 @@ func TestHTTPClientDrivesWorkflowDefinitionAPIToProjectSelection(t *testing.T) {
 	if item.WorkflowID != imported.ID || item.WorkflowVersion != imported.Version {
 		t.Fatalf("item workflow stamp = %#v", item)
 	}
+
+	actions, err := daemon.ListWorkItemWorkflowActions(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("list workflow actions: %v", err)
+	}
+	if got := clientActionByID(actions, workitem.WorkflowActionStartPlanning); got == nil || !got.Enabled {
+		t.Fatalf("start planning availability = %#v", got)
+	}
+
+	validation := workitem.DefaultWorkflowDefinition()
+	validation.ID = ""
+	report, err := daemon.ValidateWorkflowDefinition(ctx, protocol.ValidateWorkflowDefinitionRequest{Definition: validation})
+	if err != nil {
+		t.Fatalf("validate workflow definition: %v", err)
+	}
+	if report.Valid || len(report.Errors) == 0 {
+		t.Fatalf("validation report = %#v", report)
+	}
+
+	plan, err := daemon.PlanProjectWorkflowMigration(ctx, project.ID, protocol.PlanProjectWorkflowMigrationRequest{
+		ID:      imported.ID,
+		Version: imported.Version,
+	})
+	if err != nil {
+		t.Fatalf("migration plan: %v", err)
+	}
+	if plan.ProjectID != project.ID || plan.TargetID != imported.ID || plan.ExistingItems != 1 {
+		t.Fatalf("migration plan = %#v", plan)
+	}
+
+	scratch := workitem.WorkflowDefinition{
+		ID:      "scratch",
+		Version: 1,
+		Stages:  []string{workitem.StageBacklog, workitem.StageDone},
+		Actions: []workitem.WorkflowActionDefinition{{ID: "finish", From: []string{workitem.StageBacklog}, To: workitem.StageDone}},
+	}
+	scratchRecord, err := daemon.ImportWorkflowDefinition(ctx, protocol.ImportWorkflowDefinitionRequest{Definition: scratch})
+	if err != nil {
+		t.Fatalf("import scratch definition: %v", err)
+	}
+	deleted, err := daemon.DeleteWorkflowDefinition(ctx, scratchRecord.ID, scratchRecord.Version)
+	if err != nil {
+		t.Fatalf("delete scratch definition: %v", err)
+	}
+	if deleted.ID != scratchRecord.ID || deleted.Version != scratchRecord.Version {
+		t.Fatalf("deleted scratch = %#v", deleted)
+	}
+}
+
+func clientActionByID(actions []protocol.WorkflowActionAvailability, id string) *protocol.WorkflowActionAvailability {
+	for i := range actions {
+		if actions[i].Action.ID == id {
+			return &actions[i]
+		}
+	}
+	return nil
 }
 
 func TestHTTPClientDrivesDaemonWorkItemLinkAndReadyAPI(t *testing.T) {

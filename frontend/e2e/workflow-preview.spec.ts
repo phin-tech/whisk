@@ -10,9 +10,9 @@ test("opens the project workflow preview DAG", async ({ page }) => {
 
   const dialog = page.getByRole("dialog", { name: "Workflow preview" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText("6 stages")).toBeVisible();
-  await expect(dialog.getByText("5 actions")).toBeVisible();
-  await expect(dialog.getByText("2 gates")).toBeVisible();
+  await expect(dialog.getByText("7 stages")).toBeVisible();
+  await expect(dialog.getByText("9 actions")).toBeVisible();
+  await expect(dialog.getByText("1 gates")).toBeVisible();
   await expect(dialog.locator(".workflow-preview-node", { hasText: "backlog" })).toBeVisible();
   await expect(dialog.locator(".workflow-preview-node", { hasText: "done" })).toBeVisible();
   await expect(dialog.locator(".svelte-flow__edge-label", { hasText: "start_planning" })).toBeVisible();
@@ -20,17 +20,19 @@ test("opens the project workflow preview DAG", async ({ page }) => {
   await expect(dialog.locator(".svelte-flow")).toBeVisible();
   await expect(dialog.getByText("Stage config")).toBeVisible();
   await expect(dialog.getByText("Legend")).toBeVisible();
-  await expect(dialog.locator("pre")).toContainText('"stageId": "backlog"');
+  await expect(dialog.locator("dt", { hasText: "stageId" })).toBeVisible();
+  await expect(dialog.locator("dt", { hasText: "incomingActions" })).toBeVisible();
 
   await dialog.locator(".workflow-preview-node", { hasText: "planning" }).click();
-  await expect(dialog.locator("pre")).toContainText('"stageId": "planning"');
-  await expect(dialog.locator("pre")).toContainText('"gateId": "plan_approval"');
+  await expect(dialog.getByText("submit_draft_plan, approve_plan, report_blocked")).toBeVisible();
 
   await dialog.locator(".workflow-preview-edge").first().click();
   await expect(dialog.getByText("Action config")).toBeVisible();
-  await expect(dialog.locator("pre")).toContainText('"actionId": "start_planning"');
+  await expect(dialog.locator("dt", { hasText: "actionId" })).toBeVisible();
+  await expect(dialog.locator("dd").filter({ hasText: /^start_planning$/ })).toBeVisible();
 
-  await dialog.getByRole("button", { name: "plan_approval" }).click();
+  await dialog.getByRole("button", { name: "review", exact: true }).click();
   await expect(dialog.getByText("Gate config")).toBeVisible();
-  await expect(dialog.locator("pre")).toContainText('"gateId": "plan_approval"');
+  await expect(dialog.locator("dt", { hasText: "gateId" })).toBeVisible();
+  await expect(dialog.locator("dd").filter({ hasText: /^review$/ }).first()).toBeVisible();
 });

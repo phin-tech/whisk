@@ -995,6 +995,40 @@ export class WorkItemRun {
     }
 }
 
+export class WorkflowActionAvailability {
+    "action": WorkflowActionDefinition;
+    "enabled": boolean;
+    "reason"?: string;
+    "inputKind": string;
+
+    /** Creates a new WorkflowActionAvailability instance. */
+    constructor($$source: Partial<WorkflowActionAvailability> = {}) {
+        if (!("action" in $$source)) {
+            this["action"] = (new WorkflowActionDefinition());
+        }
+        if (!("enabled" in $$source)) {
+            this["enabled"] = false;
+        }
+        if (!("inputKind" in $$source)) {
+            this["inputKind"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowActionAvailability instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowActionAvailability {
+        const $$createField0_0 = $$createType29;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("action" in $$parsedSource) {
+            $$parsedSource["action"] = $$createField0_0($$parsedSource["action"]);
+        }
+        return new WorkflowActionAvailability($$parsedSource as Partial<WorkflowActionAvailability>);
+    }
+}
+
 export class WorkflowActionDefinition {
     "id": string;
     "from": string[];
@@ -1030,10 +1064,10 @@ export class WorkflowActionDefinition {
      */
     static createFrom($$source: any = {}): WorkflowActionDefinition {
         const $$createField1_0 = $$createType20;
-        const $$createField3_0 = $$createType30;
-        const $$createField4_0 = $$createType32;
-        const $$createField5_0 = $$createType32;
-        const $$createField6_0 = $$createType34;
+        const $$createField3_0 = $$createType31;
+        const $$createField4_0 = $$createType33;
+        const $$createField5_0 = $$createType33;
+        const $$createField6_0 = $$createType35;
         const $$createField8_0 = $$createType20;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("from" in $$parsedSource) {
@@ -1281,6 +1315,114 @@ export class WorkflowGateDefinition {
     }
 }
 
+export class WorkflowMigrationItem {
+    "workItemId": string;
+    "number": number;
+    "title": string;
+    "currentWorkflowId": string;
+    "currentWorkflowVersion": number;
+    "currentStageId": string;
+    "targetStageId"?: string;
+    "compatible": boolean;
+    "reason"?: string;
+
+    /** Creates a new WorkflowMigrationItem instance. */
+    constructor($$source: Partial<WorkflowMigrationItem> = {}) {
+        if (!("workItemId" in $$source)) {
+            this["workItemId"] = "";
+        }
+        if (!("number" in $$source)) {
+            this["number"] = 0;
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("currentWorkflowId" in $$source)) {
+            this["currentWorkflowId"] = "";
+        }
+        if (!("currentWorkflowVersion" in $$source)) {
+            this["currentWorkflowVersion"] = 0;
+        }
+        if (!("currentStageId" in $$source)) {
+            this["currentStageId"] = "";
+        }
+        if (!("compatible" in $$source)) {
+            this["compatible"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowMigrationItem instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowMigrationItem {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkflowMigrationItem($$parsedSource as Partial<WorkflowMigrationItem>);
+    }
+}
+
+export class WorkflowMigrationPlan {
+    "projectId": string;
+    "currentId": string;
+    "currentVersion": number;
+    "targetId": string;
+    "targetVersion": number;
+    "existingItems": number;
+    "itemsPinnedToCurrentVersion": number;
+    "compatibleItems": number;
+    "incompatibleItems": number;
+    "items": WorkflowMigrationItem[];
+
+    /** Creates a new WorkflowMigrationPlan instance. */
+    constructor($$source: Partial<WorkflowMigrationPlan> = {}) {
+        if (!("projectId" in $$source)) {
+            this["projectId"] = "";
+        }
+        if (!("currentId" in $$source)) {
+            this["currentId"] = "";
+        }
+        if (!("currentVersion" in $$source)) {
+            this["currentVersion"] = 0;
+        }
+        if (!("targetId" in $$source)) {
+            this["targetId"] = "";
+        }
+        if (!("targetVersion" in $$source)) {
+            this["targetVersion"] = 0;
+        }
+        if (!("existingItems" in $$source)) {
+            this["existingItems"] = 0;
+        }
+        if (!("itemsPinnedToCurrentVersion" in $$source)) {
+            this["itemsPinnedToCurrentVersion"] = 0;
+        }
+        if (!("compatibleItems" in $$source)) {
+            this["compatibleItems"] = 0;
+        }
+        if (!("incompatibleItems" in $$source)) {
+            this["incompatibleItems"] = 0;
+        }
+        if (!("items" in $$source)) {
+            this["items"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowMigrationPlan instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowMigrationPlan {
+        const $$createField9_0 = $$createType42;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("items" in $$parsedSource) {
+            $$parsedSource["items"] = $$createField9_0($$parsedSource["items"]);
+        }
+        return new WorkflowMigrationPlan($$parsedSource as Partial<WorkflowMigrationPlan>);
+    }
+}
+
 export class WorkflowQuestionPolicy {
     "enabled": boolean;
     "moveToBlocked": boolean;
@@ -1434,6 +1576,55 @@ export class WorkflowTemplate {
     }
 }
 
+export class WorkflowValidationError {
+    "path"?: string;
+    "message": string;
+
+    /** Creates a new WorkflowValidationError instance. */
+    constructor($$source: Partial<WorkflowValidationError> = {}) {
+        if (!("message" in $$source)) {
+            this["message"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowValidationError instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowValidationError {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkflowValidationError($$parsedSource as Partial<WorkflowValidationError>);
+    }
+}
+
+export class WorkflowValidationReport {
+    "valid": boolean;
+    "identity"?: string;
+    "errors"?: WorkflowValidationError[];
+
+    /** Creates a new WorkflowValidationReport instance. */
+    constructor($$source: Partial<WorkflowValidationReport> = {}) {
+        if (!("valid" in $$source)) {
+            this["valid"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowValidationReport instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowValidationReport {
+        const $$createField2_0 = $$createType44;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("errors" in $$parsedSource) {
+            $$parsedSource["errors"] = $$createField2_0($$parsedSource["errors"]);
+        }
+        return new WorkflowValidationReport($$parsedSource as Partial<WorkflowValidationReport>);
+    }
+}
+
 export class WorktreeBinding {
     "branch": string;
     "base": string;
@@ -1497,15 +1688,19 @@ const $$createType25 = HistoryEvent.createFrom;
 const $$createType26 = $Create.Array($$createType25);
 const $$createType27 = RunEvent.createFrom;
 const $$createType28 = $Create.Array($$createType27);
-const $$createType29 = WorkflowArtifactRequirement.createFrom;
-const $$createType30 = $Create.Array($$createType29);
-const $$createType31 = WorkflowArtifactEffect.createFrom;
-const $$createType32 = $Create.Nullable($$createType31);
-const $$createType33 = WorkflowRunEffect.createFrom;
-const $$createType34 = $Create.Nullable($$createType33);
-const $$createType35 = WorkflowActionDefinition.createFrom;
-const $$createType36 = $Create.Array($$createType35);
+const $$createType29 = WorkflowActionDefinition.createFrom;
+const $$createType30 = WorkflowArtifactRequirement.createFrom;
+const $$createType31 = $Create.Array($$createType30);
+const $$createType32 = WorkflowArtifactEffect.createFrom;
+const $$createType33 = $Create.Nullable($$createType32);
+const $$createType34 = WorkflowRunEffect.createFrom;
+const $$createType35 = $Create.Nullable($$createType34);
+const $$createType36 = $Create.Array($$createType29);
 const $$createType37 = WorkflowQuestionPolicy.createFrom;
 const $$createType38 = WorkflowGateDefinition.createFrom;
 const $$createType39 = $Create.Array($$createType38);
 const $$createType40 = WorkflowDefinition.createFrom;
+const $$createType41 = WorkflowMigrationItem.createFrom;
+const $$createType42 = $Create.Array($$createType41);
+const $$createType43 = WorkflowValidationError.createFrom;
+const $$createType44 = $Create.Array($$createType43);

@@ -24,6 +24,7 @@
     WorkItem,
     WorkItemLink,
     WorkItemRun,
+    WorkflowActionAvailability,
     WorkflowEvent,
     ReadyWorkExplanation,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
@@ -57,6 +58,7 @@
   export let artifacts: Artifact[] = [];
   export let questions: Question[] = [];
   export let gateReports: GateReport[] = [];
+  export let workflowActions: WorkflowActionAvailability[] = [];
   export let workflowEvents: WorkflowEvent[] = [];
   export let loading = false;
 
@@ -77,7 +79,6 @@
   export let onStartPlanning: (workItemId: string) => void;
   export let onSubmitPlan: (request: { workItemId: string; runId: string; title: string; body: string }) => void;
   export let onApprovePlan: (workItemId: string, artifactId: string) => void;
-  export let onQueueExecution: (workItemId: string) => void;
   export let onLaunchExecution: (workItemId: string, agentProfileId?: string) => void;
   export let onSetPhaseAgent: (projectId: string, preset: string, agentProfileId: string) => void;
   export let onSetInteractiveAgentShell: (projectId: string, enabled: boolean) => void;
@@ -172,9 +173,6 @@
 
   $: nextStep = computeNextStep(item, detailCurrentRun, detailLatestRun, approvedPlan, latestDraftPlan);
 
-  $: canExecuteActions =
-    item.stageId === "ready" && Boolean(approvedPlan) && !hasActiveRun(detailCurrentRun);
-
   function timestamp(value: unknown) {
     if (!value) return 0;
     if (value instanceof Date) return value.getTime();
@@ -208,10 +206,6 @@
 
   function canOpenRunTerminal(run: WorkItemRun | null) {
     return Boolean(run?.sessionId || run?.ptyId);
-  }
-
-  function hasActiveRun(run: WorkItemRun | null) {
-    return run?.status === "queued" || run?.status === "running" || run?.status === "awaiting_input";
   }
 
   function stageLabel(stageId: string) {
@@ -322,6 +316,71 @@
     if (loading || !detailLatestRun) return;
     openMenu = "";
     onCompleteExecution({ workItemId: item.id, runId: detailLatestRun?.id ?? "", message: "ready for review" });
+  }
+
+  function workflowActionLabel(actionId: string) {
+    return actionId
+      .split("_")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
+  function workflowActionEffect(availability: WorkflowActionAvailability) {
+    const action = availability.action;
+    const parts = [];
+    if (action.to) parts.push(`to ${stageLabel(action.to)}`);
+    if (action.createsRun?.preset) parts.push(`run ${action.createsRun.preset}`);
+    if (action.createsArtifact) parts.push(`${action.createsArtifact.kind} ${action.createsArtifact.status}`);
+    if (action.updatesArtifact) parts.push(`${action.updatesArtifact.kind} ${action.updatesArtifact.status}`);
+    if ((action.createsGates ?? []).length > 0) parts.push(`${action.createsGates?.length} gate(s)`);
+    if (action.requiresPassingBlockingGates) parts.push("gates required");
+    return parts.join(" · ");
+  }
+
+  function supportedWorkflowAction(actionId: string) {
+    return actionId === "start_planning" ||
+      actionId === "start_execution" ||
+      actionId === "complete_execution" ||
+      actionId === "approve_done";
+  }
+
+  function workflowActionReason(availability: WorkflowActionAvailability) {
+    if (!availability.enabled) return availability.reason || "not available";
+    if (!supportedWorkflowAction(availability.action.id)) {
+      if (availability.inputKind === "artifact" || availability.inputKind === "artifact_selection") return "use the artifact form";
+      if (availability.inputKind === "gate") return "use the gate form";
+      return "not wired in the UI";
+    }
+    if (availability.action.id === "complete_execution" && !detailLatestRun) return "no run";
+    return workflowActionEffect(availability);
+  }
+
+  function canRunWorkflowAction(availability: WorkflowActionAvailability) {
+    return availability.enabled &&
+      supportedWorkflowAction(availability.action.id) &&
+      !(availability.action.id === "complete_execution" && !detailLatestRun);
+  }
+
+  function runWorkflowAction(availability: WorkflowActionAvailability) {
+    if (!canRunWorkflowAction(availability) || loading) return;
+    openMenu = "";
+    switch (availability.action.id) {
+      case "start_planning":
+        onStartPlanning(item.id);
+        break;
+      case "start_execution":
+        onLaunchExecution(item.id, selectedAgentId);
+        break;
+      case "complete_execution":
+        sendToReview();
+        break;
+      case "approve_done":
+        approveDone();
+        break;
+      default:
+        break;
+    }
   }
 
   function setDoneReason(value: string) {
@@ -869,22 +928,35 @@
                   <Ellipsis size={14} />
                 </IconButton>
               {/snippet}
-              <Menu class="min-w-44">
-                <MenuItem disabled={loading} onclick={() => { openMenu = ""; onStartPlanning(item.id); }}>
-                  <ClipboardCheck size={13} /> Start planning
-                </MenuItem>
-                <MenuItem disabled={loading || !canExecuteActions} onclick={() => { openMenu = ""; onQueueExecution(item.id); }}>
-                  <Clock3 size={13} /> Queue execution
-                </MenuItem>
-                <MenuItem disabled={loading || !canExecuteActions} onclick={() => { openMenu = ""; onLaunchExecution(item.id, selectedAgentId); }}>
-                  <Play size={13} /> Launch execution
-                </MenuItem>
-                <MenuItem disabled={loading || !detailLatestRun} onclick={sendToReview}>
-                  <Search size={13} /> Send to review
-                </MenuItem>
-                <MenuItem disabled={loading} onclick={approveDone}>
-                  <ClipboardCheck size={13} /> Mark done
-                </MenuItem>
+              <Menu class="min-w-60">
+                {#each workflowActions as availability (availability.action.id)}
+                  {@const actionId = availability.action.id}
+                  {@const reason = workflowActionReason(availability)}
+                  <MenuItem
+                    disabled={loading || !canRunWorkflowAction(availability)}
+                    title={reason}
+                    onclick={() => runWorkflowAction(availability)}
+                    class="items-start gap-2"
+                  >
+                    {#if actionId === "start_planning" || actionId === "approve_done"}
+                      <ClipboardCheck size={13} class="mt-0.5 shrink-0" />
+                    {:else if actionId === "start_execution"}
+                      <Play size={13} class="mt-0.5 shrink-0" />
+                    {:else if actionId === "complete_execution"}
+                      <Search size={13} class="mt-0.5 shrink-0" />
+                    {:else}
+                      <Clock3 size={13} class="mt-0.5 shrink-0" />
+                    {/if}
+                    <span class="grid min-w-0 gap-0.5">
+                      <span class="truncate">{workflowActionLabel(actionId)}</span>
+                      {#if reason}
+                        <span class="truncate font-normal text-[10px] text-text-muted">{reason}</span>
+                      {/if}
+                    </span>
+                  </MenuItem>
+                {:else}
+                  <div class="px-3 py-2 text-[11px] text-text-muted">No workflow actions.</div>
+                {/each}
                 <div class="my-1 border-t border-hairline"></div>
                 <div class="px-3 py-1.5">
                   <TextField

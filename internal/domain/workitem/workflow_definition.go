@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -21,6 +22,12 @@ const (
 	WorkflowActionApproveDone          = "approve_done"
 	WorkflowActionReportBlocked        = "report_blocked"
 	WorkflowActionUnblock              = "unblock"
+
+	WorkflowActionInputNone              = "none"
+	WorkflowActionInputRun               = "run"
+	WorkflowActionInputArtifact          = "artifact"
+	WorkflowActionInputArtifactSelection = "artifact_selection"
+	WorkflowActionInputGate              = "gate"
 )
 
 //go:embed workflows/plan_execute_review.json
@@ -93,6 +100,24 @@ type WorkflowGateDefinition struct {
 	Blocking bool   `json:"blocking"`
 }
 
+type WorkflowActionAvailability struct {
+	Action    WorkflowActionDefinition `json:"action"`
+	Enabled   bool                     `json:"enabled"`
+	Reason    string                   `json:"reason,omitempty"`
+	InputKind string                   `json:"inputKind"`
+}
+
+type WorkflowValidationReport struct {
+	Valid    bool                      `json:"valid"`
+	Identity string                    `json:"identity,omitempty"`
+	Errors   []WorkflowValidationError `json:"errors,omitempty"`
+}
+
+type WorkflowValidationError struct {
+	Path    string `json:"path,omitempty"`
+	Message string `json:"message"`
+}
+
 func DefaultWorkflowDefinition() WorkflowDefinition {
 	definition, err := ParseWorkflowDefinition(defaultWorkflowJSON)
 	if err != nil {
@@ -150,86 +175,131 @@ func ParseWorkflowDefinition(payload []byte) (WorkflowDefinition, error) {
 }
 
 func ValidateWorkflowDefinition(definition WorkflowDefinition) error {
+	report := ValidateWorkflowDefinitionReport(definition)
+	if report.Valid {
+		return nil
+	}
+	return errors.New(report.Errors[0].Message)
+}
+
+func ValidateWorkflowDefinitionReport(definition WorkflowDefinition) WorkflowValidationReport {
+	report := WorkflowValidationReport{
+		Identity: workflowDefinitionIdentity(definition),
+	}
+	addError := func(path string, format string, args ...any) {
+		report.Errors = append(report.Errors, WorkflowValidationError{
+			Path:    path,
+			Message: fmt.Sprintf(format, args...),
+		})
+	}
 	if definition.ID == "" {
-		return fmt.Errorf("workflow id required")
+		addError("id", "workflow id required")
 	}
 	if definition.Version <= 0 {
-		return fmt.Errorf("workflow version must be positive")
+		addError("version", "workflow version must be positive")
 	}
 	validStages := map[string]struct{}{}
 	if definition.ID == WorkflowPlanExecuteReview {
 		if len(definition.Stages) != len(UniversalStages()) {
-			return fmt.Errorf("workflow stages must match universal stages")
-		}
-		for i, stage := range definition.Stages {
-			if stage != UniversalStages()[i] {
-				return fmt.Errorf("workflow stages must match universal stages")
+			addError("stages", "workflow stages must match universal stages")
+		} else {
+			for i, stage := range definition.Stages {
+				if stage != UniversalStages()[i] {
+					addError("stages", "workflow stages must match universal stages")
+					break
+				}
 			}
 		}
 	}
-	for _, stage := range definition.Stages {
+	for i, stage := range definition.Stages {
 		if stage == "" {
-			return fmt.Errorf("workflow stage id required")
+			addError(fmt.Sprintf("stages[%d]", i), "workflow stage id required")
+			continue
 		}
 		if _, exists := validStages[stage]; exists {
-			return fmt.Errorf("workflow stage %s already exists", stage)
+			addError(fmt.Sprintf("stages[%d]", i), "workflow stage %s already exists", stage)
+			continue
 		}
 		validStages[stage] = struct{}{}
 	}
 	actions := map[string]struct{}{}
-	for _, action := range definition.Actions {
+	for i, action := range definition.Actions {
+		actionPath := fmt.Sprintf("actions[%d]", i)
 		if action.ID == "" {
-			return fmt.Errorf("workflow action id required")
+			addError(actionPath+".id", "workflow action id required")
 		}
 		if _, exists := actions[action.ID]; exists {
-			return fmt.Errorf("workflow action %s already exists", action.ID)
+			addError(actionPath+".id", "workflow action %s already exists", action.ID)
+		} else if action.ID != "" {
+			actions[action.ID] = struct{}{}
 		}
-		actions[action.ID] = struct{}{}
-		for _, stage := range action.From {
+		for j, stage := range action.From {
 			if _, ok := validStages[stage]; !ok {
-				return fmt.Errorf("unknown stage %s", stage)
+				addError(fmt.Sprintf("%s.from[%d]", actionPath, j), "unknown stage %s", stage)
 			}
 		}
 		if action.To != "$previousStage" {
 			if _, ok := validStages[action.To]; !ok {
-				return fmt.Errorf("unknown stage %s", action.To)
+				addError(actionPath+".to", "unknown stage %s", action.To)
 			}
 		}
-		for _, requirement := range action.Requires {
+		for j, requirement := range action.Requires {
 			if err := validateWorkflowArtifact(requirement.Kind, requirement.Status); err != nil {
-				return err
+				addError(fmt.Sprintf("%s.requires[%d]", actionPath, j), "%s", err.Error())
 			}
 		}
 		if action.CreatesArtifact != nil {
 			if err := validateWorkflowArtifact(action.CreatesArtifact.Kind, action.CreatesArtifact.Status); err != nil {
-				return err
+				addError(actionPath+".createsArtifact", "%s", err.Error())
 			}
 		}
 		if action.UpdatesArtifact != nil {
 			if err := validateWorkflowArtifact(action.UpdatesArtifact.Kind, action.UpdatesArtifact.Status); err != nil {
-				return err
+				addError(actionPath+".updatesArtifact", "%s", err.Error())
 			}
 		}
 		if action.CreatesRun != nil {
 			if !validPreset(action.CreatesRun.Preset) {
-				return fmt.Errorf("unsupported run preset %s", action.CreatesRun.Preset)
+				addError(actionPath+".createsRun.preset", "unsupported run preset %s", action.CreatesRun.Preset)
 			}
 			switch action.CreatesRun.PromptTemplateID {
 			case PromptTemplatePlan, PromptTemplateImplement, PromptTemplateReview:
 			default:
-				return fmt.Errorf("unsupported prompt template %s", action.CreatesRun.PromptTemplateID)
+				addError(actionPath+".createsRun.promptTemplateId", "unsupported prompt template %s", action.CreatesRun.PromptTemplateID)
 			}
 		}
 	}
-	for _, gate := range definition.Gates {
+	gates := map[string]struct{}{}
+	for i, gate := range definition.Gates {
+		gatePath := fmt.Sprintf("gates[%d]", i)
 		if gate.ID == "" {
-			return fmt.Errorf("workflow gate id required")
+			addError(gatePath+".id", "workflow gate id required")
+		}
+		if _, exists := gates[gate.ID]; exists {
+			addError(gatePath+".id", "workflow gate %s already exists", gate.ID)
+		} else if gate.ID != "" {
+			gates[gate.ID] = struct{}{}
 		}
 		if _, ok := validStages[gate.Phase]; !ok {
-			return fmt.Errorf("unknown stage %s", gate.Phase)
+			addError(gatePath+".phase", "unknown stage %s", gate.Phase)
 		}
 	}
-	return nil
+	for i, action := range definition.Actions {
+		for j, gateID := range action.CreatesGates {
+			if _, ok := gates[gateID]; !ok {
+				addError(fmt.Sprintf("actions[%d].createsGates[%d]", i, j), "workflow gate %s not found", gateID)
+			}
+		}
+	}
+	report.Valid = len(report.Errors) == 0
+	return report
+}
+
+func workflowDefinitionIdentity(definition WorkflowDefinition) string {
+	if definition.ID == "" || definition.Version <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s@%d", definition.ID, definition.Version)
 }
 
 func UniversalStages() []string {

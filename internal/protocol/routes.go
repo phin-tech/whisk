@@ -35,6 +35,7 @@ var (
 	apiForwardList              = []HTTPForward(nil)
 	apiProjectList              = []Project(nil)
 	apiWorkflowDefinitionList   = []WorkflowDefinitionRecord(nil)
+	apiWorkflowActionList       = []WorkflowActionAvailability(nil)
 	apiWorkflowTemplateList     = []WorkflowTemplate(nil)
 	apiPromptList               = []PromptTemplate(nil)
 	apiAgentProfileList         = []AgentProfile(nil)
@@ -124,12 +125,18 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/projects/{projectID}/delete", OperationID: "deleteProject", Tag: "workitems", Request: DeleteProjectRequest{}, Response: Project{}},
 	{Method: "GET", Path: "/v1/projects/{projectID}/detail", OperationID: "getProjectDetail", Tag: "workitems", Response: ProjectDetail{}},
 	{Method: "POST", Path: "/v1/projects/{projectID}/workflow-definition", OperationID: "setProjectWorkflowDefinition", Tag: "workitems", Request: SetProjectWorkflowDefinitionRequest{}, Response: Project{}},
+	{Method: "POST", Path: "/v1/projects/{projectID}/workflow-migration-plan", OperationID: "planProjectWorkflowMigration", Tag: "workitems", Request: PlanProjectWorkflowMigrationRequest{}, Response: WorkflowMigrationPlan{}},
 	{Method: "POST", Path: "/v1/projects/{projectID}/attachments", OperationID: "addProjectAttachment", Tag: "workitems", Request: AddProjectAttachmentRequest{}, Response: Project{}, Status: 201},
 	{Method: "POST", Path: "/v1/project-attachments/{attachmentID}/update", OperationID: "updateProjectAttachment", Tag: "workitems", Request: UpdateProjectAttachmentRequest{}, Response: Project{}},
 	{Method: "POST", Path: "/v1/project-attachments/{attachmentID}/delete", OperationID: "deleteProjectAttachment", Tag: "workitems", Request: DeleteProjectAttachmentRequest{}, Response: Project{}},
 	{Method: "GET", Path: "/v1/projects/{projectID}/context", OperationID: "getProjectContext", Tag: "workitems", Response: ProjectContext{}},
 	{Method: "GET", Path: "/v1/workflow-definitions", OperationID: "listWorkflowDefinitions", Tag: "workitems", Response: apiWorkflowDefinitionList},
+	{Method: "POST", Path: "/v1/workflow-definitions/validate", OperationID: "validateWorkflowDefinition", Tag: "workitems", Request: ValidateWorkflowDefinitionRequest{}, Response: WorkflowValidationReport{}},
+	{Method: "POST", Path: "/v1/workflow-definitions/validate-file", OperationID: "validateWorkflowDefinitionFile", Tag: "workitems", Request: ValidateWorkflowDefinitionFileRequest{}, Response: WorkflowValidationReport{}},
 	{Method: "POST", Path: "/v1/workflow-definitions/import", OperationID: "importWorkflowDefinition", Tag: "workitems", Request: ImportWorkflowDefinitionRequest{}, Response: WorkflowDefinitionRecord{}, Status: 201},
+	{Method: "POST", Path: "/v1/workflow-definitions/import-file", OperationID: "importWorkflowDefinitionFile", Tag: "workitems", Request: ImportWorkflowDefinitionFileRequest{}, Response: WorkflowDefinitionRecord{}, Status: 201},
+	{Method: "POST", Path: "/v1/workflow-definitions/export-file", OperationID: "exportWorkflowDefinitionFile", Tag: "workitems", Request: ExportWorkflowDefinitionFileRequest{}, Status: 204},
+	{Method: "POST", Path: "/v1/workflow-definitions/{workflowID}/{version}/delete", OperationID: "deleteWorkflowDefinition", Tag: "workitems", Response: WorkflowDefinitionRecord{}},
 	{Method: "GET", Path: "/v1/workflow-templates", OperationID: "listWorkflowTemplates", Tag: "workitems", Response: apiWorkflowTemplateList},
 	{Method: "GET", Path: "/v1/prompt-templates", OperationID: "listPromptTemplates", Tag: "workitems", Response: apiPromptList},
 	{Method: "GET", Path: "/v1/agent-profiles", OperationID: "listAgentProfiles", Tag: "agents", Summary: "List selectable builtin agent profiles", Response: apiAgentProfileList},
@@ -137,6 +144,7 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/work-items", OperationID: "createWorkItem", Tag: "workitems", Request: CreateWorkItemRequest{}, Response: WorkItem{}, Status: 201},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/update", OperationID: "updateWorkItem", Tag: "workitems", Request: UpdateWorkItemRequest{}, Response: WorkItem{}},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/move", OperationID: "moveWorkItem", Tag: "workitems", Request: MoveWorkItemRequest{}, Response: WorkItem{}},
+	{Method: "GET", Path: "/v1/work-items/{workItemID}/workflow-actions", OperationID: "listWorkItemWorkflowActions", Tag: "workitems", Response: apiWorkflowActionList},
 	{Method: "GET", Path: "/v1/work-item-links", OperationID: "listWorkItemLinks", Tag: "workitems", Response: apiWorkItemLinkList, Query: []APIQueryParam{{Name: "workItemId", Type: "string"}}},
 	{Method: "POST", Path: "/v1/work-item-links", OperationID: "addWorkItemLink", Tag: "workitems", Request: AddWorkItemLinkRequest{}, Response: WorkItemLink{}, Status: 201},
 	{Method: "GET", Path: "/v1/ready-work", OperationID: "readyWork", Tag: "workitems", Response: ReadyWorkExplanation{}, Query: []APIQueryParam{{Name: "projectId", Type: "string"}}},

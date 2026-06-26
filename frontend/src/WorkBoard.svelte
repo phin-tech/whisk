@@ -20,6 +20,7 @@
     WorkItem,
     WorkItemLink,
     WorkItemRun,
+    WorkflowActionAvailability,
     WorkflowDefinitionRecord,
     WorkflowEvent,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
@@ -42,6 +43,7 @@
   export let questions: Question[] = [];
   export let gateReports: GateReport[] = [];
   export let workflowDefinitions: WorkflowDefinitionRecord[] = [];
+  export let workflowActionsByItem: Record<string, WorkflowActionAvailability[]> = {};
   export let workflowEvents: WorkflowEvent[] = [];
   export let agentProfiles: AgentProfile[] = [];
   export let activeProjectId = "";
@@ -463,6 +465,7 @@
     {artifacts}
     {questions}
     {gateReports}
+    workflowActions={workflowActionsByItem[detailItem.id] ?? []}
     {workflowEvents}
     {loading}
     onClose={closeDetail}
@@ -478,7 +481,6 @@
     {onStartPlanning}
     {onSubmitPlan}
     {onApprovePlan}
-    {onQueueExecution}
     {onLaunchExecution}
     {onSetPhaseAgent}
     {onSetInteractiveAgentShell}
