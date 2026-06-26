@@ -334,9 +334,10 @@ func launchPlanningAgentBridge(t *testing.T) (*app.Runtime, string, string) {
 	return runtime, bridgeID, token
 }
 
-func TestRuntimeExitPlanModeHookStopsPlanningRunAtWhiskSubmission(t *testing.T) {
+func TestRuntimeExitPlanModeHookSubmitsDraftPlanForReview(t *testing.T) {
 	runtime, bridgeID, token := launchPlanningAgentBridge(t)
 	ctx := context.Background()
+	planBody := "## Plan\nDo it."
 
 	resp, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
 		BridgeID:  bridgeID,
@@ -344,7 +345,7 @@ func TestRuntimeExitPlanModeHookStopsPlanningRunAtWhiskSubmission(t *testing.T) 
 		Provider:  "claude",
 		EventName: "PreToolUse",
 		ToolName:  "ExitPlanMode",
-		ToolInput: map[string]any{"plan": "## Plan\nDo it."},
+		ToolInput: map[string]any{"plan": planBody},
 	})
 	if err != nil {
 		t.Fatalf("hook: %v", err)
@@ -357,9 +358,39 @@ func TestRuntimeExitPlanModeHookStopsPlanningRunAtWhiskSubmission(t *testing.T) 
 	if hookSpecific["hookEventName"] != "PreToolUse" ||
 		hookSpecific["permissionDecision"] != "deny" ||
 		!strings.Contains(reason, "Whisk planning run") ||
-		!strings.Contains(reason, "workflow submit-plan") ||
+		!strings.Contains(reason, "submitted") ||
+		!strings.Contains(reason, "review") ||
 		!strings.Contains(reason, "Do not") {
 		t.Fatalf("hookSpecificOutput = %#v", hookSpecific)
+	}
+
+	items, err := runtime.ListWorkItems(ctx, "")
+	if err != nil {
+		t.Fatalf("list work items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].StageID != workitem.StagePlanning {
+		t.Fatalf("item stage = %q, want planning", items[0].StageID)
+	}
+	artifacts, err := runtime.ListArtifacts(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("list artifacts: %v", err)
+	}
+	if len(artifacts) != 1 ||
+		artifacts[0].Kind != workitem.ArtifactKindPlan ||
+		artifacts[0].Status != workitem.ArtifactStatusDraft ||
+		artifacts[0].Body != planBody {
+		t.Fatalf("artifacts = %#v", artifacts)
+	}
+	runs, err := runtime.ListWorkItemRuns(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("list runs: %v", err)
+	}
+	run, ok := planningRun(runs)
+	if !ok || artifacts[0].RunID != run.ID {
+		t.Fatalf("artifact = %#v, runs = %#v", artifacts[0], runs)
 	}
 
 	executionRuntime, executionBridgeID, executionToken := launchAgentBridge(t, time.Second)
@@ -376,6 +407,83 @@ func TestRuntimeExitPlanModeHookStopsPlanningRunAtWhiskSubmission(t *testing.T) 
 	}
 	if executionResp.Output != nil {
 		t.Fatalf("execution response = %#v", executionResp.Output)
+	}
+}
+
+func TestRuntimeExitPlanModeHookWithoutPlanDoesNotSubmitDraftPlan(t *testing.T) {
+	runtime, bridgeID, token := launchPlanningAgentBridge(t)
+	ctx := context.Background()
+
+	resp, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+		BridgeID:  bridgeID,
+		Token:     token,
+		Provider:  "claude",
+		EventName: "PreToolUse",
+		ToolName:  "ExitPlanMode",
+		ToolInput: map[string]any{"notes": "done"},
+	})
+	if err != nil {
+		t.Fatalf("hook: %v", err)
+	}
+	hookSpecific, ok := resp.Output["hookSpecificOutput"].(map[string]any)
+	if !ok {
+		t.Fatalf("response = %#v", resp.Output)
+	}
+	reason, _ := hookSpecific["permissionDecisionReason"].(string)
+	if hookSpecific["permissionDecision"] != "deny" ||
+		!strings.Contains(reason, "plan text") ||
+		!strings.Contains(reason, "workflow submit-plan") {
+		t.Fatalf("hookSpecificOutput = %#v", hookSpecific)
+	}
+
+	items, err := runtime.ListWorkItems(ctx, "")
+	if err != nil {
+		t.Fatalf("list work items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	artifacts, err := runtime.ListArtifacts(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("list artifacts: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Fatalf("artifacts = %#v", artifacts)
+	}
+}
+
+func TestRuntimeExitPlanModeHookDoesNotDuplicateSameDraftPlan(t *testing.T) {
+	runtime, bridgeID, token := launchPlanningAgentBridge(t)
+	ctx := context.Background()
+	req := app.AgentBridgeHookRequest{
+		BridgeID:  bridgeID,
+		Token:     token,
+		Provider:  "claude",
+		EventName: "PreToolUse",
+		ToolName:  "ExitPlanMode",
+		ToolInput: map[string]any{"plan": "## Plan\nDo it."},
+	}
+
+	if _, err := runtime.HandleAgentBridgeHook(ctx, req); err != nil {
+		t.Fatalf("first hook: %v", err)
+	}
+	if _, err := runtime.HandleAgentBridgeHook(ctx, req); err != nil {
+		t.Fatalf("second hook: %v", err)
+	}
+
+	items, err := runtime.ListWorkItems(ctx, "")
+	if err != nil {
+		t.Fatalf("list work items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	artifacts, err := runtime.ListArtifacts(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("list artifacts: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("artifacts = %#v", artifacts)
 	}
 }
 
@@ -484,6 +592,15 @@ func TestRuntimeAgentBridgeInterruptedSessionEndDoesNotCompleteExecutionRun(t *t
 func executionRun(runs []workitem.WorkItemRun) (workitem.WorkItemRun, bool) {
 	for _, run := range runs {
 		if run.PromptTemplateID == workitem.PromptTemplateImplement {
+			return run, true
+		}
+	}
+	return workitem.WorkItemRun{}, false
+}
+
+func planningRun(runs []workitem.WorkItemRun) (workitem.WorkItemRun, bool) {
+	for _, run := range runs {
+		if run.PromptTemplateID == workitem.PromptTemplatePlan {
 			return run, true
 		}
 	}

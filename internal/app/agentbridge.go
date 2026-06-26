@@ -78,11 +78,24 @@ func (r *Runtime) HandleAgentBridgeHook(ctx context.Context, req AgentBridgeHook
 		provider = bridge.Provider
 	}
 	if r.shouldStopPlanningExitPlanMode(bridge, req) {
+		hasPlanText := exitPlanModePlanBody(req) != ""
+		submitted, err := r.submitAgentBridgeDraftPlanFromHook(ctx, bridge, req)
+		if err != nil {
+			return AgentBridgeHookResponse{}, err
+		}
+		result := "plan_submission_required"
+		reason := "Whisk planning run: ExitPlanMode did not include plan text. Submit the approved plan to Whisk first with `${WHISK_CLI:-whisk} workflow submit-plan -body '<plan markdown>'`. Do not write files, edit code, run tests, install dependencies, or begin implementation in this planning session."
+		if submitted {
+			result = "draft_plan_submitted"
+			reason = "Whisk planning run: submitted the draft plan to Whisk for review. Do not write files, edit code, run tests, install dependencies, or begin implementation in this planning session."
+		} else if hasPlanText {
+			reason = "Whisk planning run: could not submit the draft plan automatically. Submit the approved plan to Whisk first with `${WHISK_CLI:-whisk} workflow submit-plan -body '<plan markdown>'`. Do not write files, edit code, run tests, install dependencies, or begin implementation in this planning session."
+		}
 		decision := agentbridge.EvaluationDecision{
 			Action: agentbridge.PolicyDeny,
-			Reason: "Whisk planning run: ExitPlanMode approval only approves the plan text. Submit the approved plan to Whisk first with `${WHISK_CLI:-whisk} workflow submit-plan -body '<plan markdown>'`. Do not write files, edit code, run tests, install dependencies, or begin implementation in this planning session.",
+			Reason: reason,
 		}
-		_, _ = r.recordAgentBridgeEvent(ctx, req, bridge, "plan_submission_required")
+		_, _ = r.recordAgentBridgeEvent(ctx, req, bridge, result)
 		output, _ := agentbridge.EvaluationDecisionToProviderOutput(provider, req.EventName, decision)
 		return AgentBridgeHookResponse{Output: output}, nil
 	}
@@ -138,6 +151,63 @@ func (r *Runtime) HandleAgentBridgeHook(ctx context.Context, req AgentBridgeHook
 
 func isAgentPromptHook(req AgentBridgeHookRequest) bool {
 	return req.EventName == "Elicitation" || ((req.EventName == "PreToolUse" || req.EventName == "PermissionRequest") && req.ToolName == "AskUserQuestion")
+}
+
+func (r *Runtime) submitAgentBridgeDraftPlanFromHook(ctx context.Context, bridge agentbridge.Bridge, req AgentBridgeHookRequest) (bool, error) {
+	body := exitPlanModePlanBody(req)
+	if body == "" || strings.TrimSpace(bridge.RunID) == "" {
+		return false, nil
+	}
+	r.mu.Lock()
+	run, runOK := r.workItems.GetRun(bridge.RunID)
+	var item workitem.WorkItem
+	itemOK := false
+	alreadySubmitted := false
+	if runOK {
+		item, itemOK = r.workItems.GetWorkItem(run.WorkItemID)
+		if itemOK {
+			for _, artifact := range r.workItems.ListArtifacts(item.ID) {
+				if artifact.RunID == run.ID &&
+					artifact.Kind == workitem.ArtifactKindPlan &&
+					artifact.Status == workitem.ArtifactStatusDraft &&
+					strings.TrimSpace(artifact.Body) == body {
+					alreadySubmitted = true
+					break
+				}
+			}
+		}
+	}
+	r.mu.Unlock()
+	if !runOK || !itemOK ||
+		run.PromptTemplateID != workitem.PromptTemplatePlan ||
+		run.Status != workitem.RunStateRunning ||
+		item.StageID != workitem.StagePlanning {
+		return false, nil
+	}
+	if alreadySubmitted {
+		return true, nil
+	}
+	if _, err := r.SubmitDraftPlan(ctx, SubmitDraftPlanRequest{
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Body:       body,
+		Actor:      "agent",
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func exitPlanModePlanBody(req AgentBridgeHookRequest) string {
+	if value, _ := req.ToolInput["plan"].(string); strings.TrimSpace(value) != "" {
+		return strings.TrimSpace(value)
+	}
+	if toolInput, _ := req.RawPayload["tool_input"].(map[string]any); toolInput != nil {
+		if value, _ := toolInput["plan"].(string); strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return strings.TrimSpace(rawStringField(req.RawPayload, "plan"))
 }
 
 func (r *Runtime) completeAgentBridgeExecutionFromHook(ctx context.Context, bridge agentbridge.Bridge, req AgentBridgeHookRequest) (bool, error) {

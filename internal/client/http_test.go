@@ -547,7 +547,7 @@ func TestHTTPClientAgentBridgeAndHookLog(t *testing.T) {
 	}
 }
 
-func TestHTTPClientExitPlanModeHookStopsPlanningRunAtWhiskSubmission(t *testing.T) {
+func TestHTTPClientExitPlanModeHookSubmitsDraftPlanForReview(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 	nextID := 0
 	ptyBackend := &clientMemoryPTYBackend{records: map[string]app.PTYRecord{}}
@@ -595,12 +595,13 @@ func TestHTTPClientExitPlanModeHookStopsPlanningRunAtWhiskSubmission(t *testing.
 		t.Fatalf("missing bridge credentials: env = %#v", env)
 	}
 
+	planBody := "## Plan\nDo it."
 	resp, err := daemon.AgentBridgeHook(ctx, bridgeID, protocol.AgentBridgeHookRequest{
 		Token:     token,
 		Provider:  "claude",
 		EventName: "PreToolUse",
 		ToolName:  "ExitPlanMode",
-		ToolInput: map[string]any{"plan": "## Plan\nDo it."},
+		ToolInput: map[string]any{"plan": planBody},
 	})
 	if err != nil {
 		t.Fatalf("agent bridge hook: %v", err)
@@ -612,8 +613,20 @@ func TestHTTPClientExitPlanModeHookStopsPlanningRunAtWhiskSubmission(t *testing.
 	reason, _ := hookSpecific["permissionDecisionReason"].(string)
 	if hookSpecific["permissionDecision"] != "deny" ||
 		!strings.Contains(reason, "Whisk planning run") ||
-		!strings.Contains(reason, "workflow submit-plan") {
+		!strings.Contains(reason, "submitted") ||
+		!strings.Contains(reason, "review") {
 		t.Fatalf("hookSpecificOutput = %#v", hookSpecific)
+	}
+	artifacts, err := daemon.ListArtifacts(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("list artifacts: %v", err)
+	}
+	if len(artifacts) != 1 ||
+		artifacts[0].Kind != workitem.ArtifactKindPlan ||
+		artifacts[0].Status != workitem.ArtifactStatusDraft ||
+		artifacts[0].Body != planBody ||
+		artifacts[0].RunID != run.ID {
+		t.Fatalf("artifacts = %#v", artifacts)
 	}
 }
 

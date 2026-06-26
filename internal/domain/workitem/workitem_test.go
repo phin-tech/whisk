@@ -604,7 +604,7 @@ func TestDeleteProjectCascadesOwnedRecordsOnly(t *testing.T) {
 	}
 }
 
-func TestPlanPromptTellsAgentToSubmitDraftPlan(t *testing.T) {
+func TestPlanPromptTellsAgentToExitPlanModeForDraftPlanReview(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	mustProject(t, state, "proj_01", "One")
@@ -621,13 +621,17 @@ func TestPlanPromptTellsAgentToSubmitDraftPlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start planning: %v", err)
 	}
-	if !strings.Contains(run.PromptSnapshot, "${WHISK_CLI:-whisk} workflow submit-plan") ||
+	if !strings.Contains(run.PromptSnapshot, "call ExitPlanMode with the full plan markdown") ||
+		!strings.Contains(run.PromptSnapshot, "Whisk will submit that plan for review") ||
+		!strings.Contains(run.PromptSnapshot, "deny continuation") ||
+		!strings.Contains(run.PromptSnapshot, "fallback CLI callback") ||
+		!strings.Contains(run.PromptSnapshot, "${WHISK_CLI:-whisk} workflow submit-plan") ||
 		!strings.Contains(run.PromptSnapshot, "-body '<plan markdown>'") ||
 		!strings.Contains(run.PromptSnapshot, "If an external plan review tool opens") ||
 		!strings.Contains(run.PromptSnapshot, "Do not submit drafts to Whisk before external plan approval") ||
 		!strings.Contains(run.PromptSnapshot, "ExitPlanMode approval does not authorize implementation") ||
 		!strings.Contains(run.PromptSnapshot, "Do not write files, edit code, run tests, install dependencies, or begin implementation in this stage") ||
-		!strings.Contains(run.PromptSnapshot, "Do not treat the plan as complete") {
+		!strings.Contains(run.PromptSnapshot, "Do not treat the plan as complete until Whisk confirms it was submitted for review") {
 		t.Fatalf("prompt snapshot = %q", run.PromptSnapshot)
 	}
 }
@@ -665,7 +669,10 @@ func TestSnapshotLoadRefreshesBuiltinPromptTemplates(t *testing.T) {
 	for _, template := range templates {
 		byID[template.ID] = template
 	}
-	if !strings.Contains(byID[PromptTemplatePlan].Body, "${WHISK_CLI:-whisk} workflow submit-plan") ||
+	if !strings.Contains(byID[PromptTemplatePlan].Body, "call ExitPlanMode with the full plan markdown") ||
+		!strings.Contains(byID[PromptTemplatePlan].Body, "Whisk will submit that plan for review") ||
+		!strings.Contains(byID[PromptTemplatePlan].Body, "fallback CLI callback") ||
+		!strings.Contains(byID[PromptTemplatePlan].Body, "${WHISK_CLI:-whisk} workflow submit-plan") ||
 		!strings.Contains(byID[PromptTemplatePlan].Body, "If an external plan review tool opens") ||
 		!strings.Contains(byID[PromptTemplatePlan].Body, "Do not submit drafts to Whisk before external plan approval") ||
 		!strings.Contains(byID[PromptTemplatePlan].Body, "ExitPlanMode approval does not authorize implementation") ||
