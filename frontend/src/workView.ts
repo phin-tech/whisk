@@ -340,7 +340,7 @@ export function deriveWorkItemCardIndicators<T extends WorkItemLike>(
   if (hasApprovedPlan) {
     indicators.push({ id: "plan-approved", label: "Plan approved", tone: "success" });
   } else if (hasDraftPlan) {
-    indicators.push({ id: "plan-draft", label: "Plan ready", tone: "info" });
+    indicators.push({ id: "plan-draft", label: "Review plan", tone: "info" });
   }
 
   if (latestRun?.status === "queued") {

@@ -152,7 +152,7 @@ describe("workView", () => {
       deriveWorkItemCardIndicators(item, {
         artifacts: [{ id: "plan-1", workItemId: "a", kind: "plan", status: "draft" }],
       }),
-    ).toEqual([{ id: "plan-draft", label: "Plan ready", tone: "info" }]);
+    ).toEqual([{ id: "plan-draft", label: "Review plan", tone: "info" }]);
 
     expect(
       deriveWorkItemCardIndicators(
