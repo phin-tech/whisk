@@ -871,6 +871,11 @@ func (r *Runtime) SubmitDraftPlan(ctx context.Context, req SubmitDraftPlanReques
 	if err != nil {
 		return workitem.Artifact{}, err
 	}
+	if err := r.closeDaemonOwnedRunSessions(ctx, req.WorkItemID, req.Actor, runCloseComplete, func(run workitem.WorkItemRun) bool {
+		return run.PromptTemplateID == workitem.PromptTemplatePlan
+	}); err != nil {
+		return workitem.Artifact{}, err
+	}
 	if err := r.persistWorkItems(ctx); err != nil {
 		return workitem.Artifact{}, err
 	}

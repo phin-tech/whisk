@@ -1427,6 +1427,83 @@ func TestRuntimeApprovePlanClosesDaemonLaunchedPlanningSession(t *testing.T) {
 	}
 }
 
+func TestRuntimeSubmitDraftPlanCompletesDaemonLaunchedPlanningRun(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	root := t.TempDir()
+	ptyBackend := newMemoryPTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: &memoryWorkItemStore{},
+		PTYBackend:    ptyBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(ctx) })
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: root})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Draft plan"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	run, err := runtime.StartPlanning(ctx, app.StartPlanningRequest{
+		WorkItemID:     item.ID,
+		Launch:         true,
+		AgentProfileID: "codex",
+		Actor:          "agent",
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+
+	if _, err := runtime.SubmitDraftPlan(ctx, app.SubmitDraftPlanRequest{
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Body:       "Ship the smallest thing.",
+		Actor:      "agent",
+	}); err != nil {
+		t.Fatalf("submit draft plan: %v", err)
+	}
+
+	items, err := runtime.ListWorkItems(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("list work items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].RunState != workitem.RunStateCompleted {
+		t.Fatalf("item run state = %q, want completed", items[0].RunState)
+	}
+	if items[0].StageID != workitem.StagePlanning {
+		t.Fatalf("item stage = %q, want planning", items[0].StageID)
+	}
+	runs, err := runtime.ListWorkItemRuns(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("list runs: %v", err)
+	}
+	if len(runs) != 1 || runs[0].Status != workitem.RunStateCompleted {
+		t.Fatalf("runs = %#v", runs)
+	}
+	sessions, err := runtime.ListSessions(ctx)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("sessions remain = %#v", sessions)
+	}
+	record := ptyBackend.records[run.PTYID]
+	if record.Running {
+		t.Fatalf("pty still running = %#v", record)
+	}
+}
+
 func TestRuntimeApprovePlanDoesNotCloseManuallyBoundPlanningSession(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 	ctx := context.Background()
