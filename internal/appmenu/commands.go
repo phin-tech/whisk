@@ -33,6 +33,7 @@ const (
 	CommandPreviousBookmark    = "bookmark.previous"
 	CommandNextBookmark        = "bookmark.next"
 	CommandLastPrompt          = "bookmark.lastPrompt"
+	CommandJumpToBottom        = "terminal.bottom"
 	selectSessionPrefix        = "select-session-"
 )
 
@@ -164,6 +165,13 @@ func Commands() []Command {
 			Label:    "Jump to Last Prompt",
 			Category: CategoryTerminal,
 			Default:  "CmdOrCtrl+Alt+P",
+			Editable: true,
+		},
+		Command{
+			ID:       CommandJumpToBottom,
+			Label:    "Jump to Bottom",
+			Category: CategoryTerminal,
+			Default:  "CmdOrCtrl+Alt+Down",
 			Editable: true,
 		},
 	)

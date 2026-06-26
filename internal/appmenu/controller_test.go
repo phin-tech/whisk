@@ -57,6 +57,7 @@ func TestControllerBuildIncludesNativeCommandAccelerators(t *testing.T) {
 		"Previous Bookmark":       "Cmd+Option+LEFT",
 		"Next Bookmark":           "Cmd+Option+RIGHT",
 		"Jump to Last Prompt":     "Cmd+Option+P",
+		"Jump to Bottom":          "Cmd+Option+DOWN",
 	}
 	for label, want := range cases {
 		item := menu.FindByLabel(label)

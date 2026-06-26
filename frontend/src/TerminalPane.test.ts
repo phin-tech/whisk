@@ -25,11 +25,23 @@ describe("TerminalPane", () => {
   it("renders bookmark jump controls and scrolls to the replay start after a jump", () => {
     expect(source).toContain("bookmark-plus");
     expect(source).toContain("export let bookmarks");
+    expect(source).toContain("export let bookmarkJumpRequest");
+    expect(source).toContain("export let chunkStartOffsets");
     expect(source).toContain("export let jumpRevision");
     expect(source).toContain("onAddBookmark");
     expect(source).toContain("onBookmark");
+    expect(source).toContain("onBookmarkReplayFallback");
     expect(source).toContain("Add bookmark for");
     expect(source).toContain("scrollToTop");
-    expect(source).toContain('replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, jumpRevision)');
+    expect(source).toContain("registerMarker");
+    expect(source).toContain("scrollToLine");
+    expect(source).toContain("bookmarkMarkerPoints");
+    expect(source).toContain('replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, jumpRevision)');
+  });
+
+  it("scrolls back to the terminal bottom when requested", () => {
+    expect(source).toContain("export let bottomRevision");
+    expect(source).toContain("applyBottomRevision");
+    expect(source).toContain("scrollToBottom");
   });
 });

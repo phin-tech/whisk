@@ -7,11 +7,12 @@
   import CircleStop from "@lucide/svelte/icons/circle-stop";
   import Clipboard from "@lucide/svelte/icons/clipboard";
   import X from "@lucide/svelte/icons/x";
-  import { Terminal } from "@xterm/xterm";
+  import { Terminal, type IMarker } from "@xterm/xterm";
   import "@xterm/xterm/css/xterm.css";
   import type { Pane } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import type { PTYBookmark } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { ResizePTY } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
+  import { bookmarkMarkerPoints, type BookmarkJumpRequest } from "./ptyMarkers";
   import { terminalInputRefreshDelays, terminalInputShouldRefreshOutput } from "./ptyStream";
   import { ptyBookmarkRowsByPty } from "./sessionView";
   import Button from "./ui/Button.svelte";
@@ -19,8 +20,11 @@
 
   export let pane: Pane;
   export let outputChunks: string[] = [];
+  export let chunkStartOffsets: number[] = [];
   export let bookmarks: PTYBookmark[] = [];
+  export let bookmarkJumpRequest: BookmarkJumpRequest | null = null;
   export let jumpRevision = 0;
+  export let bottomRevision = 0;
   export let focused = false;
   export let fontSize = 13;
   export let cursorBlink = true;
@@ -29,6 +33,7 @@
   export let onWriteInput: (ptyId: string, data: string) => Promise<void>;
   export let onAddBookmark: (ptyId: string) => void;
   export let onBookmark: (bookmark: PTYBookmark) => void;
+  export let onBookmarkReplayFallback: (bookmark: PTYBookmark) => void = () => {};
   export let onClose: () => void;
   export let onKillPTY: () => void;
   export let canClose = false;
@@ -44,7 +49,18 @@
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
   let renderedPtyId = "";
   let appliedJumpRevision = 0;
+  let appliedBottomRevision = 0;
+  let appliedBookmarkJumpRevision = 0;
   let scrollToReplayStart = false;
+  let terminalWriting = false;
+  let pendingTerminalOperations: TerminalOperation[] = [];
+  let bookmarkMarkers = new Map<string, IMarker>();
+
+  type TerminalOperation =
+    | { kind: "write"; bytes: Uint8Array }
+    | { kind: "marker"; bookmarkId: string }
+    | { kind: "scroll-top" }
+    | { kind: "scroll-marker"; bookmarkId: string };
 
   $: bookmarkRows = pane.currentPtyId
     ? (ptyBookmarkRowsByPty(bookmarks)[pane.currentPtyId] ?? [])
@@ -113,26 +129,109 @@
     if (pane.currentPtyId) onAddBookmark(pane.currentPtyId);
   }
 
-  function writeBase64Chunk(chunk: string) {
+  function base64Bytes(chunk: string) {
     if (!chunk) return;
     const binary = atob(chunk);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) {
       bytes[i] = binary.charCodeAt(i);
     }
-    terminal.write(bytes);
+    return bytes;
   }
 
-  function replayOutputChunks(nextPtyId: string, chunks: string[]) {
+  function liveMarker(bookmarkId: string) {
+    const marker = bookmarkMarkers.get(bookmarkId);
+    return marker && !marker.isDisposed && marker.line >= 0 ? marker : null;
+  }
+
+  function liveBookmarkMarkerIds() {
+    const ids = new Set<string>();
+    for (const [bookmarkId, marker] of bookmarkMarkers) {
+      if (marker.isDisposed || marker.line < 0) {
+        bookmarkMarkers.delete(bookmarkId);
+      } else {
+        ids.add(bookmarkId);
+      }
+    }
+    return ids;
+  }
+
+  function clearBookmarkMarkers() {
+    for (const marker of bookmarkMarkers.values()) marker.dispose();
+    bookmarkMarkers.clear();
+  }
+
+  function registerBookmarkMarker(bookmarkId: string) {
+    if (!terminal || liveMarker(bookmarkId)) return;
+    const marker = terminal.registerMarker(0);
+    bookmarkMarkers.set(bookmarkId, marker);
+    marker.onDispose(() => {
+      if (bookmarkMarkers.get(bookmarkId) === marker) bookmarkMarkers.delete(bookmarkId);
+    });
+  }
+
+  function enqueueTerminalOperation(operation: TerminalOperation) {
+    pendingTerminalOperations.push(operation);
+    drainTerminalOperations();
+  }
+
+  function drainTerminalOperations() {
+    if (!terminal || terminalWriting) return;
+    const operation = pendingTerminalOperations.shift();
+    if (!operation) return;
+
+    if (operation.kind === "write") {
+      terminalWriting = true;
+      terminal.write(operation.bytes, () => {
+        terminalWriting = false;
+        drainTerminalOperations();
+      });
+      return;
+    }
+    if (operation.kind === "marker") {
+      registerBookmarkMarker(operation.bookmarkId);
+    } else if (operation.kind === "scroll-top") {
+      terminal.scrollToTop();
+    } else {
+      const marker = liveMarker(operation.bookmarkId);
+      if (marker) terminal.scrollToLine(marker.line);
+    }
+    drainTerminalOperations();
+  }
+
+  function enqueueWrite(bytes: Uint8Array) {
+    if (bytes.length === 0) return;
+    enqueueTerminalOperation({ kind: "write", bytes });
+  }
+
+  function writeBase64Chunk(chunk: string, chunkStartOffset: number | undefined) {
+    const bytes = base64Bytes(chunk);
+    if (!bytes) return;
+    const markerPoints = Number.isFinite(chunkStartOffset)
+      ? bookmarkMarkerPoints(bookmarks, liveBookmarkMarkerIds(), chunkStartOffset ?? 0, bytes.length)
+      : [];
+    let cursor = 0;
+    for (const point of markerPoints) {
+      if (point.byteIndex > cursor) enqueueWrite(bytes.subarray(cursor, point.byteIndex));
+      enqueueTerminalOperation({ kind: "marker", bookmarkId: point.bookmarkId });
+      cursor = point.byteIndex;
+    }
+    enqueueWrite(bytes.subarray(cursor));
+  }
+
+  function replayOutputChunks(nextPtyId: string, chunks: string[], starts: number[]) {
     if (!terminal) return;
     if (renderedPtyId !== nextPtyId || chunks.length < writtenChunks) {
+      pendingTerminalOperations = [];
+      terminalWriting = false;
+      clearBookmarkMarkers();
       terminal.reset();
       writtenChunks = 0;
       renderedPtyId = nextPtyId;
     }
     if (chunks.length <= writtenChunks) return;
-    for (const chunk of chunks.slice(writtenChunks)) {
-      writeBase64Chunk(chunk);
+    for (let index = writtenChunks; index < chunks.length; index += 1) {
+      writeBase64Chunk(chunks[index], starts[index]);
     }
     writtenChunks = chunks.length;
   }
@@ -141,18 +240,54 @@
     if (!terminal || appliedJumpRevision === nextJumpRevision) return;
     appliedJumpRevision = nextJumpRevision;
     scrollToReplayStart = true;
+    pendingTerminalOperations = [];
+    terminalWriting = false;
+    clearBookmarkMarkers();
     terminal.reset();
     writtenChunks = 0;
     renderedPtyId = nextPtyId;
   }
 
-  function replayAndMaybeScroll(nextPtyId: string, chunks: string[], nextJumpRevision: number) {
+  function replayAndMaybeScroll(nextPtyId: string, chunks: string[], starts: number[], nextJumpRevision: number) {
     applyJumpRevision(nextPtyId, nextJumpRevision);
-    replayOutputChunks(nextPtyId, chunks);
+    replayOutputChunks(nextPtyId, chunks, starts);
     if (scrollToReplayStart && chunks.length > 0) {
-      terminal.scrollToTop();
+      enqueueTerminalOperation({ kind: "scroll-top" });
       scrollToReplayStart = false;
     }
+  }
+
+  function applyBottomRevision(nextBottomRevision: number) {
+    if (!terminal || appliedBottomRevision === nextBottomRevision) return;
+    appliedBottomRevision = nextBottomRevision;
+    terminal.scrollToBottom();
+  }
+
+  function syncCurrentEndMarkers() {
+    if (!terminal || outputChunks.length === 0) return;
+    const lastIndex = outputChunks.length - 1;
+    const lastStart = chunkStartOffsets[lastIndex];
+    if (!Number.isFinite(lastStart)) return;
+    const lastBytes = base64Bytes(outputChunks[lastIndex]);
+    if (!lastBytes) return;
+    const endOffset = Math.floor(lastStart) + lastBytes.length;
+    for (const bookmark of bookmarks) {
+      if (bookmark.offset === endOffset && !liveMarker(bookmark.id)) {
+        enqueueTerminalOperation({ kind: "marker", bookmarkId: bookmark.id });
+      }
+    }
+  }
+
+  function applyBookmarkJumpRequest(request: BookmarkJumpRequest | null) {
+    if (!terminal || !request || appliedBookmarkJumpRevision === request.revision) return;
+    appliedBookmarkJumpRevision = request.revision;
+    const marker = liveMarker(request.bookmarkId);
+    if (marker) {
+      enqueueTerminalOperation({ kind: "scroll-marker", bookmarkId: request.bookmarkId });
+      return;
+    }
+    const bookmark = bookmarks.find((candidate) => candidate.id === request.bookmarkId);
+    if (bookmark) onBookmarkReplayFallback(bookmark);
   }
 
   onMount(() => {
@@ -182,14 +317,19 @@
         })
         .catch(console.error);
     });
-    replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, jumpRevision);
+    replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, jumpRevision);
     return () => {
       resizeObserver.disconnect();
+      pendingTerminalOperations = [];
+      clearBookmarkMarkers();
       terminal.dispose();
     };
   });
 
-  $: if (terminal) replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, jumpRevision);
+  $: if (terminal) replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, jumpRevision);
+  $: if (terminal) syncCurrentEndMarkers();
+  $: if (terminal) applyBookmarkJumpRequest(bookmarkJumpRequest);
+  $: if (terminal) applyBottomRevision(bottomRevision);
   $: if (focused && terminal) terminal.focus();
 </script>
 

@@ -7,14 +7,19 @@ describe("App notification refresh", () => {
     expect(source).not.toContain("agentBridgeApprovals = [];");
   });
 
-  it("loads pty bookmarks and resets output replay when jumping to one", () => {
+  it("loads pty bookmarks and uses marker-first jumps with replay fallback", () => {
     expect(source).toContain("ListPTYBookmarks");
     expect(source).toContain("AddPTYBookmark");
     expect(source).toContain("bookmarksByPty");
     expect(source).toContain("jumpToBookmark");
+    expect(source).toContain("bookmarkJumpRequests");
+    expect(source).toContain("outputChunkStartOffsets");
     expect(source).toContain("createPTYBookmark");
     expect(source).toContain("jumpBookmarkByDirection");
     expect(source).toContain("jumpToLastPrompt");
+    expect(source).toContain("jumpToBottom");
+    expect(source).toContain("bottomJumpRevisions");
+    expect(source).toContain("replayBookmarkFromOffset");
     expect(source).toContain("latestPromptJumpPointTarget");
     expect(source).toContain("resetOutputReplayForBookmark");
     expect(source).toContain("bookmarkJumpTarget");
@@ -22,5 +27,6 @@ describe("App notification refresh", () => {
     expect(source).toContain("bookmark.previous");
     expect(source).toContain("bookmark.next");
     expect(source).toContain("bookmark.lastPrompt");
+    expect(source).toContain("terminal.bottom");
   });
 });

@@ -25,6 +25,7 @@
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import LayoutView from "./LayoutView.svelte";
   import type { MainView } from "./navigation";
+  import type { BookmarkJumpRequest } from "./ptyMarkers";
   import ProjectsView from "./ProjectsView.svelte";
   import Button from "./ui/Button.svelte";
   import WorkBoard from "./WorkBoard.svelte";
@@ -33,8 +34,11 @@
   export let activeSession: Session | null = null;
   export let activeSessionWindow: SessionWindow | null = null;
   export let outputChunks: Record<string, string[]> = {};
+  export let outputChunkStartOffsets: Record<string, number[]> = {};
   export let bookmarksByPty: Record<string, PTYBookmark[]> = {};
+  export let bookmarkJumpRequests: Record<string, BookmarkJumpRequest> = {};
   export let bookmarkJumpRevisions: Record<string, number> = {};
+  export let bottomJumpRevisions: Record<string, number> = {};
   export let activePaneId = "";
   export let terminalFontSize = 13;
   export let terminalCursorBlink = true;
@@ -178,6 +182,7 @@
   export let onFocusPane: (paneId: string) => void;
   export let onAddBookmark: (ptyId: string) => void;
   export let onSelectBookmark: (bookmark: PTYBookmark) => void;
+  export let onBookmarkReplayFallback: (bookmark: PTYBookmark) => void;
   export let onPtyInput: (ptyId: string) => void;
   export let onWriteInput: (ptyId: string, data: string) => Promise<void>;
   export let onClosePane: (paneId: string) => void;
@@ -270,14 +275,18 @@
       node={activeSessionWindow.layout}
       panes={activeSession.panes}
       {outputChunks}
+      {outputChunkStartOffsets}
       {bookmarksByPty}
+      {bookmarkJumpRequests}
       {bookmarkJumpRevisions}
+      {bottomJumpRevisions}
       {activePaneId}
       {terminalFontSize}
       {terminalCursorBlink}
       onFocus={onFocusPane}
       onAddBookmark={onAddBookmark}
       onBookmark={onSelectBookmark}
+      {onBookmarkReplayFallback}
       onInput={onPtyInput}
       onWriteInput={onWriteInput}
       onClose={onClosePane}

@@ -26,6 +26,7 @@ const (
 	FrontendCommandPreviousBookmark = "bookmark.previous"
 	FrontendCommandNextBookmark     = "bookmark.next"
 	FrontendCommandLastPrompt       = "bookmark.lastPrompt"
+	FrontendCommandJumpToBottom     = "terminal.bottom"
 )
 
 // FrontendSelectSessionCommand returns the frontend command id for the session in slot i (0-based),
@@ -203,6 +204,10 @@ func (c *Controller) build(settings appsettings.Settings, sessions []SessionRef)
 	lastPrompt := sessionsMenu.Add("Jump to Last Prompt").SetAccelerator(effective[CommandLastPrompt])
 	lastPrompt.OnClick(func(*application.Context) {
 		c.app.Event.Emit(EventCommandRun, FrontendCommandLastPrompt)
+	})
+	jumpToBottom := sessionsMenu.Add("Jump to Bottom").SetAccelerator(effective[CommandJumpToBottom])
+	jumpToBottom.OnClick(func(*application.Context) {
+		c.app.Event.Emit(EventCommandRun, FrontendCommandJumpToBottom)
 	})
 	sessionsMenu.AddSeparator()
 	for _, entry := range sessionMenuEntries(sessions, effective) {

@@ -79,6 +79,7 @@ func TestCommandsIncludeBookmarkShortcuts(t *testing.T) {
 		CommandPreviousBookmark: {"Previous Bookmark", "CmdOrCtrl+Alt+Left"},
 		CommandNextBookmark:     {"Next Bookmark", "CmdOrCtrl+Alt+Right"},
 		CommandLastPrompt:       {"Jump to Last Prompt", "CmdOrCtrl+Alt+P"},
+		CommandJumpToBottom:     {"Jump to Bottom", "CmdOrCtrl+Alt+Down"},
 	}
 	for id, want := range cases {
 		cmd, ok := byID[id]

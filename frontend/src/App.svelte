@@ -151,6 +151,7 @@
     type NavigationState,
   } from "./navigation";
   import { projectDetailWithStoreSessions } from "./projectView";
+  import type { BookmarkJumpRequest } from "./ptyMarkers";
   import {
     nextPTYStreamOffset,
     ptyAttachWebSocketURL,
@@ -274,8 +275,11 @@
   let loadingWork = false;
   let loadingStatusEvents = false;
   let outputChunks: Record<string, string[]> = {};
+  let outputChunkStartOffsets: Record<string, number[]> = {};
   let offsets: Record<string, number> = {};
+  let bookmarkJumpRequests: Record<string, BookmarkJumpRequest> = {};
   let bookmarkJumpRevisions: Record<string, number> = {};
+  let bottomJumpRevisions: Record<string, number> = {};
   let activeBookmarkIdsByPty: Record<string, string> = {};
   let bookmarkLoadRevision = 0;
   let daemonAddress = "";
@@ -378,6 +382,13 @@
       shortcut: "Cmd/Ctrl Alt P",
       enabled: () => Boolean(activePtyId && latestPromptJumpPointTarget(bookmarksByPty[activePtyId] ?? [])),
       run: jumpToLastPrompt,
+    },
+    {
+      id: "terminal.bottom",
+      title: "Jump to Bottom",
+      shortcut: "Cmd/Ctrl Alt Down",
+      enabled: () => Boolean(activePtyId),
+      run: jumpToBottom,
     },
     // Session-switch commands mirror the native Sessions menu (Cmd 1..0). They are gated on the
     // session count so only reachable slots appear in the palette.
@@ -525,6 +536,9 @@
       bookmarksByPty = Object.fromEntries(
         nextPtys.map((pty) => [pty.id, bookmarksByPty[pty.id] ?? []]),
       );
+      outputChunkStartOffsets = Object.fromEntries(
+        nextPtys.map((pty) => [pty.id, outputChunkStartOffsets[pty.id] ?? []]),
+      );
       void loadBookmarksByPty(nextPtys).then((nextBookmarksByPty) => {
         if (bookmarkLoadRevision === loadRevision) bookmarksByPty = nextBookmarksByPty;
       });
@@ -573,13 +587,12 @@
     }
   }
 
-  async function jumpToBookmark(bookmark: PTYBookmark) {
+  async function replayBookmarkFromOffset(bookmark: PTYBookmark) {
     const target = bookmarkJumpTarget(sessions, bookmark);
     if (!target) {
       error = `Bookmark target not found: ${bookmark.ptyId}`;
       return;
     }
-    activeBookmarkIdsByPty = { ...activeBookmarkIdsByPty, [bookmark.ptyId]: bookmark.id };
     const socket = ptyStreams[target.ptyId];
     if (socket) socket.close();
     const replay = resetOutputReplayForBookmark(
@@ -587,16 +600,34 @@
       bookmark,
     );
     outputChunks = replay.outputChunks;
+    outputChunkStartOffsets = { ...outputChunkStartOffsets, [bookmark.ptyId]: [] };
     offsets = replay.offsets;
     bookmarkJumpRevisions = replay.jumpRevisions;
-    activeSessionId = target.sessionId;
-    activePaneId = target.paneId;
-    selectMain("session");
     try {
       await refreshOutput(target.ptyId);
     } catch (err) {
       if (!isStalePTYError(err)) error = `Jump to bookmark failed: ${backendError(err)}`;
     }
+  }
+
+  async function jumpToBookmark(bookmark: PTYBookmark) {
+    const target = bookmarkJumpTarget(sessions, bookmark);
+    if (!target) {
+      error = `Bookmark target not found: ${bookmark.ptyId}`;
+      return;
+    }
+    activeBookmarkIdsByPty = { ...activeBookmarkIdsByPty, [bookmark.ptyId]: bookmark.id };
+    bookmarkJumpRequests = {
+      ...bookmarkJumpRequests,
+      [target.ptyId]: {
+        bookmarkId: bookmark.id,
+        offset: target.offset,
+        revision: (bookmarkJumpRequests[target.ptyId]?.revision ?? 0) + 1,
+      },
+    };
+    activeSessionId = target.sessionId;
+    activePaneId = target.paneId;
+    selectMain("session");
   }
 
   async function jumpBookmarkByDirection(direction: BookmarkDirection) {
@@ -622,6 +653,14 @@
       return;
     }
     await jumpToBookmark(bookmark);
+  }
+
+  function jumpToBottom() {
+    if (!activePtyId) return;
+    bottomJumpRevisions = {
+      ...bottomJumpRevisions,
+      [activePtyId]: (bottomJumpRevisions[activePtyId] ?? 0) + 1,
+    };
   }
 
   async function refreshProjects() {
@@ -809,14 +848,19 @@
     try {
       do {
         outputFetchAgain.delete(ptyId);
+        const fromOffset = offsets[ptyId] ?? 0;
         const snapshot = await Output({
           ptyId,
-          fromOffset: offsets[ptyId] ?? 0,
+          fromOffset,
         });
         if (snapshot.outputBase64) {
           outputChunks = {
             ...outputChunks,
             [ptyId]: [...(outputChunks[ptyId] ?? []), snapshot.outputBase64],
+          };
+          outputChunkStartOffsets = {
+            ...outputChunkStartOffsets,
+            [ptyId]: [...(outputChunkStartOffsets[ptyId] ?? []), fromOffset],
           };
         } else if (snapshot.output) {
           const bytes = textEncoder.encode(snapshot.output);
@@ -825,6 +869,10 @@
           outputChunks = {
             ...outputChunks,
             [ptyId]: [...(outputChunks[ptyId] ?? []), btoa(binary)],
+          };
+          outputChunkStartOffsets = {
+            ...outputChunkStartOffsets,
+            [ptyId]: [...(outputChunkStartOffsets[ptyId] ?? []), fromOffset],
           };
         }
         offsets = { ...offsets, [ptyId]: snapshot.offset };
@@ -849,6 +897,10 @@
     outputChunks = {
       ...outputChunks,
       [frame.ptyId]: [...(outputChunks[frame.ptyId] ?? []), frame.outputBase64],
+    };
+    outputChunkStartOffsets = {
+      ...outputChunkStartOffsets,
+      [frame.ptyId]: [...(outputChunkStartOffsets[frame.ptyId] ?? []), frame.offset],
     };
     offsets = { ...offsets, [frame.ptyId]: nextOffset };
   }
@@ -2326,8 +2378,11 @@
           {activeSession}
           {activeSessionWindow}
           {outputChunks}
+          {outputChunkStartOffsets}
           {bookmarksByPty}
+          {bookmarkJumpRequests}
           {bookmarkJumpRevisions}
+          {bottomJumpRevisions}
           {activePaneId}
           {terminalFontSize}
           {terminalCursorBlink}
@@ -2399,6 +2454,7 @@
           onFocusPane={(paneId) => (activePaneId = paneId)}
           onAddBookmark={(ptyId) => void createPTYBookmark(ptyId)}
           onSelectBookmark={(bookmark) => void jumpToBookmark(bookmark)}
+          onBookmarkReplayFallback={(bookmark) => void replayBookmarkFromOffset(bookmark)}
           onPtyInput={(ptyId) => refreshOutput(ptyId).catch((err) => {
             if (!isStalePTYError(err)) error = backendError(err);
           })}
