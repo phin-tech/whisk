@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "21",
+    "version": "22",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -1794,6 +1794,56 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectID}/workflow-definition": {
+      "post": {
+        "operationId": "setProjectWorkflowDefinition",
+        "tags": [
+          "workitems"
+        ],
+        "parameters": [
+          {
+            "name": "projectID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetProjectWorkflowDefinitionRequest"
               }
             }
           }
@@ -4303,6 +4353,79 @@
         }
       }
     },
+    "/v1/workflow-definitions": {
+      "get": {
+        "operationId": "listWorkflowDefinitions",
+        "tags": [
+          "workitems"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowDefinitionRecord"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/workflow-definitions/import": {
+      "post": {
+        "operationId": "importWorkflowDefinition",
+        "tags": [
+          "workitems"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportWorkflowDefinitionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDefinitionRecord"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/workflow-events": {
       "get": {
         "operationId": "listWorkflowEvents",
@@ -5860,6 +5983,23 @@
         ],
         "type": "object"
       },
+      "ImportWorkflowDefinitionRequest": {
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowDefinition"
+          },
+          "source": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definition"
+        ],
+        "type": "object"
+      },
       "InstallRegistryPluginRequest": {
         "properties": {
           "id": {
@@ -6637,6 +6777,16 @@
       },
       "ProjectWorkflow": {
         "properties": {
+          "definitionHash": {
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "definitionVersion": {
+            "format": "int64",
+            "type": "integer"
+          },
           "id": {
             "type": "string"
           },
@@ -7248,6 +7398,22 @@
           "sessionId",
           "paneId",
           "workingDir"
+        ],
+        "type": "object"
+      },
+      "SetProjectWorkflowDefinitionRequest": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version"
         ],
         "type": "object"
       },
@@ -7931,6 +8097,195 @@
         ],
         "type": "object"
       },
+      "WorkflowActionDefinition": {
+        "properties": {
+          "completesRun": {
+            "type": "boolean"
+          },
+          "createsArtifact": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowArtifactEffect"
+              }
+            ],
+            "nullable": true
+          },
+          "createsGates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "createsRun": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowRunEffect"
+              }
+            ],
+            "nullable": true
+          },
+          "from": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "requires": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowArtifactRequirement"
+            },
+            "type": "array"
+          },
+          "requiresHuman": {
+            "type": "boolean"
+          },
+          "requiresPassingBlockingGates": {
+            "type": "boolean"
+          },
+          "resumesRun": {
+            "type": "string"
+          },
+          "sideStage": {
+            "type": "boolean"
+          },
+          "to": {
+            "type": "string"
+          },
+          "updatesArtifact": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowArtifactEffect"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "WorkflowArtifactEffect": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "status"
+        ],
+        "type": "object"
+      },
+      "WorkflowArtifactRequirement": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "status"
+        ],
+        "type": "object"
+      },
+      "WorkflowDefinition": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowActionDefinition"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "gates": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowGateDefinition"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "questions": {
+            "$ref": "#/components/schemas/WorkflowQuestionPolicy"
+          },
+          "stages": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "stages",
+          "actions",
+          "questions",
+          "gates"
+        ],
+        "type": "object"
+      },
+      "WorkflowDefinitionRecord": {
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowDefinition"
+          },
+          "id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "source",
+          "contentHash",
+          "definition",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "WorkflowEvent": {
         "properties": {
           "actor": {
@@ -7964,6 +8319,74 @@
           "projectId",
           "type",
           "at"
+        ],
+        "type": "object"
+      },
+      "WorkflowGateDefinition": {
+        "properties": {
+          "blocking": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "phase",
+          "blocking"
+        ],
+        "type": "object"
+      },
+      "WorkflowQuestionPolicy": {
+        "properties": {
+          "answerClearsAwaitingInputWhenNoOpenQuestionsRemain": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "moveToBlocked": {
+            "type": "boolean"
+          },
+          "setsRunState": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "moveToBlocked",
+          "setsRunState",
+          "answerClearsAwaitingInputWhenNoOpenQuestionsRemain"
+        ],
+        "type": "object"
+      },
+      "WorkflowRunEffect": {
+        "properties": {
+          "autoProvisionWorktree": {
+            "type": "boolean"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "preset": {
+            "type": "string"
+          },
+          "promptTemplateId": {
+            "type": "string"
+          },
+          "workingDir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phase",
+          "preset",
+          "promptTemplateId",
+          "workingDir"
         ],
         "type": "object"
       },

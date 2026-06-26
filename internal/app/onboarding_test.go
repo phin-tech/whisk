@@ -54,6 +54,41 @@ func TestApplyOnboardingInstallsSelectedSkillAndRecordsSkips(t *testing.T) {
 	}
 }
 
+func TestApplyOnboardingInstallsAllBundledSkills(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".codex", "skills"), 0o755); err != nil {
+		t.Fatalf("mkdir codex skills: %v", err)
+	}
+	sourceRoot := t.TempDir()
+	writeFile(t, filepath.Join(sourceRoot, "whisk", "SKILL.md"), "---\nname: whisk\nversion: \"1\"\n---\n")
+	writeFile(t, filepath.Join(sourceRoot, "whisk", "README.md"), "# Whisk\n")
+	writeFile(t, filepath.Join(sourceRoot, "make-whisk-workflow", "SKILL.md"), "---\nname: make-whisk-workflow\nversion: \"1\"\n---\n")
+	writeFile(t, filepath.Join(sourceRoot, "make-whisk-workflow", "README.md"), "# Make Whisk Workflow\n")
+
+	runtime := NewRuntime(RuntimeConfig{
+		DaemonURL:           "http://127.0.0.1:8787",
+		DaemonAPIVersion:    18,
+		OnboardingSkillDir:  sourceRoot,
+		OnboardingStatePath: filepath.Join(t.TempDir(), "onboarding.json"),
+		AgentHookPaths: &agenthooks.Paths{
+			ConfigRoot:         filepath.Join(t.TempDir(), "whisk"),
+			HelperSourcePath:   os.Args[0],
+			ClaudeSettingsPath: filepath.Join(t.TempDir(), "claude.json"),
+			CodexHooksPath:     filepath.Join(t.TempDir(), "codex.json"),
+		},
+	})
+
+	if _, err := runtime.ApplyOnboarding(context.Background(), OnboardingApplyRequest{ItemIDs: []string{"skill:codex"}}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	for _, skill := range []string{"whisk", "make-whisk-workflow"} {
+		if _, err := os.Stat(filepath.Join(home, ".codex", "skills", skill, "SKILL.md")); err != nil {
+			t.Fatalf("installed %s skill: %v", skill, err)
+		}
+	}
+}
+
 func TestBundledSkillDirsPreferResources(t *testing.T) {
 	got := bundledSkillDirs("/Applications/Whisk.app/Contents/MacOS/whisk-app")
 	want := []string{

@@ -41,8 +41,12 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		projects:          []protocol.Project{{ID: "proj_01", Name: "App", RootDir: "/repo"}},
 		projectDetail:     protocol.ProjectDetail{Project: protocol.Project{ID: "proj_01", Name: "App"}},
 		workflowTemplates: []protocol.WorkflowTemplate{{ID: "default", Name: "Default"}},
-		promptTemplates:   []protocol.PromptTemplate{{ID: "implement", Name: "Implement"}},
-		workItems:         []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
+		workflowDefinitions: []protocol.WorkflowDefinitionRecord{{
+			ID:      workitem.WorkflowPlanExecuteReview,
+			Version: 1,
+		}},
+		promptTemplates: []protocol.PromptTemplate{{ID: "implement", Name: "Implement"}},
+		workItems:       []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
 		workItemLinks: []protocol.WorkItemLink{{
 			ID:               "link_01",
 			ProjectID:        "proj_01",
@@ -223,6 +227,17 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	templates, err := service.ListWorkflowTemplates(ctx)
 	if err != nil || len(templates) != 1 || templates[0].ID != "default" {
 		t.Fatalf("list templates = %#v, err = %v", templates, err)
+	}
+	definitions, err := service.ListWorkflowDefinitions(ctx)
+	if err != nil || len(definitions) != 1 || definitions[0].ID != workitem.WorkflowPlanExecuteReview {
+		t.Fatalf("list workflow definitions = %#v, err = %v", definitions, err)
+	}
+	project, err = service.SetProjectWorkflowDefinition(ctx, "proj_01", protocol.SetProjectWorkflowDefinitionRequest{
+		ID:      workitem.WorkflowPlanExecuteReview,
+		Version: 1,
+	})
+	if err != nil || project.Workflow.DefinitionID != workitem.WorkflowPlanExecuteReview || fake.setProjectWorkflowDefinitionID != "proj_01" {
+		t.Fatalf("set workflow definition = %#v, id = %q, req = %#v, err = %v", project, fake.setProjectWorkflowDefinitionID, fake.setProjectWorkflowDefinitionReq, err)
 	}
 	promptTemplates, err := service.ListPromptTemplates(ctx)
 	if err != nil || len(promptTemplates) != 1 || promptTemplates[0].ID != "implement" {
@@ -593,33 +608,34 @@ func (f *appSettingsStoreFake) Save(_ context.Context, settings appsettings.Sett
 }
 
 type runtimeClientFake struct {
-	sessions           []session.Session
-	created            protocol.CreatedSession
-	split              protocol.SplitPaneResult
-	output             protocol.OutputSnapshot
-	ptys               []protocol.PTYInfo
-	ptyHistory         []protocol.PTYHistorySummary
-	selectedPTYHistory protocol.PTYHistory
-	event              protocol.RuntimeEvent
-	worktrunk          protocol.WorktrunkStatus
-	worktrees          []protocol.Worktree
-	createdWorktree    protocol.CreatedWorktree
-	projects           []protocol.Project
-	projectDetail      protocol.ProjectDetail
-	workflowTemplates  []protocol.WorkflowTemplate
-	promptTemplates    []protocol.PromptTemplate
-	agentProfiles      []protocol.AgentProfile
-	workItems          []protocol.WorkItem
-	workItemLinks      []protocol.WorkItemLink
-	readyWork          protocol.ReadyWorkExplanation
-	runs               []protocol.WorkItemRun
-	httpForwards       []protocol.HTTPForward
-	agentApprovals     []protocol.AgentBridgeApproval
-	agentPrompts       []protocol.AgentPrompt
-	agentEvents        []protocol.AgentBridgeEvent
-	agentIntegrations  []protocol.AgentHookIntegration
-	agentHookLog       protocol.AgentHookLogStatus
-	clearResponse      protocol.ClearDaemonResponse
+	sessions            []session.Session
+	created             protocol.CreatedSession
+	split               protocol.SplitPaneResult
+	output              protocol.OutputSnapshot
+	ptys                []protocol.PTYInfo
+	ptyHistory          []protocol.PTYHistorySummary
+	selectedPTYHistory  protocol.PTYHistory
+	event               protocol.RuntimeEvent
+	worktrunk           protocol.WorktrunkStatus
+	worktrees           []protocol.Worktree
+	createdWorktree     protocol.CreatedWorktree
+	projects            []protocol.Project
+	projectDetail       protocol.ProjectDetail
+	workflowTemplates   []protocol.WorkflowTemplate
+	workflowDefinitions []protocol.WorkflowDefinitionRecord
+	promptTemplates     []protocol.PromptTemplate
+	agentProfiles       []protocol.AgentProfile
+	workItems           []protocol.WorkItem
+	workItemLinks       []protocol.WorkItemLink
+	readyWork           protocol.ReadyWorkExplanation
+	runs                []protocol.WorkItemRun
+	httpForwards        []protocol.HTTPForward
+	agentApprovals      []protocol.AgentBridgeApproval
+	agentPrompts        []protocol.AgentPrompt
+	agentEvents         []protocol.AgentBridgeEvent
+	agentIntegrations   []protocol.AgentHookIntegration
+	agentHookLog        protocol.AgentHookLogStatus
+	clearResponse       protocol.ClearDaemonResponse
 
 	clearCalled        bool
 	createReq          protocol.CreateSessionRequest
@@ -643,64 +659,67 @@ type runtimeClientFake struct {
 	readPTYHistoryID   string
 	nextEventReq       protocol.NextEventRequest
 
-	detectWorktrunkReq         protocol.DetectWorktrunkRequest
-	listWorktreesReq           protocol.ListWorktreesRequest
-	createWorktreeReq          protocol.CreateWorktreeRequest
-	removeWorktreeReq          protocol.RemoveWorktreeRequest
-	createProjectReq           protocol.CreateProjectRequest
-	updateProjectID            string
-	updateProjectReq           protocol.UpdateProjectRequest
-	deleteProjectID            string
-	deleteProjectReq           protocol.DeleteProjectRequest
-	projectDetailID            string
-	addProjectAttachmentReq    protocol.AddProjectAttachmentRequest
-	updateProjectAttachmentID  string
-	updateProjectAttachmentReq protocol.UpdateProjectAttachmentRequest
-	deleteProjectAttachmentID  string
-	projectContextID           string
-	listWorkItemsProjectID     string
-	createWorkItemReq          protocol.CreateWorkItemRequest
-	updateWorkItemReq          protocol.UpdateWorkItemRequest
-	moveWorkItemReq            protocol.MoveWorkItemRequest
-	addWorkItemLinkReq         protocol.AddWorkItemLinkRequest
-	listWorkItemLinksID        string
-	readyWorkReq               protocol.ReadyWorkRequest
-	bindWorkItemReq            protocol.BindWorkItemWorktreeRequest
-	addWorkItemAttachmentReq   protocol.AddWorkItemAttachmentRequest
-	deleteWorkItemReq          protocol.DeleteWorkItemRequest
-	listRunsWorkItemID         string
-	startRunReq                protocol.StartWorkItemRunRequest
-	cancelRunReq               protocol.CancelWorkItemRunRequest
-	reportStatusReq            protocol.ReportStatusRequest
-	listStatusEventsReq        protocol.ListStatusEventsRequest
-	markStatusReadReq          protocol.MarkStatusEventReadRequest
-	agentBridgeHookID          string
-	agentBridgeHookReq         protocol.AgentBridgeHookRequest
-	recordAgentHookReq         protocol.AgentBridgeHookRequest
-	listAgentApprovalsReq      protocol.ListAgentBridgeApprovalsRequest
-	listAgentPromptsReq        protocol.ListAgentPromptsRequest
-	listAgentEventsReq         protocol.ListAgentBridgeEventsRequest
-	markAgentEventReadReq      protocol.MarkAgentBridgeEventReadRequest
-	resolveAgentApprovalID     string
-	resolveAgentApprovalReq    protocol.ResolveAgentBridgeApprovalRequest
-	resolveAgentPromptID       string
-	resolveAgentPromptReq      protocol.ResolveAgentPromptRequest
-	checkAgentHookReq          protocol.AgentHookIntegrationRequest
-	installAgentHookReq        protocol.AgentHookIntegrationRequest
-	removeAgentHookReq         protocol.AgentHookIntegrationRequest
-	setAgentHookLogReq         protocol.SetAgentHookLogSettingsRequest
-	clearAgentHookLogCalled    bool
-	openAgentHookLogCalled     bool
-	rescanPluginsCalled        bool
-	trustPluginID              string
-	untrustPluginID            string
-	installPluginRegistry      string
-	installPluginID            string
-	runPluginTemplateID        string
-	onboardingApplyReq         protocol.OnboardingApplyRequest
-	onboardingStatus           protocol.OnboardingStatus
-	createForwardReq           protocol.CreateHTTPForwardRequest
-	deleteForwardID            string
+	detectWorktrunkReq              protocol.DetectWorktrunkRequest
+	listWorktreesReq                protocol.ListWorktreesRequest
+	createWorktreeReq               protocol.CreateWorktreeRequest
+	removeWorktreeReq               protocol.RemoveWorktreeRequest
+	createProjectReq                protocol.CreateProjectRequest
+	updateProjectID                 string
+	updateProjectReq                protocol.UpdateProjectRequest
+	deleteProjectID                 string
+	deleteProjectReq                protocol.DeleteProjectRequest
+	projectDetailID                 string
+	addProjectAttachmentReq         protocol.AddProjectAttachmentRequest
+	updateProjectAttachmentID       string
+	updateProjectAttachmentReq      protocol.UpdateProjectAttachmentRequest
+	deleteProjectAttachmentID       string
+	projectContextID                string
+	importWorkflowDefinitionReq     protocol.ImportWorkflowDefinitionRequest
+	setProjectWorkflowDefinitionID  string
+	setProjectWorkflowDefinitionReq protocol.SetProjectWorkflowDefinitionRequest
+	listWorkItemsProjectID          string
+	createWorkItemReq               protocol.CreateWorkItemRequest
+	updateWorkItemReq               protocol.UpdateWorkItemRequest
+	moveWorkItemReq                 protocol.MoveWorkItemRequest
+	addWorkItemLinkReq              protocol.AddWorkItemLinkRequest
+	listWorkItemLinksID             string
+	readyWorkReq                    protocol.ReadyWorkRequest
+	bindWorkItemReq                 protocol.BindWorkItemWorktreeRequest
+	addWorkItemAttachmentReq        protocol.AddWorkItemAttachmentRequest
+	deleteWorkItemReq               protocol.DeleteWorkItemRequest
+	listRunsWorkItemID              string
+	startRunReq                     protocol.StartWorkItemRunRequest
+	cancelRunReq                    protocol.CancelWorkItemRunRequest
+	reportStatusReq                 protocol.ReportStatusRequest
+	listStatusEventsReq             protocol.ListStatusEventsRequest
+	markStatusReadReq               protocol.MarkStatusEventReadRequest
+	agentBridgeHookID               string
+	agentBridgeHookReq              protocol.AgentBridgeHookRequest
+	recordAgentHookReq              protocol.AgentBridgeHookRequest
+	listAgentApprovalsReq           protocol.ListAgentBridgeApprovalsRequest
+	listAgentPromptsReq             protocol.ListAgentPromptsRequest
+	listAgentEventsReq              protocol.ListAgentBridgeEventsRequest
+	markAgentEventReadReq           protocol.MarkAgentBridgeEventReadRequest
+	resolveAgentApprovalID          string
+	resolveAgentApprovalReq         protocol.ResolveAgentBridgeApprovalRequest
+	resolveAgentPromptID            string
+	resolveAgentPromptReq           protocol.ResolveAgentPromptRequest
+	checkAgentHookReq               protocol.AgentHookIntegrationRequest
+	installAgentHookReq             protocol.AgentHookIntegrationRequest
+	removeAgentHookReq              protocol.AgentHookIntegrationRequest
+	setAgentHookLogReq              protocol.SetAgentHookLogSettingsRequest
+	clearAgentHookLogCalled         bool
+	openAgentHookLogCalled          bool
+	rescanPluginsCalled             bool
+	trustPluginID                   string
+	untrustPluginID                 string
+	installPluginRegistry           string
+	installPluginID                 string
+	runPluginTemplateID             string
+	onboardingApplyReq              protocol.OnboardingApplyRequest
+	onboardingStatus                protocol.OnboardingStatus
+	createForwardReq                protocol.CreateHTTPForwardRequest
+	deleteForwardID                 string
 }
 
 func (f *runtimeClientFake) ClearDaemon(context.Context, protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error) {
@@ -914,6 +933,31 @@ func (f *runtimeClientFake) GetProjectContext(_ context.Context, projectID strin
 
 func (f *runtimeClientFake) ListWorkflowTemplates(context.Context) ([]protocol.WorkflowTemplate, error) {
 	return f.workflowTemplates, nil
+}
+
+func (f *runtimeClientFake) ListWorkflowDefinitions(context.Context) ([]protocol.WorkflowDefinitionRecord, error) {
+	return f.workflowDefinitions, nil
+}
+
+func (f *runtimeClientFake) ImportWorkflowDefinition(_ context.Context, req protocol.ImportWorkflowDefinitionRequest) (protocol.WorkflowDefinitionRecord, error) {
+	f.importWorkflowDefinitionReq = req
+	record := protocol.WorkflowDefinitionRecord{
+		ID:         req.Definition.ID,
+		Version:    req.Definition.Version,
+		Definition: req.Definition,
+		SourcePath: req.SourcePath,
+	}
+	f.workflowDefinitions = append(f.workflowDefinitions, record)
+	return record, nil
+}
+
+func (f *runtimeClientFake) SetProjectWorkflowDefinition(_ context.Context, projectID string, req protocol.SetProjectWorkflowDefinitionRequest) (protocol.Project, error) {
+	f.setProjectWorkflowDefinitionID = projectID
+	f.setProjectWorkflowDefinitionReq = req
+	project := f.projectDetail.Project
+	project.Workflow.DefinitionID = req.ID
+	project.Workflow.DefinitionVersion = req.Version
+	return project, nil
 }
 
 func (f *runtimeClientFake) ListAgentProfiles(context.Context) ([]protocol.AgentProfile, error) {

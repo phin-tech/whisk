@@ -18,3 +18,8 @@ printf '%s\n' "$OUT" | grep -Fq 'cp "skills/whisk/SKILL.md" "bin/Whisk.app/Conte
   printf '%s\n' "$OUT"
   exit 1
 }
+
+printf '%s\n' "$OUT" | grep -Fq 'cp "skills/make-whisk-workflow/SKILL.md" "bin/Whisk.app/Contents/Resources/skills/make-whisk-workflow/SKILL.md"' || {
+  printf '%s\n' "$OUT"
+  exit 1
+}

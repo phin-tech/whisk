@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -18,6 +19,8 @@ import (
 	"github.com/phin-tech/whisk/internal/buildinfo"
 	"github.com/phin-tech/whisk/internal/domain/onboarding"
 )
+
+var errSkillBundleMissing = errors.New("skill bundle missing")
 
 type OnboardingStatus struct {
 	Items       []onboarding.Item `json:"items"`
@@ -163,7 +166,7 @@ func (r *Runtime) daemonOnboardingItem(state onboarding.State) onboarding.Item {
 
 func (r *Runtime) skillOnboardingItems() []onboarding.Item {
 	source := r.skillSourceDir()
-	sourceHash, sourceVersion, sourceErr := skillHashAndVersion(source)
+	sourceHash, sourceVersion, sourceErr := skillBundleHashAndVersion(source)
 	targets := detectedSkillTargets()
 	items := make([]onboarding.Item, 0, len(targets))
 	for _, target := range targets {
@@ -183,11 +186,11 @@ func (r *Runtime) skillOnboardingItems() []onboarding.Item {
 			items = append(items, item)
 			continue
 		}
-		installedHash, installedVersion, err := skillHashAndVersion(target.Path)
+		installedHash, installedVersion, err := skillBundleHashAndVersion(target.Path)
 		item.InstalledHash = installedHash
 		item.InstalledVersion = installedVersion
 		switch {
-		case os.IsNotExist(err):
+		case os.IsNotExist(err), errors.Is(err, errSkillBundleMissing):
 			item.Status = onboarding.StatusMissing
 		case err != nil:
 			item.Status = onboarding.StatusUnavailable
@@ -214,19 +217,23 @@ func (r *Runtime) installSkillTarget(targetID string) error {
 		return fmt.Errorf("skill target %s not detected", targetID)
 	}
 	source := r.skillSourceDir()
-	if _, _, err := skillHashAndVersion(source); err != nil {
+	sources, err := skillSources(source)
+	if err != nil {
 		return err
 	}
-	for _, name := range []string{"SKILL.md", "README.md"} {
-		bytes, err := os.ReadFile(filepath.Join(source, name))
-		if err != nil {
-			return err
-		}
-		if err := os.MkdirAll(target.Path, 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(target.Path, name), bytes, 0o644); err != nil {
-			return err
+	for _, source := range sources {
+		targetDir := filepath.Join(target.Path, source.Name)
+		for _, name := range []string{"SKILL.md", "README.md"} {
+			bytes, err := os.ReadFile(filepath.Join(source.Path, name))
+			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(targetDir, 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(targetDir, name), bytes, 0o644); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -314,16 +321,90 @@ func detectedSkillTargets() []skillTarget {
 		return nil
 	}
 	candidates := []skillTarget{
-		{ID: "codex", Label: "Codex", Path: filepath.Join(home, ".codex", "skills", "whisk")},
-		{ID: "claude", Label: "Claude", Path: filepath.Join(home, ".claude", "skills", "whisk")},
+		{ID: "codex", Label: "Codex", Path: filepath.Join(home, ".codex", "skills")},
+		{ID: "claude", Label: "Claude", Path: filepath.Join(home, ".claude", "skills")},
 	}
 	var out []skillTarget
 	for _, candidate := range candidates {
-		if info, err := os.Stat(filepath.Dir(candidate.Path)); err == nil && info.IsDir() {
+		if info, err := os.Stat(candidate.Path); err == nil && info.IsDir() {
 			out = append(out, candidate)
 		}
 	}
 	return out
+}
+
+type skillSource struct {
+	Name string
+	Path string
+}
+
+func skillBundleHashAndVersion(path string) (string, string, error) {
+	sources, err := skillSources(path)
+	if err != nil {
+		return "", "", err
+	}
+	if len(sources) == 1 {
+		return skillHashAndVersion(sources[0].Path)
+	}
+	hash := sha256.New()
+	versions := make([]string, 0, len(sources))
+	for _, source := range sources {
+		sourceHash, version, err := skillHashAndVersion(source.Path)
+		if err != nil {
+			return "", "", err
+		}
+		_, _ = hash.Write([]byte(source.Name))
+		_, _ = hash.Write([]byte{0})
+		_, _ = hash.Write([]byte(sourceHash))
+		_, _ = hash.Write([]byte{0})
+		versions = append(versions, source.Name+"="+version)
+	}
+	return hex.EncodeToString(hash.Sum(nil)), strings.Join(versions, ","), nil
+}
+
+func skillSources(path string) ([]skillSource, error) {
+	if _, err := os.Stat(filepath.Join(path, "SKILL.md")); err == nil {
+		if siblings, err := childSkillSources(filepath.Dir(path)); err == nil && len(siblings) > 1 {
+			return siblings, nil
+		}
+		name := skillName(filepath.Join(path, "SKILL.md"))
+		if name == "" {
+			name = filepath.Base(path)
+		}
+		return []skillSource{{Name: name, Path: path}}, nil
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	return childSkillSources(path)
+}
+
+func childSkillSources(root string) ([]skillSource, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	var sources []skillSource
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		path := filepath.Join(root, entry.Name())
+		if _, err := os.Stat(filepath.Join(path, "SKILL.md")); err != nil {
+			continue
+		}
+		name := skillName(filepath.Join(path, "SKILL.md"))
+		if name == "" {
+			name = entry.Name()
+		}
+		sources = append(sources, skillSource{Name: name, Path: path})
+	}
+	sort.Slice(sources, func(i, j int) bool {
+		return sources[i].Name < sources[j].Name
+	})
+	if len(sources) == 0 {
+		return nil, errSkillBundleMissing
+	}
+	return sources, nil
 }
 
 func skillHashAndVersion(dir string) (string, string, error) {
@@ -354,7 +435,15 @@ func skillHashAndVersion(dir string) (string, string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), version, nil
 }
 
+func skillName(path string) string {
+	return skillFrontmatterValue(path, "name")
+}
+
 func skillVersion(path string) string {
+	return skillFrontmatterValue(path, "version")
+}
+
+func skillFrontmatterValue(path string, key string) string {
 	file, err := os.Open(path)
 	if err != nil {
 		return ""
@@ -366,7 +455,7 @@ func skillVersion(path string) string {
 		if line == "---" && scanner.Text() != line {
 			continue
 		}
-		if value, ok := strings.CutPrefix(line, "version:"); ok {
+		if value, ok := strings.CutPrefix(line, key+":"); ok {
 			return strings.Trim(strings.TrimSpace(value), `"'`)
 		}
 	}

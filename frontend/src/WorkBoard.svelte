@@ -20,6 +20,7 @@
     WorkItem,
     WorkItemLink,
     WorkItemRun,
+    WorkflowDefinitionRecord,
     WorkflowEvent,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
@@ -40,6 +41,7 @@
   export let artifacts: Artifact[] = [];
   export let questions: Question[] = [];
   export let gateReports: GateReport[] = [];
+  export let workflowDefinitions: WorkflowDefinitionRecord[] = [];
   export let workflowEvents: WorkflowEvent[] = [];
   export let agentProfiles: AgentProfile[] = [];
   export let activeProjectId = "";
@@ -141,6 +143,20 @@
     const projectSlug = activeProject?.slug || "work";
     const itemSlug = slugify(item.title) || "item";
     return `whisk/${projectSlug}-${item.number}-${itemSlug}`;
+  }
+
+  function workflowDefinitionLabel() {
+    if (!activeProject) return "";
+    const id = activeProject.workflow.definitionId || activeProject.workflow.templateId || activeProject.workflow.id;
+    const version = activeProject.workflow.definitionVersion ?? 0;
+    const definition = workflowDefinitions.find(
+      (candidate) =>
+        candidate.id === activeProject.workflow.definitionId &&
+        candidate.version === activeProject.workflow.definitionVersion,
+    );
+    if (!id) return "workflow";
+    const identityId = definition?.id || id;
+    return version > 0 ? `${identityId}@${version}` : identityId;
   }
 
   function groupRunsByItem(runs: WorkItemRun[]) {
@@ -309,7 +325,10 @@
       {#if activeProject}
         <div class="min-w-0">
           <div class="truncate text-[13px] font-semibold text-text-primary">{activeProject.name}</div>
-          <div class="truncate text-[12px] text-text-secondary">{activeProject.rootDir}</div>
+          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-text-secondary">
+            <span class="truncate">{activeProject.rootDir}</span>
+            <span class="shrink-0 text-text-muted">{workflowDefinitionLabel()}</span>
+          </div>
         </div>
       {:else}
         <div class="truncate text-[13px] text-text-muted">No project selected</div>

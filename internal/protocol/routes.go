@@ -34,6 +34,7 @@ var (
 	apiWorktreeList             = []Worktree(nil)
 	apiForwardList              = []HTTPForward(nil)
 	apiProjectList              = []Project(nil)
+	apiWorkflowDefinitionList   = []WorkflowDefinitionRecord(nil)
 	apiWorkflowTemplateList     = []WorkflowTemplate(nil)
 	apiPromptList               = []PromptTemplate(nil)
 	apiAgentProfileList         = []AgentProfile(nil)
@@ -122,10 +123,13 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/projects/{projectID}/update", OperationID: "updateProject", Tag: "workitems", Request: UpdateProjectRequest{}, Response: Project{}},
 	{Method: "POST", Path: "/v1/projects/{projectID}/delete", OperationID: "deleteProject", Tag: "workitems", Request: DeleteProjectRequest{}, Response: Project{}},
 	{Method: "GET", Path: "/v1/projects/{projectID}/detail", OperationID: "getProjectDetail", Tag: "workitems", Response: ProjectDetail{}},
+	{Method: "POST", Path: "/v1/projects/{projectID}/workflow-definition", OperationID: "setProjectWorkflowDefinition", Tag: "workitems", Request: SetProjectWorkflowDefinitionRequest{}, Response: Project{}},
 	{Method: "POST", Path: "/v1/projects/{projectID}/attachments", OperationID: "addProjectAttachment", Tag: "workitems", Request: AddProjectAttachmentRequest{}, Response: Project{}, Status: 201},
 	{Method: "POST", Path: "/v1/project-attachments/{attachmentID}/update", OperationID: "updateProjectAttachment", Tag: "workitems", Request: UpdateProjectAttachmentRequest{}, Response: Project{}},
 	{Method: "POST", Path: "/v1/project-attachments/{attachmentID}/delete", OperationID: "deleteProjectAttachment", Tag: "workitems", Request: DeleteProjectAttachmentRequest{}, Response: Project{}},
 	{Method: "GET", Path: "/v1/projects/{projectID}/context", OperationID: "getProjectContext", Tag: "workitems", Response: ProjectContext{}},
+	{Method: "GET", Path: "/v1/workflow-definitions", OperationID: "listWorkflowDefinitions", Tag: "workitems", Response: apiWorkflowDefinitionList},
+	{Method: "POST", Path: "/v1/workflow-definitions/import", OperationID: "importWorkflowDefinition", Tag: "workitems", Request: ImportWorkflowDefinitionRequest{}, Response: WorkflowDefinitionRecord{}, Status: 201},
 	{Method: "GET", Path: "/v1/workflow-templates", OperationID: "listWorkflowTemplates", Tag: "workitems", Response: apiWorkflowTemplateList},
 	{Method: "GET", Path: "/v1/prompt-templates", OperationID: "listPromptTemplates", Tag: "workitems", Response: apiPromptList},
 	{Method: "GET", Path: "/v1/agent-profiles", OperationID: "listAgentProfiles", Tag: "agents", Summary: "List selectable builtin agent profiles", Response: apiAgentProfileList},

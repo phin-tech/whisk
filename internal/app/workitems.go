@@ -38,6 +38,18 @@ type DeleteProjectRequest struct {
 	Actor string
 }
 
+type ImportWorkflowDefinitionRequest struct {
+	Definition workitem.WorkflowDefinition
+	Source     string
+	SourcePath string
+}
+
+type SetProjectWorkflowDefinitionRequest struct {
+	ProjectID string
+	ID        string
+	Version   int
+}
+
 type AddProjectAttachmentRequest struct {
 	ProjectID        string
 	Kind             string
@@ -336,6 +348,44 @@ func (r *Runtime) GetProjectDetail(_ context.Context, projectID string) (Project
 
 func (r *Runtime) ListWorkflowTemplates(context.Context) ([]workitem.WorkflowTemplate, error) {
 	return r.workItems.ListWorkflowTemplates(), nil
+}
+
+func (r *Runtime) ListWorkflowDefinitions(context.Context) ([]workitem.WorkflowDefinitionRecord, error) {
+	return r.workItems.ListWorkflowDefinitions(), nil
+}
+
+func (r *Runtime) ImportWorkflowDefinition(ctx context.Context, req ImportWorkflowDefinitionRequest) (workitem.WorkflowDefinitionRecord, error) {
+	record, err := r.workItems.ImportWorkflowDefinition(workitem.ImportWorkflowDefinition{
+		Definition: req.Definition,
+		Source:     req.Source,
+		SourcePath: req.SourcePath,
+		Now:        time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.WorkflowDefinitionRecord{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkflowDefinitionRecord{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return record, nil
+}
+
+func (r *Runtime) SetProjectWorkflowDefinition(ctx context.Context, req SetProjectWorkflowDefinitionRequest) (workitem.Project, error) {
+	project, err := r.workItems.SetProjectWorkflowDefinition(workitem.SetProjectWorkflowDefinition{
+		ProjectID: req.ProjectID,
+		ID:        req.ID,
+		Version:   req.Version,
+		Now:       time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.Project{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.Project{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return project, nil
 }
 
 func (r *Runtime) ListPromptTemplates(context.Context) ([]workitem.PromptTemplate, error) {

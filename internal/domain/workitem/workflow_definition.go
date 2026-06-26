@@ -1,9 +1,12 @@
 package workitem
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 const (
@@ -30,6 +33,17 @@ type WorkflowDefinition struct {
 	Actions   []WorkflowActionDefinition `json:"actions"`
 	Questions WorkflowQuestionPolicy     `json:"questions"`
 	Gates     []WorkflowGateDefinition   `json:"gates"`
+}
+
+type WorkflowDefinitionRecord struct {
+	ID          string             `json:"id"`
+	Version     int                `json:"version"`
+	Source      string             `json:"source"`
+	SourcePath  string             `json:"sourcePath,omitempty"`
+	ContentHash string             `json:"contentHash"`
+	Definition  WorkflowDefinition `json:"definition"`
+	CreatedAt   time.Time          `json:"createdAt"`
+	UpdatedAt   time.Time          `json:"updatedAt"`
 }
 
 type WorkflowActionDefinition struct {
@@ -85,6 +99,43 @@ func DefaultWorkflowDefinition() WorkflowDefinition {
 		panic(err)
 	}
 	return definition
+}
+
+func DefaultWorkflowDefinitionRecord(now time.Time) WorkflowDefinitionRecord {
+	record, err := NewWorkflowDefinitionRecord(DefaultWorkflowDefinition(), "builtin", "internal/domain/workitem/workflows/plan_execute_review.json", now)
+	if err != nil {
+		panic(err)
+	}
+	return record
+}
+
+func NewWorkflowDefinitionRecord(definition WorkflowDefinition, source, sourcePath string, now time.Time) (WorkflowDefinitionRecord, error) {
+	if err := ValidateWorkflowDefinition(definition); err != nil {
+		return WorkflowDefinitionRecord{}, err
+	}
+	hash, err := WorkflowDefinitionHash(definition)
+	if err != nil {
+		return WorkflowDefinitionRecord{}, err
+	}
+	return WorkflowDefinitionRecord{
+		ID:          definition.ID,
+		Version:     definition.Version,
+		Source:      source,
+		SourcePath:  sourcePath,
+		ContentHash: hash,
+		Definition:  definition,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}, nil
+}
+
+func WorkflowDefinitionHash(definition WorkflowDefinition) (string, error) {
+	payload, err := json.Marshal(definition)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func ParseWorkflowDefinition(payload []byte) (WorkflowDefinition, error) {

@@ -58,6 +58,7 @@ from .gate_config import GateConfig
 from .gate_report import GateReport
 from .history_event import HistoryEvent
 from .http_forward import HTTPForward
+from .import_workflow_definition_request import ImportWorkflowDefinitionRequest
 from .install_registry_plugin_request import InstallRegistryPluginRequest
 from .item import Item
 from .kill_pty_request import KillPTYRequest
@@ -120,6 +121,7 @@ from .session_window import SessionWindow
 from .session_windows_type_0 import SessionWindowsType0
 from .set_agent_hook_log_settings_request import SetAgentHookLogSettingsRequest
 from .set_pane_working_dir_request import SetPaneWorkingDirRequest
+from .set_project_workflow_definition_request import SetProjectWorkflowDefinitionRequest
 from .set_session_project_request import SetSessionProjectRequest
 from .set_session_root_dir_request import SetSessionRootDirRequest
 from .split_pane_request import SplitPaneRequest
@@ -148,7 +150,15 @@ from .work_item_link import WorkItemLink
 from .work_item_metadata import WorkItemMetadata
 from .work_item_run import WorkItemRun
 from .work_item_run_metadata import WorkItemRunMetadata
+from .workflow_action_definition import WorkflowActionDefinition
+from .workflow_artifact_effect import WorkflowArtifactEffect
+from .workflow_artifact_requirement import WorkflowArtifactRequirement
+from .workflow_definition import WorkflowDefinition
+from .workflow_definition_record import WorkflowDefinitionRecord
 from .workflow_event import WorkflowEvent
+from .workflow_gate_definition import WorkflowGateDefinition
+from .workflow_question_policy import WorkflowQuestionPolicy
+from .workflow_run_effect import WorkflowRunEffect
 from .workflow_stage import WorkflowStage
 from .workflow_template import WorkflowTemplate
 from .worktree import Worktree
@@ -216,6 +226,7 @@ __all__ = (
     "GateReport",
     "HistoryEvent",
     "HTTPForward",
+    "ImportWorkflowDefinitionRequest",
     "InstallRegistryPluginRequest",
     "Item",
     "KillPTYRequest",
@@ -272,6 +283,7 @@ __all__ = (
     "SessionWindowsType0",
     "SetAgentHookLogSettingsRequest",
     "SetPaneWorkingDirRequest",
+    "SetProjectWorkflowDefinitionRequest",
     "SetSessionProjectRequest",
     "SetSessionRootDirRequest",
     "SplitPaneRequest",
@@ -293,7 +305,15 @@ __all__ = (
     "UpdateProjectRequest",
     "UpdateProjectRequestDefaultPhaseAgents",
     "UpdateWorkItemRequest",
+    "WorkflowActionDefinition",
+    "WorkflowArtifactEffect",
+    "WorkflowArtifactRequirement",
+    "WorkflowDefinition",
+    "WorkflowDefinitionRecord",
     "WorkflowEvent",
+    "WorkflowGateDefinition",
+    "WorkflowQuestionPolicy",
+    "WorkflowRunEffect",
     "WorkflowStage",
     "WorkflowTemplate",
     "WorkItem",

@@ -170,11 +170,14 @@ type WorkflowTemplate struct {
 }
 
 type ProjectWorkflow struct {
-	ID              string           `json:"id"`
-	TemplateID      string           `json:"templateId"`
-	Name            string           `json:"name"`
-	Stages          []WorkflowStage  `json:"stages"`
-	TransitionRules []TransitionRule `json:"transitionRules"`
+	ID                string           `json:"id"`
+	TemplateID        string           `json:"templateId"`
+	DefinitionID      string           `json:"definitionId,omitempty"`
+	DefinitionVersion int              `json:"definitionVersion,omitempty"`
+	DefinitionHash    string           `json:"definitionHash,omitempty"`
+	Name              string           `json:"name"`
+	Stages            []WorkflowStage  `json:"stages"`
+	TransitionRules   []TransitionRule `json:"transitionRules"`
 }
 
 type WorkflowStage struct {
@@ -364,31 +367,38 @@ type HistoryEvent struct {
 }
 
 type State struct {
-	projects        map[string]Project
-	templates       map[string]WorkflowTemplate
-	promptTemplates map[string]PromptTemplate
-	items           map[string]WorkItem
-	links           map[string]WorkItemLink
-	runs            map[string]WorkItemRun
-	artifacts       map[string]Artifact
-	questions       map[string]Question
-	gateReports     map[string]GateReport
-	workflowEvents  map[string]WorkflowEvent
-	statusEvents    map[string]StatusEvent
+	projects            map[string]Project
+	templates           map[string]WorkflowTemplate
+	workflowDefinitions map[workflowDefinitionKey]WorkflowDefinitionRecord
+	promptTemplates     map[string]PromptTemplate
+	items               map[string]WorkItem
+	links               map[string]WorkItemLink
+	runs                map[string]WorkItemRun
+	artifacts           map[string]Artifact
+	questions           map[string]Question
+	gateReports         map[string]GateReport
+	workflowEvents      map[string]WorkflowEvent
+	statusEvents        map[string]StatusEvent
 }
 
 type Snapshot struct {
-	Projects        []Project          `json:"projects"`
-	Templates       []WorkflowTemplate `json:"workflowTemplates"`
-	PromptTemplates []PromptTemplate   `json:"promptTemplates"`
-	Items           []WorkItem         `json:"workItems"`
-	Links           []WorkItemLink     `json:"workItemLinks,omitempty"`
-	Runs            []WorkItemRun      `json:"workItemRuns"`
-	Artifacts       []Artifact         `json:"artifacts"`
-	Questions       []Question         `json:"questions"`
-	GateReports     []GateReport       `json:"gateReports"`
-	WorkflowEvents  []WorkflowEvent    `json:"workflowEvents"`
-	StatusEvents    []StatusEvent      `json:"statusEvents"`
+	Projects            []Project                  `json:"projects"`
+	Templates           []WorkflowTemplate         `json:"workflowTemplates"`
+	WorkflowDefinitions []WorkflowDefinitionRecord `json:"workflowDefinitions,omitempty"`
+	PromptTemplates     []PromptTemplate           `json:"promptTemplates"`
+	Items               []WorkItem                 `json:"workItems"`
+	Links               []WorkItemLink             `json:"workItemLinks,omitempty"`
+	Runs                []WorkItemRun              `json:"workItemRuns"`
+	Artifacts           []Artifact                 `json:"artifacts"`
+	Questions           []Question                 `json:"questions"`
+	GateReports         []GateReport               `json:"gateReports"`
+	WorkflowEvents      []WorkflowEvent            `json:"workflowEvents"`
+	StatusEvents        []StatusEvent              `json:"statusEvents"`
+}
+
+type workflowDefinitionKey struct {
+	id      string
+	version int
 }
 
 type CreateProject struct {
@@ -402,6 +412,20 @@ type CreateProject struct {
 	Preferences        ProjectPreferences
 	NextWorkItemNumber int
 	Now                time.Time
+}
+
+type ImportWorkflowDefinition struct {
+	Definition WorkflowDefinition
+	Source     string
+	SourcePath string
+	Now        time.Time
+}
+
+type SetProjectWorkflowDefinition struct {
+	ProjectID string
+	ID        string
+	Version   int
+	Now       time.Time
 }
 
 type UpdateProject struct {
@@ -756,20 +780,23 @@ type ReadyWorkSummary struct {
 
 func NewState() *State {
 	state := &State{
-		projects:        map[string]Project{},
-		templates:       map[string]WorkflowTemplate{},
-		promptTemplates: map[string]PromptTemplate{},
-		items:           map[string]WorkItem{},
-		links:           map[string]WorkItemLink{},
-		runs:            map[string]WorkItemRun{},
-		artifacts:       map[string]Artifact{},
-		questions:       map[string]Question{},
-		gateReports:     map[string]GateReport{},
-		workflowEvents:  map[string]WorkflowEvent{},
-		statusEvents:    map[string]StatusEvent{},
+		projects:            map[string]Project{},
+		templates:           map[string]WorkflowTemplate{},
+		workflowDefinitions: map[workflowDefinitionKey]WorkflowDefinitionRecord{},
+		promptTemplates:     map[string]PromptTemplate{},
+		items:               map[string]WorkItem{},
+		links:               map[string]WorkItemLink{},
+		runs:                map[string]WorkItemRun{},
+		artifacts:           map[string]Artifact{},
+		questions:           map[string]Question{},
+		gateReports:         map[string]GateReport{},
+		workflowEvents:      map[string]WorkflowEvent{},
+		statusEvents:        map[string]StatusEvent{},
 	}
 	template := DefaultWorkflowTemplate(time.Time{})
 	state.templates[template.ID] = template
+	defaultDefinition := DefaultWorkflowDefinitionRecord(time.Time{})
+	state.workflowDefinitions[workflowDefinitionKey{id: defaultDefinition.ID, version: defaultDefinition.Version}] = defaultDefinition
 	for _, prompt := range DefaultPromptTemplates(time.Time{}) {
 		state.promptTemplates[prompt.ID] = prompt
 	}
@@ -778,17 +805,18 @@ func NewState() *State {
 
 func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 	state := &State{
-		projects:        map[string]Project{},
-		templates:       map[string]WorkflowTemplate{},
-		promptTemplates: map[string]PromptTemplate{},
-		items:           map[string]WorkItem{},
-		links:           map[string]WorkItemLink{},
-		runs:            map[string]WorkItemRun{},
-		artifacts:       map[string]Artifact{},
-		questions:       map[string]Question{},
-		gateReports:     map[string]GateReport{},
-		workflowEvents:  map[string]WorkflowEvent{},
-		statusEvents:    map[string]StatusEvent{},
+		projects:            map[string]Project{},
+		templates:           map[string]WorkflowTemplate{},
+		workflowDefinitions: map[workflowDefinitionKey]WorkflowDefinitionRecord{},
+		promptTemplates:     map[string]PromptTemplate{},
+		items:               map[string]WorkItem{},
+		links:               map[string]WorkItemLink{},
+		runs:                map[string]WorkItemRun{},
+		artifacts:           map[string]Artifact{},
+		questions:           map[string]Question{},
+		gateReports:         map[string]GateReport{},
+		workflowEvents:      map[string]WorkflowEvent{},
+		statusEvents:        map[string]StatusEvent{},
 	}
 	if len(snapshot.Templates) == 0 {
 		template := DefaultWorkflowTemplate(time.Time{})
@@ -807,6 +835,20 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 			return nil, fmt.Errorf("workflow template %s already exists", template.ID)
 		}
 		state.templates[template.ID] = cloneTemplate(template)
+	}
+	if len(snapshot.WorkflowDefinitions) == 0 {
+		record := DefaultWorkflowDefinitionRecord(time.Time{})
+		state.workflowDefinitions[workflowDefinitionKey{id: record.ID, version: record.Version}] = record
+	}
+	for _, record := range snapshot.WorkflowDefinitions {
+		if err := validateWorkflowDefinitionRecord(record); err != nil {
+			return nil, err
+		}
+		key := workflowDefinitionKey{id: record.ID, version: record.Version}
+		if _, exists := state.workflowDefinitions[key]; exists {
+			return nil, fmt.Errorf("workflow definition %s@%d already exists", record.ID, record.Version)
+		}
+		state.workflowDefinitions[key] = cloneWorkflowDefinitionRecord(record)
 	}
 	builtinPrompts := map[string]PromptTemplate{}
 	for _, prompt := range DefaultPromptTemplates(time.Time{}) {
@@ -829,6 +871,7 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		state.promptTemplates[prompt.ID] = prompt
 	}
 	for _, project := range snapshot.Projects {
+		project = state.backfillProjectWorkflowDefinition(project)
 		if err := validateProject(project); err != nil {
 			return nil, err
 		}
@@ -838,6 +881,12 @@ func NewStateFromSnapshot(snapshot Snapshot) (*State, error) {
 		state.projects[project.ID] = cloneProject(project)
 	}
 	for _, item := range snapshot.Items {
+		if item.WorkflowID == "" {
+			item.WorkflowID = WorkflowPlanExecuteReview
+		}
+		if item.WorkflowVersion <= 0 {
+			item.WorkflowVersion = 1
+		}
 		if err := state.validateWorkItem(item); err != nil {
 			return nil, err
 		}
@@ -998,17 +1047,18 @@ func DefaultPromptTemplates(now time.Time) []PromptTemplate {
 
 func (s *State) Snapshot() Snapshot {
 	return Snapshot{
-		Projects:        s.ListProjects(),
-		Templates:       s.ListWorkflowTemplates(),
-		PromptTemplates: s.ListPromptTemplates(),
-		Items:           s.ListWorkItems(""),
-		Links:           s.ListWorkItemLinks(""),
-		Runs:            s.ListRuns(""),
-		Artifacts:       s.ListArtifacts(""),
-		Questions:       s.ListQuestions(""),
-		GateReports:     s.ListGateReports(""),
-		WorkflowEvents:  s.ListWorkflowEvents(""),
-		StatusEvents:    s.ListStatusEvents(ListStatusEvents{}),
+		Projects:            s.ListProjects(),
+		Templates:           s.ListWorkflowTemplates(),
+		WorkflowDefinitions: s.ListWorkflowDefinitions(),
+		PromptTemplates:     s.ListPromptTemplates(),
+		Items:               s.ListWorkItems(""),
+		Links:               s.ListWorkItemLinks(""),
+		Runs:                s.ListRuns(""),
+		Artifacts:           s.ListArtifacts(""),
+		Questions:           s.ListQuestions(""),
+		GateReports:         s.ListGateReports(""),
+		WorkflowEvents:      s.ListWorkflowEvents(""),
+		StatusEvents:        s.ListStatusEvents(ListStatusEvents{}),
 	}
 }
 
@@ -1032,6 +1082,67 @@ func (s *State) ListWorkflowTemplates() []WorkflowTemplate {
 		return out[i].ID < out[j].ID
 	})
 	return out
+}
+
+func (s *State) ListWorkflowDefinitions() []WorkflowDefinitionRecord {
+	out := make([]WorkflowDefinitionRecord, 0, len(s.workflowDefinitions))
+	for _, record := range s.workflowDefinitions {
+		out = append(out, cloneWorkflowDefinitionRecord(record))
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].ID == out[j].ID {
+			return out[i].Version < out[j].Version
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func (s *State) WorkflowDefinition(id string, version int) (WorkflowDefinitionRecord, bool) {
+	record, ok := s.workflowDefinitions[workflowDefinitionKey{id: id, version: version}]
+	return cloneWorkflowDefinitionRecord(record), ok
+}
+
+func (s *State) ImportWorkflowDefinition(req ImportWorkflowDefinition) (WorkflowDefinitionRecord, error) {
+	source := strings.TrimSpace(req.Source)
+	if source == "" {
+		source = "imported"
+	}
+	record, err := NewWorkflowDefinitionRecord(req.Definition, source, strings.TrimSpace(req.SourcePath), req.Now)
+	if err != nil {
+		return WorkflowDefinitionRecord{}, err
+	}
+	key := workflowDefinitionKey{id: record.ID, version: record.Version}
+	existing, exists := s.workflowDefinitions[key]
+	if exists {
+		if existing.ContentHash != record.ContentHash {
+			return WorkflowDefinitionRecord{}, fmt.Errorf("workflow definition %s@%d already exists with different content", record.ID, record.Version)
+		}
+		return cloneWorkflowDefinitionRecord(existing), nil
+	}
+	s.workflowDefinitions[key] = record
+	return cloneWorkflowDefinitionRecord(record), nil
+}
+
+func (s *State) SetProjectWorkflowDefinition(req SetProjectWorkflowDefinition) (Project, error) {
+	project, ok := s.projects[req.ProjectID]
+	if !ok {
+		return Project{}, fmt.Errorf("project %s not found", req.ProjectID)
+	}
+	record, ok := s.workflowDefinitions[workflowDefinitionKey{id: req.ID, version: req.Version}]
+	if !ok {
+		return Project{}, fmt.Errorf("workflow definition %s@%d not found", req.ID, req.Version)
+	}
+	project.Workflow.DefinitionID = record.ID
+	project.Workflow.DefinitionVersion = record.Version
+	project.Workflow.DefinitionHash = record.ContentHash
+	project.Workflow.Stages = stagesForWorkflowDefinition(record.Definition)
+	project.UpdatedAt = req.Now
+	if err := validateProject(project); err != nil {
+		return Project{}, err
+	}
+	s.projects[project.ID] = project
+	return cloneProject(project), nil
 }
 
 func (s *State) ListPromptTemplates() []PromptTemplate {
@@ -1370,6 +1481,10 @@ func (s *State) CreateProject(req CreateProject) (Project, error) {
 	if !ok {
 		return Project{}, fmt.Errorf("workflow template %s not found", workflowID)
 	}
+	definition := DefaultWorkflowDefinitionRecord(time.Time{})
+	if record, ok := s.workflowDefinitions[workflowDefinitionKey{id: WorkflowPlanExecuteReview, version: 1}]; ok {
+		definition = record
+	}
 	projectWorkflowID := req.ProjectWorkflowID
 	if projectWorkflowID == "" {
 		projectWorkflowID = req.ID + "-workflow"
@@ -1385,11 +1500,14 @@ func (s *State) CreateProject(req CreateProject) (Project, error) {
 		Slug:        slug,
 		RootDir:     rootDir,
 		Workflow: ProjectWorkflow{
-			ID:              projectWorkflowID,
-			TemplateID:      template.ID,
-			Name:            template.Name,
-			Stages:          cloneStages(template.Stages),
-			TransitionRules: cloneTransitionRules(template.TransitionRules),
+			ID:                projectWorkflowID,
+			TemplateID:        template.ID,
+			DefinitionID:      definition.ID,
+			DefinitionVersion: definition.Version,
+			DefinitionHash:    definition.ContentHash,
+			Name:              template.Name,
+			Stages:            cloneStages(template.Stages),
+			TransitionRules:   cloneTransitionRules(template.TransitionRules),
 		},
 		Preferences:        defaultProjectPreferences(req.Preferences),
 		Metadata:           map[string]MetadataValue{},
@@ -1622,9 +1740,20 @@ func (s *State) CreateWorkItem(req CreateWorkItem) (WorkItem, error) {
 	if stage.ProvisionWorktree {
 		return WorkItem{}, fmt.Errorf("stage %s requires worktree", stageID)
 	}
-	workflow := DefaultWorkflowDefinition()
-	if req.WorkflowID != "" && req.WorkflowID != workflow.ID {
-		return WorkItem{}, fmt.Errorf("workflow %s not found", req.WorkflowID)
+	workflowID := project.Workflow.DefinitionID
+	if req.WorkflowID != "" {
+		workflowID = req.WorkflowID
+	}
+	workflowVersion := project.Workflow.DefinitionVersion
+	if workflowID == "" {
+		workflowID = WorkflowPlanExecuteReview
+	}
+	if workflowVersion <= 0 {
+		workflowVersion = 1
+	}
+	workflow, ok := s.workflowDefinitions[workflowDefinitionKey{id: workflowID, version: workflowVersion}]
+	if !ok {
+		return WorkItem{}, fmt.Errorf("workflow definition %s@%d not found", workflowID, workflowVersion)
 	}
 	number := project.NextWorkItemNumber
 	project.NextWorkItemNumber++
@@ -1948,7 +2077,10 @@ func (s *State) StartPlanning(req StartPlanning) (WorkItemRun, error) {
 	if !ok {
 		return WorkItemRun{}, fmt.Errorf("work item %s not found", req.WorkItemID)
 	}
-	action := mustDefaultWorkflowAction(WorkflowActionStartPlanning)
+	action, err := s.workflowActionForItem(item, WorkflowActionStartPlanning)
+	if err != nil {
+		return WorkItemRun{}, err
+	}
 	item.StageID = action.To
 	item.UpdatedAt = req.Now
 	s.items[item.ID] = item
@@ -1984,7 +2116,10 @@ func (s *State) SubmitDraftPlan(req SubmitDraftPlan) (Artifact, error) {
 	if body == "" {
 		return Artifact{}, fmt.Errorf("plan body required")
 	}
-	action := mustDefaultWorkflowAction(WorkflowActionSubmitDraftPlan)
+	action, err := s.workflowActionForItem(item, WorkflowActionSubmitDraftPlan)
+	if err != nil {
+		return Artifact{}, err
+	}
 	effect := action.CreatesArtifact
 	if effect == nil {
 		return Artifact{}, fmt.Errorf("workflow action %s does not create an artifact", action.ID)
@@ -2027,7 +2162,10 @@ func (s *State) ApprovePlan(req ApprovePlan) (WorkItem, error) {
 	if artifact.WorkItemID != item.ID || artifact.Kind != ArtifactKindPlan {
 		return WorkItem{}, fmt.Errorf("plan artifact required")
 	}
-	action := mustDefaultWorkflowAction(WorkflowActionApprovePlan)
+	action, err := s.workflowActionForItem(item, WorkflowActionApprovePlan)
+	if err != nil {
+		return WorkItem{}, err
+	}
 	if action.UpdatesArtifact == nil {
 		return WorkItem{}, fmt.Errorf("workflow action %s does not update an artifact", action.ID)
 	}
@@ -2046,7 +2184,10 @@ func (s *State) StartExecution(req StartExecution) (WorkItemRun, error) {
 	if !ok {
 		return WorkItemRun{}, fmt.Errorf("work item %s not found", req.WorkItemID)
 	}
-	action := mustDefaultWorkflowAction(WorkflowActionStartExecution)
+	action, err := s.workflowActionForItem(item, WorkflowActionStartExecution)
+	if err != nil {
+		return WorkItemRun{}, err
+	}
 	if !s.hasRequiredArtifacts(item.ID, action.Requires) {
 		return WorkItemRun{}, fmt.Errorf("approved plan required")
 	}
@@ -2167,10 +2308,14 @@ func (s *State) ReportBlocked(req ReportBlocked) (WorkItem, error) {
 	if !ok {
 		return WorkItem{}, fmt.Errorf("work item %s not found", req.WorkItemID)
 	}
-	if item.StageID != StageBlocked {
+	action, err := s.workflowActionForItem(item, WorkflowActionReportBlocked)
+	if err != nil {
+		return WorkItem{}, err
+	}
+	if item.StageID != action.To {
 		item.PreviousStageID = item.StageID
 	}
-	item.StageID = StageBlocked
+	item.StageID = action.To
 	item.RunState = RunStateAwaitingInput
 	item.UpdatedAt = req.Now
 	if req.RunID != "" {
@@ -2189,11 +2334,23 @@ func (s *State) Unblock(req Unblock) (WorkItem, error) {
 	if !ok {
 		return WorkItem{}, fmt.Errorf("work item %s not found", req.WorkItemID)
 	}
-	if item.StageID != StageBlocked {
+	action, err := s.workflowActionForItem(item, WorkflowActionUnblock)
+	if err != nil {
+		return WorkItem{}, err
+	}
+	blockedStage := StageBlocked
+	for _, stage := range action.From {
+		blockedStage = stage
+		break
+	}
+	if item.StageID != blockedStage {
 		return WorkItem{}, fmt.Errorf("work item %s is not blocked", req.WorkItemID)
 	}
-	next := item.PreviousStageID
-	if next == "" {
+	next := action.To
+	if next == "$previousStage" {
+		next = item.PreviousStageID
+	}
+	if next == "" || next == "$previousStage" {
 		next = StageExecution
 	}
 	item.StageID = next
@@ -2213,13 +2370,19 @@ func (s *State) CompleteExecution(req CompleteExecution) (WorkItem, error) {
 	run.Status = RunStateCompleted
 	run.CompletedAt = &req.Now
 	run.UpdatedAt = req.Now
-	action := mustDefaultWorkflowAction(WorkflowActionCompleteExecution)
+	action, err := s.workflowActionForItem(item, WorkflowActionCompleteExecution)
+	if err != nil {
+		return WorkItem{}, err
+	}
 	item.RunState = RunStateCompleted
 	item.StageID = action.To
 	item.UpdatedAt = req.Now
 	s.runs[run.ID] = run
 	s.items[item.ID] = item
-	definition := DefaultWorkflowDefinition()
+	definition, err := s.workflowDefinitionForItem(item)
+	if err != nil {
+		return WorkItem{}, err
+	}
 	for _, gateID := range action.CreatesGates {
 		if s.hasGateReport(item.ID, gateID) {
 			continue
@@ -2254,7 +2417,10 @@ func (s *State) SubmitReviewFeedback(req SubmitReviewFeedback) (Artifact, error)
 	if body == "" {
 		return Artifact{}, fmt.Errorf("feedback body required")
 	}
-	action := mustDefaultWorkflowAction(WorkflowActionSubmitReviewFeedback)
+	action, err := s.workflowActionForItem(item, WorkflowActionSubmitReviewFeedback)
+	if err != nil {
+		return Artifact{}, err
+	}
 	effect := action.CreatesArtifact
 	if effect == nil {
 		return Artifact{}, fmt.Errorf("workflow action %s does not create an artifact", action.ID)
@@ -2320,7 +2486,10 @@ func (s *State) ApproveDone(req ApproveDone) (WorkItem, error) {
 	if !ok {
 		return WorkItem{}, fmt.Errorf("work item %s not found", req.WorkItemID)
 	}
-	action := mustDefaultWorkflowAction(WorkflowActionApproveDone)
+	action, err := s.workflowActionForItem(item, WorkflowActionApproveDone)
+	if err != nil {
+		return WorkItem{}, err
+	}
 	if action.RequiresPassingBlockingGates {
 		for _, gate := range s.gateReports {
 			if gate.WorkItemID == item.ID && gate.Blocking && gate.Status != GateStatusPassed && gate.Status != GateStatusOverridden {
@@ -2705,8 +2874,8 @@ func (s *State) validateWorkItem(item WorkItem) error {
 	if item.WorkflowVersion <= 0 {
 		return fmt.Errorf("work item workflow version must be positive")
 	}
-	if item.WorkflowID != WorkflowPlanExecuteReview {
-		return fmt.Errorf("workflow %s not found", item.WorkflowID)
+	if _, ok := s.workflowDefinitions[workflowDefinitionKey{id: item.WorkflowID, version: item.WorkflowVersion}]; !ok {
+		return fmt.Errorf("workflow definition %s@%d not found", item.WorkflowID, item.WorkflowVersion)
 	}
 	if !project.hasStage(item.StageID) {
 		return fmt.Errorf("stage %s not found", item.StageID)
@@ -2827,6 +2996,32 @@ func validatePromptTemplate(template PromptTemplate) error {
 	return nil
 }
 
+func validateWorkflowDefinitionRecord(record WorkflowDefinitionRecord) error {
+	if record.ID == "" {
+		return fmt.Errorf("workflow definition id required")
+	}
+	if record.Version <= 0 {
+		return fmt.Errorf("workflow definition version must be positive")
+	}
+	if record.ContentHash == "" {
+		return fmt.Errorf("workflow definition content hash required")
+	}
+	if record.ID != record.Definition.ID || record.Version != record.Definition.Version {
+		return fmt.Errorf("workflow definition record identity mismatch")
+	}
+	if err := ValidateWorkflowDefinition(record.Definition); err != nil {
+		return err
+	}
+	hash, err := WorkflowDefinitionHash(record.Definition)
+	if err != nil {
+		return err
+	}
+	if hash != record.ContentHash {
+		return fmt.Errorf("workflow definition content hash mismatch")
+	}
+	return nil
+}
+
 func validateProject(project Project) error {
 	if project.ID == "" {
 		return fmt.Errorf("project id required")
@@ -2856,6 +3051,43 @@ func validateProject(project Project) error {
 		Name:   project.Workflow.Name,
 		Stages: project.Workflow.Stages,
 	})
+}
+
+func stagesForWorkflowDefinition(definition WorkflowDefinition) []WorkflowStage {
+	defaults := map[string]WorkflowStage{}
+	for _, stage := range DefaultWorkflowTemplate(time.Time{}).Stages {
+		defaults[stage.ID] = stage
+	}
+	stages := make([]WorkflowStage, 0, len(definition.Stages))
+	for _, id := range definition.Stages {
+		if stage, ok := defaults[id]; ok {
+			stages = append(stages, stage)
+			continue
+		}
+		stages = append(stages, WorkflowStage{
+			ID:   id,
+			Name: stageNameFromID(id),
+			Kind: StageKindActive,
+		})
+	}
+	return stages
+}
+
+func stageNameFromID(id string) string {
+	parts := strings.FieldsFunc(id, func(r rune) bool {
+		return r == '-' || r == '_'
+	})
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	name := strings.Join(parts, " ")
+	if name == "" {
+		return id
+	}
+	return name
 }
 
 func defaultProjectPreferences(preferences ProjectPreferences) ProjectPreferences {
@@ -2963,6 +3195,43 @@ func (s *State) hasGateReport(workItemID string, name string) bool {
 		}
 	}
 	return false
+}
+
+func (s *State) workflowDefinitionForItem(item WorkItem) (WorkflowDefinition, error) {
+	record, ok := s.workflowDefinitions[workflowDefinitionKey{id: item.WorkflowID, version: item.WorkflowVersion}]
+	if !ok {
+		return WorkflowDefinition{}, fmt.Errorf("workflow definition %s@%d not found", item.WorkflowID, item.WorkflowVersion)
+	}
+	return record.Definition, nil
+}
+
+func (s *State) workflowActionForItem(item WorkItem, id string) (WorkflowActionDefinition, error) {
+	definition, err := s.workflowDefinitionForItem(item)
+	if err != nil {
+		return WorkflowActionDefinition{}, err
+	}
+	action, ok := definition.Action(id)
+	if !ok {
+		return WorkflowActionDefinition{}, fmt.Errorf("workflow action %s not found", id)
+	}
+	return action, nil
+}
+
+func (s *State) backfillProjectWorkflowDefinition(project Project) Project {
+	if project.Workflow.DefinitionID != "" && project.Workflow.DefinitionVersion > 0 && project.Workflow.DefinitionHash != "" {
+		return project
+	}
+	record, ok := s.workflowDefinitions[workflowDefinitionKey{id: WorkflowPlanExecuteReview, version: 1}]
+	if !ok {
+		record = DefaultWorkflowDefinitionRecord(time.Time{})
+	}
+	project.Workflow.DefinitionID = record.ID
+	project.Workflow.DefinitionVersion = record.Version
+	project.Workflow.DefinitionHash = record.ContentHash
+	if len(project.Workflow.Stages) == 0 {
+		project.Workflow.Stages = stagesForWorkflowDefinition(record.Definition)
+	}
+	return project
 }
 
 func (s *State) recordWorkflowEvent(kind, projectID, workItemID, runID, actor, message string, at time.Time) {
@@ -3279,6 +3548,41 @@ func cloneTemplate(template WorkflowTemplate) WorkflowTemplate {
 	template.Stages = cloneStages(template.Stages)
 	template.TransitionRules = cloneTransitionRules(template.TransitionRules)
 	return template
+}
+
+func cloneWorkflowDefinitionRecord(record WorkflowDefinitionRecord) WorkflowDefinitionRecord {
+	record.Definition = cloneWorkflowDefinition(record.Definition)
+	return record
+}
+
+func cloneWorkflowDefinition(definition WorkflowDefinition) WorkflowDefinition {
+	definition.Stages = append([]string(nil), definition.Stages...)
+	definition.Actions = cloneWorkflowActionDefinitions(definition.Actions)
+	definition.Gates = append([]WorkflowGateDefinition(nil), definition.Gates...)
+	return definition
+}
+
+func cloneWorkflowActionDefinitions(actions []WorkflowActionDefinition) []WorkflowActionDefinition {
+	out := make([]WorkflowActionDefinition, 0, len(actions))
+	for _, action := range actions {
+		action.From = append([]string(nil), action.From...)
+		action.Requires = append([]WorkflowArtifactRequirement(nil), action.Requires...)
+		if action.CreatesArtifact != nil {
+			effect := *action.CreatesArtifact
+			action.CreatesArtifact = &effect
+		}
+		if action.UpdatesArtifact != nil {
+			effect := *action.UpdatesArtifact
+			action.UpdatesArtifact = &effect
+		}
+		if action.CreatesRun != nil {
+			effect := *action.CreatesRun
+			action.CreatesRun = &effect
+		}
+		action.CreatesGates = append([]string(nil), action.CreatesGates...)
+		out = append(out, action)
+	}
+	return out
 }
 
 func cloneWorkItem(item WorkItem) WorkItem {

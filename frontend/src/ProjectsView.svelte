@@ -19,6 +19,7 @@
     Project,
     ProjectAttachmentTemplate,
     ProjectDetail,
+    WorkflowDefinitionRecord,
     WorkItem,
     WorkItemRun,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
@@ -52,12 +53,18 @@
   export let projects: Project[] = [];
   export let activeProjectId = "";
   export let detail: ProjectDetail | null = null;
+  export let workflowDefinitions: WorkflowDefinitionRecord[] = [];
   export let artifacts: Artifact[] = [];
   export let gateReports: GateReport[] = [];
   export let loading = false;
   export let onUpdateProject: (
     projectId: string,
     request: { name: string; description: string },
+  ) => void;
+  export let onSetProjectWorkflowDefinition: (
+    projectId: string,
+    id: string,
+    version: number,
   ) => void;
   export let onDeleteProject: (projectId: string) => void;
   export let onNewSession: (projectId: string) => void;
@@ -389,13 +396,16 @@
       <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto p-5">
         {#if activeTab === "overview"}
           <ProjectOverview
+            project={visibleDetail.project}
             {counts}
+            workflowDefinitions={workflowDefinitions}
             {recentSessions}
             {recentWorkItems}
             {recentRuns}
             {sessions}
             {loading}
             onSelectTab={selectTab}
+            onSetWorkflowDefinition={(id, version) => onSetProjectWorkflowDefinition(visibleDetail.project.id, id, version)}
             onNewSession={() => onNewSession(visibleDetail.project.id)}
             {onOpenSession}
             {onOpenWorkItem}

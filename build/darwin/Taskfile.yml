@@ -170,6 +170,9 @@ tasks:
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources/skills/whisk"
       - cp "skills/whisk/SKILL.md" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources/skills/whisk/SKILL.md"
       - cp "skills/whisk/README.md" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources/skills/whisk/README.md"
+      - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources/skills/make-whisk-workflow"
+      - cp "skills/make-whisk-workflow/SKILL.md" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources/skills/make-whisk-workflow/SKILL.md"
+      - cp "skills/make-whisk-workflow/README.md" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources/skills/make-whisk-workflow/README.md"
       - cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents"
       - task: '{{if eq OS "darwin"}}codesign:adhoc{{else}}codesign:skip{{end}}'
 

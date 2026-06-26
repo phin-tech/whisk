@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..types import UNSET, Unset
+
 if TYPE_CHECKING:
     from ..models.transition_rule import TransitionRule
     from ..models.workflow_stage import WorkflowStage
@@ -23,6 +25,9 @@ class ProjectWorkflow:
         stages (list[WorkflowStage] | None):
         template_id (str):
         transition_rules (list[TransitionRule] | None):
+        definition_hash (str | Unset):
+        definition_id (str | Unset):
+        definition_version (int | Unset):
     """
 
     id: str
@@ -30,6 +35,9 @@ class ProjectWorkflow:
     stages: list[WorkflowStage] | None
     template_id: str
     transition_rules: list[TransitionRule] | None
+    definition_hash: str | Unset = UNSET
+    definition_id: str | Unset = UNSET
+    definition_version: int | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -61,6 +69,12 @@ class ProjectWorkflow:
         else:
             transition_rules = self.transition_rules
 
+        definition_hash = self.definition_hash
+
+        definition_id = self.definition_id
+
+        definition_version = self.definition_version
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -72,6 +86,12 @@ class ProjectWorkflow:
                 "transitionRules": transition_rules,
             }
         )
+        if definition_hash is not UNSET:
+            field_dict["definitionHash"] = definition_hash
+        if definition_id is not UNSET:
+            field_dict["definitionId"] = definition_id
+        if definition_version is not UNSET:
+            field_dict["definitionVersion"] = definition_version
 
         return field_dict
 
@@ -131,12 +151,21 @@ class ProjectWorkflow:
 
         transition_rules = _parse_transition_rules(d.pop("transitionRules"))
 
+        definition_hash = d.pop("definitionHash", UNSET)
+
+        definition_id = d.pop("definitionId", UNSET)
+
+        definition_version = d.pop("definitionVersion", UNSET)
+
         project_workflow = cls(
             id=id,
             name=name,
             stages=stages,
             template_id=template_id,
             transition_rules=transition_rules,
+            definition_hash=definition_hash,
+            definition_id=definition_id,
+            definition_version=definition_version,
         )
 
         project_workflow.additional_properties = d

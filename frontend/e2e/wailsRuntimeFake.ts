@@ -44,9 +44,71 @@ let agentHookLogStatus = {
 
 function seedState() {
   const now = "2026-06-25T12:00:00Z";
+  const workflowDefinition = {
+    id: "plan-execute-review",
+    version: 1,
+    stages: ["backlog", "planning", "ready", "execution", "review", "done"],
+    actions: [
+      {
+        id: "start_planning",
+        from: ["backlog"],
+        to: "planning",
+        requiresHuman: true,
+      },
+      {
+        id: "approve_plan",
+        from: ["planning"],
+        to: "ready",
+        requires: [{ kind: "plan", status: "draft" }],
+        createsArtifact: { kind: "plan", status: "approved" },
+        createsGates: ["plan_approval"],
+        requiresHuman: true,
+      },
+      {
+        id: "start_execution",
+        from: ["ready"],
+        to: "execution",
+        createsRun: {
+          phase: "execution",
+          preset: "writer",
+          promptTemplateId: "execution",
+          workingDir: "project",
+          autoProvisionWorktree: true,
+        },
+      },
+      {
+        id: "submit_review",
+        from: ["execution"],
+        to: "review",
+        updatesArtifact: { kind: "implementation", status: "submitted" },
+        createsGates: ["review"],
+      },
+      {
+        id: "complete",
+        from: ["review"],
+        to: "done",
+        requiresPassingBlockingGates: true,
+        completesRun: true,
+      },
+    ],
+    questions: {
+      enabled: true,
+      moveToBlocked: true,
+      setsRunState: "awaiting_input",
+      answerClearsAwaitingInputWhenNoOpenQuestionsRemain: true,
+    },
+    gates: [
+      { id: "plan_approval", phase: "planning", blocking: true },
+      { id: "review", phase: "review", blocking: true },
+    ],
+  };
   const workflow = {
     id: "default",
-    version: 1,
+    templateId: "default",
+    definitionId: workflowDefinition.id,
+    definitionVersion: workflowDefinition.version,
+    definitionHash: "e2e-workflow",
+    name: "Plan Execute Review",
     stages: [
       { id: "backlog", name: "Backlog", kind: "backlog" },
       { id: "planning", name: "Planning", kind: "planning" },
@@ -55,6 +117,7 @@ function seedState() {
       { id: "review", name: "Review", kind: "review" },
       { id: "done", name: "Done", kind: "done" },
     ],
+    transitionRules: [],
   };
   const project = {
     id: "proj_01",
@@ -84,6 +147,18 @@ function seedState() {
     now,
     project,
     projects: [project],
+    workflowDefinitions: [
+      {
+        id: workflowDefinition.id,
+        version: workflowDefinition.version,
+        source: "builtin",
+        sourcePath: "",
+        contentHash: "e2e-workflow",
+        definition: workflowDefinition,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
     sessions: [
       {
         id: "sess_01",
@@ -244,7 +319,7 @@ function seedState() {
   function workItem(input: { id: string; number: number; title: string; stageId: string; runState: string }): WorkItem {
     return {
       projectId: "proj_01",
-      workflowId: "default",
+      workflowId: workflowDefinition.id,
       workflowVersion: 1,
       bodyMarkdown: `Seeded body for ${input.title}.`,
       worktree:
@@ -280,7 +355,7 @@ function createdWorkItem(req: any): WorkItem {
 function workItemFromRequest(input: Partial<WorkItem> & { id: string; number: number; title: string }): WorkItem {
   return {
     projectId: "proj_01",
-    workflowId: "default",
+    workflowId: state.project.workflow.definitionId,
     workflowVersion: 1,
     bodyMarkdown: "",
     stageId: "backlog",
@@ -416,6 +491,29 @@ function dispatch(methodName: string, args: unknown[]) {
       ];
     case "ListProjects":
       return clone(state.projects);
+    case "ListWorkflowDefinitions":
+      return clone(state.workflowDefinitions);
+    case "SetProjectWorkflowDefinition": {
+      const projectID = args[0] as string;
+      const req = args[1] as { id: string; version: number };
+      const definition = state.workflowDefinitions.find(
+        (candidate) => candidate.id === req.id && candidate.version === req.version,
+      );
+      if (!definition || projectID !== state.project.id) {
+        throw new Error("workflow definition not found");
+      }
+      state.project = {
+        ...state.project,
+        workflow: {
+          ...state.project.workflow,
+          definitionId: definition.id,
+          definitionVersion: definition.version,
+          definitionHash: definition.contentHash,
+        },
+      };
+      state.projects = state.projects.map((project) => (project.id === state.project.id ? state.project : project));
+      return clone(state.project);
+    }
     case "ProjectDetail":
       return {
         project: clone(state.project),

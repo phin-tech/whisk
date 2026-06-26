@@ -395,6 +395,18 @@ func (s *Service) ListWorkflowTemplates(ctx context.Context) ([]protocol.Workflo
 	return s.client.ListWorkflowTemplates(ctx)
 }
 
+func (s *Service) ListWorkflowDefinitions(ctx context.Context) ([]protocol.WorkflowDefinitionRecord, error) {
+	return s.client.ListWorkflowDefinitions(ctx)
+}
+
+func (s *Service) ImportWorkflowDefinition(ctx context.Context, req protocol.ImportWorkflowDefinitionRequest) (protocol.WorkflowDefinitionRecord, error) {
+	return s.client.ImportWorkflowDefinition(ctx, req)
+}
+
+func (s *Service) SetProjectWorkflowDefinition(ctx context.Context, projectID string, req protocol.SetProjectWorkflowDefinitionRequest) (protocol.Project, error) {
+	return s.client.SetProjectWorkflowDefinition(ctx, projectID, req)
+}
+
 func (s *Service) ListPromptTemplates(ctx context.Context) ([]protocol.PromptTemplate, error) {
 	return s.client.ListPromptTemplates(ctx)
 }

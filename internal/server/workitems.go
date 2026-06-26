@@ -86,6 +86,23 @@ func (s *HTTPServer) getProjectDetail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *HTTPServer) setProjectWorkflowDefinition(w http.ResponseWriter, r *http.Request) {
+	var req protocol.SetProjectWorkflowDefinitionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	project, err := s.runtime.SetProjectWorkflowDefinition(r.Context(), app.SetProjectWorkflowDefinitionRequest{
+		ProjectID: pathValue(r, "projectID", ""),
+		ID:        req.ID,
+		Version:   req.Version,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, project)
+}
+
 func (s *HTTPServer) addProjectAttachment(w http.ResponseWriter, r *http.Request) {
 	var req protocol.AddProjectAttachmentRequest
 	if !decodeJSON(w, r, &req) {
@@ -458,6 +475,32 @@ func (s *HTTPServer) listWorkflowTemplates(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, templates)
+}
+
+func (s *HTTPServer) listWorkflowDefinitions(w http.ResponseWriter, r *http.Request) {
+	definitions, err := s.runtime.ListWorkflowDefinitions(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, definitions)
+}
+
+func (s *HTTPServer) importWorkflowDefinition(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ImportWorkflowDefinitionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	record, err := s.runtime.ImportWorkflowDefinition(r.Context(), app.ImportWorkflowDefinitionRequest{
+		Definition: req.Definition,
+		Source:     req.Source,
+		SourcePath: req.SourcePath,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, record)
 }
 
 func (s *HTTPServer) listPromptTemplates(w http.ResponseWriter, r *http.Request) {

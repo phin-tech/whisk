@@ -9,7 +9,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 21
+const DaemonAPIVersion = 22
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -455,6 +455,8 @@ type SetAgentHookLogSettingsRequest struct {
 }
 
 type Project = workitem.Project
+type WorkflowDefinition = workitem.WorkflowDefinition
+type WorkflowDefinitionRecord = workitem.WorkflowDefinitionRecord
 type WorkflowTemplate = workitem.WorkflowTemplate
 type PromptTemplate = workitem.PromptTemplate
 type WorkItem = workitem.WorkItem
@@ -531,6 +533,17 @@ type UpdateProjectRequest struct {
 
 type DeleteProjectRequest struct {
 	Actor string `json:"actor,omitempty"`
+}
+
+type ImportWorkflowDefinitionRequest struct {
+	Definition WorkflowDefinition `json:"definition"`
+	Source     string             `json:"source,omitempty"`
+	SourcePath string             `json:"sourcePath,omitempty"`
+}
+
+type SetProjectWorkflowDefinitionRequest struct {
+	ID      string `json:"id"`
+	Version int    `json:"version"`
 }
 
 type AddProjectAttachmentRequest struct {

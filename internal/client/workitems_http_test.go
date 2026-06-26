@@ -197,6 +197,76 @@ func TestHTTPClientDrivesDaemonWorkItemAPI(t *testing.T) {
 	}
 }
 
+func TestHTTPClientDrivesWorkflowDefinitionAPIToProjectSelection(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend()})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	handler := server.NewHTTP(runtime)
+	httpServer := httptest.NewServer(handler)
+	defer httpServer.Close()
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx := context.Background()
+
+	definitions, err := daemon.ListWorkflowDefinitions(ctx)
+	if err != nil {
+		t.Fatalf("list definitions: %v", err)
+	}
+	if len(definitions) != 1 || definitions[0].ID != workitem.WorkflowPlanExecuteReview || definitions[0].Version != 1 {
+		t.Fatalf("definitions = %#v", definitions)
+	}
+
+	project, err := daemon.CreateProject(ctx, protocol.CreateProjectRequest{
+		Name:    "Workflow UI",
+		RootDir: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	definition := workitem.DefaultWorkflowDefinition()
+	definition.Version = 2
+	definition.Actions[0].To = workitem.StageReady
+	imported, err := daemon.ImportWorkflowDefinition(ctx, protocol.ImportWorkflowDefinitionRequest{
+		Definition: definition,
+		SourcePath: ".whisk/workflows/plan_execute_review_v2.json",
+	})
+	if err != nil {
+		t.Fatalf("import definition: %v", err)
+	}
+	if imported.ID != definition.ID || imported.Version != definition.Version || imported.ContentHash == "" {
+		t.Fatalf("imported = %#v", imported)
+	}
+
+	selected, err := daemon.SetProjectWorkflowDefinition(ctx, project.ID, protocol.SetProjectWorkflowDefinitionRequest{
+		ID:      imported.ID,
+		Version: imported.Version,
+	})
+	if err != nil {
+		t.Fatalf("set project workflow definition: %v", err)
+	}
+	if selected.Workflow.DefinitionID != imported.ID || selected.Workflow.DefinitionVersion != imported.Version || selected.Workflow.DefinitionHash != imported.ContentHash {
+		t.Fatalf("selected project = %#v", selected.Workflow)
+	}
+
+	projects, err := daemon.ListProjects(ctx)
+	if err != nil || len(projects) != 1 {
+		t.Fatalf("projects = %#v, err = %v", projects, err)
+	}
+	if projects[0].Workflow.DefinitionVersion != imported.Version {
+		t.Fatalf("listed project workflow = %#v", projects[0].Workflow)
+	}
+
+	item, err := daemon.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{
+		ProjectID: project.ID,
+		Title:     "Use selected workflow",
+	})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	if item.WorkflowID != imported.ID || item.WorkflowVersion != imported.Version {
+		t.Fatalf("item workflow stamp = %#v", item)
+	}
+}
+
 func TestHTTPClientDrivesDaemonWorkItemLinkAndReadyAPI(t *testing.T) {
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend()})
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })

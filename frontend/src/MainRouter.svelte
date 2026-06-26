@@ -16,6 +16,7 @@
     WorkItem,
     WorkItemLink,
     WorkItemRun,
+    WorkflowDefinitionRecord,
     WorkflowEvent,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import LayoutView from "./LayoutView.svelte";
@@ -45,6 +46,7 @@
   export let artifacts: Artifact[] = [];
   export let questions: Question[] = [];
   export let gateReports: GateReport[] = [];
+  export let workflowDefinitions: WorkflowDefinitionRecord[] = [];
   export let workflowEvents: WorkflowEvent[] = [];
   export let agentProfiles: AgentProfile[] = [];
   export let workFilterQuery = "";
@@ -54,6 +56,11 @@
   export let onUpdateProject: (
     projectId: string,
     request: { name: string; description: string },
+  ) => void;
+  export let onSetProjectWorkflowDefinition: (
+    projectId: string,
+    id: string,
+    version: number,
   ) => void;
   export let onDeleteProject: (projectId: string) => void;
   export let onNewProjectSession: (projectId: string) => void;
@@ -162,10 +169,12 @@
 {#if activeMain === "projects"}
   <ProjectsView
     {projects}
+    {workflowDefinitions}
     detail={projectDetail}
     {activeProjectId}
     loading={loadingWork || loadingSession}
     {onUpdateProject}
+    {onSetProjectWorkflowDefinition}
     {onDeleteProject}
     onNewSession={onNewProjectSession}
     {onOpenSession}
@@ -194,6 +203,7 @@
     {artifacts}
     {questions}
     {gateReports}
+    workflowDefinitions={workflowDefinitions}
     {workflowEvents}
     {agentProfiles}
     {activeProjectId}

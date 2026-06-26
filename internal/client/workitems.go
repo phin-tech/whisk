@@ -40,6 +40,13 @@ func (c *HTTPClient) GetProjectDetail(ctx context.Context, projectID string) (pr
 	return detail, err
 }
 
+func (c *HTTPClient) SetProjectWorkflowDefinition(ctx context.Context, projectID string, req protocol.SetProjectWorkflowDefinitionRequest) (protocol.Project, error) {
+	var project protocol.Project
+	path := "/v1/projects/" + url.PathEscape(projectID) + "/workflow-definition"
+	err := c.post(ctx, path, req, &project)
+	return project, err
+}
+
 func (c *HTTPClient) AddProjectAttachment(ctx context.Context, req protocol.AddProjectAttachmentRequest) (protocol.Project, error) {
 	var project protocol.Project
 	path := "/v1/projects/" + url.PathEscape(req.ProjectID) + "/attachments"
@@ -72,6 +79,18 @@ func (c *HTTPClient) ListWorkflowTemplates(ctx context.Context) ([]protocol.Work
 	var templates []protocol.WorkflowTemplate
 	err := c.get(ctx, "/v1/workflow-templates", nil, &templates)
 	return templates, err
+}
+
+func (c *HTTPClient) ListWorkflowDefinitions(ctx context.Context) ([]protocol.WorkflowDefinitionRecord, error) {
+	var definitions []protocol.WorkflowDefinitionRecord
+	err := c.get(ctx, "/v1/workflow-definitions", nil, &definitions)
+	return definitions, err
+}
+
+func (c *HTTPClient) ImportWorkflowDefinition(ctx context.Context, req protocol.ImportWorkflowDefinitionRequest) (protocol.WorkflowDefinitionRecord, error) {
+	var record protocol.WorkflowDefinitionRecord
+	err := c.post(ctx, "/v1/workflow-definitions/import", req, &record)
+	return record, err
 }
 
 func (c *HTTPClient) ListPromptTemplates(ctx context.Context) ([]protocol.PromptTemplate, error) {

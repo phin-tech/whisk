@@ -27,6 +27,7 @@
     WorkItem,
     WorkItemLink,
     WorkItemRun,
+    WorkflowDefinitionRecord,
     WorkflowEvent,
     ReadyWorkExplanation,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
@@ -75,6 +76,7 @@
     ListStatusEvents,
     ListWorkItemLinks,
     ListWorkItemRuns,
+    ListWorkflowDefinitions,
     ListWorkItems,
     ListWorkflowEvents,
     LoadAppSettings,
@@ -98,6 +100,7 @@
     RunPluginProjectAttachmentTemplate,
     SaveAppSettings,
     SetAgentHookLogSettings,
+    SetProjectWorkflowDefinition,
     SetSessionProject,
     SplitPane,
     StartPlanning,
@@ -171,6 +174,7 @@
   let artifacts: Artifact[] = [];
   let questions: Question[] = [];
   let gateReports: GateReport[] = [];
+  let workflowDefinitions: WorkflowDefinitionRecord[] = [];
   let workflowEvents: WorkflowEvent[] = [];
   let statusEvents: StatusEvent[] = [];
   let agentBridgeApprovals: AgentBridgeApproval[] = [];
@@ -485,6 +489,7 @@
   async function refreshProjects() {
     loadingWork = true;
     try {
+      workflowDefinitions = await ListWorkflowDefinitions();
       projects = await ListProjects();
       if (!activeProjectId && projects.length > 0) {
         activeProjectId = projects[0].id;
@@ -497,6 +502,10 @@
     } finally {
       loadingWork = false;
     }
+  }
+
+  async function refreshWorkflowDefinitions() {
+    workflowDefinitions = await ListWorkflowDefinitions();
   }
 
   async function refreshProjectDetail() {
@@ -1257,6 +1266,20 @@
     }
   }
 
+  async function setProjectWorkflowDefinition(projectId: string, id: string, version: number) {
+    if (!projectId || !id || version <= 0) return;
+    error = "";
+    loadingWork = true;
+    try {
+      await SetProjectWorkflowDefinition(projectId, { id, version });
+      await refreshProjects();
+    } catch (err) {
+      error = `Set project workflow failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
   async function setPhaseAgent(projectId: string, preset: string, agentProfileId: string) {
     if (!projectId || !preset) return;
     error = "";
@@ -1958,6 +1981,7 @@
       .then(refreshPlugins)
       .then(() => refreshOnboarding(true))
       .then(refreshAgentProfiles)
+      .then(refreshWorkflowDefinitions)
       .then(refreshProjects)
       .then(refreshStatusEvents)
       .then(refreshVisibleOutput)
@@ -2089,6 +2113,7 @@
           {artifacts}
           {questions}
           {gateReports}
+          {workflowDefinitions}
           {workflowEvents}
           {agentProfiles}
           {workFilterQuery}
@@ -2096,6 +2121,7 @@
           {workFilterRunState}
           pluginAttachmentTemplates={projectAttachmentTemplates}
           onUpdateProject={(projectId, request) => void updateProject(projectId, request)}
+          onSetProjectWorkflowDefinition={(projectId, id, version) => void setProjectWorkflowDefinition(projectId, id, version)}
           onDeleteProject={(projectId) => void deleteProject(projectId)}
           onNewProjectSession={(projectId) => openNewProjectSession(projectId)}
           onOpenSession={(sessionId) => void openSessionById(sessionId)}

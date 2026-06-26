@@ -408,6 +408,9 @@ export class ProjectPreferences {
 export class ProjectWorkflow {
     "id": string;
     "templateId": string;
+    "definitionId"?: string;
+    "definitionVersion"?: number;
+    "definitionHash"?: string;
     "name": string;
     "stages": WorkflowStage[];
     "transitionRules": TransitionRule[];
@@ -437,14 +440,14 @@ export class ProjectWorkflow {
      * Creates a new ProjectWorkflow instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectWorkflow {
-        const $$createField3_0 = $$createType13;
-        const $$createField4_0 = $$createType15;
+        const $$createField6_0 = $$createType13;
+        const $$createField7_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("stages" in $$parsedSource) {
-            $$parsedSource["stages"] = $$createField3_0($$parsedSource["stages"]);
+            $$parsedSource["stages"] = $$createField6_0($$parsedSource["stages"]);
         }
         if ("transitionRules" in $$parsedSource) {
-            $$parsedSource["transitionRules"] = $$createField4_0($$parsedSource["transitionRules"]);
+            $$parsedSource["transitionRules"] = $$createField7_0($$parsedSource["transitionRules"]);
         }
         return new ProjectWorkflow($$parsedSource as Partial<ProjectWorkflow>);
     }
@@ -992,6 +995,226 @@ export class WorkItemRun {
     }
 }
 
+export class WorkflowActionDefinition {
+    "id": string;
+    "from": string[];
+    "to": string;
+    "requires"?: WorkflowArtifactRequirement[];
+    "createsArtifact"?: WorkflowArtifactEffect | null;
+    "updatesArtifact"?: WorkflowArtifactEffect | null;
+    "createsRun"?: WorkflowRunEffect | null;
+    "completesRun"?: boolean;
+    "createsGates"?: string[];
+    "resumesRun"?: string;
+    "requiresPassingBlockingGates"?: boolean;
+    "requiresHuman"?: boolean;
+    "sideStage"?: boolean;
+
+    /** Creates a new WorkflowActionDefinition instance. */
+    constructor($$source: Partial<WorkflowActionDefinition> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("from" in $$source)) {
+            this["from"] = [];
+        }
+        if (!("to" in $$source)) {
+            this["to"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowActionDefinition instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowActionDefinition {
+        const $$createField1_0 = $$createType20;
+        const $$createField3_0 = $$createType30;
+        const $$createField4_0 = $$createType32;
+        const $$createField5_0 = $$createType32;
+        const $$createField6_0 = $$createType34;
+        const $$createField8_0 = $$createType20;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("from" in $$parsedSource) {
+            $$parsedSource["from"] = $$createField1_0($$parsedSource["from"]);
+        }
+        if ("requires" in $$parsedSource) {
+            $$parsedSource["requires"] = $$createField3_0($$parsedSource["requires"]);
+        }
+        if ("createsArtifact" in $$parsedSource) {
+            $$parsedSource["createsArtifact"] = $$createField4_0($$parsedSource["createsArtifact"]);
+        }
+        if ("updatesArtifact" in $$parsedSource) {
+            $$parsedSource["updatesArtifact"] = $$createField5_0($$parsedSource["updatesArtifact"]);
+        }
+        if ("createsRun" in $$parsedSource) {
+            $$parsedSource["createsRun"] = $$createField6_0($$parsedSource["createsRun"]);
+        }
+        if ("createsGates" in $$parsedSource) {
+            $$parsedSource["createsGates"] = $$createField8_0($$parsedSource["createsGates"]);
+        }
+        return new WorkflowActionDefinition($$parsedSource as Partial<WorkflowActionDefinition>);
+    }
+}
+
+export class WorkflowArtifactEffect {
+    "kind": string;
+    "status": string;
+
+    /** Creates a new WorkflowArtifactEffect instance. */
+    constructor($$source: Partial<WorkflowArtifactEffect> = {}) {
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowArtifactEffect instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowArtifactEffect {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkflowArtifactEffect($$parsedSource as Partial<WorkflowArtifactEffect>);
+    }
+}
+
+export class WorkflowArtifactRequirement {
+    "kind": string;
+    "status": string;
+
+    /** Creates a new WorkflowArtifactRequirement instance. */
+    constructor($$source: Partial<WorkflowArtifactRequirement> = {}) {
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowArtifactRequirement instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowArtifactRequirement {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkflowArtifactRequirement($$parsedSource as Partial<WorkflowArtifactRequirement>);
+    }
+}
+
+export class WorkflowDefinition {
+    "id": string;
+    "version": number;
+    "stages": string[];
+    "actions": WorkflowActionDefinition[];
+    "questions": WorkflowQuestionPolicy;
+    "gates": WorkflowGateDefinition[];
+
+    /** Creates a new WorkflowDefinition instance. */
+    constructor($$source: Partial<WorkflowDefinition> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("version" in $$source)) {
+            this["version"] = 0;
+        }
+        if (!("stages" in $$source)) {
+            this["stages"] = [];
+        }
+        if (!("actions" in $$source)) {
+            this["actions"] = [];
+        }
+        if (!("questions" in $$source)) {
+            this["questions"] = (new WorkflowQuestionPolicy());
+        }
+        if (!("gates" in $$source)) {
+            this["gates"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowDefinition instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowDefinition {
+        const $$createField2_0 = $$createType20;
+        const $$createField3_0 = $$createType36;
+        const $$createField4_0 = $$createType37;
+        const $$createField5_0 = $$createType39;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("stages" in $$parsedSource) {
+            $$parsedSource["stages"] = $$createField2_0($$parsedSource["stages"]);
+        }
+        if ("actions" in $$parsedSource) {
+            $$parsedSource["actions"] = $$createField3_0($$parsedSource["actions"]);
+        }
+        if ("questions" in $$parsedSource) {
+            $$parsedSource["questions"] = $$createField4_0($$parsedSource["questions"]);
+        }
+        if ("gates" in $$parsedSource) {
+            $$parsedSource["gates"] = $$createField5_0($$parsedSource["gates"]);
+        }
+        return new WorkflowDefinition($$parsedSource as Partial<WorkflowDefinition>);
+    }
+}
+
+export class WorkflowDefinitionRecord {
+    "id": string;
+    "version": number;
+    "source": string;
+    "sourcePath"?: string;
+    "contentHash": string;
+    "definition": WorkflowDefinition;
+    "createdAt": time$0.Time;
+    "updatedAt": time$0.Time;
+
+    /** Creates a new WorkflowDefinitionRecord instance. */
+    constructor($$source: Partial<WorkflowDefinitionRecord> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("version" in $$source)) {
+            this["version"] = 0;
+        }
+        if (!("source" in $$source)) {
+            this["source"] = "";
+        }
+        if (!("contentHash" in $$source)) {
+            this["contentHash"] = "";
+        }
+        if (!("definition" in $$source)) {
+            this["definition"] = (new WorkflowDefinition());
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowDefinitionRecord instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowDefinitionRecord {
+        const $$createField5_0 = $$createType40;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("definition" in $$parsedSource) {
+            $$parsedSource["definition"] = $$createField5_0($$parsedSource["definition"]);
+        }
+        return new WorkflowDefinitionRecord($$parsedSource as Partial<WorkflowDefinitionRecord>);
+    }
+}
+
 export class WorkflowEvent {
     "id": string;
     "projectId": string;
@@ -1026,6 +1249,102 @@ export class WorkflowEvent {
     static createFrom($$source: any = {}): WorkflowEvent {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new WorkflowEvent($$parsedSource as Partial<WorkflowEvent>);
+    }
+}
+
+export class WorkflowGateDefinition {
+    "id": string;
+    "phase": string;
+    "blocking": boolean;
+
+    /** Creates a new WorkflowGateDefinition instance. */
+    constructor($$source: Partial<WorkflowGateDefinition> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("phase" in $$source)) {
+            this["phase"] = "";
+        }
+        if (!("blocking" in $$source)) {
+            this["blocking"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowGateDefinition instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowGateDefinition {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkflowGateDefinition($$parsedSource as Partial<WorkflowGateDefinition>);
+    }
+}
+
+export class WorkflowQuestionPolicy {
+    "enabled": boolean;
+    "moveToBlocked": boolean;
+    "setsRunState": string;
+    "answerClearsAwaitingInputWhenNoOpenQuestionsRemain": boolean;
+
+    /** Creates a new WorkflowQuestionPolicy instance. */
+    constructor($$source: Partial<WorkflowQuestionPolicy> = {}) {
+        if (!("enabled" in $$source)) {
+            this["enabled"] = false;
+        }
+        if (!("moveToBlocked" in $$source)) {
+            this["moveToBlocked"] = false;
+        }
+        if (!("setsRunState" in $$source)) {
+            this["setsRunState"] = "";
+        }
+        if (!("answerClearsAwaitingInputWhenNoOpenQuestionsRemain" in $$source)) {
+            this["answerClearsAwaitingInputWhenNoOpenQuestionsRemain"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowQuestionPolicy instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowQuestionPolicy {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkflowQuestionPolicy($$parsedSource as Partial<WorkflowQuestionPolicy>);
+    }
+}
+
+export class WorkflowRunEffect {
+    "phase": string;
+    "preset": string;
+    "promptTemplateId": string;
+    "workingDir": string;
+    "autoProvisionWorktree"?: boolean;
+
+    /** Creates a new WorkflowRunEffect instance. */
+    constructor($$source: Partial<WorkflowRunEffect> = {}) {
+        if (!("phase" in $$source)) {
+            this["phase"] = "";
+        }
+        if (!("preset" in $$source)) {
+            this["preset"] = "";
+        }
+        if (!("promptTemplateId" in $$source)) {
+            this["promptTemplateId"] = "";
+        }
+        if (!("workingDir" in $$source)) {
+            this["workingDir"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkflowRunEffect instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkflowRunEffect {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkflowRunEffect($$parsedSource as Partial<WorkflowRunEffect>);
     }
 }
 
@@ -1178,3 +1497,15 @@ const $$createType25 = HistoryEvent.createFrom;
 const $$createType26 = $Create.Array($$createType25);
 const $$createType27 = RunEvent.createFrom;
 const $$createType28 = $Create.Array($$createType27);
+const $$createType29 = WorkflowArtifactRequirement.createFrom;
+const $$createType30 = $Create.Array($$createType29);
+const $$createType31 = WorkflowArtifactEffect.createFrom;
+const $$createType32 = $Create.Nullable($$createType31);
+const $$createType33 = WorkflowRunEffect.createFrom;
+const $$createType34 = $Create.Nullable($$createType33);
+const $$createType35 = WorkflowActionDefinition.createFrom;
+const $$createType36 = $Create.Array($$createType35);
+const $$createType37 = WorkflowQuestionPolicy.createFrom;
+const $$createType38 = WorkflowGateDefinition.createFrom;
+const $$createType39 = $Create.Array($$createType38);
+const $$createType40 = WorkflowDefinition.createFrom;
