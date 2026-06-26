@@ -32,6 +32,7 @@ const (
 	CommandAddBookmark         = "bookmark.add"
 	CommandPreviousBookmark    = "bookmark.previous"
 	CommandNextBookmark        = "bookmark.next"
+	CommandLastPrompt          = "bookmark.lastPrompt"
 	selectSessionPrefix        = "select-session-"
 )
 
@@ -156,6 +157,13 @@ func Commands() []Command {
 			Label:    "Next Bookmark",
 			Category: CategoryTerminal,
 			Default:  "CmdOrCtrl+Alt+Right",
+			Editable: true,
+		},
+		Command{
+			ID:       CommandLastPrompt,
+			Label:    "Jump to Last Prompt",
+			Category: CategoryTerminal,
+			Default:  "CmdOrCtrl+Alt+P",
 			Editable: true,
 		},
 	)

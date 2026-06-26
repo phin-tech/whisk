@@ -159,7 +159,7 @@
     writePTYInputOverSocket,
   } from "./ptyStream";
   import { sessionSplitCommands } from "./sessionCommands";
-  import { activeWindow, bookmarkJumpTarget, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, nextBookmarkTarget, resetOutputReplayForBookmark, runtimeRefreshTargets, safeBookmarksByPty, visiblePtyIds, type BookmarkDirection } from "./sessionView";
+  import { activeWindow, bookmarkJumpTarget, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, latestPromptJumpPointTarget, nextBookmarkTarget, resetOutputReplayForBookmark, runtimeRefreshTargets, safeBookmarksByPty, visiblePtyIds, type BookmarkDirection } from "./sessionView";
   import {
     normalizeStartupView,
     startupTarget,
@@ -371,6 +371,13 @@
       shortcut: "Cmd/Ctrl Alt Right",
       enabled: () => Boolean(activePtyId && (bookmarksByPty[activePtyId] ?? []).length > 0),
       run: () => jumpBookmarkByDirection("next"),
+    },
+    {
+      id: "bookmark.lastPrompt",
+      title: "Jump to Last Prompt",
+      shortcut: "Cmd/Ctrl Alt P",
+      enabled: () => Boolean(activePtyId && latestPromptJumpPointTarget(bookmarksByPty[activePtyId] ?? [])),
+      run: jumpToLastPrompt,
     },
     // Session-switch commands mirror the native Sessions menu (Cmd 1..0). They are gated on the
     // session count so only reachable slots appear in the palette.
@@ -602,6 +609,16 @@
     );
     if (!bookmark) {
       error = `No bookmarks for ${activePtyId}`;
+      return;
+    }
+    await jumpToBookmark(bookmark);
+  }
+
+  async function jumpToLastPrompt() {
+    if (!activePtyId) return;
+    const bookmark = latestPromptJumpPointTarget(bookmarksByPty[activePtyId] ?? []);
+    if (!bookmark) {
+      error = `No prompt jump points for ${activePtyId}`;
       return;
     }
     await jumpToBookmark(bookmark);

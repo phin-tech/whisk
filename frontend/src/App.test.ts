@@ -14,10 +14,13 @@ describe("App notification refresh", () => {
     expect(source).toContain("jumpToBookmark");
     expect(source).toContain("createPTYBookmark");
     expect(source).toContain("jumpBookmarkByDirection");
+    expect(source).toContain("jumpToLastPrompt");
+    expect(source).toContain("latestPromptJumpPointTarget");
     expect(source).toContain("resetOutputReplayForBookmark");
     expect(source).toContain("bookmarkJumpTarget");
     expect(source).toContain("bookmark.add");
     expect(source).toContain("bookmark.previous");
     expect(source).toContain("bookmark.next");
+    expect(source).toContain("bookmark.lastPrompt");
   });
 });

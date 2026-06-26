@@ -283,6 +283,13 @@ export function nextBookmarkTarget<T extends PtyBookmarkLike>(
   return sorted[sorted.length - 1];
 }
 
+export function latestPromptJumpPointTarget<T extends PtyBookmarkLike>(bookmarks: T[]): T | null {
+  const sorted = bookmarks
+    .filter((bookmark) => bookmark.kind === "jump_point")
+    .sort((a, b) => b.offset - a.offset || b.id.localeCompare(a.id));
+  return sorted[0] ?? null;
+}
+
 export function bookmarkJumpTarget(
   sessions: SessionLike[],
   bookmark: PtyBookmarkLike,

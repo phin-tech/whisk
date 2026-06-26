@@ -6,6 +6,7 @@ import {
   closePaneRequest,
   isStalePTYError,
   killPTYRequest,
+  latestPromptJumpPointTarget,
   paneIds,
   ptyHistoryRows,
   ptyRowsFromInventory,
@@ -334,6 +335,27 @@ describe("nextBookmarkTarget", () => {
     expect(nextBookmarkTarget(bookmarks, "bm_30", 0, "next")?.id).toBe("bm_10");
     expect(nextBookmarkTarget(bookmarks, "", 35, "next")?.id).toBe("bm_10");
     expect(nextBookmarkTarget(bookmarks, "", 5, "previous")?.id).toBe("bm_30");
+  });
+});
+
+describe("latestPromptJumpPointTarget", () => {
+  it("returns the highest-offset jump point and ignores manual bookmarks", () => {
+    const bookmarks = [
+      { id: "manual", ptyId: "pty_01", offset: 80, kind: "manual" },
+      { id: "older", ptyId: "pty_01", offset: 10, kind: "jump_point" },
+      { id: "latest", ptyId: "pty_01", offset: 40, kind: "jump_point" },
+    ];
+
+    expect(latestPromptJumpPointTarget(bookmarks)?.id).toBe("latest");
+  });
+
+  it("uses id as a stable tie-breaker", () => {
+    const bookmarks = [
+      { id: "jump_a", ptyId: "pty_01", offset: 40, kind: "jump_point" },
+      { id: "jump_b", ptyId: "pty_01", offset: 40, kind: "jump_point" },
+    ];
+
+    expect(latestPromptJumpPointTarget(bookmarks)?.id).toBe("jump_b");
   });
 });
 
