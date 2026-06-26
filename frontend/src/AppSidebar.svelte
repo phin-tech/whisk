@@ -5,6 +5,7 @@
     AgentBridgeEvent,
     AgentPrompt,
     Project,
+    PTYBookmark,
     PTYHistory,
     PTYHistorySummary,
     PTYInfo,
@@ -25,6 +26,7 @@
   export let notificationCount = 0;
   export let sessions: Session[] = [];
   export let ptys: PTYInfo[] = [];
+  export let bookmarksByPty: Record<string, PTYBookmark[]> = {};
   export let ptyHistory: PTYHistorySummary[] = [];
   export let selectedPTYHistory: PTYHistory | null = null;
   export let projects: Project[] = [];
@@ -53,6 +55,7 @@
   export let onRefreshPtys: () => void;
   export let onKillPTY: (ptyId: string) => void;
   export let onDeletePTY: (ptyId: string) => void;
+  export let onSelectBookmark: (bookmark: PTYBookmark) => void;
   export let onSelectPTYHistory: (ptyId: string) => void;
   export let onRefreshStatusEvents: () => void;
   export let onClearNotifications: () => void;
@@ -97,6 +100,7 @@
     activePanel={activeSidebar}
     {sessions}
     {ptys}
+    {bookmarksByPty}
     {ptyHistory}
     {selectedPTYHistory}
     {projects}
@@ -124,6 +128,7 @@
     {onRefreshPtys}
     {onKillPTY}
     {onDeletePTY}
+    {onSelectBookmark}
     {onSelectPTYHistory}
     {onRefreshStatusEvents}
     {onClearNotifications}

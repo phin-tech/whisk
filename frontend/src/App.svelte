@@ -11,6 +11,7 @@
     AgentHookLogStatus,
     Project,
     ProjectDetail,
+    PTYBookmark,
     PTYHistory,
     PTYHistorySummary,
     PTYInfo,
@@ -72,6 +73,7 @@
     ListArtifacts,
     ListAgentProfiles,
     ListGateReports,
+    ListPTYBookmarks,
     ListPTYHistory,
     ListPTYs,
     ProjectDetail as LoadProjectDetail,
@@ -156,7 +158,7 @@
     writePTYInputOverSocket,
   } from "./ptyStream";
   import { sessionSplitCommands } from "./sessionCommands";
-  import { activeWindow, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
+  import { activeWindow, bookmarkJumpTarget, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, resetOutputReplayForBookmark, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
     normalizeStartupView,
     startupTarget,
@@ -171,6 +173,7 @@
 
   let sessions: Session[] = [];
   let ptys: PTYInfo[] = [];
+  let bookmarksByPty: Record<string, PTYBookmark[]> = {};
   let ptyHistory: PTYHistorySummary[] = [];
   let selectedPTYHistory: PTYHistory | null = null;
   let projects: Project[] = [];
@@ -271,6 +274,7 @@
   let loadingStatusEvents = false;
   let outputChunks: Record<string, string[]> = {};
   let offsets: Record<string, number> = {};
+  let bookmarkJumpRevisions: Record<string, number> = {};
   let daemonAddress = "";
   let ptyStreams: Record<string, WebSocket> = {};
   let ptyTraceEnabled = false;
@@ -474,12 +478,22 @@
     }
   }
 
+  async function loadBookmarksByPty(nextPtys: PTYInfo[]) {
+    if (nextPtys.length === 0) return {};
+    const entries = await Promise.all(
+      nextPtys.map(async (pty) => [pty.id, await ListPTYBookmarks(pty.id)] as const),
+    );
+    return Object.fromEntries(entries);
+  }
+
   async function refreshPTYs() {
     loadingPtys = true;
     loadingPTYHistory = true;
     try {
       const [nextPtys, nextHistory] = await Promise.all([ListPTYs(), ListPTYHistory()]);
+      const nextBookmarksByPty = await loadBookmarksByPty(nextPtys);
       ptys = nextPtys;
+      bookmarksByPty = nextBookmarksByPty;
       ptyHistory = nextHistory;
       if (selectedPTYHistory && !nextHistory.some((item) => item.ptyId === selectedPTYHistory?.ptyId)) {
         selectedPTYHistory = null;
@@ -495,6 +509,31 @@
       selectedPTYHistory = await ReadPTYHistory(ptyId);
     } catch (err) {
       error = `Load PTY history failed: ${backendError(err)}`;
+    }
+  }
+
+  async function jumpToBookmark(bookmark: PTYBookmark) {
+    const target = bookmarkJumpTarget(sessions, bookmark);
+    if (!target) {
+      error = `Bookmark target not found: ${bookmark.ptyId}`;
+      return;
+    }
+    const socket = ptyStreams[target.ptyId];
+    if (socket) socket.close();
+    const replay = resetOutputReplayForBookmark(
+      { outputChunks, offsets, jumpRevisions: bookmarkJumpRevisions },
+      bookmark,
+    );
+    outputChunks = replay.outputChunks;
+    offsets = replay.offsets;
+    bookmarkJumpRevisions = replay.jumpRevisions;
+    activeSessionId = target.sessionId;
+    activePaneId = target.paneId;
+    selectMain("session");
+    try {
+      await refreshOutput(target.ptyId);
+    } catch (err) {
+      if (!isStalePTYError(err)) error = `Jump to bookmark failed: ${backendError(err)}`;
     }
   }
 
@@ -2129,6 +2168,7 @@
       {notificationCount}
       {sessions}
       {ptys}
+      {bookmarksByPty}
       {ptyHistory}
       {selectedPTYHistory}
       {projects}
@@ -2157,6 +2197,7 @@
       onRefreshPtys={() => void refreshPTYs()}
       onKillPTY={(ptyId) => void killPTY(ptyId)}
       onDeletePTY={(ptyId) => void deletePTY(ptyId)}
+      onSelectBookmark={(bookmark) => void jumpToBookmark(bookmark)}
       onSelectPTYHistory={(ptyId) => void selectPTYHistory(ptyId)}
       onRefreshStatusEvents={() => void refreshStatusEvents()}
       onClearNotifications={() => void executeCommand("notifications.clear")}
@@ -2198,6 +2239,8 @@
           {activeSession}
           {activeSessionWindow}
           {outputChunks}
+          {bookmarksByPty}
+          {bookmarkJumpRevisions}
           {activePaneId}
           {terminalFontSize}
           {terminalCursorBlink}
@@ -2267,6 +2310,7 @@
           onCompleteGate={completeGate}
           onApproveDone={approveDone}
           onFocusPane={(paneId) => (activePaneId = paneId)}
+          onSelectBookmark={(bookmark) => void jumpToBookmark(bookmark)}
           onPtyInput={(ptyId) => refreshOutput(ptyId).catch((err) => {
             if (!isStalePTYError(err)) error = backendError(err);
           })}

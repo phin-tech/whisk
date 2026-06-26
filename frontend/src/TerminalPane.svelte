@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { FitAddon } from "@xterm/addon-fit";
+  import BookmarkIcon from "@lucide/svelte/icons/bookmark";
   import Check from "@lucide/svelte/icons/check";
   import CircleStop from "@lucide/svelte/icons/circle-stop";
   import Clipboard from "@lucide/svelte/icons/clipboard";
@@ -8,19 +9,24 @@
   import { Terminal } from "@xterm/xterm";
   import "@xterm/xterm/css/xterm.css";
   import type { Pane } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
+  import type { PTYBookmark } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import { ResizePTY } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import { terminalInputRefreshDelays, terminalInputShouldRefreshOutput } from "./ptyStream";
+  import { ptyBookmarkRowsByPty } from "./sessionView";
   import Button from "./ui/Button.svelte";
   import IconButton from "./ui/IconButton.svelte";
 
   export let pane: Pane;
   export let outputChunks: string[] = [];
+  export let bookmarks: PTYBookmark[] = [];
+  export let jumpRevision = 0;
   export let focused = false;
   export let fontSize = 13;
   export let cursorBlink = true;
   export let onFocus: () => void;
   export let onInput: (ptyId: string) => void;
   export let onWriteInput: (ptyId: string, data: string) => Promise<void>;
+  export let onBookmark: (bookmark: PTYBookmark) => void;
   export let onClose: () => void;
   export let onKillPTY: () => void;
   export let canClose = false;
@@ -35,6 +41,12 @@
   let copiedPtyId = "";
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
   let renderedPtyId = "";
+  let appliedJumpRevision = 0;
+  let scrollToReplayStart = false;
+
+  $: bookmarkRows = pane.currentPtyId
+    ? (ptyBookmarkRowsByPty(bookmarks)[pane.currentPtyId] ?? [])
+    : [];
 
   function cssToken(name: string, fallback: string) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -88,6 +100,12 @@
     onKillPTY();
   }
 
+  function jumpBookmark(event: MouseEvent, bookmarkId: string) {
+    event.stopPropagation();
+    const bookmark = bookmarks.find((candidate) => candidate.id === bookmarkId);
+    if (bookmark) onBookmark(bookmark);
+  }
+
   function writeBase64Chunk(chunk: string) {
     if (!chunk) return;
     const binary = atob(chunk);
@@ -110,6 +128,24 @@
       writeBase64Chunk(chunk);
     }
     writtenChunks = chunks.length;
+  }
+
+  function applyJumpRevision() {
+    if (!terminal || appliedJumpRevision === jumpRevision) return;
+    appliedJumpRevision = jumpRevision;
+    scrollToReplayStart = true;
+    terminal.reset();
+    writtenChunks = 0;
+    renderedPtyId = pane.currentPtyId ?? "";
+  }
+
+  function replayAndMaybeScroll() {
+    applyJumpRevision();
+    replayOutputChunks(pane.currentPtyId ?? "", outputChunks);
+    if (scrollToReplayStart && outputChunks.length > 0) {
+      terminal.scrollToTop();
+      scrollToReplayStart = false;
+    }
   }
 
   onMount(() => {
@@ -139,14 +175,14 @@
         })
         .catch(console.error);
     });
-    replayOutputChunks(pane.currentPtyId ?? "", outputChunks);
+    replayAndMaybeScroll();
     return () => {
       resizeObserver.disconnect();
       terminal.dispose();
     };
   });
 
-  $: if (terminal) replayOutputChunks(pane.currentPtyId ?? "", outputChunks);
+  $: if (terminal) replayAndMaybeScroll();
   $: if (focused && terminal) terminal.focus();
 </script>
 
@@ -216,5 +252,30 @@
       </IconButton>
     </div>
   </div>
+  {#if pane.currentPtyId && bookmarkRows.length > 0}
+    <div
+      class="flex h-7 shrink-0 items-center gap-1 border-b border-hairline bg-bg-base/80 px-2 text-[10px]"
+    >
+      <BookmarkIcon size={12} class="shrink-0 text-text-muted" />
+      <div class="app-scrollbar flex min-w-0 flex-1 gap-1 overflow-x-auto">
+        {#each bookmarkRows as bookmark (bookmark.id)}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            align="start"
+            class="h-5 max-w-[180px] shrink-0 gap-1 rounded border border-border-subtle/60 bg-bg-surface/35 px-1.5 py-0 text-[10px]"
+            aria-label={`Jump to bookmark ${bookmark.label}`}
+            title={`Jump to bookmark ${bookmark.label} ${bookmark.offsetLabel}`}
+            onclick={(event: MouseEvent) => jumpBookmark(event, bookmark.id)}
+            onkeydown={(event: KeyboardEvent) => event.stopPropagation()}
+          >
+            <span class="min-w-0 truncate">{bookmark.label}</span>
+            <span class="font-mono text-text-muted">{bookmark.offsetLabel}</span>
+          </Button>
+        {/each}
+      </div>
+    </div>
+  {/if}
   <div bind:this={host} class="min-h-0 min-w-0 flex-1 overflow-hidden"></div>
 </div>

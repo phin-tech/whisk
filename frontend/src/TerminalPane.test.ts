@@ -7,7 +7,8 @@ describe("TerminalPane", () => {
   });
 
   it("themes xterm from design-system tokens instead of hardcoded hex", () => {
-    expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+    const withoutSvelteBlocks = source.replace(/\{#[a-z]+/g, "");
+    expect(withoutSvelteBlocks).not.toMatch(/#[0-9a-fA-F]{3,8}/);
     expect(source).toContain('cssToken("--color-bg-deep"');
     expect(source).toContain('cssToken("--color-text-primary"');
     expect(source).toContain('cssToken("--color-accent"');
@@ -19,5 +20,12 @@ describe("TerminalPane", () => {
     expect(source).toContain('from "./ui/Button.svelte"');
     expect(source).toContain('from "./ui/IconButton.svelte"');
     expect(source).not.toMatch(/<button\b/);
+  });
+
+  it("renders bookmark jump controls and scrolls to the replay start after a jump", () => {
+    expect(source).toContain("export let bookmarks");
+    expect(source).toContain("export let jumpRevision");
+    expect(source).toContain("onBookmark");
+    expect(source).toContain("scrollToTop");
   });
 });

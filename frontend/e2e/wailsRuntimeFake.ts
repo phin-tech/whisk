@@ -26,6 +26,18 @@ type WorkItemLink = {
   createdAt: string;
 };
 
+type PTYBookmark = {
+  id: string;
+  ptyId: string;
+  sessionId: string;
+  windowId: string;
+  paneId: string;
+  offset: number;
+  kind: string;
+  label: string;
+  createdAt: string;
+};
+
 const methodPrefix = "github.com/phin-tech/whisk/internal/wailsapp.Service.";
 const listeners = new Map<string, Set<Listener>>();
 const nextEventWaiters: Array<(event: unknown) => void> = [];
@@ -249,6 +261,19 @@ function seedState() {
         createdAt: now,
       },
     ],
+    bookmarks: [
+      {
+        id: "bm_01",
+        ptyId: "pty_01",
+        sessionId: "sess_01",
+        windowId: "win_01",
+        paneId: "pane_01",
+        offset: 12,
+        kind: "manual",
+        label: "Agent handoff",
+        createdAt: now,
+      },
+    ] as PTYBookmark[],
     ptyHistory: [],
     workItems,
     workItemLinks: [] as WorkItemLink[],
@@ -677,6 +702,8 @@ function dispatch(methodName: string, args: unknown[]) {
       return clone(state.sessions);
     case "ListPTYs":
       return clone(state.ptys);
+    case "ListPTYBookmarks":
+      return clone(state.bookmarks.filter((bookmark) => bookmark.ptyId === args[0]));
     case "ListPTYHistory":
       return clone(state.ptyHistory);
     case "ReadPTYHistory":
@@ -806,8 +833,16 @@ function dispatch(methodName: string, args: unknown[]) {
       return clone(state.statusEvents);
     case "ListAgentPrompts":
       return clone(state.agentPrompts);
-    case "Output":
-      return { ptyId: (args[0] as any)?.ptyId, fromOffset: (args[0] as any)?.fromOffset ?? 0, output: "", outputBase64: "", nextOffset: 0 };
+    case "Output": {
+      const req = (args[0] ?? {}) as { ptyId?: string; fromOffset?: number };
+      const output = req.fromOffset === 12 ? "bookmarked output\n" : "";
+      return {
+        ptyId: req.ptyId,
+        offset: (req.fromOffset ?? 0) + output.length,
+        output,
+        outputBase64: output ? btoa(output) : "",
+      };
+    }
     case "NextEvent":
       return new CancellablePromise((resolve) => {
         nextEventWaiters.push(resolve);

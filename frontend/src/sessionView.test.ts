@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  bookmarkJumpTarget,
+  ptyBookmarkRowsByPty,
   closePaneTarget,
   closePaneRequest,
   isStalePTYError,
@@ -7,6 +9,7 @@ import {
   paneIds,
   ptyHistoryRows,
   ptyRowsFromInventory,
+  resetOutputReplayForBookmark,
   runtimeRefreshTargets,
   sessionGroups,
   visiblePtyIds,
@@ -214,6 +217,132 @@ describe("ptyHistoryRows", () => {
         exitCode: 0,
       },
     ]);
+  });
+});
+
+describe("ptyBookmarkRowsByPty", () => {
+  it("groups bookmarks by pty and gives unlabeled bookmarks stable labels", () => {
+    expect(
+      ptyBookmarkRowsByPty([
+        { id: "bm_02", ptyId: "pty_01", sessionId: "sess_01", paneId: "pane_01", offset: 30, kind: "manual", label: "" },
+        { id: "bm_01", ptyId: "pty_01", sessionId: "sess_01", paneId: "pane_01", offset: 10, kind: "prompt", label: "Planning prompt" },
+        { id: "bm_03", ptyId: "pty_02", sessionId: "", paneId: "", offset: 5, kind: "", label: "" },
+      ]),
+    ).toEqual({
+      pty_01: [
+        {
+          id: "bm_01",
+          ptyId: "pty_01",
+          label: "Planning prompt",
+          offset: 10,
+          offsetLabel: "@10",
+          detail: "sess_01 / pane_01",
+          kind: "prompt",
+        },
+        {
+          id: "bm_02",
+          ptyId: "pty_01",
+          label: "manual",
+          offset: 30,
+          offsetLabel: "@30",
+          detail: "sess_01 / pane_01",
+          kind: "manual",
+        },
+      ],
+      pty_02: [
+        {
+          id: "bm_03",
+          ptyId: "pty_02",
+          label: "offset 5",
+          offset: 5,
+          offsetLabel: "@5",
+          detail: "unowned / detached",
+          kind: "",
+        },
+      ],
+    });
+  });
+});
+
+describe("bookmarkJumpTarget", () => {
+  const sessions = [
+    {
+      id: "sess_01",
+      name: "one",
+      rootDir: ".",
+      windows: {
+        win_01: { id: "win_01", layout: { kind: "leaf", paneId: "pane_01" } },
+      },
+      panes: {
+        pane_01: { id: "pane_01", currentPtyId: "pty_01" },
+      },
+    },
+    {
+      id: "sess_02",
+      name: "two",
+      rootDir: ".",
+      windows: {
+        win_02: { id: "win_02", layout: { kind: "leaf", paneId: "pane_02" } },
+      },
+      panes: {
+        pane_02: { id: "pane_02", currentPtyId: "pty_02" },
+      },
+    },
+  ];
+
+  it("resolves the owning session and pane for a bookmark", () => {
+    expect(
+      bookmarkJumpTarget(sessions, {
+        id: "bm_01",
+        ptyId: "pty_01",
+        sessionId: "sess_01",
+        paneId: "pane_01",
+        offset: 12,
+      }),
+    ).toEqual({ sessionId: "sess_01", paneId: "pane_01", ptyId: "pty_01", offset: 12 });
+  });
+
+  it("falls back to the live pty owner when stored pane metadata is stale", () => {
+    expect(
+      bookmarkJumpTarget(sessions, {
+        id: "bm_02",
+        ptyId: "pty_02",
+        sessionId: "old",
+        paneId: "old",
+        offset: 20,
+      }),
+    ).toEqual({ sessionId: "sess_02", paneId: "pane_02", ptyId: "pty_02", offset: 20 });
+  });
+
+  it("returns null for bookmarks whose pty is not live", () => {
+    expect(
+      bookmarkJumpTarget(sessions, {
+        id: "bm_stale",
+        ptyId: "pty_missing",
+        sessionId: "sess_01",
+        paneId: "pane_01",
+        offset: 0,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("resetOutputReplayForBookmark", () => {
+  it("clears rendered chunks, seeks to the bookmark offset, and bumps the jump revision", () => {
+    expect(
+      resetOutputReplayForBookmark(
+        {
+          outputChunks: { pty_01: ["old"], pty_02: ["keep"] },
+          offsets: { pty_01: 99, pty_02: 4 },
+          jumpRevisions: { pty_01: 2 },
+        },
+        { ptyId: "pty_01", offset: 12 },
+      ),
+    ).toEqual({
+      outputChunks: { pty_01: [], pty_02: ["keep"] },
+      offsets: { pty_01: 12, pty_02: 4 },
+      jumpRevisions: { pty_01: 3 },
+    });
   });
 });
 

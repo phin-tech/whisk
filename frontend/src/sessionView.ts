@@ -63,6 +63,39 @@ type PtyHistorySummaryLike = {
   exitCode?: number | null;
 };
 
+type PtyBookmarkLike = {
+  id: string;
+  ptyId: string;
+  sessionId?: string;
+  paneId?: string;
+  offset: number;
+  kind?: string;
+  label?: string;
+};
+
+export type PtyBookmarkRow = {
+  id: string;
+  ptyId: string;
+  label: string;
+  offset: number;
+  offsetLabel: string;
+  detail: string;
+  kind: string;
+};
+
+export type OutputReplayState = {
+  outputChunks: Record<string, string[]>;
+  offsets: Record<string, number>;
+  jumpRevisions: Record<string, number>;
+};
+
+export type BookmarkJumpTarget = {
+  sessionId: string;
+  paneId: string;
+  ptyId: string;
+  offset: number;
+};
+
 export type ClosePaneRequestLike = {
   sessionId: string;
   windowId: string;
@@ -185,6 +218,70 @@ export function ptyHistoryRows(history: PtyHistorySummaryLike[]) {
     createdAt: item.createdAt || "",
     exitCode: item.exitCode ?? null,
   }));
+}
+
+export function ptyBookmarkRowsByPty(bookmarks: PtyBookmarkLike[]) {
+  const grouped: Record<string, PtyBookmarkRow[]> = {};
+  for (const bookmark of [...bookmarks].sort((a, b) => a.ptyId.localeCompare(b.ptyId) || a.offset - b.offset || a.id.localeCompare(b.id))) {
+    const kind = bookmark.kind ?? "";
+    const label = bookmark.label?.trim() || kind.trim() || `offset ${bookmark.offset}`;
+    const row = {
+      id: bookmark.id,
+      ptyId: bookmark.ptyId,
+      label,
+      offset: bookmark.offset,
+      offsetLabel: `@${bookmark.offset}`,
+      detail: `${bookmark.sessionId || "unowned"} / ${bookmark.paneId || "detached"}`,
+      kind,
+    };
+    grouped[bookmark.ptyId] = [...(grouped[bookmark.ptyId] ?? []), row];
+  }
+  return grouped;
+}
+
+export function bookmarkJumpTarget(
+  sessions: SessionLike[],
+  bookmark: PtyBookmarkLike,
+): BookmarkJumpTarget | null {
+  const exactSession = sessions.find((session) => session.id === bookmark.sessionId);
+  const exactPane = exactSession?.panes[bookmark.paneId ?? ""];
+  if (exactSession && exactPane?.currentPtyId === bookmark.ptyId) {
+    return {
+      sessionId: exactSession.id,
+      paneId: exactPane.id || bookmark.paneId || "",
+      ptyId: bookmark.ptyId,
+      offset: Math.max(0, bookmark.offset),
+    };
+  }
+
+  for (const session of sessions) {
+    for (const [paneId, pane] of Object.entries(session.panes)) {
+      if (pane?.currentPtyId === bookmark.ptyId) {
+        return {
+          sessionId: session.id,
+          paneId: pane.id || paneId,
+          ptyId: bookmark.ptyId,
+          offset: Math.max(0, bookmark.offset),
+        };
+      }
+    }
+  }
+  return null;
+}
+
+export function resetOutputReplayForBookmark(
+  state: OutputReplayState,
+  bookmark: Pick<PtyBookmarkLike, "ptyId" | "offset">,
+): OutputReplayState {
+  const offset = Math.max(0, bookmark.offset);
+  return {
+    outputChunks: { ...state.outputChunks, [bookmark.ptyId]: [] },
+    offsets: { ...state.offsets, [bookmark.ptyId]: offset },
+    jumpRevisions: {
+      ...state.jumpRevisions,
+      [bookmark.ptyId]: (state.jumpRevisions[bookmark.ptyId] ?? 0) + 1,
+    },
+  };
 }
 
 export function sessionGroups<T extends SessionLike>(

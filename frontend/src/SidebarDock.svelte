@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
-  import type { AgentBridgeApproval, AgentBridgeEvent, AgentPrompt, Project, PTYHistory, PTYHistorySummary, PTYInfo, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { AgentBridgeApproval, AgentBridgeEvent, AgentPrompt, Project, PTYBookmark, PTYHistory, PTYHistorySummary, PTYInfo, StatusEvent, WorkItem } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import NotificationsPanel from "./NotificationsPanel.svelte";
   import ProjectsPanel from "./ProjectsPanel.svelte";
   import PtysPanel from "./PtysPanel.svelte";
@@ -12,6 +12,7 @@
   export let activePanel: "sessions" | "ptys" | "work" | "projects" | "notifications" | null = "sessions";
   export let sessions: Session[] = [];
   export let ptys: PTYInfo[] = [];
+  export let bookmarksByPty: Record<string, PTYBookmark[]> = {};
   export let ptyHistory: PTYHistorySummary[] = [];
   export let selectedPTYHistory: PTYHistory | null = null;
   export let projects: Project[] = [];
@@ -39,6 +40,7 @@
   export let onRefreshPtys: () => void;
   export let onKillPTY: (ptyId: string) => void;
   export let onDeletePTY: (ptyId: string) => void;
+  export let onSelectBookmark: (bookmark: PTYBookmark) => void;
   export let onSelectPTYHistory: (ptyId: string) => void;
   export let onRefreshStatusEvents: () => void;
   export let onClearNotifications: () => void;
@@ -166,6 +168,7 @@
         {:else if activePanel === "ptys"}
           <PtysPanel
             {ptys}
+            {bookmarksByPty}
             {ptyHistory}
             {selectedPTYHistory}
             loading={loadingPtys}
@@ -174,6 +177,7 @@
             onRefresh={onRefreshPtys}
             onKill={onKillPTY}
             onDelete={onDeletePTY}
+            {onSelectBookmark}
             onSelectHistory={onSelectPTYHistory}
           />
         {/if}

@@ -11,6 +11,7 @@
     Project,
     ProjectAttachmentTemplate,
     ProjectDetail,
+    PTYBookmark,
     Question,
     ReadyWorkExplanation,
     WorkItem,
@@ -32,6 +33,8 @@
   export let activeSession: Session | null = null;
   export let activeSessionWindow: SessionWindow | null = null;
   export let outputChunks: Record<string, string[]> = {};
+  export let bookmarksByPty: Record<string, PTYBookmark[]> = {};
+  export let bookmarkJumpRevisions: Record<string, number> = {};
   export let activePaneId = "";
   export let terminalFontSize = 13;
   export let terminalCursorBlink = true;
@@ -173,6 +176,7 @@
   export let onCompleteGate: (request: { id: string; status: string; overrideReason: string }) => void;
   export let onApproveDone: (workItemId: string, reason: string) => void;
   export let onFocusPane: (paneId: string) => void;
+  export let onSelectBookmark: (bookmark: PTYBookmark) => void;
   export let onPtyInput: (ptyId: string) => void;
   export let onWriteInput: (ptyId: string, data: string) => Promise<void>;
   export let onClosePane: (paneId: string) => void;
@@ -265,10 +269,13 @@
       node={activeSessionWindow.layout}
       panes={activeSession.panes}
       {outputChunks}
+      {bookmarksByPty}
+      {bookmarkJumpRevisions}
       {activePaneId}
       {terminalFontSize}
       {terminalCursorBlink}
       onFocus={onFocusPane}
+      onBookmark={onSelectBookmark}
       onInput={onPtyInput}
       onWriteInput={onWriteInput}
       onClose={onClosePane}

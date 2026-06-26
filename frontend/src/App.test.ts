@@ -6,4 +6,12 @@ describe("App notification refresh", () => {
     expect(source).toContain('ListAgentBridgeApprovals({ status: "pending" })');
     expect(source).not.toContain("agentBridgeApprovals = [];");
   });
+
+  it("loads pty bookmarks and resets output replay when jumping to one", () => {
+    expect(source).toContain("ListPTYBookmarks");
+    expect(source).toContain("bookmarksByPty");
+    expect(source).toContain("jumpToBookmark");
+    expect(source).toContain("resetOutputReplayForBookmark");
+    expect(source).toContain("bookmarkJumpTarget");
+  });
 });
