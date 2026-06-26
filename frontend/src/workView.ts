@@ -59,6 +59,12 @@ export type WorkItemAttention = {
   signals: WorkItemAttentionSignal[];
 };
 
+export type WorkItemCardIndicator = {
+  id: string;
+  label: string;
+  tone: WorkItemAttentionTone;
+};
+
 export function groupWorkItemsByStage<T extends WorkItemLike, S extends StageLike>(
   items: T[],
   stages: S[],
@@ -307,6 +313,67 @@ export function deriveWorkItemAttention<T extends WorkItemLike>(
         : "",
     signals,
   };
+}
+
+export function deriveWorkItemCardIndicators<T extends WorkItemLike>(
+  item: T,
+  context: {
+    runs?: RunLike[];
+    gates?: GateLike[];
+    artifacts?: ArtifactLike[];
+  },
+): WorkItemCardIndicator[] {
+  if (item.stageId === "done") {
+    return [{ id: "done", label: "Done", tone: "success" }];
+  }
+
+  const indicators: WorkItemCardIndicator[] = [];
+  const itemArtifacts = (context.artifacts ?? []).filter((artifact) => artifact.workItemId === item.id);
+  const hasApprovedPlan = itemArtifacts.some(
+    (artifact) => artifact.kind === "plan" && artifact.status === "approved",
+  );
+  const hasDraftPlan = itemArtifacts.some(
+    (artifact) => artifact.kind === "plan" && artifact.status === "draft",
+  );
+  const latestRun = (context.runs ?? []).find((run) => run.workItemId === item.id) ?? null;
+
+  if (hasApprovedPlan) {
+    indicators.push({ id: "plan-approved", label: "Plan approved", tone: "success" });
+  } else if (hasDraftPlan) {
+    indicators.push({ id: "plan-draft", label: "Plan ready", tone: "info" });
+  }
+
+  if (latestRun?.status === "queued") {
+    indicators.push({ id: "run-queued", label: "Queued", tone: "info" });
+  } else if (latestRun?.status === "running") {
+    indicators.push({ id: "run-running", label: "Running", tone: "success" });
+  } else if (latestRun?.status === "awaiting_input") {
+    indicators.push({ id: "run-awaiting-input", label: "Needs input", tone: "warning" });
+  } else if (latestRun?.status === "failed" || latestRun?.status === "cancelled") {
+    indicators.push({
+      id: "run-failed",
+      label: latestRun.status === "failed" ? "Run failed" : "Cancelled",
+      tone: "danger",
+    });
+  } else if (item.stageId === "execution" && latestRun?.status === "completed") {
+    indicators.push({ id: "execution-complete", label: "Ready for review", tone: "success" });
+  }
+
+  if (item.stageId === "review") {
+    indicators.push({ id: "review", label: "Review work", tone: "info" });
+    const hasOpenBlockingGate = (context.gates ?? []).some(
+      (gate) =>
+        gate.workItemId === item.id &&
+        gate.blocking &&
+        gate.status !== "passed" &&
+        gate.status !== "overridden",
+    );
+    if (hasOpenBlockingGate) {
+      indicators.push({ id: "review-gate", label: "Review gate", tone: "warning" });
+    }
+  }
+
+  return indicators;
 }
 
 export function collapsedStageStorageKey(projectID: string) {

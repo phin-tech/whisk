@@ -5,10 +5,12 @@ import boardSource from "./WorkBoard.svelte?raw";
 import detailSource from "./WorkItemDetail.svelte?raw";
 import projectSource from "./ProjectsView.svelte?raw";
 import projectAttachmentsSource from "./projects/ProjectAttachments.svelte?raw";
+import projectCardsSource from "./projects/ProjectCards.svelte?raw";
 import projectOverviewSource from "./projects/ProjectOverview.svelte?raw";
 import projectRunsSource from "./projects/ProjectRuns.svelte?raw";
 import projectSessionsSource from "./projects/ProjectSessions.svelte?raw";
 import listSource from "./ui/List.svelte?raw";
+import cardIndicatorsSource from "./ui/CardIndicators.svelte?raw";
 import boardColumnSource from "./workboard/WorkBoardColumn.svelte?raw";
 import itemCardSource from "./workboard/WorkItemCard.svelte?raw";
 
@@ -57,6 +59,27 @@ describe("WorkBoard", () => {
     expect(projectSource).not.toContain("function runStatusDot");
     expect(boardSource).not.toContain("function attentionToneClass");
     expect(boardSource).not.toContain("rounded border px-1.5 py-0.5 text-[12px] font-medium");
+  });
+
+  it("renders workflow progress indicators on board and project cards", () => {
+    expect(cardIndicatorsSource).toContain("text-green");
+    expect(cardIndicatorsSource).toContain("text-blue");
+    expect(cardIndicatorsSource).toContain("text-amber");
+    expect(boardSource).toContain("deriveWorkItemCardIndicators");
+    expect(itemCardSource).toContain('from "../ui/CardIndicators.svelte"');
+    expect(itemCardSource).toContain("<CardIndicators");
+    expect(projectCardsSource).toContain("deriveWorkItemCardIndicators");
+    expect(projectCardsSource).toContain('from "../ui/CardIndicators.svelte"');
+    expect(projectCardsSource).toContain("<CardIndicators");
+    expect(projectSource).toContain("{artifacts}");
+    expect(projectSource).toContain("{gateReports}");
+    expect(mainRouterSource).toContain("{artifacts}");
+    expect(mainRouterSource).toContain("{gateReports}");
+  });
+
+  it("does not show plan-required attention for done cards", () => {
+    expect(boardSource).toContain('return value.includes("execution") || value.includes("review");');
+    expect(boardSource).not.toContain('value.includes("done")');
   });
 
   it("uses hairline-separated rows instead of bordered item cards", () => {

@@ -25,6 +25,7 @@
   import {
     adjacentStageTargets,
     collapsedStageStorageKey,
+    deriveWorkItemCardIndicators,
     deriveWorkItemAttention,
     groupWorkItemsByStage,
     parseCollapsedStages,
@@ -198,7 +199,7 @@
 
   function stageRequiresPlan(stage: WorkflowStage) {
     const value = `${stage.id} ${stage.name}`.toLowerCase();
-    return value.includes("execution") || value.includes("review") || value.includes("done");
+    return value.includes("execution") || value.includes("review");
   }
 
   function attentionFor(item: WorkItem, stage: WorkflowStage) {
@@ -386,6 +387,11 @@
               {@const latestRun = (runsByItem[item.id] ?? [])[0] ?? null}
               {@const canExecute = canQueueOrLaunchExecution(item, latestRun)}
               {@const attention = attentionFor(item, stage)}
+              {@const indicators = deriveWorkItemCardIndicators(item, {
+                runs: runsByItem[item.id] ?? [],
+                artifacts: detailRecordsForItem(artifacts, item.id),
+                gates: detailRecordsForItem(gateReports, item.id),
+              })}
               {@const terminalRun = attention.terminalRunId
                 ? (runsByItem[item.id] ?? []).find((run) => run.id === attention.terminalRunId) ?? null
                 : null}
@@ -395,6 +401,7 @@
                 {latestRun}
                 {terminalRun}
                 {attention}
+                {indicators}
                 {canExecute}
                 {loading}
                 {cardRailClass}

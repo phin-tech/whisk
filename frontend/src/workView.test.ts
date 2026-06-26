@@ -4,6 +4,7 @@ import {
   canMoveToStage,
   collapsedStageStorageKey,
   deriveNextStep,
+  deriveWorkItemCardIndicators,
   deriveWorkItemAttention,
   groupWorkItemsByStage,
   parseCollapsedStages,
@@ -142,6 +143,55 @@ describe("workView", () => {
         },
       ).terminalRunId,
     ).toBe("run-1");
+  });
+
+  it("derives progress indicators for card surfaces", () => {
+    const item = { id: "a", stageId: "planning" };
+
+    expect(
+      deriveWorkItemCardIndicators(item, {
+        artifacts: [{ id: "plan-1", workItemId: "a", kind: "plan", status: "draft" }],
+      }),
+    ).toEqual([{ id: "plan-draft", label: "Plan ready", tone: "info" }]);
+
+    expect(
+      deriveWorkItemCardIndicators(
+        { ...item, stageId: "ready" },
+        {
+          artifacts: [{ id: "plan-1", workItemId: "a", kind: "plan", status: "approved" }],
+        },
+      ),
+    ).toEqual([{ id: "plan-approved", label: "Plan approved", tone: "success" }]);
+
+    expect(
+      deriveWorkItemCardIndicators(
+        { ...item, stageId: "execution" },
+        {
+          artifacts: [{ id: "plan-1", workItemId: "a", kind: "plan", status: "approved" }],
+          runs: [{ id: "run-1", workItemId: "a", status: "running" }],
+        },
+      ),
+    ).toEqual([
+      { id: "plan-approved", label: "Plan approved", tone: "success" },
+      { id: "run-running", label: "Running", tone: "success" },
+    ]);
+
+    expect(
+      deriveWorkItemCardIndicators(
+        { ...item, stageId: "review" },
+        {
+          gates: [{ id: "gate-1", workItemId: "a", status: "pending", blocking: true }],
+          runs: [{ id: "run-1", workItemId: "a", status: "completed" }],
+        },
+      ),
+    ).toEqual([
+      { id: "review", label: "Review work", tone: "info" },
+      { id: "review-gate", label: "Review gate", tone: "warning" },
+    ]);
+
+    expect(deriveWorkItemCardIndicators({ ...item, stageId: "done" }, {})).toEqual([
+      { id: "done", label: "Done", tone: "success" },
+    ]);
   });
 
   it("selects the latest run for the detail modal even when an older run is cancellable", () => {

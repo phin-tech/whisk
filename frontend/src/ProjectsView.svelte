@@ -13,6 +13,8 @@
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import type {
+    Artifact,
+    GateReport,
     MetadataValue,
     Project,
     ProjectAttachmentTemplate,
@@ -50,6 +52,8 @@
   export let projects: Project[] = [];
   export let activeProjectId = "";
   export let detail: ProjectDetail | null = null;
+  export let artifacts: Artifact[] = [];
+  export let gateReports: GateReport[] = [];
   export let loading = false;
   export let onUpdateProject: (
     projectId: string,
@@ -428,6 +432,9 @@
         {:else if activeTab === "cards"}
           <ProjectCards
             {workItems}
+            runs={sortedRuns}
+            {artifacts}
+            {gateReports}
             bind:newCardTitle
             bind:newCardBody
             {loading}

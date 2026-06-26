@@ -7,8 +7,9 @@
   import SquareTerminal from "@lucide/svelte/icons/square-terminal";
   import type { WorkflowStage } from "../../bindings/github.com/phin-tech/whisk/internal/domain/workitem/models";
   import type { WorkItem, WorkItemRun } from "../../bindings/github.com/phin-tech/whisk/internal/protocol/models";
-  import type { WorkItemAttention } from "../workView";
+  import type { WorkItemAttention, WorkItemAttentionSignal, WorkItemCardIndicator } from "../workView";
   import Button from "../ui/Button.svelte";
+  import CardIndicators from "../ui/CardIndicators.svelte";
   import IconButton from "../ui/IconButton.svelte";
   import StatusDot from "../ui/StatusDot.svelte";
 
@@ -23,6 +24,7 @@
   export let latestRun: WorkItemRun | null = null;
   export let terminalRun: WorkItemRun | null = null;
   export let attention: WorkItemAttention;
+  export let indicators: WorkItemCardIndicator[] = [];
   export let canExecute = false;
   export let loading = false;
   export let cardRailClass: (severity: string) => string;
@@ -35,6 +37,23 @@
   export let onGenerateWorktree: (item: WorkItem) => void;
   export let onMovePrevious: (item: WorkItem) => void;
   export let onMoveNext: (item: WorkItem) => void;
+
+  $: visibleAttentionSignals = attentionSignalsNotShownByIndicators(attention.signals, indicators);
+
+  function attentionSignalsNotShownByIndicators(
+    signals: WorkItemAttentionSignal[],
+    cardIndicators: WorkItemCardIndicator[],
+  ) {
+    const hidden = new Set(
+      cardIndicators.map((indicator) => {
+        if (indicator.id === "run-queued") return "queued";
+        if (indicator.id === "run-awaiting-input") return "awaiting-input";
+        if (indicator.id === "review-gate") return "blocking-gates";
+        return indicator.id;
+      }),
+    );
+    return signals.filter((signal) => !hidden.has(signal.id));
+  }
 </script>
 
 <article class="group relative min-h-[76px] overflow-hidden bg-bg-base transition-colors hover:bg-bg-surface/60 focus-within:bg-bg-surface/60">
@@ -92,15 +111,18 @@
       </div>
     </div>
 
-    <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-      {#if attention.signals.length > 0}
-        {#each attention.signals as signal (signal.id)}
-          <span class="inline-flex min-w-0 items-center gap-1 text-[12px]">
-            <span class={attentionDotClass(signal.tone)}>●</span>
-            <span class="truncate text-text-muted">{signal.label}</span>
-          </span>
-        {/each}
-      {:else}
+    <div class="grid min-w-0 gap-1">
+      <CardIndicators {indicators} />
+      {#if visibleAttentionSignals.length > 0}
+        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+          {#each visibleAttentionSignals as signal (signal.id)}
+            <span class="inline-flex min-w-0 items-center gap-1 text-[12px]">
+              <span class={attentionDotClass(signal.tone)}>●</span>
+              <span class="truncate text-text-muted">{signal.label}</span>
+            </span>
+          {/each}
+        </div>
+      {:else if indicators.length === 0}
         <StatusDot status={item.runState || "idle"} label={item.runState || "Idle"} showLabel class="text-[12px]" />
       {/if}
     </div>

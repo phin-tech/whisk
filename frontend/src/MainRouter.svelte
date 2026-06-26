@@ -170,6 +170,8 @@
     onNewSession={onNewProjectSession}
     {onOpenSession}
     onRemoveSession={onRemoveSession}
+    {artifacts}
+    {gateReports}
     {onCreateWorkItem}
     {onDeleteWorkItem}
     {onOpenWorkItem}

@@ -35,6 +35,12 @@ const seedActivePTY =
 let state = seedState();
 let calls: Array<{ method: string; args: unknown[] }> = [];
 let openedURLs: string[] = [];
+let agentHookLogStatus = {
+  enabled: true,
+  clearAfterSession: false,
+  path: "/tmp/whisk-e2e/agent-hooks.jsonl",
+  sizeBytes: 0,
+};
 
 function seedState() {
   const now = "2026-06-25T12:00:00Z";
@@ -156,6 +162,26 @@ function seedState() {
         createdAt: now,
         updatedAt: now,
       },
+      {
+        id: "artifact_exec_plan",
+        workItemId: "wi_exec",
+        kind: "plan",
+        title: "Plan",
+        body: "Reconnect terminals after reload.",
+        status: "approved",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "artifact_review_plan",
+        workItemId: "wi_review",
+        kind: "plan",
+        title: "Plan",
+        body: "Review token usage and rendered states.",
+        status: "approved",
+        createdAt: now,
+        updatedAt: now,
+      },
     ],
     questions: [
       {
@@ -174,6 +200,7 @@ function seedState() {
         id: "gate_01",
         workItemId: "wi_review",
         name: "Design QA",
+        blocking: true,
         status: "pending",
         message: "Needs rendered verification.",
         createdAt: now,
@@ -364,6 +391,22 @@ function dispatch(methodName: string, args: unknown[]) {
     case "ListAgentBridgeApprovals":
     case "ListAgentBridgeEvents":
       return [];
+    case "AgentHookLogStatus":
+      return clone(agentHookLogStatus);
+    case "SetAgentHookLogSettings": {
+      const request = (args[0] ?? {}) as { enabled?: boolean; clearAfterSession?: boolean };
+      agentHookLogStatus = {
+        ...agentHookLogStatus,
+        enabled: request.enabled ?? agentHookLogStatus.enabled,
+        clearAfterSession: request.clearAfterSession ?? agentHookLogStatus.clearAfterSession,
+      };
+      return clone(agentHookLogStatus);
+    }
+    case "ClearAgentHookLog":
+      agentHookLogStatus = { ...agentHookLogStatus, sizeBytes: 0 };
+      return clone(agentHookLogStatus);
+    case "OpenAgentHookLog":
+      return clone(agentHookLogStatus);
     case "OnboardingStatus":
       return { localDaemon: true, items: [] };
     case "ListAgentProfiles":

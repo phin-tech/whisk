@@ -1,8 +1,10 @@
 <script lang="ts">
   import Plus from "@lucide/svelte/icons/plus";
   import Trash2 from "@lucide/svelte/icons/trash-2";
-  import type { WorkItem } from "../../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { Artifact, GateReport, WorkItem, WorkItemRun } from "../../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import { deriveWorkItemCardIndicators } from "../workView";
   import Button from "../ui/Button.svelte";
+  import CardIndicators from "../ui/CardIndicators.svelte";
   import EmptyState from "../ui/EmptyState.svelte";
   import IconButton from "../ui/IconButton.svelte";
   import List from "../ui/List.svelte";
@@ -12,6 +14,9 @@
   import TextField from "../ui/TextField.svelte";
 
   export let workItems: WorkItem[] = [];
+  export let runs: WorkItemRun[] = [];
+  export let artifacts: Artifact[] = [];
+  export let gateReports: GateReport[] = [];
   export let newCardTitle = "";
   export let newCardBody = "";
   export let loading = false;
@@ -28,6 +33,10 @@
   function stopDelete(event: MouseEvent, item: WorkItem) {
     event.stopPropagation();
     deleteCard(item);
+  }
+
+  function recordsForItem<T extends { workItemId: string }>(records: T[], itemId: string) {
+    return records.filter((record) => record.workItemId === itemId);
   }
 </script>
 
@@ -53,6 +62,11 @@
       <EmptyState message="No cards." />
     {:else}
       {#each workItems as item (item.id)}
+        {@const indicators = deriveWorkItemCardIndicators(item, {
+          runs: recordsForItem(runs, item.id),
+          artifacts: recordsForItem(artifacts, item.id),
+          gates: recordsForItem(gateReports, item.id),
+        })}
         <ListRow
           as="button"
           cols="grid-cols-[72px_minmax(0,1fr)_120px_32px]"
@@ -67,6 +81,7 @@
             {#if item.bodyMarkdown}
               <div class="truncate text-[11px] text-text-muted">{item.bodyMarkdown}</div>
             {/if}
+            <CardIndicators {indicators} class="mt-1" />
           </div>
           <div class="truncate text-right text-[11px] text-text-muted">{item.stageId}</div>
           <IconButton label="Delete card" tone="danger" disabled={loading} onclick={(event) => stopDelete(event, item)}>
