@@ -514,6 +514,106 @@ func TestRuntimeAgentBridgeLogsClaudePreToolUseWithoutApproval(t *testing.T) {
 	}
 }
 
+func TestRuntimeAgentBridgePromptHookCreatesPTYJumpPoint(t *testing.T) {
+	runtime, bridgeID, token := launchAgentBridge(t, time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ptys, err := runtime.ListPTYs(ctx)
+	if err != nil || len(ptys) != 1 {
+		t.Fatalf("ptys = %#v, err = %v", ptys, err)
+	}
+	ptyID := ptys[0].ID
+	if err := runtime.WritePTY(ctx, ptyID, []byte("before prompt")); err != nil {
+		t.Fatalf("write pty: %v", err)
+	}
+
+	resultCh := make(chan app.AgentBridgeHookResponse, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+			BridgeID:      bridgeID,
+			Token:         token,
+			Provider:      "claude",
+			EventName:     "Elicitation",
+			ElicitationID: "ask_01",
+			RawPayload: map[string]any{
+				"tool_input": map[string]any{
+					"questions": []any{
+						map[string]any{"question": "Continue?"},
+					},
+				},
+			},
+		})
+		if err != nil {
+			errCh <- err
+			return
+		}
+		resultCh <- resp
+	}()
+
+	prompt := waitForPendingAgentPrompt(t, runtime)
+	bookmarks, err := runtime.ListPTYBookmarks(ctx, ptyID)
+	if err != nil || len(bookmarks) != 1 {
+		t.Fatalf("bookmarks = %#v, err = %v", bookmarks, err)
+	}
+	if bookmarks[0].Kind != "jump_point" || bookmarks[0].Label != "" || bookmarks[0].Offset != uint64(len("before prompt")) {
+		t.Fatalf("bookmark = %#v", bookmarks[0])
+	}
+	if _, err := runtime.ResolveAgentPrompt(ctx, app.ResolveAgentPromptRequest{ID: prompt.ID, Answer: "yes"}); err != nil {
+		t.Fatalf("resolve prompt: %v", err)
+	}
+	select {
+	case err := <-errCh:
+		t.Fatalf("hook error: %v", err)
+	case <-resultCh:
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for hook response")
+	}
+}
+
+func TestRuntimeAgentBridgeApprovalHookCreatesPTYJumpPoint(t *testing.T) {
+	runtime, bridgeID, token := launchAgentBridge(t, time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ptys, err := runtime.ListPTYs(ctx)
+	if err != nil || len(ptys) != 1 {
+		t.Fatalf("ptys = %#v, err = %v", ptys, err)
+	}
+	ptyID := ptys[0].ID
+	if err := runtime.WritePTY(ctx, ptyID, []byte("before approval")); err != nil {
+		t.Fatalf("write pty: %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := runtime.HandleAgentBridgeHook(ctx, toolCallHook(bridgeID, token))
+		errCh <- err
+	}()
+
+	approval := waitForPendingAgentBridgeApproval(t, runtime)
+	bookmarks, err := runtime.ListPTYBookmarks(ctx, ptyID)
+	if err != nil || len(bookmarks) != 1 {
+		t.Fatalf("bookmarks = %#v, err = %v", bookmarks, err)
+	}
+	if bookmarks[0].Kind != "jump_point" || bookmarks[0].Label != "" || bookmarks[0].Offset != uint64(len("before approval")) {
+		t.Fatalf("bookmark = %#v", bookmarks[0])
+	}
+	if _, err := runtime.ResolveAgentBridgeApproval(ctx, app.ResolveAgentBridgeApprovalRequest{
+		ID:     approval.ID,
+		Action: "allow",
+	}); err != nil {
+		t.Fatalf("resolve approval: %v", err)
+	}
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("hook error: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for hook response")
+	}
+}
+
 func TestRuntimeAgentBridgeStopCompletesExecutionRun(t *testing.T) {
 	runtime, bridgeID, token := launchExecutionAgentBridge(t)
 	ctx := context.Background()

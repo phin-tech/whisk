@@ -226,7 +226,8 @@ export function ptyBookmarkRowsByPty(bookmarks: PtyBookmarkLike[]) {
   const grouped: Record<string, PtyBookmarkRow[]> = {};
   for (const bookmark of [...bookmarks].sort((a, b) => a.ptyId.localeCompare(b.ptyId) || a.offset - b.offset || a.id.localeCompare(b.id))) {
     const kind = bookmark.kind ?? "";
-    const label = bookmark.label?.trim() || kind.trim() || `offset ${bookmark.offset}`;
+    const kindLabel = kind.trim().replace(/[_-]+/g, " ");
+    const label = bookmark.label?.trim() || kindLabel || `offset ${bookmark.offset}`;
     const row = {
       id: bookmark.id,
       ptyId: bookmark.ptyId,

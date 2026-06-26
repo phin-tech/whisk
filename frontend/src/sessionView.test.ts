@@ -228,6 +228,7 @@ describe("ptyBookmarkRowsByPty", () => {
       ptyBookmarkRowsByPty([
         { id: "bm_02", ptyId: "pty_01", sessionId: "sess_01", paneId: "pane_01", offset: 30, kind: "manual", label: "" },
         { id: "bm_01", ptyId: "pty_01", sessionId: "sess_01", paneId: "pane_01", offset: 10, kind: "prompt", label: "Planning prompt" },
+        { id: "bm_04", ptyId: "pty_01", sessionId: "sess_01", paneId: "pane_01", offset: 40, kind: "jump_point", label: "" },
         { id: "bm_03", ptyId: "pty_02", sessionId: "", paneId: "", offset: 5, kind: "", label: "" },
       ]),
     ).toEqual({
@@ -249,6 +250,15 @@ describe("ptyBookmarkRowsByPty", () => {
           offsetLabel: "@30",
           detail: "sess_01 / pane_01",
           kind: "manual",
+        },
+        {
+          id: "bm_04",
+          ptyId: "pty_01",
+          label: "jump point",
+          offset: 40,
+          offsetLabel: "@40",
+          detail: "sess_01 / pane_01",
+          kind: "jump_point",
         },
       ],
       pty_02: [
