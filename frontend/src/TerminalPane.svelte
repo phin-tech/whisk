@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { FitAddon } from "@xterm/addon-fit";
-  import BookmarkIcon from "@lucide/svelte/icons/bookmark";
   import BookmarkPlus from "@lucide/svelte/icons/bookmark-plus";
   import Check from "@lucide/svelte/icons/check";
   import CircleStop from "@lucide/svelte/icons/circle-stop";
@@ -14,7 +13,6 @@
   import { ResizePTY } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
   import { bookmarkMarkerPoints, type BookmarkJumpRequest } from "./ptyMarkers";
   import { terminalInputRefreshDelays, terminalInputShouldRefreshOutput } from "./ptyStream";
-  import { ptyBookmarkRowsByPty } from "./sessionView";
   import Button from "./ui/Button.svelte";
   import IconButton from "./ui/IconButton.svelte";
 
@@ -51,6 +49,7 @@
   let appliedJumpRevision = 0;
   let appliedBottomRevision = 0;
   let appliedBookmarkJumpRevision = 0;
+  let appliedBookmarkMarkerSignature = "";
   let scrollToReplayStart = false;
   let terminalWriting = false;
   let pendingTerminalOperations: TerminalOperation[] = [];
@@ -62,10 +61,6 @@
     | { kind: "marker"; bookmarkId: string }
     | { kind: "scroll-top" }
     | { kind: "scroll-marker"; bookmarkId: string };
-
-  $: bookmarkRows = pane.currentPtyId
-    ? (ptyBookmarkRowsByPty(bookmarks)[pane.currentPtyId] ?? [])
-    : [];
 
   function cssToken(name: string, fallback: string) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -123,9 +118,14 @@
     onKillPTY();
   }
 
-  function jumpBookmark(event: MouseEvent, bookmarkId: string) {
+  function bookmarkById(bookmarkId: string) {
+    return bookmarks.find((candidate) => candidate.id === bookmarkId) ?? null;
+  }
+
+  function clickBookmarkDecoration(event: MouseEvent | KeyboardEvent, bookmarkId: string) {
     event.stopPropagation();
-    const bookmark = bookmarks.find((candidate) => candidate.id === bookmarkId);
+    event.preventDefault();
+    const bookmark = bookmarkById(bookmarkId);
     if (bookmark) onBookmark(bookmark);
   }
 
@@ -186,8 +186,16 @@
     if (!decoration) return;
     bookmarkDecorations.set(bookmarkId, decoration);
     decoration.onRender((element) => {
+      const bookmark = bookmarkById(bookmarkId);
       element.classList.add("terminal-bookmark-decoration");
-      element.title = "Bookmark";
+      element.title = bookmark?.label ? `${bookmark.label} @${bookmark.offset}` : "Bookmark";
+      element.setAttribute("role", "button");
+      element.setAttribute("aria-label", bookmark?.label ? `Open bookmark ${bookmark.label}` : "Open bookmark");
+      element.tabIndex = 0;
+      element.onclick = (event: MouseEvent) => clickBookmarkDecoration(event, bookmarkId);
+      element.onkeydown = (event: KeyboardEvent) => {
+        if (event.key === "Enter" || event.key === " ") clickBookmarkDecoration(event, bookmarkId);
+      };
     });
     decoration.onDispose(() => {
       if (bookmarkDecorations.get(bookmarkId) === decoration) bookmarkDecorations.delete(bookmarkId);
@@ -202,6 +210,15 @@
     marker.onDispose(() => {
       if (bookmarkMarkers.get(bookmarkId) === marker) bookmarkMarkers.delete(bookmarkId);
     });
+  }
+
+  function resetRenderedTerminal(nextPtyId: string) {
+    pendingTerminalOperations = [];
+    terminalWriting = false;
+    clearBookmarkMarkers();
+    terminal.reset();
+    writtenChunks = 0;
+    renderedPtyId = nextPtyId;
   }
 
   function enqueueTerminalOperation(operation: TerminalOperation) {
@@ -256,12 +273,8 @@
   function replayOutputChunks(nextPtyId: string, chunks: string[], starts: number[]) {
     if (!terminal) return;
     if (renderedPtyId !== nextPtyId || chunks.length < writtenChunks) {
-      pendingTerminalOperations = [];
-      terminalWriting = false;
-      clearBookmarkMarkers();
-      terminal.reset();
-      writtenChunks = 0;
-      renderedPtyId = nextPtyId;
+      resetRenderedTerminal(nextPtyId);
+      appliedBookmarkMarkerSignature = "";
     }
     if (chunks.length <= writtenChunks) return;
     for (let index = writtenChunks; index < chunks.length; index += 1) {
@@ -274,12 +287,8 @@
     if (!terminal || appliedJumpRevision === nextJumpRevision) return;
     appliedJumpRevision = nextJumpRevision;
     scrollToReplayStart = true;
-    pendingTerminalOperations = [];
-    terminalWriting = false;
-    clearBookmarkMarkers();
-    terminal.reset();
-    writtenChunks = 0;
-    renderedPtyId = nextPtyId;
+    resetRenderedTerminal(nextPtyId);
+    appliedBookmarkMarkerSignature = "";
   }
 
   function replayAndMaybeScroll(nextPtyId: string, chunks: string[], starts: number[], nextJumpRevision: number) {
@@ -297,15 +306,51 @@
     terminal.scrollToBottom();
   }
 
-  function syncCurrentEndMarkers() {
-    if (!terminal || outputChunks.length === 0) return;
-    const lastIndex = outputChunks.length - 1;
-    const lastStart = chunkStartOffsets[lastIndex];
+  function bookmarkOffsetIsRendered(bookmark: PTYBookmark, chunks: string[], starts: number[]) {
+    for (let index = 0; index < chunks.length; index += 1) {
+      const start = starts[index];
+      if (!Number.isFinite(start)) continue;
+      const bytes = base64Bytes(chunks[index]);
+      if (!bytes) continue;
+      const end = Math.floor(start) + bytes.length;
+      if (bookmark.offset >= Math.floor(start) && bookmark.offset <= end) return true;
+    }
+    return false;
+  }
+
+  function bookmarkMarkerSignature(nextPtyId: string, chunks: string[], starts: number[], nextBookmarks: PTYBookmark[]) {
+    const renderedBookmarks = nextBookmarks
+      .filter((bookmark) => bookmarkOffsetIsRendered(bookmark, chunks, starts))
+      .map((bookmark) => `${bookmark.id}:${bookmark.offset}`)
+      .sort()
+      .join(",");
+    if (!nextPtyId || !renderedBookmarks) return "";
+    return `${nextPtyId}|${chunks.length}|${starts.join(",")}|${renderedBookmarks}`;
+  }
+
+  function replayRenderedChunksForBookmarkMarkers(nextPtyId: string, chunks: string[], starts: number[], nextBookmarks: PTYBookmark[]) {
+    if (!terminal || !nextPtyId || chunks.length === 0 || terminalWriting || pendingTerminalOperations.length > 0) return;
+    const signature = bookmarkMarkerSignature(nextPtyId, chunks, starts, nextBookmarks);
+    if (!signature || appliedBookmarkMarkerSignature === signature) return;
+    const needsReplay = nextBookmarks.some((bookmark) => bookmarkOffsetIsRendered(bookmark, chunks, starts) && !liveMarker(bookmark.id));
+    if (!needsReplay) {
+      appliedBookmarkMarkerSignature = signature;
+      return;
+    }
+    resetRenderedTerminal(nextPtyId);
+    replayOutputChunks(nextPtyId, chunks, starts);
+    appliedBookmarkMarkerSignature = signature;
+  }
+
+  function syncCurrentEndMarkers(chunks: string[], starts: number[], nextBookmarks: PTYBookmark[]) {
+    if (!terminal || chunks.length === 0) return;
+    const lastIndex = chunks.length - 1;
+    const lastStart = starts[lastIndex];
     if (!Number.isFinite(lastStart)) return;
-    const lastBytes = base64Bytes(outputChunks[lastIndex]);
+    const lastBytes = base64Bytes(chunks[lastIndex]);
     if (!lastBytes) return;
     const endOffset = Math.floor(lastStart) + lastBytes.length;
-    for (const bookmark of bookmarks) {
+    for (const bookmark of nextBookmarks) {
       if (bookmark.offset === endOffset && !liveMarker(bookmark.id)) {
         enqueueTerminalOperation({ kind: "marker", bookmarkId: bookmark.id });
       }
@@ -363,7 +408,8 @@
   });
 
   $: if (terminal) replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, jumpRevision);
-  $: if (terminal) syncCurrentEndMarkers();
+  $: if (terminal) replayRenderedChunksForBookmarkMarkers(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, bookmarks);
+  $: if (terminal) syncCurrentEndMarkers(outputChunks, chunkStartOffsets, bookmarks);
   $: if (terminal) applyBookmarkJumpRequest(bookmarkJumpRequest);
   $: if (terminal) applyBottomRevision(bottomRevision);
   $: if (focused && terminal) terminal.focus();
@@ -444,37 +490,13 @@
       </IconButton>
     </div>
   </div>
-  {#if pane.currentPtyId && bookmarkRows.length > 0}
-    <div
-      class="flex h-7 shrink-0 items-center gap-1 border-b border-hairline bg-bg-base/80 px-2 text-[10px]"
-    >
-      <BookmarkIcon size={12} class="shrink-0 text-text-muted" />
-      <div class="app-scrollbar flex min-w-0 flex-1 gap-1 overflow-x-auto">
-        {#each bookmarkRows as bookmark (bookmark.id)}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            align="start"
-            class="h-5 max-w-[180px] shrink-0 gap-1 rounded border border-border-subtle/60 bg-bg-surface/35 px-1.5 py-0 text-[10px]"
-            aria-label={`Jump to bookmark ${bookmark.label}`}
-            title={`Jump to bookmark ${bookmark.label} ${bookmark.offsetLabel}`}
-            onclick={(event: MouseEvent) => jumpBookmark(event, bookmark.id)}
-            onkeydown={(event: KeyboardEvent) => event.stopPropagation()}
-          >
-            <span class="min-w-0 truncate">{bookmark.label}</span>
-            <span class="font-mono text-text-muted">{bookmark.offsetLabel}</span>
-          </Button>
-        {/each}
-      </div>
-    </div>
-  {/if}
   <div bind:this={host} class="min-h-0 min-w-0 flex-1 overflow-hidden"></div>
 </div>
 
 <style>
   :global(.xterm .terminal-bookmark-decoration) {
-    pointer-events: none;
+    cursor: pointer;
+    pointer-events: auto;
     position: relative;
   }
 

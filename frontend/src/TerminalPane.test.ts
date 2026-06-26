@@ -22,7 +22,7 @@ describe("TerminalPane", () => {
     expect(source).not.toMatch(/<button\b/);
   });
 
-  it("renders bookmark jump controls and scrolls to the replay start after a jump", () => {
+  it("uses xterm as the bookmark GUI and scrolls to the replay start after a jump", () => {
     expect(source).toContain("bookmark-plus");
     expect(source).toContain("export let bookmarks");
     expect(source).toContain("export let bookmarkJumpRequest");
@@ -37,6 +37,9 @@ describe("TerminalPane", () => {
     expect(source).toContain("scrollToLine");
     expect(source).toContain("bookmarkMarkerPoints");
     expect(source).toContain('replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, jumpRevision)');
+    expect(source).not.toContain("ptyBookmarkRowsByPty");
+    expect(source).not.toContain("bookmarkRows");
+    expect(source).not.toContain("Jump to bookmark");
   });
 
   it("renders visible xterm decorations for bookmark markers", () => {
@@ -47,6 +50,20 @@ describe("TerminalPane", () => {
     expect(source).toContain("terminal-bookmark-decoration");
     expect(source).toContain("terminal-bookmark-ruler-color");
     expect(source).toContain("clearBookmarkDecorations");
+    expect(source).toContain("clickBookmarkDecoration");
+    expect(source).toContain("element.onclick");
+    expect(source).toContain("element.setAttribute(\"role\", \"button\")");
+    expect(source).toContain("element.tabIndex = 0");
+    expect(source).toContain("cursor: pointer");
+  });
+
+  it("replays rendered chunks when bookmarks arrive after output", () => {
+    expect(source).toContain("replayRenderedChunksForBookmarkMarkers");
+    expect(source).toContain("appliedBookmarkMarkerSignature");
+    expect(source).toContain("bookmarkOffsetIsRendered");
+    expect(source).toContain("resetRenderedTerminal");
+    expect(source).toContain('replayRenderedChunksForBookmarkMarkers(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, bookmarks)');
+    expect(source).toContain("syncCurrentEndMarkers(outputChunks, chunkStartOffsets, bookmarks)");
   });
 
   it("scrolls back to the terminal bottom when requested", () => {
