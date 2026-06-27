@@ -7,26 +7,26 @@ describe("App notification refresh", () => {
     expect(source).not.toContain("agentBridgeApprovals = [];");
   });
 
-  it("loads pty bookmarks and uses marker-first jumps with replay fallback", () => {
-    expect(source).toContain("ListPTYBookmarks");
-    expect(source).toContain("AddPTYBookmark");
-    expect(source).toContain("bookmarksByPty");
-    expect(source).toContain("jumpToBookmark");
-    expect(source).toContain("bookmarkJumpRequests");
+  it("does not expose bookmark bindings or commands", () => {
+    expect(source).not.toContain("ListPTYBookmarks");
+    expect(source).not.toContain("AddPTYBookmark");
+    expect(source).not.toContain("bookmarksByPty");
+    expect(source).not.toContain("jumpToBookmark");
+    expect(source).not.toContain("bookmarkJumpRequests");
     expect(source).toContain("outputChunkStartOffsets");
-    expect(source).toContain("createPTYBookmark");
-    expect(source).toContain("jumpBookmarkByDirection");
-    expect(source).toContain("jumpToLastPrompt");
+    expect(source).not.toContain("createPTYBookmark");
+    expect(source).not.toContain("jumpBookmarkByDirection");
+    expect(source).not.toContain("jumpToLastPrompt");
     expect(source).toContain("jumpToBottom");
     expect(source).toContain("bottomJumpRevisions");
-    expect(source).toContain("replayBookmarkFromOffset");
-    expect(source).toContain("latestPromptJumpPointTarget");
-    expect(source).toContain("resetOutputReplayForBookmark");
-    expect(source).toContain("bookmarkJumpTarget");
-    expect(source).toContain("bookmark.add");
-    expect(source).toContain("bookmark.previous");
-    expect(source).toContain("bookmark.next");
-    expect(source).toContain("bookmark.lastPrompt");
+    expect(source).not.toContain("replayBookmarkFromOffset");
+    expect(source).not.toContain("latestPromptJumpPointTarget");
+    expect(source).not.toContain("resetOutputReplayForBookmark");
+    expect(source).not.toContain("bookmarkJumpTarget");
+    expect(source).not.toContain("bookmark.add");
+    expect(source).not.toContain("bookmark.previous");
+    expect(source).not.toContain("bookmark.next");
+    expect(source).not.toContain("bookmark.lastPrompt");
     expect(source).toContain("terminal.bottom");
   });
 });

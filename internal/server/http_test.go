@@ -108,23 +108,9 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	if snapshot.Output != "hello" || snapshot.OutputBase64 != "aGVsbG8=" || snapshot.Offset != 5 {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
-	bookmark := postJSON[protocol.PTYBookmark](t, handler, "/v1/ptys/"+created.MainPtyID+"/bookmarks", protocol.AddPTYBookmarkRequest{
-		Offset: 3,
-		Kind:   "prompt",
-		Label:  "Prompt",
-	}, http.StatusCreated)
-	if bookmark.ID == "" || bookmark.PTYID != created.MainPtyID || bookmark.Offset != 3 {
-		t.Fatalf("bookmark = %#v", bookmark)
-	}
-	bookmarks := getJSON[[]protocol.PTYBookmark](t, handler, "/v1/ptys/"+created.MainPtyID+"/bookmarks", http.StatusOK)
-	if len(bookmarks) != 1 || bookmarks[0].ID != bookmark.ID {
-		t.Fatalf("bookmarks = %#v", bookmarks)
-	}
-	deleteNoContent(t, handler, "/v1/pty-bookmarks/"+bookmark.ID)
-	bookmarks = getJSON[[]protocol.PTYBookmark](t, handler, "/v1/ptys/"+created.MainPtyID+"/bookmarks", http.StatusOK)
-	if len(bookmarks) != 0 {
-		t.Fatalf("bookmarks after delete = %#v", bookmarks)
-	}
+	assertStatus(t, handler, http.MethodPost, "/v1/ptys/"+created.MainPtyID+"/bookmarks", `{"offset":3}`, http.StatusNotFound)
+	assertStatus(t, handler, http.MethodGet, "/v1/ptys/"+created.MainPtyID+"/bookmarks", "", http.StatusNotFound)
+	assertStatus(t, handler, http.MethodDelete, "/v1/pty-bookmarks/bm_01", "", http.StatusNotFound)
 
 	split := postJSON[protocol.SplitPaneResult](t, handler, "/v1/sessions/"+created.Session.ID+"/split", protocol.SplitPaneRequest{
 		WindowID:     created.WindowID,

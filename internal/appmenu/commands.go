@@ -29,10 +29,6 @@ const (
 	CommandSplitPaneHorizontal = "split-pane-horizontal"
 	CommandClosePane           = "close-pane"
 	CommandCloseSession        = "close-session"
-	CommandAddBookmark         = "bookmark.add"
-	CommandPreviousBookmark    = "bookmark.previous"
-	CommandNextBookmark        = "bookmark.next"
-	CommandLastPrompt          = "bookmark.lastPrompt"
 	CommandJumpToBottom        = "terminal.bottom"
 	selectSessionPrefix        = "select-session-"
 )
@@ -86,7 +82,7 @@ func defaultSessionAccelerator(i int) string {
 // Commands returns the full registry in display order: the editable app commands first, then the
 // read-only standard macOS items surfaced for reference in the panel.
 func Commands() []Command {
-	commands := make([]Command, 0, 10+SessionSlots+8)
+	commands := make([]Command, 0, 6+SessionSlots+8)
 	commands = append(commands, Command{
 		ID:       CommandOpenPreferences,
 		Label:    "Open Preferences",
@@ -138,43 +134,13 @@ func Commands() []Command {
 			Editable: true,
 		},
 	)
-	commands = append(commands,
-		Command{
-			ID:       CommandAddBookmark,
-			Label:    "Add Bookmark",
-			Category: CategoryTerminal,
-			Default:  "CmdOrCtrl+B",
-			Editable: true,
-		},
-		Command{
-			ID:       CommandPreviousBookmark,
-			Label:    "Previous Bookmark",
-			Category: CategoryTerminal,
-			Default:  "CmdOrCtrl+Alt+Left",
-			Editable: true,
-		},
-		Command{
-			ID:       CommandNextBookmark,
-			Label:    "Next Bookmark",
-			Category: CategoryTerminal,
-			Default:  "CmdOrCtrl+Alt+Right",
-			Editable: true,
-		},
-		Command{
-			ID:       CommandLastPrompt,
-			Label:    "Jump to Last Prompt",
-			Category: CategoryTerminal,
-			Default:  "CmdOrCtrl+Alt+P",
-			Editable: true,
-		},
-		Command{
-			ID:       CommandJumpToBottom,
-			Label:    "Jump to Bottom",
-			Category: CategoryTerminal,
-			Default:  "CmdOrCtrl+Alt+Down",
-			Editable: true,
-		},
-	)
+	commands = append(commands, Command{
+		ID:       CommandJumpToBottom,
+		Label:    "Jump to Bottom",
+		Category: CategoryTerminal,
+		Default:  "CmdOrCtrl+Alt+Down",
+		Editable: true,
+	})
 	for i := 0; i < SessionSlots; i++ {
 		commands = append(commands, Command{
 			ID:       SelectSessionID(i),

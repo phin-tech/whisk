@@ -307,18 +307,6 @@ func (s *Service) DeletePTY(ctx context.Context, req protocol.DeletePTYRequest) 
 	return s.client.DeletePTY(ctx, req)
 }
 
-func (s *Service) AddPTYBookmark(ctx context.Context, req protocol.AddPTYBookmarkRequest) (protocol.PTYBookmark, error) {
-	return s.client.AddPTYBookmark(ctx, req)
-}
-
-func (s *Service) ListPTYBookmarks(ctx context.Context, ptyID string) ([]protocol.PTYBookmark, error) {
-	return s.client.ListPTYBookmarks(ctx, ptyID)
-}
-
-func (s *Service) RemovePTYBookmark(ctx context.Context, req protocol.RemovePTYBookmarkRequest) error {
-	return s.client.RemovePTYBookmark(ctx, req)
-}
-
 func (s *Service) Output(ctx context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error) {
 	return s.client.Output(ctx, req)
 }

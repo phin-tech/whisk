@@ -514,7 +514,7 @@ func TestRuntimeAgentBridgeLogsClaudePreToolUseWithoutApproval(t *testing.T) {
 	}
 }
 
-func TestRuntimeAgentBridgePromptHookCreatesPTYJumpPoint(t *testing.T) {
+func TestRuntimeAgentBridgePromptHookWaitsForPromptResolution(t *testing.T) {
 	runtime, bridgeID, token := launchAgentBridge(t, time.Second)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -552,13 +552,6 @@ func TestRuntimeAgentBridgePromptHookCreatesPTYJumpPoint(t *testing.T) {
 	}()
 
 	prompt := waitForPendingAgentPrompt(t, runtime)
-	bookmarks, err := runtime.ListPTYBookmarks(ctx, ptyID)
-	if err != nil || len(bookmarks) != 1 {
-		t.Fatalf("bookmarks = %#v, err = %v", bookmarks, err)
-	}
-	if bookmarks[0].Kind != "jump_point" || bookmarks[0].Label != "" || bookmarks[0].Offset != uint64(len("before prompt")) {
-		t.Fatalf("bookmark = %#v", bookmarks[0])
-	}
 	if _, err := runtime.ResolveAgentPrompt(ctx, app.ResolveAgentPromptRequest{ID: prompt.ID, Answer: "yes"}); err != nil {
 		t.Fatalf("resolve prompt: %v", err)
 	}
@@ -571,7 +564,7 @@ func TestRuntimeAgentBridgePromptHookCreatesPTYJumpPoint(t *testing.T) {
 	}
 }
 
-func TestRuntimeAgentBridgeApprovalHookCreatesPTYJumpPoint(t *testing.T) {
+func TestRuntimeAgentBridgeApprovalHookWaitsForApprovalResolution(t *testing.T) {
 	runtime, bridgeID, token := launchAgentBridge(t, time.Second)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -591,13 +584,6 @@ func TestRuntimeAgentBridgeApprovalHookCreatesPTYJumpPoint(t *testing.T) {
 	}()
 
 	approval := waitForPendingAgentBridgeApproval(t, runtime)
-	bookmarks, err := runtime.ListPTYBookmarks(ctx, ptyID)
-	if err != nil || len(bookmarks) != 1 {
-		t.Fatalf("bookmarks = %#v, err = %v", bookmarks, err)
-	}
-	if bookmarks[0].Kind != "jump_point" || bookmarks[0].Label != "" || bookmarks[0].Offset != uint64(len("before approval")) {
-		t.Fatalf("bookmark = %#v", bookmarks[0])
-	}
 	if _, err := runtime.ResolveAgentBridgeApproval(ctx, app.ResolveAgentBridgeApprovalRequest{
 		ID:     approval.ID,
 		Action: "allow",

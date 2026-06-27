@@ -53,10 +53,6 @@ func TestControllerBuildIncludesNativeCommandAccelerators(t *testing.T) {
 		"Split Pane Horizontally": "Cmd+Shift+D",
 		"Close Pane":              "Cmd+W",
 		"Close Session":           "Cmd+Shift+W",
-		"Add Bookmark":            "Cmd+B",
-		"Previous Bookmark":       "Cmd+Option+LEFT",
-		"Next Bookmark":           "Cmd+Option+RIGHT",
-		"Jump to Last Prompt":     "Cmd+Option+P",
 		"Jump to Bottom":          "Cmd+Option+DOWN",
 	}
 	for label, want := range cases {
@@ -66,6 +62,13 @@ func TestControllerBuildIncludesNativeCommandAccelerators(t *testing.T) {
 		}
 		if got := item.GetAccelerator(); got != want {
 			t.Fatalf("%s accelerator = %q, want %q", label, got, want)
+		}
+	}
+
+	removed := []string{"Add Bookmark", "Previous Bookmark", "Next Bookmark", "Jump to Last Prompt"}
+	for _, label := range removed {
+		if item := menu.FindByLabel(label); item != nil {
+			t.Fatalf("menu still includes %q", label)
 		}
 	}
 }

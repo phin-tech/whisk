@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "22",
+    "version": "23",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -1955,39 +1955,6 @@
         }
       }
     },
-    "/v1/pty-bookmarks/{bookmarkID}": {
-      "delete": {
-        "operationId": "removePTYBookmark",
-        "tags": [
-          "ptys"
-        ],
-        "parameters": [
-          {
-            "name": "bookmarkID",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "no content"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "error"
-          }
-        }
-      }
-    },
     "/v1/pty-history": {
       "get": {
         "operationId": "listPTYHistory",
@@ -2115,97 +2082,6 @@
         "responses": {
           "204": {
             "description": "no content"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "error"
-          }
-        }
-      }
-    },
-    "/v1/ptys/{ptyID}/bookmarks": {
-      "get": {
-        "operationId": "listPTYBookmarks",
-        "tags": [
-          "ptys"
-        ],
-        "parameters": [
-          {
-            "name": "ptyID",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/Bookmark"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "success"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "error"
-          }
-        }
-      },
-      "post": {
-        "operationId": "addPTYBookmark",
-        "tags": [
-          "ptys"
-        ],
-        "parameters": [
-          {
-            "name": "ptyID",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddPTYBookmarkRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Bookmark"
-                }
-              }
-            },
-            "description": "success"
           },
           "default": {
             "content": {
@@ -4955,30 +4831,6 @@
   },
   "components": {
     "schemas": {
-      "AddPTYBookmarkRequest": {
-        "properties": {
-          "kind": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "offset": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "ptyId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ptyId",
-          "offset",
-          "kind",
-          "label"
-        ],
-        "type": "object"
-      },
       "AddProjectAttachmentRequest": {
         "properties": {
           "includeInContext": {
@@ -5705,51 +5557,6 @@
         ],
         "type": "object"
       },
-      "Bookmark": {
-        "properties": {
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "offset": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "paneId": {
-            "type": "string"
-          },
-          "ptyId": {
-            "type": "string"
-          },
-          "sessionId": {
-            "type": "string"
-          },
-          "windowId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "ptyId",
-          "sessionId",
-          "windowId",
-          "paneId",
-          "offset",
-          "kind",
-          "label",
-          "createdAt"
-        ],
-        "type": "object"
-      },
       "CancelWorkItemRunRequest": {
         "properties": {
           "actor": {
@@ -5770,10 +5577,6 @@
       },
       "ClearDaemonResponse": {
         "properties": {
-          "bookmarksCleared": {
-            "format": "int64",
-            "type": "integer"
-          },
           "forwardsCleared": {
             "format": "int64",
             "type": "integer"
@@ -5798,7 +5601,6 @@
         "required": [
           "sessionsCleared",
           "ptysCleared",
-          "bookmarksCleared",
           "projectsCleared",
           "workItemsCleared",
           "forwardsCleared"

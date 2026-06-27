@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	daemonclient "github.com/phin-tech/whisk/internal/client"
-	ptybookmark "github.com/phin-tech/whisk/internal/domain/ptybookmark"
 	session "github.com/phin-tech/whisk/internal/domain/session"
 	workitem "github.com/phin-tech/whisk/internal/domain/workitem"
 	protocol "github.com/phin-tech/whisk/internal/protocol"
@@ -28,7 +27,6 @@ func NewWithHTTPClient(baseURL string, httpClient *http.Client) *Client {
 
 type APIQueryParam = protocol.APIQueryParam
 type APIRoute = protocol.APIRoute
-type AddPTYBookmarkRequest = protocol.AddPTYBookmarkRequest
 type AddProjectAttachmentRequest = protocol.AddProjectAttachmentRequest
 type AddWorkItemAttachmentRequest = protocol.AddWorkItemAttachmentRequest
 type AddWorkItemLinkRequest = protocol.AddWorkItemLinkRequest
@@ -98,7 +96,6 @@ type OnboardingItem = protocol.OnboardingItem
 type OnboardingStatus = protocol.OnboardingStatus
 type OutputRequest = protocol.OutputRequest
 type OutputSnapshot = protocol.OutputSnapshot
-type PTYBookmark = protocol.PTYBookmark
 type PTYHistory = protocol.PTYHistory
 type PTYHistorySummary = protocol.PTYHistorySummary
 type PTYInfo = protocol.PTYInfo
@@ -122,7 +119,6 @@ type ReadyWorkItem = protocol.ReadyWorkItem
 type ReadyWorkRequest = protocol.ReadyWorkRequest
 type ReadyWorkSummary = protocol.ReadyWorkSummary
 type RegistryPlugin = protocol.RegistryPlugin
-type RemovePTYBookmarkRequest = protocol.RemovePTYBookmarkRequest
 type RemoveWorktreeRequest = protocol.RemoveWorktreeRequest
 type ReportStatusRequest = protocol.ReportStatusRequest
 type ReportStatusResponse = protocol.ReportStatusResponse
@@ -194,8 +190,6 @@ type WorkflowGateDefinition = workitem.WorkflowGateDefinition
 type WorkflowQuestionPolicy = workitem.WorkflowQuestionPolicy
 type WorkflowRunEffect = workitem.WorkflowRunEffect
 type WorkflowStage = workitem.WorkflowStage
-
-type Bookmark = ptybookmark.Bookmark
 
 const (
 	DaemonAPIVersion                     = protocol.DaemonAPIVersion

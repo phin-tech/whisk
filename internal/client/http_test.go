@@ -137,22 +137,6 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	if separateDir.Session.RootDir != sessionRoot || separateDir.Session.Panes[separateDir.PaneID].WorkingDir != sessionWorkingDir {
 		t.Fatalf("separate dir session = %#v", separateDir.Session)
 	}
-	bookmark, err := daemon.AddPTYBookmark(ctx, protocol.AddPTYBookmarkRequest{
-		PTYID:  created.MainPtyID,
-		Offset: 2,
-		Kind:   "prompt",
-		Label:  "Prompt",
-	})
-	if err != nil || bookmark.PTYID != created.MainPtyID || bookmark.Offset != 2 {
-		t.Fatalf("add bookmark = %#v, %v", bookmark, err)
-	}
-	bookmarks, err := daemon.ListPTYBookmarks(ctx, created.MainPtyID)
-	if err != nil || len(bookmarks) != 1 || bookmarks[0].ID != bookmark.ID {
-		t.Fatalf("list bookmarks = %#v, %v", bookmarks, err)
-	}
-	if err := daemon.RemovePTYBookmark(ctx, protocol.RemovePTYBookmarkRequest{BookmarkID: bookmark.ID}); err != nil {
-		t.Fatalf("remove bookmark: %v", err)
-	}
 	closeViaClient, err := daemon.CreateSession(ctx, protocol.CreateSessionRequest{
 		Name:       "Close via client",
 		RootDir:    t.TempDir(),

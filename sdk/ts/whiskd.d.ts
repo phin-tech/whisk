@@ -752,22 +752,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/pty-bookmarks/{bookmarkID}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["removePTYBookmark"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/pty-history": {
         parameters: {
             query?: never;
@@ -829,22 +813,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["deletePTY"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/ptys/{ptyID}/bookmarks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listPTYBookmarks"];
-        put?: never;
-        post: operations["addPTYBookmark"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1718,13 +1686,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        AddPTYBookmarkRequest: {
-            kind: string;
-            label: string;
-            /** Format: int64 */
-            offset: number;
-            ptyId: string;
-        };
         AddProjectAttachmentRequest: {
             includeInContext?: boolean;
             kind: string;
@@ -1954,27 +1915,12 @@ export interface components {
             blockedByCount: number;
             workItem: components["schemas"]["WorkItem"];
         };
-        Bookmark: {
-            /** Format: date-time */
-            createdAt: string;
-            id: string;
-            kind: string;
-            label: string;
-            /** Format: int64 */
-            offset: number;
-            paneId: string;
-            ptyId: string;
-            sessionId: string;
-            windowId: string;
-        };
         CancelWorkItemRunRequest: {
             actor?: string;
             id: string;
         };
         ClearDaemonRequest: Record<string, never>;
         ClearDaemonResponse: {
-            /** Format: int64 */
-            bookmarksCleared: number;
             /** Format: int64 */
             forwardsCleared: number;
             /** Format: int64 */
@@ -4417,35 +4363,6 @@ export interface operations {
             };
         };
     };
-    removePTYBookmark: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                bookmarkID: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     listPTYHistory: {
         parameters: {
             query?: never;
@@ -4552,72 +4469,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    listPTYBookmarks: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                ptyID: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Bookmark"][];
-                };
-            };
-            /** @description error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    addPTYBookmark: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                ptyID: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddPTYBookmarkRequest"];
-            };
-        };
-        responses: {
-            /** @description success */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Bookmark"];
-                };
             };
             /** @description error */
             default: {

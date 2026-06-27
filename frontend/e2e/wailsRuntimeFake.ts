@@ -26,23 +26,17 @@ type WorkItemLink = {
   createdAt: string;
 };
 
-type PTYBookmark = {
-  id: string;
-  ptyId: string;
-  sessionId: string;
-  windowId: string;
-  paneId: string;
-  offset: number;
-  kind: string;
-  label: string;
-  createdAt: string;
-};
-
 const methodPrefix = "github.com/phin-tech/whisk/internal/wailsapp.Service.";
 const listeners = new Map<string, Set<Listener>>();
 const nextEventWaiters: Array<(event: unknown) => void> = [];
+const seedLongPTY =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eLongPty");
 const seedActivePTY =
-  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2ePty");
+  seedLongPTY || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2ePty"));
+const longPTYOutput = Array.from(
+  { length: 90 },
+  (_, index) => `scrollback line ${String(index).padStart(2, "0")}\n`,
+).join("");
 
 let state = seedState();
 let calls: Array<{ method: string; args: unknown[] }> = [];
@@ -53,6 +47,15 @@ let agentHookLogStatus = {
   path: "/tmp/whisk-e2e/agent-hooks.jsonl",
   sizeBytes: 0,
 };
+
+function longPTYLineOffset(line: number) {
+  if (line <= 0) return 0;
+  let offset = 0;
+  for (let index = 0; index < line; index += 1) {
+    offset = longPTYOutput.indexOf("\n", offset) + 1;
+  }
+  return offset;
+}
 
 function seedState() {
   const now = "2026-06-25T12:00:00Z";
@@ -261,19 +264,6 @@ function seedState() {
         createdAt: now,
       },
     ],
-    bookmarks: [
-      {
-        id: "bm_01",
-        ptyId: "pty_01",
-        sessionId: "sess_01",
-        windowId: "win_01",
-        paneId: "pane_01",
-        offset: 12,
-        kind: "manual",
-        label: "Agent handoff",
-        createdAt: now,
-      },
-    ] as PTYBookmark[],
     ptyHistory: [],
     workItems,
     workItemLinks: [] as WorkItemLink[],
@@ -702,27 +692,6 @@ function dispatch(methodName: string, args: unknown[]) {
       return clone(state.sessions);
     case "ListPTYs":
       return clone(state.ptys);
-    case "ListPTYBookmarks":
-      return clone(state.bookmarks.filter((bookmark) => bookmark.ptyId === args[0]));
-    case "AddPTYBookmark": {
-      const req = (args[0] ?? {}) as { ptyId?: string; offset?: number; kind?: string; label?: string };
-      const pty = state.ptys.find((candidate) => candidate.id === req.ptyId);
-      const session = state.sessions.find((candidate) => candidate.id === pty?.sessionId);
-      const windowId = Object.values(session?.windows ?? {})[0]?.id ?? "";
-      const bookmark: PTYBookmark = {
-        id: `bm_${String(state.bookmarks.length + 1).padStart(2, "0")}`,
-        ptyId: req.ptyId ?? "",
-        sessionId: pty?.sessionId ?? "",
-        windowId,
-        paneId: pty?.paneId ?? "",
-        offset: req.offset ?? 0,
-        kind: req.kind || "manual",
-        label: req.label || "",
-        createdAt: state.now,
-      };
-      state.bookmarks = [...state.bookmarks, bookmark];
-      return clone(bookmark);
-    }
     case "ListPTYHistory":
       return clone(state.ptyHistory);
     case "ReadPTYHistory":
@@ -854,14 +823,17 @@ function dispatch(methodName: string, args: unknown[]) {
       return clone(state.agentPrompts);
     case "Output": {
       const req = (args[0] ?? {}) as { ptyId?: string; fromOffset?: number };
-      const output = req.fromOffset === 12
-        ? "bookmarked output\n"
-        : req.fromOffset === 0
-          ? "seeded terminal output\n"
-          : "";
+      const fromOffset = Math.max(0, req.fromOffset ?? 0);
+      const output = seedLongPTY
+        ? longPTYOutput.slice(fromOffset)
+        : req.fromOffset === 12
+          ? "offset output\n"
+          : req.fromOffset === 0
+            ? "seeded terminal output\n"
+            : "";
       return {
         ptyId: req.ptyId,
-        offset: (req.fromOffset ?? 0) + output.length,
+        offset: fromOffset + output.length,
         output,
         outputBase64: output ? btoa(output) : "",
       };

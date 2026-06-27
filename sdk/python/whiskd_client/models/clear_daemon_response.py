@@ -13,7 +13,6 @@ T = TypeVar("T", bound="ClearDaemonResponse")
 class ClearDaemonResponse:
     """
     Attributes:
-        bookmarks_cleared (int):
         forwards_cleared (int):
         projects_cleared (int):
         ptys_cleared (int):
@@ -21,7 +20,6 @@ class ClearDaemonResponse:
         work_items_cleared (int):
     """
 
-    bookmarks_cleared: int
     forwards_cleared: int
     projects_cleared: int
     ptys_cleared: int
@@ -30,8 +28,6 @@ class ClearDaemonResponse:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        bookmarks_cleared = self.bookmarks_cleared
-
         forwards_cleared = self.forwards_cleared
 
         projects_cleared = self.projects_cleared
@@ -46,7 +42,6 @@ class ClearDaemonResponse:
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
-                "bookmarksCleared": bookmarks_cleared,
                 "forwardsCleared": forwards_cleared,
                 "projectsCleared": projects_cleared,
                 "ptysCleared": ptys_cleared,
@@ -60,8 +55,6 @@ class ClearDaemonResponse:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        bookmarks_cleared = d.pop("bookmarksCleared")
-
         forwards_cleared = d.pop("forwardsCleared")
 
         projects_cleared = d.pop("projectsCleared")
@@ -73,7 +66,6 @@ class ClearDaemonResponse:
         work_items_cleared = d.pop("workItemsCleared")
 
         clear_daemon_response = cls(
-            bookmarks_cleared=bookmarks_cleared,
             forwards_cleared=forwards_cleared,
             projects_cleared=projects_cleared,
             ptys_cleared=ptys_cleared,

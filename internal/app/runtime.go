@@ -14,7 +14,6 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/httpforward"
-	"github.com/phin-tech/whisk/internal/domain/ptybookmark"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
@@ -63,7 +62,6 @@ type PTYInfo struct {
 type ClearDaemonResult struct {
 	SessionsCleared  int
 	PTYsCleared      int
-	BookmarksCleared int
 	ProjectsCleared  int
 	WorkItemsCleared int
 	ForwardsCleared  int
@@ -137,7 +135,6 @@ type RuntimeConfig struct {
 	EventSink                  EventSink
 	SessionStore               SessionStore
 	TranscriptStore            TranscriptStore
-	BookmarkStore              BookmarkStore
 	WorkItemStore              WorkItemStore
 	DaemonURL                  string
 	CLIPath                    string
@@ -157,10 +154,8 @@ type Runtime struct {
 	contextResolvers           map[string]ProjectContextResolver
 	plugins                    PluginRegistry
 	state                      *session.State
-	bookmarks                  *ptybookmark.State
 	sessionStore               SessionStore
 	transcriptStore            TranscriptStore
-	bookmarkStore              BookmarkStore
 	workItemStore              WorkItemStore
 	daemonURL                  string
 	cliPath                    string
@@ -254,11 +249,6 @@ type TranscriptStore interface {
 	MarkPTYExit(ctx context.Context, event PTYTranscriptExit) error
 	ListPTYHistory(ctx context.Context) ([]PTYHistorySummary, error)
 	ReadPTYHistory(ctx context.Context, ptyID string) (PTYHistory, error)
-}
-
-type BookmarkStore interface {
-	LoadBookmarks(ctx context.Context) ([]ptybookmark.Bookmark, error)
-	SaveBookmarks(ctx context.Context, bookmarks []ptybookmark.Bookmark) error
 }
 
 type WorkItemStore interface {
@@ -415,17 +405,6 @@ type DeletePTYRequest struct {
 	PTYID string
 }
 
-type AddPTYBookmarkRequest struct {
-	PTYID  string
-	Offset uint64
-	Kind   string
-	Label  string
-}
-
-type RemovePTYBookmarkRequest struct {
-	BookmarkID string
-}
-
 func NewRuntime(config RuntimeConfig) *Runtime {
 	runtime, err := NewRuntimeWithError(config)
 	if err != nil {
@@ -447,19 +426,6 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		}
 		nextID = maxWhiskIDFromSessions(sessions)
 		state, err = session.NewStateFromSessions(clearRestoredCurrentPTYs(sessions))
-		if err != nil {
-			watchCancel()
-			return nil, err
-		}
-	}
-	bookmarks := ptybookmark.NewState()
-	if config.BookmarkStore != nil {
-		loaded, err := config.BookmarkStore.LoadBookmarks(context.Background())
-		if err != nil {
-			watchCancel()
-			return nil, err
-		}
-		bookmarks, err = ptybookmark.NewStateFromBookmarks(loaded)
 		if err != nil {
 			watchCancel()
 			return nil, err
@@ -494,10 +460,8 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		contextResolvers:           config.ContextResolvers,
 		plugins:                    config.Plugins,
 		state:                      state,
-		bookmarks:                  bookmarks,
 		sessionStore:               config.SessionStore,
 		transcriptStore:            config.TranscriptStore,
-		bookmarkStore:              config.BookmarkStore,
 		workItemStore:              config.WorkItemStore,
 		daemonURL:                  config.DaemonURL,
 		cliPath:                    config.CLIPath,
@@ -1069,49 +1033,6 @@ func (r *Runtime) DeletePTY(ctx context.Context, req DeletePTYRequest) error {
 	return nil
 }
 
-func (r *Runtime) AddPTYBookmark(ctx context.Context, req AddPTYBookmarkRequest) (ptybookmark.Bookmark, error) {
-	record, err := r.findPTYRecord(ctx, req.PTYID)
-	if err != nil {
-		return ptybookmark.Bookmark{}, err
-	}
-	meta := r.ptyMetadataForRecord(record)
-	bookmark, err := r.bookmarks.Add(ptybookmark.AddBookmark{
-		ID:        r.ids(),
-		PTYID:     record.ID,
-		SessionID: meta.SessionID,
-		WindowID:  meta.WindowID,
-		PaneID:    meta.PaneID,
-		Offset:    req.Offset,
-		Kind:      req.Kind,
-		Label:     req.Label,
-		CreatedAt: time.Now().UTC(),
-	})
-	if err != nil {
-		return ptybookmark.Bookmark{}, err
-	}
-	if err := r.persistBookmarks(ctx); err != nil {
-		return ptybookmark.Bookmark{}, err
-	}
-	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: record.ID})
-	return bookmark, nil
-}
-
-func (r *Runtime) ListPTYBookmarks(_ context.Context, ptyID string) ([]ptybookmark.Bookmark, error) {
-	return r.bookmarks.List(ptyID), nil
-}
-
-func (r *Runtime) RemovePTYBookmark(ctx context.Context, req RemovePTYBookmarkRequest) error {
-	removed, err := r.bookmarks.Remove(req.BookmarkID)
-	if err != nil {
-		return err
-	}
-	if err := r.persistBookmarks(ctx); err != nil {
-		return err
-	}
-	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: removed.PTYID})
-	return nil
-}
-
 func (r *Runtime) CloseSession(ctx context.Context, req CloseSessionRequest) ([]session.Session, error) {
 	current, ok := r.state.Get(req.SessionID)
 	if !ok {
@@ -1386,7 +1307,6 @@ func (r *Runtime) ClearDaemon(ctx context.Context) (ClearDaemonResult, error) {
 
 	result := ClearDaemonResult{
 		SessionsCleared:  len(r.state.List()),
-		BookmarksCleared: len(r.bookmarks.List("")),
 		ProjectsCleared:  len(r.workItems.ListProjects()),
 		WorkItemsCleared: len(r.workItems.ListWorkItems("")),
 		ForwardsCleared:  forwardsCleared,
@@ -1403,13 +1323,9 @@ func (r *Runtime) ClearDaemon(ctx context.Context) (ClearDaemonResult, error) {
 	}
 
 	r.state = session.NewState()
-	r.bookmarks = ptybookmark.NewState()
 	r.workItems = workitem.NewState()
 
 	if err := r.persistSessions(ctx); err != nil {
-		return ClearDaemonResult{}, err
-	}
-	if err := r.persistBookmarks(ctx); err != nil {
 		return ClearDaemonResult{}, err
 	}
 	if err := r.persistWorkItems(ctx); err != nil {
@@ -1458,13 +1374,6 @@ func (r *Runtime) persistSessions(ctx context.Context) error {
 		return nil
 	}
 	return r.sessionStore.SaveSessions(ctx, r.state.List())
-}
-
-func (r *Runtime) persistBookmarks(ctx context.Context) error {
-	if r.bookmarkStore == nil {
-		return nil
-	}
-	return r.bookmarkStore.SaveBookmarks(ctx, r.bookmarks.List(""))
 }
 
 func (r *Runtime) persistWorkItems(ctx context.Context) error {

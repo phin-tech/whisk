@@ -136,17 +136,6 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err := service.DeletePTY(ctx, protocol.DeletePTYRequest{PTYID: "pty_01"}); err != nil || fake.deletePTYReq.PTYID != "pty_01" {
 		t.Fatalf("delete pty req = %#v, err = %v", fake.deletePTYReq, err)
 	}
-	bookmark, err := service.AddPTYBookmark(ctx, protocol.AddPTYBookmarkRequest{PTYID: "pty_01", Offset: 12, Kind: "prompt"})
-	if err != nil || bookmark.PTYID != "pty_01" || fake.addBookmarkReq.Offset != 12 {
-		t.Fatalf("add bookmark = %#v, req = %#v, err = %v", bookmark, fake.addBookmarkReq, err)
-	}
-	bookmarks, err := service.ListPTYBookmarks(ctx, "pty_01")
-	if err != nil || len(bookmarks) != 1 || fake.listBookmarksPTYID != "pty_01" {
-		t.Fatalf("list bookmarks = %#v, pty = %q, err = %v", bookmarks, fake.listBookmarksPTYID, err)
-	}
-	if err := service.RemovePTYBookmark(ctx, protocol.RemovePTYBookmarkRequest{BookmarkID: "bm_01"}); err != nil || fake.removeBookmarkReq.BookmarkID != "bm_01" {
-		t.Fatalf("remove bookmark req = %#v, err = %v", fake.removeBookmarkReq, err)
-	}
 	output, err := service.Output(ctx, protocol.OutputRequest{PtyID: "pty_01", FromOffset: 7})
 	if err != nil || output.Offset != 12 || fake.outputReq.FromOffset != 7 {
 		t.Fatalf("output = %#v, req = %#v, err = %v", output, fake.outputReq, err)
@@ -664,27 +653,24 @@ type runtimeClientFake struct {
 	agentHookLog        protocol.AgentHookLogStatus
 	clearResponse       protocol.ClearDaemonResponse
 
-	clearCalled        bool
-	createReq          protocol.CreateSessionRequest
-	splitReq           protocol.SplitPaneRequest
-	setRootReq         protocol.SetSessionRootDirRequest
-	setProjectReq      protocol.SetSessionProjectRequest
-	setPaneDirReq      protocol.SetPaneWorkingDirRequest
-	startPanePTYReq    protocol.StartPanePTYRequest
-	restartPanePTYReq  protocol.RestartPanePTYRequest
-	detachPanePTYReq   protocol.DetachPanePTYRequest
-	closeSessionReq    protocol.CloseSessionRequest
-	closePaneReq       protocol.ClosePaneRequest
-	writeReq           protocol.WritePTYRequest
-	resizeReq          protocol.ResizePTYRequest
-	killReq            protocol.KillPTYRequest
-	deletePTYReq       protocol.DeletePTYRequest
-	addBookmarkReq     protocol.AddPTYBookmarkRequest
-	listBookmarksPTYID string
-	removeBookmarkReq  protocol.RemovePTYBookmarkRequest
-	outputReq          protocol.OutputRequest
-	readPTYHistoryID   string
-	nextEventReq       protocol.NextEventRequest
+	clearCalled       bool
+	createReq         protocol.CreateSessionRequest
+	splitReq          protocol.SplitPaneRequest
+	setRootReq        protocol.SetSessionRootDirRequest
+	setProjectReq     protocol.SetSessionProjectRequest
+	setPaneDirReq     protocol.SetPaneWorkingDirRequest
+	startPanePTYReq   protocol.StartPanePTYRequest
+	restartPanePTYReq protocol.RestartPanePTYRequest
+	detachPanePTYReq  protocol.DetachPanePTYRequest
+	closeSessionReq   protocol.CloseSessionRequest
+	closePaneReq      protocol.ClosePaneRequest
+	writeReq          protocol.WritePTYRequest
+	resizeReq         protocol.ResizePTYRequest
+	killReq           protocol.KillPTYRequest
+	deletePTYReq      protocol.DeletePTYRequest
+	outputReq         protocol.OutputRequest
+	readPTYHistoryID  string
+	nextEventReq      protocol.NextEventRequest
 
 	detectWorktrunkReq              protocol.DetectWorktrunkRequest
 	listWorktreesReq                protocol.ListWorktreesRequest
@@ -843,21 +829,6 @@ func (f *runtimeClientFake) KillPTY(_ context.Context, req protocol.KillPTYReque
 
 func (f *runtimeClientFake) DeletePTY(_ context.Context, req protocol.DeletePTYRequest) error {
 	f.deletePTYReq = req
-	return nil
-}
-
-func (f *runtimeClientFake) AddPTYBookmark(_ context.Context, req protocol.AddPTYBookmarkRequest) (protocol.PTYBookmark, error) {
-	f.addBookmarkReq = req
-	return protocol.PTYBookmark{ID: "bm_01", PTYID: req.PTYID, Offset: req.Offset, Kind: req.Kind}, nil
-}
-
-func (f *runtimeClientFake) ListPTYBookmarks(_ context.Context, ptyID string) ([]protocol.PTYBookmark, error) {
-	f.listBookmarksPTYID = ptyID
-	return []protocol.PTYBookmark{{ID: "bm_01", PTYID: ptyID}}, nil
-}
-
-func (f *runtimeClientFake) RemovePTYBookmark(_ context.Context, req protocol.RemovePTYBookmarkRequest) error {
-	f.removeBookmarkReq = req
 	return nil
 }
 

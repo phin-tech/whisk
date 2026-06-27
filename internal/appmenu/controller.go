@@ -15,18 +15,14 @@ const EventCommandRun = "command:run"
 
 // Frontend command ids, kept in sync with the entries registered in App.svelte's `commands` array.
 const (
-	FrontendCommandOpenPreferences  = "preferences.open"
-	FrontendCommandOpenPalette      = "palette.open"
-	FrontendCommandToggleSidebar    = "sidebar.toggle"
-	FrontendCommandSplitVertical    = "split-pane-vertical"
-	FrontendCommandSplitHorizontal  = "split-pane-horizontal"
-	FrontendCommandClosePane        = "close-pane"
-	FrontendCommandCloseSession     = "close-session"
-	FrontendCommandAddBookmark      = "bookmark.add"
-	FrontendCommandPreviousBookmark = "bookmark.previous"
-	FrontendCommandNextBookmark     = "bookmark.next"
-	FrontendCommandLastPrompt       = "bookmark.lastPrompt"
-	FrontendCommandJumpToBottom     = "terminal.bottom"
+	FrontendCommandOpenPreferences = "preferences.open"
+	FrontendCommandOpenPalette     = "palette.open"
+	FrontendCommandToggleSidebar   = "sidebar.toggle"
+	FrontendCommandSplitVertical   = "split-pane-vertical"
+	FrontendCommandSplitHorizontal = "split-pane-horizontal"
+	FrontendCommandClosePane       = "close-pane"
+	FrontendCommandCloseSession    = "close-session"
+	FrontendCommandJumpToBottom    = "terminal.bottom"
 )
 
 // FrontendSelectSessionCommand returns the frontend command id for the session in slot i (0-based),
@@ -189,22 +185,6 @@ func (c *Controller) build(settings appsettings.Settings, sessions []SessionRef)
 		c.app.Event.Emit(EventCommandRun, FrontendCommandCloseSession)
 	})
 	sessionsMenu.AddSeparator()
-	addBookmark := sessionsMenu.Add("Add Bookmark").SetAccelerator(effective[CommandAddBookmark])
-	addBookmark.OnClick(func(*application.Context) {
-		c.app.Event.Emit(EventCommandRun, FrontendCommandAddBookmark)
-	})
-	previousBookmark := sessionsMenu.Add("Previous Bookmark").SetAccelerator(effective[CommandPreviousBookmark])
-	previousBookmark.OnClick(func(*application.Context) {
-		c.app.Event.Emit(EventCommandRun, FrontendCommandPreviousBookmark)
-	})
-	nextBookmark := sessionsMenu.Add("Next Bookmark").SetAccelerator(effective[CommandNextBookmark])
-	nextBookmark.OnClick(func(*application.Context) {
-		c.app.Event.Emit(EventCommandRun, FrontendCommandNextBookmark)
-	})
-	lastPrompt := sessionsMenu.Add("Jump to Last Prompt").SetAccelerator(effective[CommandLastPrompt])
-	lastPrompt.OnClick(func(*application.Context) {
-		c.app.Event.Emit(EventCommandRun, FrontendCommandLastPrompt)
-	})
 	jumpToBottom := sessionsMenu.Add("Jump to Bottom").SetAccelerator(effective[CommandJumpToBottom])
 	jumpToBottom.OnClick(func(*application.Context) {
 		c.app.Event.Emit(EventCommandRun, FrontendCommandJumpToBottom)

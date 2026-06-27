@@ -69,7 +69,6 @@ func sdkExports() ([]packageExport, error) {
 		{dir: "internal/protocol", importAlias: "protocol", importPath: "github.com/phin-tech/whisk/internal/protocol"},
 		{dir: "internal/domain/session", importAlias: "session", importPath: "github.com/phin-tech/whisk/internal/domain/session"},
 		{dir: "internal/domain/workitem", importAlias: "workitem", importPath: "github.com/phin-tech/whisk/internal/domain/workitem"},
-		{dir: "internal/domain/ptybookmark", importAlias: "ptybookmark", importPath: "github.com/phin-tech/whisk/internal/domain/ptybookmark"},
 	}
 	reachable := reachableAPITypes()
 	seenTypes := map[string]bool{}

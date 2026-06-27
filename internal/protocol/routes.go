@@ -1,9 +1,6 @@
 package protocol
 
-import (
-	"github.com/phin-tech/whisk/internal/domain/ptybookmark"
-	"github.com/phin-tech/whisk/internal/domain/session"
-)
+import "github.com/phin-tech/whisk/internal/domain/session"
 
 // APIRoute maps a daemon HTTP endpoint to its protocol request/response types.
 // SDK/OpenAPI generation consumes this catalog; parity tests keep it aligned
@@ -30,7 +27,6 @@ var (
 	apiSessionList              = []session.Session(nil)
 	apiPTYList                  = []PTYInfo(nil)
 	apiPTYHistoryList           = []PTYHistorySummary(nil)
-	apiBookmarkList             = []ptybookmark.Bookmark(nil)
 	apiWorktreeList             = []Worktree(nil)
 	apiForwardList              = []HTTPForward(nil)
 	apiProjectList              = []Project(nil)
@@ -104,9 +100,6 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/ptys/{ptyID}/kill", OperationID: "killPTY", Tag: "ptys", Request: KillPTYRequest{}, Response: PTYInfo{}},
 	{Method: "DELETE", Path: "/v1/ptys/{ptyID}", OperationID: "deletePTY", Tag: "ptys", Status: 204},
 	{Method: "GET", Path: "/v1/ptys/{ptyID}/output", OperationID: "getPTYOutput", Tag: "ptys", Response: OutputSnapshot{}, Query: []APIQueryParam{{Name: "from", Type: "integer"}}},
-	{Method: "POST", Path: "/v1/ptys/{ptyID}/bookmarks", OperationID: "addPTYBookmark", Tag: "ptys", Request: AddPTYBookmarkRequest{}, Response: ptybookmark.Bookmark{}, Status: 201},
-	{Method: "GET", Path: "/v1/ptys/{ptyID}/bookmarks", OperationID: "listPTYBookmarks", Tag: "ptys", Response: apiBookmarkList},
-	{Method: "DELETE", Path: "/v1/pty-bookmarks/{bookmarkID}", OperationID: "removePTYBookmark", Tag: "ptys", Status: 204},
 
 	{Method: "GET", Path: "/v1/events/next", OperationID: "nextEvent", Tag: "events", Response: RuntimeEvent{}, Query: []APIQueryParam{{Name: "timeoutMs", Type: "integer"}}},
 

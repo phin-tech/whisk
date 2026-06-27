@@ -438,9 +438,6 @@ func promptFromApproval(approval agentbridge.Approval) agentbridge.Prompt {
 func (r *Runtime) requestAgentBridgeApproval(ctx context.Context, bridge agentbridge.Bridge, req AgentBridgeHookRequest) (agentbridge.EvaluationDecision, error) {
 	approvalID := r.ids()
 	waiter := make(chan agentbridge.EvaluationDecision, 1)
-	if _, ok := agentHookJumpPointForHook(req, true); ok {
-		r.createAgentHookJumpPoint(ctx, bridge, req)
-	}
 	r.mu.Lock()
 	next, approval, err := r.agentBridges.RecordPendingApproval(agentbridge.RecordPendingApproval{
 		ID:        approvalID,
@@ -512,9 +509,6 @@ func (r *Runtime) requestAgentPrompt(ctx context.Context, bridge agentbridge.Bri
 			return "", err
 		}
 		return "", nil
-	}
-	if _, ok := agentHookJumpPointForHook(req, false); ok {
-		r.createAgentHookJumpPoint(ctx, bridge, req)
 	}
 	r.mu.Lock()
 	next, prompt, err := r.agentBridges.RecordPendingPrompt(promptReq)

@@ -300,25 +300,6 @@ func (c *HTTPClient) DeletePTY(ctx context.Context, req protocol.DeletePTYReques
 	return c.delete(ctx, path)
 }
 
-func (c *HTTPClient) AddPTYBookmark(ctx context.Context, req protocol.AddPTYBookmarkRequest) (protocol.PTYBookmark, error) {
-	var result protocol.PTYBookmark
-	path := "/v1/ptys/" + url.PathEscape(req.PTYID) + "/bookmarks"
-	err := c.post(ctx, path, req, &result)
-	return result, err
-}
-
-func (c *HTTPClient) ListPTYBookmarks(ctx context.Context, ptyID string) ([]protocol.PTYBookmark, error) {
-	var result []protocol.PTYBookmark
-	path := "/v1/ptys/" + url.PathEscape(ptyID) + "/bookmarks"
-	err := c.get(ctx, path, nil, &result)
-	return result, err
-}
-
-func (c *HTTPClient) RemovePTYBookmark(ctx context.Context, req protocol.RemovePTYBookmarkRequest) error {
-	path := "/v1/pty-bookmarks/" + url.PathEscape(req.BookmarkID)
-	return c.delete(ctx, path)
-}
-
 func (c *HTTPClient) CloseSession(ctx context.Context, req protocol.CloseSessionRequest) ([]session.Session, error) {
 	var result []session.Session
 	path := "/v1/sessions/" + url.PathEscape(req.SessionID)

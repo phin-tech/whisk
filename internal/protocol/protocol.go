@@ -4,12 +4,11 @@ import (
 	"time"
 
 	"github.com/phin-tech/whisk/internal/domain/onboarding"
-	"github.com/phin-tech/whisk/internal/domain/ptybookmark"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 22
+const DaemonAPIVersion = 23
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -36,7 +35,6 @@ type ClearDaemonRequest struct{}
 type ClearDaemonResponse struct {
 	SessionsCleared  int `json:"sessionsCleared"`
 	PTYsCleared      int `json:"ptysCleared"`
-	BookmarksCleared int `json:"bookmarksCleared"`
 	ProjectsCleared  int `json:"projectsCleared"`
 	WorkItemsCleared int `json:"workItemsCleared"`
 	ForwardsCleared  int `json:"forwardsCleared"`
@@ -154,19 +152,6 @@ type KillPTYRequest struct {
 type DeletePTYRequest struct {
 	PTYID string `json:"ptyId"`
 }
-
-type AddPTYBookmarkRequest struct {
-	PTYID  string `json:"ptyId"`
-	Offset uint64 `json:"offset"`
-	Kind   string `json:"kind"`
-	Label  string `json:"label"`
-}
-
-type RemovePTYBookmarkRequest struct {
-	BookmarkID string `json:"bookmarkId"`
-}
-
-type PTYBookmark = ptybookmark.Bookmark
 
 type WritePTYRequest struct {
 	PtyID string `json:"ptyId"`

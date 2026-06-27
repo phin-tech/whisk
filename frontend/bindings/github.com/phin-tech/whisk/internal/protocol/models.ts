@@ -10,9 +10,6 @@ import { Create as $Create } from "@wailsio/runtime";
 import * as onboarding$0 from "../domain/onboarding/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as ptybookmark$0 from "../domain/ptybookmark/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
 import * as session$0 from "../domain/session/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -20,39 +17,6 @@ import * as workitem$0 from "../domain/workitem/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as time$0 from "../../../../../time/models.js";
-
-export class AddPTYBookmarkRequest {
-    "ptyId": string;
-    "offset": number;
-    "kind": string;
-    "label": string;
-
-    /** Creates a new AddPTYBookmarkRequest instance. */
-    constructor($$source: Partial<AddPTYBookmarkRequest> = {}) {
-        if (!("ptyId" in $$source)) {
-            this["ptyId"] = "";
-        }
-        if (!("offset" in $$source)) {
-            this["offset"] = 0;
-        }
-        if (!("kind" in $$source)) {
-            this["kind"] = "";
-        }
-        if (!("label" in $$source)) {
-            this["label"] = "";
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new AddPTYBookmarkRequest instance from a string or object.
-     */
-    static createFrom($$source: any = {}): AddPTYBookmarkRequest {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new AddPTYBookmarkRequest($$parsedSource as Partial<AddPTYBookmarkRequest>);
-    }
-}
 
 export class AddProjectAttachmentRequest {
     "projectId": string;
@@ -689,7 +653,6 @@ export class ClearDaemonRequest {
 export class ClearDaemonResponse {
     "sessionsCleared": number;
     "ptysCleared": number;
-    "bookmarksCleared": number;
     "projectsCleared": number;
     "workItemsCleared": number;
     "forwardsCleared": number;
@@ -701,9 +664,6 @@ export class ClearDaemonResponse {
         }
         if (!("ptysCleared" in $$source)) {
             this["ptysCleared"] = 0;
-        }
-        if (!("bookmarksCleared" in $$source)) {
-            this["bookmarksCleared"] = 0;
         }
         if (!("projectsCleared" in $$source)) {
             this["projectsCleared"] = 0;
@@ -1667,9 +1627,6 @@ export class OutputSnapshot {
     }
 }
 
-export const PTYBookmark = ptybookmark$0.Bookmark;
-export type PTYBookmark = ptybookmark$0.Bookmark;
-
 export class PTYHistory {
     "ptyId": string;
     "sessionId": string;
@@ -2211,27 +2168,6 @@ export class RegistryPlugin {
     static createFrom($$source: any = {}): RegistryPlugin {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new RegistryPlugin($$parsedSource as Partial<RegistryPlugin>);
-    }
-}
-
-export class RemovePTYBookmarkRequest {
-    "bookmarkId": string;
-
-    /** Creates a new RemovePTYBookmarkRequest instance. */
-    constructor($$source: Partial<RemovePTYBookmarkRequest> = {}) {
-        if (!("bookmarkId" in $$source)) {
-            this["bookmarkId"] = "";
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new RemovePTYBookmarkRequest instance from a string or object.
-     */
-    static createFrom($$source: any = {}): RemovePTYBookmarkRequest {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new RemovePTYBookmarkRequest($$parsedSource as Partial<RemovePTYBookmarkRequest>);
     }
 }
 

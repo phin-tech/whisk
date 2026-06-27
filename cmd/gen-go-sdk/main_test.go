@@ -52,12 +52,14 @@ func TestSDKExportsIncludesProtocolAndDomainTypes(t *testing.T) {
 		"type Session = session.Session",
 		"type ProjectWorkflow = workitem.ProjectWorkflow",
 		"type WorkflowStage = workitem.WorkflowStage",
-		"type Bookmark = ptybookmark.Bookmark",
 		"StageDone",
 	} {
 		if !strings.Contains(string(source), want) {
 			t.Fatalf("generated sdk missing %q", want)
 		}
+	}
+	if strings.Contains(string(source), "Bookmark") || strings.Contains(string(source), "ptybookmark") {
+		t.Fatalf("generated sdk still exposes bookmark symbols")
 	}
 	if strings.Contains(string(source), "type State =") {
 		t.Fatalf("generated sdk exposes domain state internals")

@@ -12,7 +12,6 @@ import (
 
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/app"
-	"github.com/phin-tech/whisk/internal/domain/ptybookmark"
 	"github.com/phin-tech/whisk/internal/domain/session"
 )
 
@@ -378,27 +377,22 @@ func TestRuntimeClearDaemonResetsOwnedStateAndKillsPTYs(t *testing.T) {
 	rootDir := t.TempDir()
 	ptyBackend := newMemoryPTYBackend()
 	sessionStore := &memorySessionStore{}
-	bookmarkStore := &memoryBookmarkStore{}
 	workItemStore := &memoryWorkItemStore{}
 	runtime := app.NewRuntime(app.RuntimeConfig{
 		PTYBackend:    ptyBackend,
 		SessionStore:  sessionStore,
-		BookmarkStore: bookmarkStore,
 		WorkItemStore: workItemStore,
 		DaemonURL:     "http://127.0.0.1:8787",
 		CLIPath:       "/usr/local/bin/whisk",
 	})
 
-	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+	_, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
 		Name:       "Clear me",
 		RootDir:    rootDir,
 		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
 	})
 	if err != nil {
 		t.Fatalf("create session: %v", err)
-	}
-	if _, err := runtime.AddPTYBookmark(ctx, app.AddPTYBookmarkRequest{PTYID: created.MainPtyID, Offset: 12}); err != nil {
-		t.Fatalf("add bookmark: %v", err)
 	}
 	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: rootDir})
 	if err != nil {
@@ -415,7 +409,7 @@ func TestRuntimeClearDaemonResetsOwnedStateAndKillsPTYs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clear daemon: %v", err)
 	}
-	if cleared.SessionsCleared != 1 || cleared.PTYsCleared != 1 || cleared.BookmarksCleared != 1 || cleared.ProjectsCleared != 1 || cleared.WorkItemsCleared != 1 || cleared.ForwardsCleared != 1 {
+	if cleared.SessionsCleared != 1 || cleared.PTYsCleared != 1 || cleared.ProjectsCleared != 1 || cleared.WorkItemsCleared != 1 || cleared.ForwardsCleared != 1 {
 		t.Fatalf("cleared = %#v", cleared)
 	}
 	if sessions, _ := runtime.ListSessions(ctx); len(sessions) != 0 {
@@ -423,9 +417,6 @@ func TestRuntimeClearDaemonResetsOwnedStateAndKillsPTYs(t *testing.T) {
 	}
 	if ptys, _ := runtime.ListPTYs(ctx); len(ptys) != 0 {
 		t.Fatalf("ptys = %#v", ptys)
-	}
-	if bookmarks, _ := runtime.ListPTYBookmarks(ctx, ""); len(bookmarks) != 0 {
-		t.Fatalf("bookmarks = %#v", bookmarks)
 	}
 	if projects, _ := runtime.ListProjects(ctx); len(projects) != 0 {
 		t.Fatalf("projects = %#v", projects)
@@ -435,9 +426,6 @@ func TestRuntimeClearDaemonResetsOwnedStateAndKillsPTYs(t *testing.T) {
 	}
 	if len(sessionStore.saved[len(sessionStore.saved)-1]) != 0 {
 		t.Fatalf("saved sessions = %#v", sessionStore.saved)
-	}
-	if len(bookmarkStore.saved[len(bookmarkStore.saved)-1]) != 0 {
-		t.Fatalf("saved bookmarks = %#v", bookmarkStore.saved)
 	}
 	if len(workItemStore.saved.Items) != 0 || len(workItemStore.saved.Projects) != 0 {
 		t.Fatalf("saved work items = %#v", workItemStore.saved)
@@ -867,73 +855,7 @@ func TestRuntimeCapturesPTYTranscriptOutput(t *testing.T) {
 	}
 }
 
-func TestRuntimeAddsListsPersistsAndRemovesPTYBookmarks(t *testing.T) {
-	t.Setenv("SHELL", "/bin/sh")
-	ctx := context.Background()
-	store := &memoryBookmarkStore{}
-	runtime := app.NewRuntime(app.RuntimeConfig{
-		PTYBackend:    native.NewBackend(),
-		BookmarkStore: store,
-	})
-	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
-
-	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
-		Name:       "Bookmarks",
-		RootDir:    t.TempDir(),
-		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
-	})
-	if err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-	bookmark, err := runtime.AddPTYBookmark(ctx, app.AddPTYBookmarkRequest{
-		PTYID:  created.MainPtyID,
-		Offset: 42,
-		Kind:   "prompt",
-		Label:  "Last prompt",
-	})
-	if err != nil {
-		t.Fatalf("add bookmark: %v", err)
-	}
-	if bookmark.PTYID != created.MainPtyID || bookmark.SessionID != created.Session.ID || bookmark.PaneID != created.PaneID || bookmark.Offset != 42 {
-		t.Fatalf("bookmark = %#v", bookmark)
-	}
-	if len(store.saved) != 1 || store.saved[0][0].ID != bookmark.ID {
-		t.Fatalf("saved bookmarks = %#v", store.saved)
-	}
-	listed, err := runtime.ListPTYBookmarks(ctx, created.MainPtyID)
-	if err != nil || len(listed) != 1 || listed[0].ID != bookmark.ID {
-		t.Fatalf("listed = %#v, %v", listed, err)
-	}
-	if err := runtime.RemovePTYBookmark(ctx, app.RemovePTYBookmarkRequest{BookmarkID: bookmark.ID}); err != nil {
-		t.Fatalf("remove bookmark: %v", err)
-	}
-	listed, err = runtime.ListPTYBookmarks(ctx, created.MainPtyID)
-	if err != nil || len(listed) != 0 {
-		t.Fatalf("listed after remove = %#v, %v", listed, err)
-	}
-	if len(store.saved) != 2 || len(store.saved[1]) != 0 {
-		t.Fatalf("saved after remove = %#v", store.saved)
-	}
-}
-
-func TestRuntimeLoadsPersistedPTYBookmarks(t *testing.T) {
-	createdAt := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
-	store := &memoryBookmarkStore{
-		loaded: []ptybookmark.Bookmark{
-			{ID: "bm_01", PTYID: "pty_01", Offset: 7, CreatedAt: createdAt},
-		},
-	}
-	runtime, err := app.NewRuntimeWithError(app.RuntimeConfig{BookmarkStore: store})
-	if err != nil {
-		t.Fatalf("new runtime: %v", err)
-	}
-	bookmarks, err := runtime.ListPTYBookmarks(context.Background(), "pty_01")
-	if err != nil || len(bookmarks) != 1 || bookmarks[0].ID != "bm_01" {
-		t.Fatalf("bookmarks = %#v, %v", bookmarks, err)
-	}
-}
-
-func TestRuntimeSessionAndBookmarkPersistenceErrorsBubble(t *testing.T) {
+func TestRuntimeSessionPersistenceErrorsBubble(t *testing.T) {
 	ctx := context.Background()
 	saveErr := fmt.Errorf("save failed")
 	expectSaveErr := func(t *testing.T, err error) {
@@ -994,25 +916,6 @@ func TestRuntimeSessionAndBookmarkPersistenceErrorsBubble(t *testing.T) {
 		_, err = runtime.CloseSession(ctx, app.CloseSessionRequest{SessionID: created.Session.ID})
 		expectSaveErr(t, err)
 	})
-	t.Run("bookmarks", func(t *testing.T) {
-		bookmarkStore := &memoryBookmarkStore{saveErr: saveErr}
-		ptyBackend := newMemoryPTYBackend()
-		runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: ptyBackend, BookmarkStore: bookmarkStore})
-		created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{Name: "Bookmarks", RootDir: t.TempDir(), InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24}})
-		if err != nil {
-			t.Fatalf("create session: %v", err)
-		}
-		_, err = runtime.AddPTYBookmark(ctx, app.AddPTYBookmarkRequest{PTYID: created.MainPtyID, Offset: 1})
-		expectSaveErr(t, err)
-		bookmarkStore.saveErr = nil
-		bookmark, err := runtime.AddPTYBookmark(ctx, app.AddPTYBookmarkRequest{PTYID: created.MainPtyID, Offset: 1})
-		if err != nil {
-			t.Fatalf("add bookmark: %v", err)
-		}
-		bookmarkStore.saveErr = saveErr
-		err = runtime.RemovePTYBookmark(ctx, app.RemovePTYBookmarkRequest{BookmarkID: bookmark.ID})
-		expectSaveErr(t, err)
-	})
 }
 
 type memorySessionStore struct {
@@ -1061,24 +964,6 @@ func cloneTestPanes(in map[string]session.Pane) map[string]session.Pane {
 		out[id] = pane
 	}
 	return out
-}
-
-type memoryBookmarkStore struct {
-	loaded  []ptybookmark.Bookmark
-	saved   [][]ptybookmark.Bookmark
-	saveErr error
-}
-
-func (s *memoryBookmarkStore) LoadBookmarks(context.Context) ([]ptybookmark.Bookmark, error) {
-	return append([]ptybookmark.Bookmark(nil), s.loaded...), nil
-}
-
-func (s *memoryBookmarkStore) SaveBookmarks(_ context.Context, bookmarks []ptybookmark.Bookmark) error {
-	if s.saveErr != nil {
-		return s.saveErr
-	}
-	s.saved = append(s.saved, append([]ptybookmark.Bookmark(nil), bookmarks...))
-	return nil
 }
 
 type memoryTranscriptStore struct {

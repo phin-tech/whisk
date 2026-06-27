@@ -2,7 +2,6 @@
 
 from .add_project_attachment_request import AddProjectAttachmentRequest
 from .add_project_attachment_request_meta import AddProjectAttachmentRequestMeta
-from .add_pty_bookmark_request import AddPTYBookmarkRequest
 from .add_work_item_attachment_request import AddWorkItemAttachmentRequest
 from .add_work_item_link_request import AddWorkItemLinkRequest
 from .agent_bridge_approval import AgentBridgeApproval
@@ -32,7 +31,6 @@ from .attachment import Attachment
 from .attachment_meta import AttachmentMeta
 from .bind_work_item_worktree_request import BindWorkItemWorktreeRequest
 from .blocked_work_item import BlockedWorkItem
-from .bookmark import Bookmark
 from .cancel_work_item_run_request import CancelWorkItemRunRequest
 from .clear_daemon_request import ClearDaemonRequest
 from .clear_daemon_response import ClearDaemonResponse
@@ -182,7 +180,6 @@ from .write_pty_request import WritePTYRequest
 __all__ = (
     "AddProjectAttachmentRequest",
     "AddProjectAttachmentRequestMeta",
-    "AddPTYBookmarkRequest",
     "AddWorkItemAttachmentRequest",
     "AddWorkItemLinkRequest",
     "AgentBridgeApproval",
@@ -212,7 +209,6 @@ __all__ = (
     "AttachmentMeta",
     "BindWorkItemWorktreeRequest",
     "BlockedWorkItem",
-    "Bookmark",
     "CancelWorkItemRunRequest",
     "ClearDaemonRequest",
     "ClearDaemonResponse",

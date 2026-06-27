@@ -137,10 +137,9 @@ func runDaemon(args []string) error {
 			return err
 		}
 		fmt.Printf(
-			"cleared daemon state: sessions=%d ptys=%d bookmarks=%d projects=%d workItems=%d forwards=%d\n",
+			"cleared daemon state: sessions=%d ptys=%d projects=%d workItems=%d forwards=%d\n",
 			cleared.SessionsCleared,
 			cleared.PTYsCleared,
-			cleared.BookmarksCleared,
 			cleared.ProjectsCleared,
 			cleared.WorkItemsCleared,
 			cleared.ForwardsCleared,

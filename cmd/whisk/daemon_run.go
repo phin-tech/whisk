@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/phin-tech/whisk/internal/adapters/bookmarkstore"
 	"github.com/phin-tech/whisk/internal/adapters/plugins"
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/adapters/sessionstore"
@@ -82,10 +81,6 @@ func serveDaemon(addr string) error {
 	if err != nil {
 		return err
 	}
-	bookmarks, err := bookmarkstore.NewJSONStore("")
-	if err != nil {
-		return err
-	}
 	workItems, err := workitemstore.NewSQLiteStore("")
 	if err != nil {
 		return err
@@ -105,7 +100,6 @@ func serveDaemon(addr string) error {
 		EventSink:        eventBus,
 		SessionStore:     store,
 		TranscriptStore:  transcripts,
-		BookmarkStore:    bookmarks,
 		WorkItemStore:    workItems,
 		DaemonURL:        "http://" + addr,
 		CLIPath:          whiskCLIPath(),

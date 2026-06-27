@@ -64,40 +64,40 @@ func TestCommandsIncludeSessionActionShortcuts(t *testing.T) {
 	}
 }
 
-func TestCommandsIncludeBookmarkShortcuts(t *testing.T) {
+func TestCommandsExcludeBookmarkShortcuts(t *testing.T) {
 	commands := Commands()
 	byID := make(map[string]Command, len(commands))
 	for _, cmd := range commands {
 		byID[cmd.ID] = cmd
 	}
 
-	cases := map[string]struct {
-		label    string
-		shortcut string
-	}{
-		CommandAddBookmark:      {"Add Bookmark", "CmdOrCtrl+B"},
-		CommandPreviousBookmark: {"Previous Bookmark", "CmdOrCtrl+Alt+Left"},
-		CommandNextBookmark:     {"Next Bookmark", "CmdOrCtrl+Alt+Right"},
-		CommandLastPrompt:       {"Jump to Last Prompt", "CmdOrCtrl+Alt+P"},
-		CommandJumpToBottom:     {"Jump to Bottom", "CmdOrCtrl+Alt+Down"},
+	removed := []string{
+		"bookmark.add",
+		"bookmark.previous",
+		"bookmark.next",
+		"bookmark.lastPrompt",
 	}
-	for id, want := range cases {
-		cmd, ok := byID[id]
-		if !ok {
-			t.Fatalf("registry missing bookmark command %q", id)
+	for _, id := range removed {
+		if _, ok := byID[id]; ok {
+			t.Fatalf("registry still includes bookmark command %q", id)
 		}
-		if cmd.Label != want.label {
-			t.Fatalf("%s label = %q, want %q", id, cmd.Label, want.label)
-		}
-		if cmd.Category != CategoryTerminal {
-			t.Fatalf("%s category = %q, want %q", id, cmd.Category, CategoryTerminal)
-		}
-		if cmd.Default != want.shortcut {
-			t.Fatalf("%s shortcut = %q, want %q", id, cmd.Default, want.shortcut)
-		}
-		if !cmd.Editable {
-			t.Fatalf("%s should be editable", id)
-		}
+	}
+
+	cmd, ok := byID[CommandJumpToBottom]
+	if !ok {
+		t.Fatalf("registry missing jump to bottom command")
+	}
+	if cmd.Label != "Jump to Bottom" {
+		t.Fatalf("jump to bottom label = %q", cmd.Label)
+	}
+	if cmd.Category != CategoryTerminal {
+		t.Fatalf("jump to bottom category = %q, want %q", cmd.Category, CategoryTerminal)
+	}
+	if cmd.Default != "CmdOrCtrl+Alt+Down" {
+		t.Fatalf("jump to bottom shortcut = %q, want CmdOrCtrl+Alt+Down", cmd.Default)
+	}
+	if !cmd.Editable {
+		t.Fatalf("jump to bottom should be editable")
 	}
 }
 

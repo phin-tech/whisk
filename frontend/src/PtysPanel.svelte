@@ -1,16 +1,14 @@
 <script lang="ts">
-  import BookmarkIcon from "@lucide/svelte/icons/bookmark";
   import CircleStop from "@lucide/svelte/icons/circle-stop";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import Trash2 from "@lucide/svelte/icons/trash-2";
-  import type { PTYBookmark, PTYHistory, PTYHistorySummary, PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
-  import { ptyBookmarkRowsByPty, ptyHistoryRows, ptyRowsFromInventory } from "./sessionView";
+  import type { PTYHistory, PTYHistorySummary, PTYInfo } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import { ptyHistoryRows, ptyRowsFromInventory } from "./sessionView";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
   import Button from "./ui/Button.svelte";
   import IconButton from "./ui/IconButton.svelte";
 
   export let ptys: PTYInfo[] = [];
-  export let bookmarksByPty: Record<string, PTYBookmark[]> = {};
   export let ptyHistory: PTYHistorySummary[] = [];
   export let selectedPTYHistory: PTYHistory | null = null;
   export let loading = false;
@@ -19,21 +17,10 @@
   export let onRefresh: () => void;
   export let onKill: (ptyId: string) => void;
   export let onDelete: (ptyId: string) => void;
-  export let onSelectBookmark: (bookmark: PTYBookmark) => void;
   export let onSelectHistory: (ptyId: string) => void;
 
-  let allBookmarks: PTYBookmark[] = [];
-  let bookmarkRowsByPty = ptyBookmarkRowsByPty([]);
-
   $: rows = ptyRowsFromInventory(ptys);
-  $: allBookmarks = Object.values(bookmarksByPty).flat();
-  $: bookmarkRowsByPty = ptyBookmarkRowsByPty(allBookmarks);
   $: historyRows = ptyHistoryRows(ptyHistory);
-
-  function selectBookmark(bookmarkId: string) {
-    const bookmark = allBookmarks.find((candidate) => candidate.id === bookmarkId);
-    if (bookmark) onSelectBookmark(bookmark);
-  }
 </script>
 
 <div class="flex h-full min-h-0 w-full flex-col bg-bg-deep">
@@ -66,7 +53,6 @@
               Live
             </div>
             {#each rows as row (row.id)}
-              {@const bookmarkRows = bookmarkRowsByPty[row.id] ?? []}
               <div
                 class="rounded-lg border border-border-subtle/60 bg-bg-surface/35 px-2 py-1.5 text-[12px]"
               >
@@ -108,25 +94,6 @@
                   <div class="truncate">{row.subtitle}</div>
                   <div class="truncate" title={row.detail}>{row.detail}</div>
                 </div>
-                {#if bookmarkRows.length > 0}
-                  <div class="mt-2 flex min-w-0 flex-wrap gap-1 border-t border-hairline pt-1.5">
-                    {#each bookmarkRows as bookmark (bookmark.id)}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        align="start"
-                        class="h-5 max-w-full gap-1 rounded border border-border-subtle/60 bg-bg-base/45 px-1.5 py-0 text-[10px]"
-                        aria-label={`Jump to bookmark ${bookmark.label} from PTYs`}
-                        title={`Jump to bookmark ${bookmark.label} ${bookmark.offsetLabel}`}
-                        onclick={() => selectBookmark(bookmark.id)}
-                      >
-                        <BookmarkIcon size={11} />
-                        <span class="min-w-0 truncate">{bookmark.label}</span>
-                        <span class="font-mono text-text-muted">{bookmark.offsetLabel}</span>
-                      </Button>
-                    {/each}
-                  </div>
-                {/if}
               </div>
             {/each}
           </section>

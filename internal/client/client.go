@@ -47,9 +47,6 @@ type RuntimeClient interface {
 	ClosePane(ctx context.Context, req protocol.ClosePaneRequest) (session.Session, error)
 	KillPTY(ctx context.Context, req protocol.KillPTYRequest) (protocol.PTYInfo, error)
 	DeletePTY(ctx context.Context, req protocol.DeletePTYRequest) error
-	AddPTYBookmark(ctx context.Context, req protocol.AddPTYBookmarkRequest) (protocol.PTYBookmark, error)
-	ListPTYBookmarks(ctx context.Context, ptyID string) ([]protocol.PTYBookmark, error)
-	RemovePTYBookmark(ctx context.Context, req protocol.RemovePTYBookmarkRequest) error
 	WritePTY(ctx context.Context, req protocol.WritePTYRequest) error
 	ResizePTY(ctx context.Context, req protocol.ResizePTYRequest) error
 	Output(ctx context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error)

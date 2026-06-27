@@ -69,9 +69,6 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/resize", server.resizePTY)
 	mux.HandleFunc("POST /v1/ptys/{ptyID}/kill", server.killPTY)
 	mux.HandleFunc("DELETE /v1/ptys/{ptyID}", server.deletePTY)
-	mux.HandleFunc("POST /v1/ptys/{ptyID}/bookmarks", server.addPTYBookmark)
-	mux.HandleFunc("GET /v1/ptys/{ptyID}/bookmarks", server.listPTYBookmarks)
-	mux.HandleFunc("DELETE /v1/pty-bookmarks/{bookmarkID}", server.removePTYBookmark)
 	mux.HandleFunc("GET /v1/ptys/{ptyID}/attach", server.attachPTY)
 	mux.HandleFunc("GET /v1/ptys/{ptyID}/output", server.output)
 	mux.HandleFunc("POST /v1/worktrunk/detect", server.detectWorktrunk)
@@ -178,7 +175,6 @@ func (s *HTTPServer) clearDaemon(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, protocol.ClearDaemonResponse{
 		SessionsCleared:  cleared.SessionsCleared,
 		PTYsCleared:      cleared.PTYsCleared,
-		BookmarksCleared: cleared.BookmarksCleared,
 		ProjectsCleared:  cleared.ProjectsCleared,
 		WorkItemsCleared: cleared.WorkItemsCleared,
 		ForwardsCleared:  cleared.ForwardsCleared,
@@ -535,43 +531,6 @@ func toProtocolAgentHookIntegration(integration app.AgentHookIntegration) protoc
 		ManifestPath:     integration.ManifestPath,
 		Detail:           integration.Detail,
 	}
-}
-
-func (s *HTTPServer) addPTYBookmark(w http.ResponseWriter, r *http.Request) {
-	var req protocol.AddPTYBookmarkRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	req.PTYID = pathValue(r, "ptyID", req.PTYID)
-	bookmark, err := s.runtime.AddPTYBookmark(r.Context(), app.AddPTYBookmarkRequest{
-		PTYID:  req.PTYID,
-		Offset: req.Offset,
-		Kind:   req.Kind,
-		Label:  req.Label,
-	})
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, bookmark)
-}
-
-func (s *HTTPServer) listPTYBookmarks(w http.ResponseWriter, r *http.Request) {
-	bookmarks, err := s.runtime.ListPTYBookmarks(r.Context(), pathValue(r, "ptyID", ""))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, bookmarks)
-}
-
-func (s *HTTPServer) removePTYBookmark(w http.ResponseWriter, r *http.Request) {
-	req := app.RemovePTYBookmarkRequest{BookmarkID: pathValue(r, "bookmarkID", "")}
-	if err := s.runtime.RemovePTYBookmark(r.Context(), req); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *HTTPServer) closeSession(w http.ResponseWriter, r *http.Request) {

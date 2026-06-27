@@ -16,26 +16,33 @@ test("loads the seeded app shell without browser console errors", async ({ page 
   expect(browserErrors).toEqual([]);
 });
 
-test("shows pty bookmarks and jumps terminal replay to their offsets", async ({ page }) => {
+test("does not expose pty bookmark controls", async ({ page }) => {
   await page.goto("/?e2ePty");
 
   await expect(page.getByRole("button", { name: /Seeded Session/ })).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("seeded terminal output");
-  await expect(page.getByRole("button", { name: "Add bookmark for pty_01" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Jump to bookmark Agent handoff/ })).toBeVisible();
-
-  await page.getByRole("button", { name: "Add bookmark for pty_01" }).click();
-  await expect(page.getByRole("button", { name: /Jump to bookmark Bookmark @23/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Add bookmark/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Open bookmark/ })).toHaveCount(0);
+  await expect(page.locator(".terminal-bookmark-decoration")).toHaveCount(0);
 
   await page.getByRole("button", { name: "PTYs" }).click();
-  await expect(page.getByRole("button", { name: /Jump to bookmark Agent handoff from PTYs/ })).toBeVisible();
-
-  await page.evaluate(() => window.__WHISK_E2E__.emitCommand("bookmark.previous"));
-  await expect(page.locator(".xterm-rows")).toContainText("bookmarked output");
+  await expect(page.getByRole("button", { name: /Jump to bookmark/ })).toHaveCount(0);
 
   const calls = await page.evaluate(() => window.__WHISK_E2E__.calls());
   const outputCalls = calls.filter((call) => call.method.endsWith(".Output"));
-  const addBookmarkCalls = calls.filter((call) => call.method.endsWith(".AddPTYBookmark"));
-  expect(outputCalls.some((call) => (call.args[0] as { fromOffset?: number }).fromOffset === 12)).toBe(true);
-  expect(addBookmarkCalls.some((call) => (call.args[0] as { offset?: number }).offset === 23)).toBe(true);
+  const bookmarkCalls = calls.filter((call) => call.method.includes("Bookmark"));
+  expect(outputCalls.some((call) => (call.args[0] as { fromOffset?: number }).fromOffset === 0)).toBe(true);
+  expect(bookmarkCalls).toEqual([]);
+});
+
+test("jump to bottom remains available on a long pty", async ({ page }) => {
+  await page.goto("/?e2eLongPty");
+
+  await expect(page.getByRole("button", { name: /Seeded Session/ })).toBeVisible();
+  await expect(page.locator(".xterm-rows")).toContainText("scrollback line 89");
+  await expect(page.locator(".xterm-rows")).not.toContainText("scrollback line 20");
+
+  await page.evaluate(() => window.__WHISK_E2E__.emitCommand("terminal.bottom"));
+  await expect(page.locator(".xterm-rows")).toContainText("scrollback line 89");
+  await expect(page.locator(".terminal-bookmark-decoration")).toHaveCount(0);
 });

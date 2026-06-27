@@ -66,12 +66,21 @@ func TestRunDaemonClearUsesClearEndpoint(t *testing.T) {
 		}
 		called = true
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"sessionsCleared":1,"ptysCleared":2,"bookmarksCleared":3,"projectsCleared":4,"workItemsCleared":5,"forwardsCleared":6}`))
+		_, _ = w.Write([]byte(`{"sessionsCleared":1,"ptysCleared":2,"projectsCleared":4,"workItemsCleared":5,"forwardsCleared":6}`))
 	}))
 	defer server.Close()
 
-	if err := run([]string{"daemon", "clear", "-url", server.URL, "-yes"}); err != nil {
+	output, err := captureStdout(func() error {
+		return run([]string{"daemon", "clear", "-url", server.URL, "-yes"})
+	})
+	if err != nil {
 		t.Fatalf("clear: %v", err)
+	}
+	if strings.Contains(output, "bookmarks") {
+		t.Fatalf("clear output still includes bookmarks: %q", output)
+	}
+	if !strings.Contains(output, "sessions=1 ptys=2 projects=4 workItems=5 forwards=6") {
+		t.Fatalf("clear output = %q", output)
 	}
 	if !called {
 		t.Fatalf("clear endpoint was not called")
