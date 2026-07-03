@@ -730,8 +730,11 @@ export class StatusEvent {
     "workItemId"?: string;
     "runId"?: string;
     "sessionId"?: string;
+    "paneId"?: string;
     "ptyId"?: string;
     "requiresAttention": boolean;
+    "notificationKey"?: string;
+    "notificationSeverity"?: string;
     "createdAt": time$0.Time;
     "readAt"?: time$0.Time | null;
 

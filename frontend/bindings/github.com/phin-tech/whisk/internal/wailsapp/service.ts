@@ -586,6 +586,10 @@ export function SetAgentHookLogSettings(req: protocol$0.SetAgentHookLogSettingsR
     });
 }
 
+export function SetNotificationFocusContext(focus: $models.NotificationFocusContext): $CancellablePromise<void> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SetNotificationFocusContext", focus);
+}
+
 export function SetPaneWorkingDir(req: protocol$0.SetPaneWorkingDirRequest): $CancellablePromise<session$0.Session> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SetPaneWorkingDir", req).then(($result: any) => {
         return $$createType9($result);

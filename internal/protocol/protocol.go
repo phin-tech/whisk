@@ -777,6 +777,7 @@ type ReportStatusRequest struct {
 	WorkItemID string `json:"workItemId,omitempty"`
 	RunID      string `json:"runId,omitempty"`
 	SessionID  string `json:"sessionId,omitempty"`
+	PaneID     string `json:"paneId,omitempty"`
 	PTYID      string `json:"ptyId,omitempty"`
 }
 

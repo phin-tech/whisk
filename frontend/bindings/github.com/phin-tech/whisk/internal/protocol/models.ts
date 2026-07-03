@@ -2247,6 +2247,7 @@ export class ReportStatusRequest {
     "workItemId"?: string;
     "runId"?: string;
     "sessionId"?: string;
+    "paneId"?: string;
     "ptyId"?: string;
 
     /** Creates a new ReportStatusRequest instance. */

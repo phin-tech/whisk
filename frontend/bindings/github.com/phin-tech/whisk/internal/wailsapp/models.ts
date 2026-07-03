@@ -124,3 +124,27 @@ export class DaemonStatus {
         return new DaemonStatus($$parsedSource as Partial<DaemonStatus>);
     }
 }
+
+export class NotificationFocusContext {
+    "activeMain"?: string;
+    "sessionId"?: string;
+    "paneId"?: string;
+    "windowFocused": boolean;
+
+    /** Creates a new NotificationFocusContext instance. */
+    constructor($$source: Partial<NotificationFocusContext> = {}) {
+        if (!("windowFocused" in $$source)) {
+            this["windowFocused"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NotificationFocusContext instance from a string or object.
+     */
+    static createFrom($$source: any = {}): NotificationFocusContext {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NotificationFocusContext($$parsedSource as Partial<NotificationFocusContext>);
+    }
+}

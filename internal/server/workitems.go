@@ -876,6 +876,7 @@ func (s *HTTPServer) reportStatus(w http.ResponseWriter, r *http.Request) {
 		WorkItemID: req.WorkItemID,
 		RunID:      req.RunID,
 		SessionID:  req.SessionID,
+		PaneID:     req.PaneID,
 		PTYID:      req.PTYID,
 	})
 	if err != nil {

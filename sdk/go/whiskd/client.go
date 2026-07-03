@@ -268,6 +268,9 @@ const (
 	StatusKindBlocked                    = workitem.StatusKindBlocked
 	StatusKindDone                       = workitem.StatusKindDone
 	StatusKindQuestion                   = workitem.StatusKindQuestion
+	StatusNotificationSeverityAttention  = workitem.StatusNotificationSeverityAttention
+	StatusNotificationSeverityInfo       = workitem.StatusNotificationSeverityInfo
+	StatusNotificationSeverityWarning    = workitem.StatusNotificationSeverityWarning
 	StatusScopePTY                       = workitem.StatusScopePTY
 	StatusScopeRun                       = workitem.StatusScopeRun
 	StatusScopeSession                   = workitem.StatusScopeSession

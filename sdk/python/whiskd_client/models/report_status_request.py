@@ -18,6 +18,7 @@ class ReportStatusRequest:
         kind (str):
         message (str):
         actor (str | Unset):
+        pane_id (str | Unset):
         project_id (str | Unset):
         pty_id (str | Unset):
         run_id (str | Unset):
@@ -28,6 +29,7 @@ class ReportStatusRequest:
     kind: str
     message: str
     actor: str | Unset = UNSET
+    pane_id: str | Unset = UNSET
     project_id: str | Unset = UNSET
     pty_id: str | Unset = UNSET
     run_id: str | Unset = UNSET
@@ -41,6 +43,8 @@ class ReportStatusRequest:
         message = self.message
 
         actor = self.actor
+
+        pane_id = self.pane_id
 
         project_id = self.project_id
 
@@ -62,6 +66,8 @@ class ReportStatusRequest:
         )
         if actor is not UNSET:
             field_dict["actor"] = actor
+        if pane_id is not UNSET:
+            field_dict["paneId"] = pane_id
         if project_id is not UNSET:
             field_dict["projectId"] = project_id
         if pty_id is not UNSET:
@@ -84,6 +90,8 @@ class ReportStatusRequest:
 
         actor = d.pop("actor", UNSET)
 
+        pane_id = d.pop("paneId", UNSET)
+
         project_id = d.pop("projectId", UNSET)
 
         pty_id = d.pop("ptyId", UNSET)
@@ -98,6 +106,7 @@ class ReportStatusRequest:
             kind=kind,
             message=message,
             actor=actor,
+            pane_id=pane_id,
             project_id=project_id,
             pty_id=pty_id,
             run_id=run_id,

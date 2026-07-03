@@ -121,6 +121,7 @@ describe("notificationsView", () => {
           workItemId: "wi_01",
           runId: "run_01",
           sessionId: "sess_01",
+          paneId: "pane_01",
           ptyId: "pty_01",
           requiresAttention: true,
           createdAt: "2026-06-11T12:01:00Z",
@@ -130,6 +131,7 @@ describe("notificationsView", () => {
     ).toEqual([
       { label: "Agent", value: "codex" },
       { label: "Session", value: "sess_01" },
+      { label: "Pane", value: "pane_01" },
       { label: "PTY", value: "pty_01" },
       { label: "CWD", value: "/repo" },
       { label: "Project", value: "proj_01" },
@@ -146,6 +148,19 @@ describe("notificationsView", () => {
       targetForStatusEvent(
         {
           id: "status_01",
+          kind: "question",
+          sessionId: "sess_01",
+          paneId: "pane_01",
+          requiresAttention: true,
+        },
+        sessions,
+      ),
+    ).toEqual({ main: "session", sessionId: "sess_01", paneId: "pane_01" });
+
+    expect(
+      targetForStatusEvent(
+        {
+          id: "status_03",
           kind: "question",
           sessionId: "sess_01",
           ptyId: "pty_01",

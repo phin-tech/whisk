@@ -317,6 +317,7 @@ type ReportStatusRequest struct {
 	WorkItemID string
 	RunID      string
 	SessionID  string
+	PaneID     string
 	PTYID      string
 }
 
@@ -1743,6 +1744,27 @@ func (r *Runtime) CancelWorkItemRun(ctx context.Context, req CancelWorkItemRunRe
 }
 
 func (r *Runtime) ReportStatus(ctx context.Context, req ReportStatusRequest) (ReportStatusResponse, error) {
+	sessionID := strings.TrimSpace(req.SessionID)
+	paneID := strings.TrimSpace(req.PaneID)
+	ptyID := strings.TrimSpace(req.PTYID)
+	if req.RunID != "" {
+		if run, ok := r.workItems.GetRun(req.RunID); ok {
+			if sessionID == "" {
+				sessionID = run.SessionID
+			}
+			if ptyID == "" {
+				ptyID = run.PTYID
+			}
+		}
+	}
+	if ptyID != "" && paneID == "" {
+		if owner, ok := r.state.PTYOwners()[ptyID]; ok {
+			paneID = owner.PaneID
+			if sessionID == "" {
+				sessionID = owner.SessionID
+			}
+		}
+	}
 	event, err := r.workItems.ReportStatus(workitem.ReportStatus{
 		ID:           r.ids(),
 		RunHistoryID: r.ids(),
@@ -1752,8 +1774,9 @@ func (r *Runtime) ReportStatus(ctx context.Context, req ReportStatusRequest) (Re
 		ProjectID:    req.ProjectID,
 		WorkItemID:   req.WorkItemID,
 		RunID:        req.RunID,
-		SessionID:    req.SessionID,
-		PTYID:        req.PTYID,
+		SessionID:    sessionID,
+		PaneID:       paneID,
+		PTYID:        ptyID,
 		Now:          time.Now().UTC(),
 	})
 	if err != nil {
