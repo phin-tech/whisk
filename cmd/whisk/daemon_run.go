@@ -130,7 +130,7 @@ func serveDaemon(addr string) (err error) {
 	}
 	defer func() { _ = runtime.Shutdown(context.Background()) }()
 
-	shutdown := make(chan struct{})
+	shutdown := make(chan struct{}, 1)
 	mux := http.NewServeMux()
 	httpServer := &http.Server{
 		Addr:              addr,
