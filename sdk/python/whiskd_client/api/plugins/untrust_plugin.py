@@ -51,7 +51,7 @@ def _build_response(
 def sync_detailed(
     plugin_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | PluginStatus]:
     """Untrust a discovered plugin
 
@@ -80,7 +80,7 @@ def sync_detailed(
 def sync(
     plugin_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | PluginStatus | None:
     """Untrust a discovered plugin
 
@@ -104,7 +104,7 @@ def sync(
 async def asyncio_detailed(
     plugin_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | PluginStatus]:
     """Untrust a discovered plugin
 
@@ -131,7 +131,7 @@ async def asyncio_detailed(
 async def asyncio(
     plugin_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | PluginStatus | None:
     """Untrust a discovered plugin
 

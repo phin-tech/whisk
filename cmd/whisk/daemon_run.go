@@ -24,6 +24,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/worktrunk"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/appsettings"
+	"github.com/phin-tech/whisk/internal/controlauth"
 	"github.com/phin-tech/whisk/internal/events"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/server"
@@ -45,6 +46,10 @@ func runDaemonRun(args []string) error {
 func serveDaemon(addr string) error {
 	if err := validateListenAddr(addr); err != nil {
 		return err
+	}
+	controlToken, err := controlauth.EnsureToken()
+	if err != nil {
+		return fmt.Errorf("ensure daemon auth token: %w", err)
 	}
 
 	// Bind the listener before any other setup so a duplicate instance fails fast and
@@ -125,6 +130,7 @@ func serveDaemon(addr string) error {
 		default:
 		}
 	})
+	httpServer.Handler = server.RequireBearerAuth(controlToken, mux)
 
 	serveErr := make(chan error, 1)
 	serveStarted = true
@@ -182,18 +188,8 @@ func trustedPluginsFromEnv() map[string]bool {
 }
 
 func validateListenAddr(addr string) error {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return err
-	}
-	if host == "localhost" {
-		return nil
-	}
-	ip := net.ParseIP(host)
-	if ip == nil || !ip.IsLoopback() {
-		return fmt.Errorf("refusing non-loopback bind %q until daemon auth is implemented", addr)
-	}
-	return nil
+	_, _, err := net.SplitHostPort(addr)
+	return err
 }
 
 func whiskCLIPath() string {

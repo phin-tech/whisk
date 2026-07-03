@@ -29,7 +29,7 @@ from whiskd_client.api.workitems import (
     submit_draft_plan,
     submit_review_feedback,
 )
-from whiskd_client.client import Client
+from whiskd_client.local import local_client
 from whiskd_client.models import (
     AnswerQuestionRequest,
     ApproveDoneRequest,
@@ -58,7 +58,7 @@ from whiskd_client.models import (
 
 
 def test_compatibility_handshake(base_url):
-    client = Client(base_url=base_url)
+    client = local_client(base_url=base_url)
     compat = get_compatibility.sync(client=client)
     assert compat is not None
     assert compat.api_version >= 1
@@ -66,13 +66,13 @@ def test_compatibility_handshake(base_url):
 
 
 def test_sessions_start_empty(base_url):
-    client = Client(base_url=base_url)
+    client = local_client(base_url=base_url)
     sessions = list_sessions.sync(client=client)
     assert sessions == []
 
 
 def test_daemon_clear_resets_work_item_state(base_url, tmp_path):
-    client = Client(base_url=base_url)
+    client = local_client(base_url=base_url)
 
     project = create_project.sync(
         client=client,
@@ -95,7 +95,7 @@ def test_daemon_clear_resets_work_item_state(base_url, tmp_path):
 
 
 def test_work_item_round_trip(base_url, tmp_path):
-    client = Client(base_url=base_url)
+    client = local_client(base_url=base_url)
 
     project = create_project.sync(
         client=client,
@@ -139,7 +139,7 @@ def test_work_item_round_trip(base_url, tmp_path):
 
 
 def test_workflow_round_trip(base_url, tmp_path):
-    client = Client(base_url=base_url)
+    client = local_client(base_url=base_url)
 
     project = create_project.sync(
         client=client,

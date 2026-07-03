@@ -44,6 +44,8 @@ def base_url(tmp_path_factory) -> str:
         "XDG_STATE_HOME": str(state / "state"),
         "XDG_CACHE_HOME": str(state / "cache"),
     }
+    previous_xdg = {name: os.environ.get(name) for name in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME")}
+    os.environ.update({name: env[name] for name in previous_xdg})
     proc = subprocess.Popen(
         [binary, "daemon", "run", "-addr", addr],
         env=env,
@@ -51,6 +53,7 @@ def base_url(tmp_path_factory) -> str:
         stderr=subprocess.STDOUT,
     )
     url = f"http://{addr}"
+    token_path = pathlib.Path(env["XDG_STATE_HOME"]) / "whisk" / "control-token"
     try:
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
@@ -58,8 +61,10 @@ def base_url(tmp_path_factory) -> str:
                 output = proc.stdout.read().decode() if proc.stdout else ""
                 raise RuntimeError(f"daemon exited early (code {proc.returncode}):\n{output}")
             try:
-                if httpx.get(url + "/v1/compat", timeout=0.5).status_code == 200:
-                    break
+                if token_path.exists():
+                    token = token_path.read_text(encoding="utf-8").strip()
+                    if httpx.get(url + "/v1/compat", headers={"Authorization": f"Bearer {token}"}, timeout=0.5).status_code == 200:
+                        break
             except httpx.HTTPError:
                 time.sleep(0.1)
         else:
@@ -71,3 +76,8 @@ def base_url(tmp_path_factory) -> str:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
+        for name, value in previous_xdg.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value

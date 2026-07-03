@@ -24,12 +24,23 @@ func TestRunDaemonStatusUsesHealthEndpoint(t *testing.T) {
 
 func TestRunDaemonStopUsesShutdownEndpoint(t *testing.T) {
 	called := false
+	healthy := true
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/v1/shutdown" {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/health":
+			if !healthy {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/shutdown":
+			called = true
+			healthy = false
+			w.WriteHeader(http.StatusNoContent)
+		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		called = true
-		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
 
@@ -87,16 +98,6 @@ func TestRunDaemonClearUsesClearEndpoint(t *testing.T) {
 	}
 }
 
-func TestRunDaemonRunValidatesListenAddress(t *testing.T) {
-	err := run([]string{"daemon", "run", "-addr", "0.0.0.0:8787"})
-	if err == nil {
-		t.Fatalf("expected non-loopback daemon run address to be rejected")
-	}
-	if !strings.Contains(err.Error(), "refusing non-loopback bind") {
-		t.Fatalf("daemon run error = %q", err.Error())
-	}
-}
-
 func TestRunRejectsUnknownCommand(t *testing.T) {
 	if err := run([]string{"daemon", "bogus"}); err == nil {
 		t.Fatalf("expected unknown command error")
@@ -125,8 +126,16 @@ func TestRunDaemonStatusReportsUnavailableDaemon(t *testing.T) {
 }
 
 func TestRunDaemonStopReportsServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/health":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/shutdown":
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 

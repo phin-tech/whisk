@@ -3,7 +3,6 @@ package wailsapp
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/phin-tech/whisk/internal/appmenu"
 	"github.com/phin-tech/whisk/internal/appsettings"
@@ -13,10 +12,6 @@ import (
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/ptytrace"
 )
-
-// daemonControlTimeout bounds start/stop/restart operations so a frontend action can't hang the
-// UI waiting on a wedged daemon.
-const daemonControlTimeout = 12 * time.Second
 
 type AppSettingsStore interface {
 	Load(context.Context) (appsettings.Settings, error)
@@ -132,6 +127,8 @@ type DaemonStatus struct {
 	Running bool `json:"running"`
 	// Address is the daemon URL (e.g. http://127.0.0.1:8787).
 	Address string `json:"address"`
+	// ControlToken is used by the renderer only for daemon WebSocket attach handshakes.
+	ControlToken string `json:"controlToken"`
 	// Managed is true when this app started the daemon (a live PID file names it), as opposed to
 	// one started independently (e.g. `whisk daemon run`).
 	Managed bool `json:"managed"`
@@ -155,6 +152,9 @@ func (s *Service) httpClient() (*client.HTTPClient, error) {
 func (s *Service) daemonStatus(ctx context.Context, httpClient *client.HTTPClient) DaemonStatus {
 	baseURL := httpClient.BaseURL()
 	status := DaemonStatus{Address: baseURL, Managed: daemon.IsManaged(baseURL)}
+	if token, err := httpClient.ControlToken(); err == nil {
+		status.ControlToken = token
+	}
 	if err := httpClient.Health(ctx); err != nil {
 		status.Error = err.Error()
 		return status
@@ -187,7 +187,7 @@ func (s *Service) StartDaemon(ctx context.Context) (DaemonStatus, error) {
 	if err != nil {
 		return DaemonStatus{}, err
 	}
-	opCtx, cancel := context.WithTimeout(ctx, daemonControlTimeout)
+	opCtx, cancel := context.WithTimeout(ctx, daemon.DefaultControlTimeout())
 	defer cancel()
 	if _, err := daemon.Ensure(opCtx, httpClient.BaseURL()); err != nil {
 		return s.daemonStatus(ctx, httpClient), err
@@ -201,7 +201,7 @@ func (s *Service) StopDaemon(ctx context.Context) (DaemonStatus, error) {
 	if err != nil {
 		return DaemonStatus{}, err
 	}
-	opCtx, cancel := context.WithTimeout(ctx, daemonControlTimeout)
+	opCtx, cancel := context.WithTimeout(ctx, daemon.DefaultControlTimeout())
 	defer cancel()
 	if err := daemon.Stop(opCtx, httpClient.BaseURL()); err != nil {
 		return s.daemonStatus(ctx, httpClient), err
@@ -215,7 +215,7 @@ func (s *Service) RestartDaemon(ctx context.Context) (DaemonStatus, error) {
 	if err != nil {
 		return DaemonStatus{}, err
 	}
-	opCtx, cancel := context.WithTimeout(ctx, daemonControlTimeout)
+	opCtx, cancel := context.WithTimeout(ctx, daemon.DefaultControlTimeout())
 	defer cancel()
 	baseURL := httpClient.BaseURL()
 	if err := daemon.Stop(opCtx, baseURL); err != nil {

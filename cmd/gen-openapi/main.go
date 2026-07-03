@@ -60,19 +60,27 @@ type serverURL struct {
 }
 
 type components struct {
-	Schemas map[string]any `json:"schemas"`
+	Schemas         map[string]any            `json:"schemas"`
+	SecuritySchemes map[string]securityScheme `json:"securitySchemes,omitempty"`
+}
+
+type securityScheme struct {
+	Type         string `json:"type"`
+	Scheme       string `json:"scheme"`
+	BearerFormat string `json:"bearerFormat,omitempty"`
 }
 
 // pathItem is keyed by lowercase HTTP method -> operation.
 type pathItem map[string]operation
 
 type operation struct {
-	OperationID string         `json:"operationId"`
-	Summary     string         `json:"summary,omitempty"`
-	Tags        []string       `json:"tags,omitempty"`
-	Parameters  []parameter    `json:"parameters,omitempty"`
-	RequestBody *requestBody   `json:"requestBody,omitempty"`
-	Responses   map[string]any `json:"responses"`
+	OperationID string                `json:"operationId"`
+	Summary     string                `json:"summary,omitempty"`
+	Tags        []string              `json:"tags,omitempty"`
+	Parameters  []parameter           `json:"parameters,omitempty"`
+	RequestBody *requestBody          `json:"requestBody,omitempty"`
+	Security    []map[string][]string `json:"security,omitempty"`
+	Responses   map[string]any        `json:"responses"`
 }
 
 type parameter struct {
@@ -116,9 +124,14 @@ func build() *openAPI {
 			Version:     fmt.Sprintf("%d", protocol.DaemonAPIVersion),
 			Description: "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand.",
 		},
-		Servers:    []serverURL{{URL: "http://127.0.0.1:8787"}},
-		Paths:      paths,
-		Components: components{Schemas: reg.schemas},
+		Servers: []serverURL{{URL: "http://127.0.0.1:8787"}},
+		Paths:   paths,
+		Components: components{
+			Schemas: reg.schemas,
+			SecuritySchemes: map[string]securityScheme{
+				"controlBearer": {Type: "http", Scheme: "bearer", BearerFormat: "whiskd-control-token"},
+			},
+		},
 	}
 }
 
@@ -127,6 +140,7 @@ func operationForRoute(rt protocol.APIRoute, reg *registry) operation {
 		OperationID: rt.OperationID,
 		Summary:     rt.Summary,
 		Tags:        []string{rt.Tag},
+		Security:    []map[string][]string{{"controlBearer": {}}},
 		Responses:   map[string]any{},
 	}
 

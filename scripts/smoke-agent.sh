@@ -5,20 +5,24 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BIN_DIR="${BIN_DIR:-$ROOT_DIR/bin}"
 ADDR="${WHISK_SMOKE_ADDR:-127.0.0.1:8899}"
 URL="http://$ADDR"
-CONFIG_DIR=$(mktemp -d /tmp/whisk-smoke-config.XXXXXX)
+STATE_ROOT=$(mktemp -d /tmp/whisk-smoke-state.XXXXXX)
 PROJECT_DIR=$(mktemp -d /tmp/whisk-smoke-project.XXXXXX)
-LOG_FILE="$CONFIG_DIR/whiskd.log"
+LOG_FILE="$STATE_ROOT/whiskd.log"
 DAEMON_PID=""
+export XDG_CONFIG_HOME="$STATE_ROOT/config"
+export XDG_DATA_HOME="$STATE_ROOT/data"
+export XDG_STATE_HOME="$STATE_ROOT/state"
+export XDG_CACHE_HOME="$STATE_ROOT/cache"
 
 cleanup() {
   if [ -n "$DAEMON_PID" ]; then
-    curl -fsS -X POST "$URL/v1/shutdown" >/dev/null 2>&1 || true
+    "$BIN_DIR/whisk" daemon stop -url "$URL" >/dev/null 2>&1 || true
     wait "$DAEMON_PID" 2>/dev/null || true
   fi
   if [ "${WHISK_SMOKE_KEEP:-0}" != "1" ]; then
-    rm -rf "$CONFIG_DIR" "$PROJECT_DIR"
+    rm -rf "$STATE_ROOT" "$PROJECT_DIR"
   else
-    printf 'kept config dir: %s\n' "$CONFIG_DIR"
+    printf 'kept state root: %s\n' "$STATE_ROOT"
     printf 'kept project dir: %s\n' "$PROJECT_DIR"
     printf 'daemon log: %s\n' "$LOG_FILE"
   fi
@@ -28,7 +32,7 @@ trap cleanup EXIT INT TERM
 printf 'starting smoke daemon: %s\n' "$URL"
 (
   cd "$ROOT_DIR"
-  XDG_CONFIG_HOME="$CONFIG_DIR" SHELL=/bin/sh "$BIN_DIR/whisk" daemon run -addr "$ADDR"
+  SHELL=/bin/sh "$BIN_DIR/whisk" daemon run -addr "$ADDR"
 ) >"$LOG_FILE" 2>&1 &
 DAEMON_PID=$!
 
