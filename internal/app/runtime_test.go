@@ -252,8 +252,11 @@ func TestRuntimePublishesSessionPTYAndOutputEvents(t *testing.T) {
 
 	created := createRuntimeSession(t, runtime, ctx, 80, 24)
 
-	sink.waitFor(t, ctx, app.EventSessionChanged, "")
-	sink.waitFor(t, ctx, app.EventPTYChanged, created.MainPtyID)
+	sessionEvent := sink.waitFor(t, ctx, app.EventSessionChanged, "")
+	ptyEvent := sink.waitFor(t, ctx, app.EventPTYChanged, created.MainPtyID)
+	if sessionEvent.Seq == 0 || ptyEvent.Seq <= sessionEvent.Seq {
+		t.Fatalf("events not sequenced: session=%#v pty=%#v", sessionEvent, ptyEvent)
+	}
 
 	if err := runtime.WritePTY(ctx, created.MainPtyID, []byte("printf 'event-output-ok\\n'\n")); err != nil {
 		t.Fatalf("write pty: %v", err)
@@ -262,12 +265,15 @@ func TestRuntimePublishesSessionPTYAndOutputEvents(t *testing.T) {
 	if event.Offset == 0 {
 		t.Fatalf("output event missing offset: %#v", event)
 	}
+	if event.Seq <= ptyEvent.Seq {
+		t.Fatalf("output event not sequenced after pty event: %#v", event)
+	}
 }
 
 func TestRuntimeNextEventRequiresEventSource(t *testing.T) {
 	ctx := context.Background()
 	runtime := app.NewRuntime(app.RuntimeConfig{})
-	if _, err := runtime.NextEvent(ctx); err == nil {
+	if _, err := runtime.NextEvent(ctx, 0); err == nil {
 		t.Fatalf("expected missing event source error")
 	}
 
@@ -277,11 +283,11 @@ func TestRuntimeNextEventRequiresEventSource(t *testing.T) {
 	if err := sink.Publish(ctx, want); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	got, err := runtime.NextEvent(ctx)
+	got, err := runtime.NextEvent(ctx, 7)
 	if err != nil {
 		t.Fatalf("next event: %v", err)
 	}
-	if got.Type != want.Type {
+	if got.Event.Type != want.Type || sink.afterSeq != 7 {
 		t.Fatalf("event = %#v", got)
 	}
 }
@@ -351,9 +357,10 @@ func TestRuntimeResizePTYChangesShellGrid(t *testing.T) {
 }
 
 type recordingEventSink struct {
-	mu     sync.Mutex
-	events []app.RuntimeEvent
-	ch     chan app.RuntimeEvent
+	mu       sync.Mutex
+	events   []app.RuntimeEvent
+	ch       chan app.RuntimeEvent
+	afterSeq uint64
 }
 
 func newRecordingEventSink() *recordingEventSink {
@@ -387,12 +394,13 @@ func (s *recordingEventSink) Publish(_ context.Context, event app.RuntimeEvent) 
 	return nil
 }
 
-func (s *recordingEventSink) Next(ctx context.Context) (app.RuntimeEvent, error) {
+func (s *recordingEventSink) Next(ctx context.Context, afterSeq uint64) (app.NextRuntimeEventResult, error) {
+	s.afterSeq = afterSeq
 	select {
 	case event := <-s.ch:
-		return event, nil
+		return app.NextRuntimeEventResult{Event: event}, nil
 	case <-ctx.Done():
-		return app.RuntimeEvent{}, ctx.Err()
+		return app.NextRuntimeEventResult{}, ctx.Err()
 	}
 }
 

@@ -2147,6 +2147,10 @@ export interface components {
             id: string;
             stageId: string;
         };
+        NextEventResponse: {
+            event: components["schemas"]["RuntimeEvent"];
+            missed: boolean;
+        };
         OnboardingApplyRequest: {
             itemIds: string[] | null;
         };
@@ -2445,6 +2449,8 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             ptyId?: string;
+            /** Format: int64 */
+            seq: number;
             type: string;
         };
         Session: {
@@ -3501,6 +3507,7 @@ export interface operations {
         parameters: {
             query?: {
                 timeoutMs?: number;
+                afterSeq?: number;
             };
             header?: never;
             path?: never;
@@ -3514,7 +3521,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RuntimeEvent"];
+                    "application/json": components["schemas"]["NextEventResponse"];
                 };
             };
             /** @description error */

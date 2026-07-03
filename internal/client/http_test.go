@@ -84,7 +84,7 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	}
 	for range 2 {
 		event, err := daemon.NextEvent(ctx, protocol.NextEventRequest{TimeoutMs: 10})
-		if err != nil || event.Type != "agent_hook_events.changed" {
+		if err != nil || event.Event.Type != "agent_hook_events.changed" || event.Event.Seq == 0 {
 			t.Fatalf("agent hook event = %#v, err = %v", event, err)
 		}
 	}
@@ -159,7 +159,7 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("next event: %v", err)
 	}
-	if event.Type != "session.changed" {
+	if event.Event.Type != "session.changed" || event.Event.Seq == 0 {
 		t.Fatalf("event = %#v", event)
 	}
 
@@ -748,13 +748,41 @@ func TestHTTPClientNextEventTimeoutReturnsNoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("next event: %v", err)
 	}
-	if event.Type != protocol.RuntimeEventNone {
+	if event.Event.Type != protocol.RuntimeEventNone || event.Missed {
+		t.Fatalf("event = %#v", event)
+	}
+}
+
+func TestHTTPClientNextEventSendsCursorAndParsesMissed(t *testing.T) {
+	eventBus := newFakeEventBus()
+	runtime := app.NewRuntime(app.RuntimeConfig{EventSink: eventBus})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	eventBus.missed = true
+	eventBus.ch <- app.RuntimeEvent{Seq: 8, Type: app.EventPTYOutput, PtyID: "pty_01", Offset: 42}
+	event, err := daemon.NextEvent(ctx, protocol.NextEventRequest{TimeoutMs: 25, AfterSeq: 4})
+	if err != nil {
+		t.Fatalf("next event: %v", err)
+	}
+	if eventBus.afterSeq != 4 {
+		t.Fatalf("after seq = %d, want 4", eventBus.afterSeq)
+	}
+	if !event.Missed || event.Event.Seq != 8 || event.Event.Type != "pty.output" || event.Event.PtyID != "pty_01" || event.Event.Offset != 42 {
 		t.Fatalf("event = %#v", event)
 	}
 }
 
 type fakeEventBus struct {
-	ch chan app.RuntimeEvent
+	ch       chan app.RuntimeEvent
+	afterSeq uint64
+	missed   bool
 }
 
 func newFakeEventBus() *fakeEventBus {
@@ -766,12 +794,13 @@ func (b *fakeEventBus) Publish(_ context.Context, event app.RuntimeEvent) error 
 	return nil
 }
 
-func (b *fakeEventBus) Next(ctx context.Context) (app.RuntimeEvent, error) {
+func (b *fakeEventBus) Next(ctx context.Context, afterSeq uint64) (app.NextRuntimeEventResult, error) {
+	b.afterSeq = afterSeq
 	select {
 	case event := <-b.ch:
-		return event, nil
+		return app.NextRuntimeEventResult{Event: event, Missed: b.missed}, nil
 	case <-ctx.Done():
-		return app.RuntimeEvent{}, ctx.Err()
+		return app.NextRuntimeEventResult{}, ctx.Err()
 	}
 }
 

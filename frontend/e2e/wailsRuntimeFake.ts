@@ -29,6 +29,7 @@ type WorkItemLink = {
 const methodPrefix = "github.com/phin-tech/whisk/internal/wailsapp.Service.";
 const listeners = new Map<string, Set<Listener>>();
 const nextEventWaiters: Array<(event: unknown) => void> = [];
+let nextRuntimeEventSeq = 0;
 const seedLongPTY =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eLongPty");
 const seedActivePTY =
@@ -1083,7 +1084,14 @@ function emitWailsEvent(name: string, data: unknown) {
 
 function emitRuntimeEvent(event: unknown) {
   const waiter = nextEventWaiters.shift();
-  if (waiter) waiter(event);
+  if (!waiter) return;
+  if (event && typeof event === "object" && "event" in event && "missed" in event) {
+    waiter(event);
+    return;
+  }
+  const runtimeEvent = event && typeof event === "object" ? { ...(event as Record<string, unknown>) } : { type: String(event) };
+  if (typeof runtimeEvent.seq !== "number") runtimeEvent.seq = ++nextRuntimeEventSeq;
+  waiter({ event: runtimeEvent, missed: false });
 }
 
 function emitDaemonStatus(status: unknown) {

@@ -50,6 +50,7 @@ type PtyInfoLike = {
 
 type RuntimeEventLike = {
   type: string;
+  seq?: number;
   ptyId?: string;
   offset?: number;
 };

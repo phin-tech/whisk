@@ -1,76 +1,62 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..types import UNSET, Unset
+if TYPE_CHECKING:
+    from ..models.runtime_event import RuntimeEvent
 
-T = TypeVar("T", bound="RuntimeEvent")
+
+T = TypeVar("T", bound="NextEventResponse")
 
 
 @_attrs_define
-class RuntimeEvent:
+class NextEventResponse:
     """
     Attributes:
-        seq (int):
-        type_ (str):
-        offset (int | Unset):
-        pty_id (str | Unset):
+        event (RuntimeEvent):
+        missed (bool):
     """
 
-    seq: int
-    type_: str
-    offset: int | Unset = UNSET
-    pty_id: str | Unset = UNSET
+    event: RuntimeEvent
+    missed: bool
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        seq = self.seq
+        event = self.event.to_dict()
 
-        type_ = self.type_
-
-        offset = self.offset
-
-        pty_id = self.pty_id
+        missed = self.missed
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
-                "seq": seq,
-                "type": type_,
+                "event": event,
+                "missed": missed,
             }
         )
-        if offset is not UNSET:
-            field_dict["offset"] = offset
-        if pty_id is not UNSET:
-            field_dict["ptyId"] = pty_id
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.runtime_event import RuntimeEvent
+
         d = dict(src_dict)
-        seq = d.pop("seq")
+        event = RuntimeEvent.from_dict(d.pop("event"))
 
-        type_ = d.pop("type")
+        missed = d.pop("missed")
 
-        offset = d.pop("offset", UNSET)
-
-        pty_id = d.pop("ptyId", UNSET)
-
-        runtime_event = cls(
-            seq=seq,
-            type_=type_,
-            offset=offset,
-            pty_id=pty_id,
+        next_event_response = cls(
+            event=event,
+            missed=missed,
         )
 
-        runtime_event.additional_properties = d
-        return runtime_event
+        next_event_response.additional_properties = d
+        return next_event_response
 
     @property
     def additional_keys(self) -> list[str]:

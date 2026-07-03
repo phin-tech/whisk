@@ -286,6 +286,7 @@
   let stopCommandEvents: (() => void) | undefined;
   let stopDaemonStatusEvents: (() => void) | undefined;
   let eventLoopRunning = false;
+  let lastRuntimeEventSeq = 0;
   let settingsLoaded = false;
   let stopped = false;
   const textEncoder = new TextEncoder();
@@ -653,6 +654,16 @@
     await refreshWorkItemLinks();
     await refreshWorkItemRuns();
     await refreshWorkflowRecords();
+  }
+
+  async function refreshRuntimeReadModels() {
+    await Promise.all([
+      refreshSessions(),
+      refreshPTYs(),
+      refreshStatusEvents(),
+      refreshWorkState(),
+    ]);
+    if (activeMain === "projects") await refreshProjectDetail();
   }
 
   async function refreshVisibleWorkState() {
@@ -1153,8 +1164,10 @@
     eventLoopRunning = true;
     while (!stopped) {
       try {
-        const event = await NextEvent({ timeoutMs: 30000 });
-        await handleRuntimeEvent(event);
+        const response = await NextEvent({ timeoutMs: 30000, afterSeq: lastRuntimeEventSeq });
+        if (response.event.seq) lastRuntimeEventSeq = response.event.seq;
+        if (response.missed) await refreshRuntimeReadModels();
+        await handleRuntimeEvent(response.event);
       } catch {
         if (!stopped) {
           await new Promise((resolve) => window.setTimeout(resolve, 250));

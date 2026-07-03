@@ -58,6 +58,7 @@ export {
     MetadataValue,
     MoveWorkItemRequest,
     NextEventRequest,
+    NextEventResponse,
     OnboardingApplyRequest,
     OnboardingItem,
     OnboardingStatus,

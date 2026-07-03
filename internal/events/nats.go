@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
@@ -17,11 +18,16 @@ const (
 	subjectPTYOutput        = "whisk.pty.output"
 	subjectWorkItemsChanged = "whisk.workitems.changed"
 	subjectStatusChanged    = "whisk.status.changed"
+
+	retainedRuntimeEventLimit = 256
 )
 
 type NATSBus struct {
-	server *natsserver.Server
-	conn   *nats.Conn
+	server   *natsserver.Server
+	conn     *nats.Conn
+	mu       sync.Mutex
+	retained []app.RuntimeEvent
+	notify   chan struct{}
 }
 
 func NewNATSBus() (*NATSBus, error) {
@@ -44,13 +50,24 @@ func NewNATSBus() (*NATSBus, error) {
 		server.Shutdown()
 		return nil, err
 	}
-	return &NATSBus{server: server, conn: conn}, nil
+	return &NATSBus{server: server, conn: conn, notify: make(chan struct{}, 1)}, nil
 }
 
 func (b *NATSBus) Publish(_ context.Context, event app.RuntimeEvent) error {
 	if b == nil || b.conn == nil {
 		return nil
 	}
+	b.mu.Lock()
+	b.retained = append(b.retained, event)
+	if len(b.retained) > retainedRuntimeEventLimit {
+		b.retained = append([]app.RuntimeEvent(nil), b.retained[len(b.retained)-retainedRuntimeEventLimit:]...)
+	}
+	select {
+	case b.notify <- struct{}{}:
+	default:
+	}
+	b.mu.Unlock()
+
 	data, err := json.Marshal(event)
 	if err != nil {
 		return err
@@ -58,24 +75,45 @@ func (b *NATSBus) Publish(_ context.Context, event app.RuntimeEvent) error {
 	return b.conn.Publish(subjectFor(event.Type), data)
 }
 
-func (b *NATSBus) Next(ctx context.Context) (app.RuntimeEvent, error) {
+func (b *NATSBus) Next(ctx context.Context, afterSeq uint64) (app.NextRuntimeEventResult, error) {
 	if b == nil || b.conn == nil {
-		return app.RuntimeEvent{}, fmt.Errorf("nats event bus unavailable")
+		return app.NextRuntimeEventResult{}, fmt.Errorf("nats event bus unavailable")
 	}
-	sub, err := b.conn.SubscribeSync("whisk.>")
-	if err != nil {
-		return app.RuntimeEvent{}, err
+	for {
+		b.mu.Lock()
+		if result, ok := b.nextRetainedLocked(afterSeq); ok {
+			b.mu.Unlock()
+			return result, nil
+		}
+		notify := b.notify
+		b.mu.Unlock()
+
+		select {
+		case <-notify:
+		case <-ctx.Done():
+			return app.NextRuntimeEventResult{}, ctx.Err()
+		}
 	}
-	defer func() { _ = sub.Unsubscribe() }()
-	msg, err := sub.NextMsgWithContext(ctx)
-	if err != nil {
-		return app.RuntimeEvent{}, err
+}
+
+func (b *NATSBus) nextRetainedLocked(afterSeq uint64) (app.NextRuntimeEventResult, bool) {
+	if len(b.retained) == 0 {
+		return app.NextRuntimeEventResult{}, false
 	}
-	var event app.RuntimeEvent
-	if err := json.Unmarshal(msg.Data, &event); err != nil {
-		return app.RuntimeEvent{}, err
+	latest := b.retained[len(b.retained)-1].Seq
+	if afterSeq == latest {
+		return app.NextRuntimeEventResult{}, false
 	}
-	return event, nil
+	if afterSeq > latest {
+		return app.NextRuntimeEventResult{Event: b.retained[0], Missed: afterSeq > 0}, true
+	}
+	for _, event := range b.retained {
+		if event.Seq > afterSeq {
+			missed := afterSeq > 0 && event.Seq > afterSeq+1
+			return app.NextRuntimeEventResult{Event: event, Missed: missed}, true
+		}
+	}
+	return app.NextRuntimeEventResult{}, false
 }
 
 func (b *NATSBus) Close() {

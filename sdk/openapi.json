@@ -942,6 +942,14 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "name": "afterSeq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "security": [
@@ -954,7 +962,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RuntimeEvent"
+                  "$ref": "#/components/schemas/NextEventResponse"
                 }
               }
             },
@@ -6910,6 +6918,21 @@
         ],
         "type": "object"
       },
+      "NextEventResponse": {
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/RuntimeEvent"
+          },
+          "missed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "event",
+          "missed"
+        ],
+        "type": "object"
+      },
       "OnboardingApplyRequest": {
         "properties": {
           "itemIds": {
@@ -7992,12 +8015,17 @@
           "ptyId": {
             "type": "string"
           },
+          "seq": {
+            "format": "int64",
+            "type": "integer"
+          },
           "type": {
             "type": "string"
           }
         },
         "required": [
-          "type"
+          "type",
+          "seq"
         ],
         "type": "object"
       },

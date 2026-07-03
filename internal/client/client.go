@@ -53,7 +53,7 @@ type RuntimeClient interface {
 	ListPTYs(ctx context.Context) ([]protocol.PTYInfo, error)
 	ListPTYHistory(ctx context.Context) ([]protocol.PTYHistorySummary, error)
 	ReadPTYHistory(ctx context.Context, ptyID string) (protocol.PTYHistory, error)
-	NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error)
+	NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.NextEventResponse, error)
 	DetectWorktrunk(ctx context.Context, req protocol.DetectWorktrunkRequest) (protocol.WorktrunkStatus, error)
 	ListWorktrees(ctx context.Context, req protocol.ListWorktreesRequest) ([]protocol.Worktree, error)
 	CreateWorktree(ctx context.Context, req protocol.CreateWorktreeRequest) (protocol.CreatedWorktree, error)

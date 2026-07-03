@@ -22,11 +22,36 @@ type Backend struct {
 }
 
 type proc struct {
-	record app.PTYRecord
-	cmd    *exec.Cmd
-	master *os.File
-	buffer *outputBuffer
-	subs   map[chan app.PTYEvent]struct{}
+	record   app.PTYRecord
+	cmd      *exec.Cmd
+	master   *os.File
+	buffer   *outputBuffer
+	subs     map[*subscriber]struct{}
+	exitCode *int
+}
+
+type subscriber struct {
+	ch         chan app.PTYEvent
+	notify     chan struct{}
+	done       chan struct{}
+	nextOffset uint64
+	closed     bool
+}
+
+func newSubscriber(nextOffset uint64) *subscriber {
+	return &subscriber{
+		ch:         make(chan app.PTYEvent, 64),
+		notify:     make(chan struct{}, 1),
+		done:       make(chan struct{}),
+		nextOffset: nextOffset,
+	}
+}
+
+func (s *subscriber) signal() {
+	select {
+	case s.notify <- struct{}{}:
+	default:
+	}
 }
 
 func NewBackend() *Backend {
@@ -81,7 +106,7 @@ func (b *Backend) Spawn(_ context.Context, req app.SpawnPTYRequest) (app.PTYReco
 		record: record,
 		cmd:    cmd,
 		buffer: newOutputBuffer(outputLimitBytes),
-		subs:   map[chan app.PTYEvent]struct{}{},
+		subs:   map[*subscriber]struct{}{},
 	}
 
 	b.mu.Lock()
@@ -175,7 +200,6 @@ func (b *Backend) Delete(_ context.Context, ptyID string) error {
 }
 
 func (b *Backend) Attach(ctx context.Context, req app.AttachPTYRequest) (*app.PTYAttach, error) {
-	ch := make(chan app.PTYEvent, 64)
 	b.mu.Lock()
 	p, ok := b.ptys[req.PtyID]
 	if !ok {
@@ -183,32 +207,94 @@ func (b *Backend) Attach(ctx context.Context, req app.AttachPTYRequest) (*app.PT
 		return nil, fmt.Errorf("pty %s not found", req.PtyID)
 	}
 	replayOffset, replayBytes := p.buffer.snapshotFrom(req.ReplayFromOffset)
-	p.subs[ch] = struct{}{}
+	sub := newSubscriber(replayOffset + uint64(len(replayBytes)))
+	p.subs[sub] = struct{}{}
 	record := p.record
 	b.mu.Unlock()
 
 	cancelOnce := sync.Once{}
 	cancel := func() {
 		cancelOnce.Do(func() {
-			b.mu.Lock()
-			if p, ok := b.ptys[req.PtyID]; ok {
-				delete(p.subs, ch)
-			}
-			b.mu.Unlock()
-			close(ch)
+			b.closeSubscriber(req.PtyID, sub)
 		})
 	}
 	go func() {
-		<-ctx.Done()
-		cancel()
+		select {
+		case <-ctx.Done():
+			cancel()
+		case <-sub.done:
+		}
 	}()
+	go b.runSubscriber(ctx, req.PtyID, sub)
 	return &app.PTYAttach{
 		Record:       record,
 		ReplayBytes:  replayBytes,
 		ReplayOffset: replayOffset,
-		Events:       ch,
+		Events:       sub.ch,
 		CloseFunc:    cancel,
 	}, nil
+}
+
+func (b *Backend) closeSubscriber(ptyID string, sub *subscriber) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if p, ok := b.ptys[ptyID]; ok {
+		delete(p.subs, sub)
+	}
+	if !sub.closed {
+		sub.closed = true
+		close(sub.done)
+	}
+}
+
+func (b *Backend) runSubscriber(ctx context.Context, ptyID string, sub *subscriber) {
+	defer close(sub.ch)
+	defer b.closeSubscriber(ptyID, sub)
+
+	for {
+		b.mu.Lock()
+		p, ok := b.ptys[ptyID]
+		if !ok || sub.closed {
+			b.mu.Unlock()
+			return
+		}
+		offset, bytes := p.buffer.snapshotFrom(sub.nextOffset)
+		if len(bytes) > 0 {
+			sub.nextOffset = offset + uint64(len(bytes))
+			b.mu.Unlock()
+			if !sendPTYEvent(ctx, sub, app.PTYEvent{Kind: app.PTYOutput, Offset: offset, Bytes: bytes}) {
+				return
+			}
+			continue
+		}
+		if p.exitCode != nil {
+			code := *p.exitCode
+			b.mu.Unlock()
+			_ = sendPTYEvent(ctx, sub, app.PTYEvent{Kind: app.PTYExit, Code: &code})
+			return
+		}
+		notify := sub.notify
+		b.mu.Unlock()
+
+		select {
+		case <-notify:
+		case <-ctx.Done():
+			return
+		case <-sub.done:
+			return
+		}
+	}
+}
+
+func sendPTYEvent(ctx context.Context, sub *subscriber, event app.PTYEvent) bool {
+	select {
+	case sub.ch <- event:
+		return true
+	case <-ctx.Done():
+		return false
+	case <-sub.done:
+		return false
+	}
 }
 
 func (b *Backend) Output(_ context.Context, ptyID string, fromOffset uint64) (app.PTYOutputSnapshot, error) {
@@ -286,12 +372,9 @@ func (b *Backend) wait(id string, cmd *exec.Cmd) {
 		return
 	}
 	p.record.Running = false
-	event := app.PTYEvent{Kind: app.PTYExit, Code: &code}
-	for ch := range p.subs {
-		select {
-		case ch <- event:
-		default:
-		}
+	p.exitCode = &code
+	for sub := range p.subs {
+		sub.signal()
 	}
 	b.mu.Unlock()
 }
@@ -303,13 +386,9 @@ func (b *Backend) broadcastOutput(id string, data []byte) {
 		b.mu.Unlock()
 		return
 	}
-	offset := p.buffer.append(data)
-	event := app.PTYEvent{Kind: app.PTYOutput, Offset: offset, Bytes: data}
-	for ch := range p.subs {
-		select {
-		case ch <- event:
-		default:
-		}
+	p.buffer.append(data)
+	for sub := range p.subs {
+		sub.signal()
 	}
 	b.mu.Unlock()
 }

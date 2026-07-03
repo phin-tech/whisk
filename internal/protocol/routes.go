@@ -101,7 +101,7 @@ var APIRoutes = []APIRoute{
 	{Method: "DELETE", Path: "/v1/ptys/{ptyID}", OperationID: "deletePTY", Tag: "ptys", Status: 204},
 	{Method: "GET", Path: "/v1/ptys/{ptyID}/output", OperationID: "getPTYOutput", Tag: "ptys", Response: OutputSnapshot{}, Query: []APIQueryParam{{Name: "from", Type: "integer"}}},
 
-	{Method: "GET", Path: "/v1/events/next", OperationID: "nextEvent", Tag: "events", Response: RuntimeEvent{}, Query: []APIQueryParam{{Name: "timeoutMs", Type: "integer"}}},
+	{Method: "GET", Path: "/v1/events/next", OperationID: "nextEvent", Tag: "events", Response: NextEventResponse{}, Query: []APIQueryParam{{Name: "timeoutMs", Type: "integer"}, {Name: "afterSeq", Type: "integer"}}},
 
 	{Method: "POST", Path: "/v1/worktrunk/detect", OperationID: "detectWorktrunk", Tag: "worktrees", Request: DetectWorktrunkRequest{}, Response: WorktrunkStatus{}},
 	{Method: "POST", Path: "/v1/worktrees/list", OperationID: "listWorktrees", Tag: "worktrees", Request: ListWorktreesRequest{}, Response: apiWorktreeList},

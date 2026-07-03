@@ -91,6 +91,7 @@ type MarkStatusEventReadRequest = protocol.MarkStatusEventReadRequest
 type MetadataValue = protocol.MetadataValue
 type MoveWorkItemRequest = protocol.MoveWorkItemRequest
 type NextEventRequest = protocol.NextEventRequest
+type NextEventResponse = protocol.NextEventResponse
 type OnboardingApplyRequest = protocol.OnboardingApplyRequest
 type OnboardingItem = protocol.OnboardingItem
 type OnboardingStatus = protocol.OnboardingStatus

@@ -223,15 +223,22 @@ type PTYHistory struct {
 }
 
 type NextEventRequest struct {
-	TimeoutMs int `json:"timeoutMs"`
+	TimeoutMs int    `json:"timeoutMs"`
+	AfterSeq  uint64 `json:"afterSeq,omitempty"`
 }
 
 const RuntimeEventNone = "none"
 
 type RuntimeEvent struct {
 	Type   string `json:"type"`
+	Seq    uint64 `json:"seq"`
 	PtyID  string `json:"ptyId,omitempty"`
 	Offset uint64 `json:"offset,omitempty"`
+}
+
+type NextEventResponse struct {
+	Event  RuntimeEvent `json:"event"`
+	Missed bool         `json:"missed"`
 }
 
 type AgentBridgeHookDecision struct {

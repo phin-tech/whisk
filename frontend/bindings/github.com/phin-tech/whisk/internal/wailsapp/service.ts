@@ -440,7 +440,7 @@ export function MoveWorkItem(req: protocol$0.MoveWorkItemRequest): $CancellableP
     });
 }
 
-export function NextEvent(req: protocol$0.NextEventRequest): $CancellablePromise<protocol$0.RuntimeEvent> {
+export function NextEvent(req: protocol$0.NextEventRequest): $CancellablePromise<protocol$0.NextEventResponse> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.NextEvent", req).then(($result: any) => {
         return $$createType60($result);
     });
@@ -795,7 +795,7 @@ const $$createType56 = protocol$0.Worktree.createFrom;
 const $$createType57 = $Create.Array($$createType56);
 const $$createType58 = appsettings$0.Settings.createFrom;
 const $$createType59 = appmenu$0.KeybindingsView.createFrom;
-const $$createType60 = protocol$0.RuntimeEvent.createFrom;
+const $$createType60 = protocol$0.NextEventResponse.createFrom;
 const $$createType61 = protocol$0.OutputSnapshot.createFrom;
 const $$createType62 = workitem$0.WorkflowMigrationPlan.createFrom;
 const $$createType63 = protocol$0.ProjectContext.createFrom;

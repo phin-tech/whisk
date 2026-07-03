@@ -28,7 +28,7 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 			WorkingDir: "/repo",
 		}},
 		selectedPTYHistory: protocol.PTYHistory{PTYID: "pty_01", Output: "hello history"},
-		event:              protocol.RuntimeEvent{Type: "pty.changed", PtyID: "pty_01"},
+		event:              protocol.NextEventResponse{Event: protocol.RuntimeEvent{Seq: 3, Type: "pty.changed", PtyID: "pty_01"}},
 		worktrunk: protocol.WorktrunkStatus{
 			Available:   true,
 			ConfigFound: true,
@@ -154,8 +154,8 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || selectedHistory.Output != "hello history" || fake.readPTYHistoryID != "pty_01" {
 		t.Fatalf("selected pty history = %#v, id = %q, err = %v", selectedHistory, fake.readPTYHistoryID, err)
 	}
-	event, err := service.NextEvent(ctx, protocol.NextEventRequest{TimeoutMs: 25})
-	if err != nil || event.Type != "pty.changed" || fake.nextEventReq.TimeoutMs != 25 {
+	event, err := service.NextEvent(ctx, protocol.NextEventRequest{TimeoutMs: 25, AfterSeq: 2})
+	if err != nil || event.Event.Type != "pty.changed" || event.Event.Seq != 3 || fake.nextEventReq.TimeoutMs != 25 || fake.nextEventReq.AfterSeq != 2 {
 		t.Fatalf("event = %#v, req = %#v, err = %v", event, fake.nextEventReq, err)
 	}
 
@@ -653,7 +653,7 @@ type runtimeClientFake struct {
 	ptys                []protocol.PTYInfo
 	ptyHistory          []protocol.PTYHistorySummary
 	selectedPTYHistory  protocol.PTYHistory
-	event               protocol.RuntimeEvent
+	event               protocol.NextEventResponse
 	worktrunk           protocol.WorktrunkStatus
 	worktrees           []protocol.Worktree
 	createdWorktree     protocol.CreatedWorktree
@@ -872,7 +872,7 @@ func (f *runtimeClientFake) ReadPTYHistory(_ context.Context, ptyID string) (pro
 	return f.selectedPTYHistory, nil
 }
 
-func (f *runtimeClientFake) NextEvent(_ context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error) {
+func (f *runtimeClientFake) NextEvent(_ context.Context, req protocol.NextEventRequest) (protocol.NextEventResponse, error) {
 	f.nextEventReq = req
 	return f.event, nil
 }
