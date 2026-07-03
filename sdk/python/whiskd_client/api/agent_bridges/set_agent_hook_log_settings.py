@@ -55,7 +55,7 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetAgentHookLogSettingsRequest,
 ) -> Response[AgentHookLogStatus | ErrorResponse]:
     """Update hook log settings
@@ -84,7 +84,7 @@ def sync_detailed(
 
 def sync(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetAgentHookLogSettingsRequest,
 ) -> AgentHookLogStatus | ErrorResponse | None:
     """Update hook log settings
@@ -108,7 +108,7 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetAgentHookLogSettingsRequest,
 ) -> Response[AgentHookLogStatus | ErrorResponse]:
     """Update hook log settings
@@ -135,7 +135,7 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetAgentHookLogSettingsRequest,
 ) -> AgentHookLogStatus | ErrorResponse | None:
     """Update hook log settings

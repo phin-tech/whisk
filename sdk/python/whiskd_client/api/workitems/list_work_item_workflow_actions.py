@@ -58,7 +58,7 @@ def _build_response(
 def sync_detailed(
     work_item_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | list[WorkflowActionAvailability]]:
     """
     Args:
@@ -86,7 +86,7 @@ def sync_detailed(
 def sync(
     work_item_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | list[WorkflowActionAvailability] | None:
     """
     Args:
@@ -109,7 +109,7 @@ def sync(
 async def asyncio_detailed(
     work_item_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | list[WorkflowActionAvailability]]:
     """
     Args:
@@ -135,7 +135,7 @@ async def asyncio_detailed(
 async def asyncio(
     work_item_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | list[WorkflowActionAvailability] | None:
     """
     Args:

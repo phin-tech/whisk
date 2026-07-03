@@ -12,25 +12,61 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/phin-tech/whisk/internal/controlauth"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/protocol"
 )
 
 type HTTPClient struct {
-	baseURL string
-	client  *http.Client
+	baseURL      string
+	client       *http.Client
+	controlToken string
 }
 
-func NewHTTP(baseURL string, httpClient *http.Client) *HTTPClient {
-	return &HTTPClient{
+type HTTPOption func(*HTTPClient)
+
+func WithControlToken(token string) HTTPOption {
+	return func(c *HTTPClient) {
+		c.controlToken = token
+	}
+}
+
+func NewHTTP(baseURL string, httpClient *http.Client, options ...HTTPOption) *HTTPClient {
+	c := &HTTPClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		client:  httpClient,
 	}
+	for _, option := range options {
+		option(c)
+	}
+	return c
 }
 
 // BaseURL returns the daemon URL this client targets, e.g. http://127.0.0.1:8787.
 func (c *HTTPClient) BaseURL() string {
 	return c.baseURL
+}
+
+func (c *HTTPClient) ControlToken() (string, error) {
+	if c.controlToken != "" {
+		return c.controlToken, nil
+	}
+	return controlauth.ReadToken()
+}
+
+func (c *HTTPClient) AuthorizeRequest(req *http.Request) error {
+	if req.URL != nil && req.URL.Path == "/v1/health" {
+		return nil
+	}
+	token, err := c.ControlToken()
+	if err != nil {
+		if errors.Is(err, controlauth.ErrNoToken) {
+			return nil
+		}
+		return fmt.Errorf("read daemon auth token: %w", err)
+	}
+	req.Header.Set(controlauth.AuthorizationHeader, controlauth.BearerHeader(token))
+	return nil
 }
 
 func (c *HTTPClient) Health(ctx context.Context) error {
@@ -403,6 +439,9 @@ func (c *HTTPClient) deleteJSON(ctx context.Context, path string, out any) error
 }
 
 func (c *HTTPClient) do(req *http.Request, out any) error {
+	if err := c.AuthorizeRequest(req); err != nil {
+		return err
+	}
 	httpClient := c.client
 	if httpClient == nil {
 		httpClient = http.DefaultClient

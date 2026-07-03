@@ -63,6 +63,7 @@ def test_cli_only_install_runs_daemon_in_clean_linux_container(linux_whisk):
     script = r"""
 set -eu
 export XDG_CONFIG_HOME=/tmp/whisk-config
+export XDG_STATE_HOME=/tmp/whisk-state
 whisk version
 whisk daemon run -addr 127.0.0.1:8787 >/tmp/whiskd.log 2>&1 &
 daemon_pid=$!
@@ -105,6 +106,7 @@ def test_agent_can_ask_question_from_clean_linux_container(linux_whisk):
     script = r"""
 set -eu
 export XDG_CONFIG_HOME=/tmp/whisk-config
+export XDG_STATE_HOME=/tmp/whisk-state
 whisk daemon run -addr 127.0.0.1:8787 >/tmp/whiskd.log 2>&1 &
 daemon_pid=$!
 cleanup() {
@@ -159,6 +161,7 @@ def test_claude_native_ask_user_question_hook_creates_structured_prompt(linux_wh
     script = r"""
 set -eu
 export XDG_CONFIG_HOME=/tmp/whisk-config
+export XDG_STATE_HOME=/tmp/whisk-state
 whisk daemon run -addr 127.0.0.1:8787 >/tmp/whiskd.log 2>&1 &
 daemon_pid=$!
 cleanup() {

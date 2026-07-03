@@ -95,6 +95,7 @@ tasks:
     cmds:
       - rm -rf sdk/python/whiskd_client
       - uvx --from openapi-python-client openapi-python-client generate --path sdk/openapi.json --output-path sdk/python/whiskd_client --overwrite --meta none
+      - go run ./cmd/gen-python-sdk-local -o sdk/python/whiskd_client/local.py
 
   sdk:ts:
     desc: Generates the headless TypeScript types from sdk/openapi.json

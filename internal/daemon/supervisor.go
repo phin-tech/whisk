@@ -414,6 +414,9 @@ func shutdownExistingWithPolicy(ctx context.Context, baseURL string, policy Stop
 	if err != nil {
 		return err
 	}
+	if err := client.NewHTTP(baseURL, nil).AuthorizeRequest(req); err != nil {
+		return err
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err

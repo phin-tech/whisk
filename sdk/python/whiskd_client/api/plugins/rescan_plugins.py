@@ -50,7 +50,7 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | list[PluginStatus]]:
     """Rescan plugin directories
 
@@ -73,7 +73,7 @@ def sync_detailed(
 
 def sync(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | list[PluginStatus] | None:
     """Rescan plugin directories
 
@@ -92,7 +92,7 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | list[PluginStatus]]:
     """Rescan plugin directories
 
@@ -113,7 +113,7 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | list[PluginStatus] | None:
     """Rescan plugin directories
 

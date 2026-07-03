@@ -42,10 +42,10 @@ endpoints) and regenerate.
 **Python** (`sdk/python/whiskd_client`, requires `httpx`, `attrs`, `python-dateutil`):
 
 ```python
-from whiskd_client.client import Client
 from whiskd_client.api.workitems import list_work_items
+from whiskd_client.local import local_client
 
-client = Client(base_url="http://127.0.0.1:8787")
+client = local_client(base_url="http://127.0.0.1:8787")
 items = list_work_items.sync(client=client, project_id="proj-1")
 ```
 
@@ -53,9 +53,10 @@ items = list_work_items.sync(client=client, project_id="proj-1")
 
 ```ts
 import createClient from "openapi-fetch";
+import { whiskdClientOptions } from "./client";
 import type { paths } from "./whiskd";
 
-const d = createClient<paths>({ baseUrl: "http://127.0.0.1:8787" });
+const d = createClient<paths>(whiskdClientOptions({ baseUrl: "http://127.0.0.1:8787" }));
 const { data } = await d.GET("/v1/work-items", { params: { query: { projectId } } });
 ```
 
@@ -101,14 +102,17 @@ task sdk:test:go      # just the Go suite
   XDG state dir (never touches real session state) and runs the generated Python,
   TS, and Go clients through a compat handshake + work-item round-trip. This is what
   verifies the spec matches real wire behavior — status codes, camelCase mapping,
-  RFC3339 time parsing, query params, and Go's `nil slice -> null` encoding. The
-  suites skip themselves if `WHISKD_BIN` is unset (the tasks build it first).
+  RFC3339 time parsing, query params, local control-token auth, and Go's
+  `nil slice -> null` encoding. The suites skip themselves if `WHISKD_BIN` is
+  unset (the tasks build it first).
 
 ## Notes / known wrinkles
 
 - **Streaming is polling.** Live output/events use `GET /v1/ptys/{id}/output?from=`
   and `GET /v1/events/next?timeoutMs=` — drive them in a loop, tracking the
   returned offset. There is no websocket.
-- **No auth.** The daemon binds loopback only; clients just need the base URL.
+- **Local auth.** The daemon protects control routes with a per-user bearer token
+  at `$XDG_STATE_HOME/whisk/control-token` or `~/.local/state/whisk/control-token`.
+  Same-user Go, Python, TypeScript, CLI, and desktop clients read it automatically.
 - `uint64` offsets are emitted as `integer/int64`.
 - Empty-body endpoints (writes, resizes, deletes) return `204`.
