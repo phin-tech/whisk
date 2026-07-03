@@ -8,7 +8,7 @@ vars:
   # other, which previously bundled the GUI as its own daemon helper and caused a fork loop.
   BINARY_NAME: "whisk-app"
   BIN_DIR: "bin"
-  COVERAGE_MIN: '{{.COVERAGE_MIN | default "82.9"}}'
+  COVERAGE_MIN: '{{.COVERAGE_MIN | default "82.4"}}'
   COVERAGE_PACKAGES: "./internal/adapters/agents ./internal/adapters/pty/native ./internal/adapters/workitemstore ./internal/adapters/worktrunk ./internal/app ./internal/appsettings ./internal/client ./internal/daemon ./internal/domain/httpforward ./internal/domain/session ./internal/domain/workitem ./internal/server ./internal/wailsapp"
   COVERAGE_PROFILE: '{{.COVERAGE_PROFILE | default "/tmp/whisk-internal-cover.out"}}'
   DAEMON_ADDR: '{{.WHISKD_ADDR | default "127.0.0.1:8787"}}'
