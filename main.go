@@ -28,9 +28,7 @@ func main() {
 	}
 
 	daemonURL := envOrDefault("WHISKD_URL", "http://127.0.0.1:8787")
-	ctx, cancel := context.WithTimeout(context.Background(), daemon.DefaultControlTimeout())
-	defer cancel()
-	if _, err := daemon.Ensure(ctx, daemonURL); err != nil {
+	if _, err := daemon.Ensure(context.Background(), daemonURL); err != nil {
 		log.Fatal(err)
 	}
 
@@ -56,16 +54,14 @@ func main() {
 		// it when the user opted out via the KeepDaemonAlive preference and the current state file
 		// still identifies a daemon this app owns.
 		OnShutdown: func() {
-			if !daemon.IsManaged(daemonURL) {
+			if !daemon.Status(context.Background(), daemonURL).Managed {
 				return
 			}
 			settings, loadErr := settingsStore.Load(context.Background())
 			if loadErr != nil || settings.KeepDaemonAlive {
 				return
 			}
-			stopCtx, stopCancel := context.WithTimeout(context.Background(), daemon.DefaultControlTimeout())
-			defer stopCancel()
-			_ = daemon.Stop(stopCtx, daemonURL)
+			_ = daemon.Stop(context.Background(), daemonURL)
 		},
 	})
 

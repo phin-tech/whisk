@@ -148,23 +148,17 @@ func (s *Service) httpClient() (*client.HTTPClient, error) {
 }
 
 func (s *Service) daemonStatus(ctx context.Context, httpClient *client.HTTPClient) DaemonStatus {
-	baseURL := httpClient.BaseURL()
-	status := DaemonStatus{Address: baseURL, Managed: daemon.IsManaged(baseURL)}
-	if err := httpClient.Health(ctx); err != nil {
-		status.Error = err.Error()
-		return status
+	supervisorStatus := daemon.Status(ctx, httpClient.BaseURL())
+	return DaemonStatus{
+		Running:    supervisorStatus.Running,
+		Address:    supervisorStatus.Address,
+		Managed:    supervisorStatus.Managed,
+		APIVersion: supervisorStatus.APIVersion,
+		GitSHA:     supervisorStatus.GitSHA,
+		Version:    supervisorStatus.Version,
+		Dirty:      supervisorStatus.Dirty,
+		Error:      supervisorStatus.Error,
 	}
-	status.Running = true
-	compat, err := httpClient.Compatibility(ctx)
-	if err != nil {
-		status.Error = err.Error()
-		return status
-	}
-	status.APIVersion = compat.APIVersion
-	status.GitSHA = compat.GitSHA
-	status.Version = compat.Version
-	status.Dirty = compat.Dirty
-	return status
 }
 
 // DaemonStatus reports the current state of the daemon for display in the preferences panel.
@@ -182,9 +176,7 @@ func (s *Service) StartDaemon(ctx context.Context) (DaemonStatus, error) {
 	if err != nil {
 		return DaemonStatus{}, err
 	}
-	opCtx, cancel := context.WithTimeout(ctx, daemon.DefaultControlTimeout())
-	defer cancel()
-	if _, err := daemon.Ensure(opCtx, httpClient.BaseURL()); err != nil {
+	if _, err := daemon.Ensure(ctx, httpClient.BaseURL()); err != nil {
 		return s.daemonStatus(ctx, httpClient), err
 	}
 	return s.daemonStatus(ctx, httpClient), nil
@@ -196,9 +188,7 @@ func (s *Service) StopDaemon(ctx context.Context) (DaemonStatus, error) {
 	if err != nil {
 		return DaemonStatus{}, err
 	}
-	opCtx, cancel := context.WithTimeout(ctx, daemon.DefaultControlTimeout())
-	defer cancel()
-	if err := daemon.Stop(opCtx, httpClient.BaseURL()); err != nil {
+	if err := daemon.Stop(ctx, httpClient.BaseURL()); err != nil {
 		return s.daemonStatus(ctx, httpClient), err
 	}
 	return s.daemonStatus(ctx, httpClient), nil
@@ -210,13 +200,11 @@ func (s *Service) RestartDaemon(ctx context.Context) (DaemonStatus, error) {
 	if err != nil {
 		return DaemonStatus{}, err
 	}
-	opCtx, cancel := context.WithTimeout(ctx, daemon.DefaultControlTimeout())
-	defer cancel()
 	baseURL := httpClient.BaseURL()
-	if err := daemon.Stop(opCtx, baseURL); err != nil {
+	if err := daemon.Stop(ctx, baseURL); err != nil {
 		return s.daemonStatus(ctx, httpClient), err
 	}
-	if _, err := daemon.Ensure(opCtx, baseURL); err != nil {
+	if _, err := daemon.Ensure(ctx, baseURL); err != nil {
 		return s.daemonStatus(ctx, httpClient), err
 	}
 	return s.daemonStatus(ctx, httpClient), nil

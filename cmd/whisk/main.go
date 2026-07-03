@@ -108,28 +108,27 @@ func runDaemon(args []string) error {
 		return err
 	}
 
-	controlTimeout := 5 * time.Second
-	if args[0] == "start" || args[0] == "stop" {
-		controlTimeout = daemon.DefaultControlTimeout()
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), controlTimeout)
-	defer cancel()
-
 	switch args[0] {
 	case "start":
-		if _, err := daemon.Ensure(ctx, *baseURL); err != nil {
+		if _, err := daemon.Ensure(context.Background(), *baseURL); err != nil {
 			return err
 		}
 		fmt.Printf("whiskd running at %s\n", *baseURL)
 		return nil
 	case "status":
-		if err := client.NewHTTP(*baseURL, nil).Health(ctx); err != nil {
-			return fmt.Errorf("whiskd unavailable at %s: %w", *baseURL, err)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		status := daemon.Status(ctx, *baseURL)
+		if !status.Running {
+			return fmt.Errorf("whiskd unavailable at %s: %s", *baseURL, status.Error)
+		}
+		if status.Error != "" {
+			return fmt.Errorf("whiskd incompatible at %s: %s", *baseURL, status.Error)
 		}
 		fmt.Printf("whiskd running at %s\n", *baseURL)
 		return nil
 	case "stop":
-		if err := daemon.Stop(ctx, *baseURL); err != nil {
+		if err := daemon.Stop(context.Background(), *baseURL); err != nil {
 			return err
 		}
 		fmt.Printf("whiskd stopped at %s\n", *baseURL)
@@ -138,6 +137,8 @@ func runDaemon(args []string) error {
 		if !*yes {
 			return fmt.Errorf("daemon clear requires -yes")
 		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		cleared, err := client.NewHTTP(*baseURL, nil).ClearDaemon(ctx, protocol.ClearDaemonRequest{})
 		if err != nil {
 			return err

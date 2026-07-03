@@ -24,3 +24,7 @@ func WriteStateForTest(baseURL string, pid int, processStartTime string, binaryP
 		BinaryPath:       binaryPath,
 	})
 }
+
+func StatePathForTest(baseURL string) (string, error) {
+	return statePath(baseURL)
+}
