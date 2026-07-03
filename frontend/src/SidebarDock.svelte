@@ -106,7 +106,7 @@
       <ResizeHandle {dragging} onmousedown={startDrag} />
     {/if}
     <div
-      class="dock-panel relative h-full shrink-0 bg-bg-deep"
+      class="dock-panel relative h-full shrink-0 bg-sidebar-surface"
       style="--dock-width: {width}px"
     >
       {#if activePanel === "sessions"}
