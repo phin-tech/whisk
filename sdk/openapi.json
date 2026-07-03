@@ -7838,6 +7838,9 @@
           "message": {
             "type": "string"
           },
+          "paneId": {
+            "type": "string"
+          },
           "projectId": {
             "type": "string"
           },
@@ -8431,6 +8434,15 @@
             "type": "string"
           },
           "message": {
+            "type": "string"
+          },
+          "notificationKey": {
+            "type": "string"
+          },
+          "notificationSeverity": {
+            "type": "string"
+          },
+          "paneId": {
             "type": "string"
           },
           "projectId": {

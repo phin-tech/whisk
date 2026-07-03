@@ -10,6 +10,7 @@ import (
 	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/daemon"
+	domainnotification "github.com/phin-tech/whisk/internal/domain/notification"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/ptytrace"
@@ -81,6 +82,17 @@ type Service struct {
 	daemonStatusTimeout      time.Duration
 	daemonControlTimeout     time.Duration
 	daemonRestartMaxAttempts int
+
+	notificationPresenter    statusNotificationPresenter
+	notificationWatchMu      sync.Mutex
+	notificationWatchCancel  context.CancelFunc
+	notificationWatchDone    chan struct{}
+	notificationMu           sync.Mutex
+	notificationFocus        NotificationFocusContext
+	notificationCooldown     domainnotification.CooldownState
+	notificationShown        map[string]struct{}
+	notificationEvents       map[string]protocol.StatusEvent
+	notificationEventTimeout time.Duration
 }
 
 func NewService(runtimeClient client.RuntimeClient) *Service {
@@ -92,6 +104,10 @@ func NewServiceWithSettings(runtimeClient client.RuntimeClient, settings AppSett
 		client:                   runtimeClient,
 		settings:                 settings,
 		supervisor:               daemonSupervisorAdapter{},
+		notificationPresenter:    newDesktopStatusNotificationPresenter(),
+		notificationShown:        map[string]struct{}{},
+		notificationEvents:       map[string]protocol.StatusEvent{},
+		notificationEventTimeout: defaultStatusNotificationEventTimeout,
 		daemonStatusInterval:     defaultDaemonStatusInterval,
 		daemonStatusTimeout:      defaultDaemonStatusTimeout,
 		daemonControlTimeout:     defaultDaemonControlTimeout,
@@ -138,18 +154,26 @@ func StopDaemonStatusWatcher(s *Service) {
 	s.stopDaemonStatusWatcher()
 }
 
-func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+func (s *Service) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	if s.events == nil {
 		if app := application.Get(); app != nil && app.Event != nil {
 			s.events = app.Event
 		}
 	}
+	if s.notificationPresenter != nil {
+		_ = s.notificationPresenter.Start(ctx, options, s.handleStatusNotificationActivation)
+	}
 	s.startDaemonStatusWatcher(ctx)
+	s.startStatusNotificationWatcher(ctx)
 	return nil
 }
 
 func (s *Service) ServiceShutdown() error {
 	s.stopDaemonStatusWatcher()
+	s.stopStatusNotificationWatcher()
+	if s.notificationPresenter != nil {
+		return s.notificationPresenter.Stop()
+	}
 	return nil
 }
 

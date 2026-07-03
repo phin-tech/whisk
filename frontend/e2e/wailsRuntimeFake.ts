@@ -692,6 +692,8 @@ function dispatch(methodName: string, args: unknown[]) {
       };
     case "SaveAppSettings":
       return args[0];
+    case "SetNotificationFocusContext":
+      return undefined;
     case "DaemonStatus":
       return clone(state.daemonStatus);
     case "SyncSessionMenu":

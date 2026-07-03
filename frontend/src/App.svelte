@@ -108,6 +108,7 @@
     RunPluginProjectAttachmentTemplate,
     SaveAppSettings,
     SetAgentHookLogSettings,
+    SetNotificationFocusContext,
     SetProjectWorkflowDefinition,
     SetSessionProject,
     SplitPane,
@@ -170,6 +171,11 @@
 
   const SETTINGS_KEY = "whisk.ui.settings";
   const DAEMON_STATUS_EVENT = "daemon-status:changed";
+  const STATUS_NOTIFICATION_ACTIVATED_EVENT = "status-notification:activated";
+
+  type StatusNotificationActivation = {
+    event?: StatusEvent;
+  };
 
   let sessions: Session[] = [];
   let ptys: PTYInfo[] = [];
@@ -224,6 +230,24 @@
     activeMain = next.activeMain;
     navigationStack = next.navigationStack;
     workBoardOpenItemId = next.workBoardOpenItemId;
+  }
+
+  function syncNotificationFocusContext() {
+    const focus = {
+      activeMain,
+      sessionId: activeSessionId,
+      paneId: activePaneId,
+      windowFocused,
+    };
+    const key = JSON.stringify(focus);
+    if (key === lastNotificationFocusKey) return;
+    lastNotificationFocusKey = key;
+    void SetNotificationFocusContext(focus).catch(() => undefined);
+  }
+
+  function updateWindowFocusState() {
+    windowFocused = document.hasFocus() && document.visibilityState !== "hidden";
+    syncNotificationFocusContext();
   }
 
   function navigateTo(target: MainView, opts?: { openItemId?: string }) {
@@ -285,6 +309,9 @@
   let workReconcileTimer: number | undefined;
   let stopCommandEvents: (() => void) | undefined;
   let stopDaemonStatusEvents: (() => void) | undefined;
+  let stopStatusNotificationEvents: (() => void) | undefined;
+  let windowFocused = true;
+  let lastNotificationFocusKey = "";
   let eventLoopRunning = false;
   let lastRuntimeEventSeq = 0;
   let settingsLoaded = false;
@@ -1244,6 +1271,11 @@
     }
   }
 
+  async function selectStatusNotificationActivation(activation: StatusNotificationActivation) {
+    if (!activation.event?.id) return;
+    await selectStatusEvent(activation.event);
+  }
+
   async function selectAgentBridgeEvent(event: AgentBridgeEvent) {
     const target = agentHookNotificationClickTarget(event, sessions);
     selectMain("session");
@@ -2148,6 +2180,13 @@
     stopDaemonStatusEvents = Events.On(DAEMON_STATUS_EVENT, (event) => {
       applyDaemonStatus(event.data as DaemonStatus);
     });
+    stopStatusNotificationEvents = Events.On(STATUS_NOTIFICATION_ACTIVATED_EVENT, (event) => {
+      void selectStatusNotificationActivation(event.data as StatusNotificationActivation);
+    });
+    updateWindowFocusState();
+    window.addEventListener("focus", updateWindowFocusState);
+    window.addEventListener("blur", updateWindowFocusState);
+    document.addEventListener("visibilitychange", updateWindowFocusState);
     PTYTraceEnabled()
       .then((enabled) => {
         ptyTraceEnabled = enabled;
@@ -2192,10 +2231,22 @@
   // Keep the native Sessions menu in step with the session bar whenever the list changes.
   $: if (settingsLoaded) syncSessionMenu(sessions);
 
+  $: if (settingsLoaded) {
+    activeMain;
+    activeSessionId;
+    activePaneId;
+    windowFocused;
+    syncNotificationFocusContext();
+  }
+
   onDestroy(() => {
     stopped = true;
     stopCommandEvents?.();
     stopDaemonStatusEvents?.();
+    stopStatusNotificationEvents?.();
+    window.removeEventListener("focus", updateWindowFocusState);
+    window.removeEventListener("blur", updateWindowFocusState);
+    document.removeEventListener("visibilitychange", updateWindowFocusState);
     if (outputReconcileTimer) window.clearInterval(outputReconcileTimer);
     if (workReconcileTimer) window.clearInterval(workReconcileTimer);
     for (const socket of Object.values(ptyStreams)) socket.close();

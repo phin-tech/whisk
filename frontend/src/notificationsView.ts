@@ -11,6 +11,7 @@ type StatusEventLike = {
   ptyId?: string;
   workItemId?: string;
   runId?: string;
+  paneId?: string;
   requiresAttention?: boolean;
   createdAt?: string | null;
   readAt?: unknown;
@@ -87,6 +88,7 @@ export function notificationDetailRows(event: StatusEventLike, sessions: Session
   return [
     detail("Agent", event.actor),
     detail("Session", event.sessionId),
+    detail("Pane", event.paneId),
     detail("PTY", event.ptyId),
     detail("CWD", session?.rootDir),
     detail("Project", event.projectId),
@@ -102,9 +104,10 @@ export function targetForStatusEvent(event: StatusEventLike, sessions: SessionLi
   if (event.sessionId || event.ptyId) {
     const session = sessionForEvent(event, sessions);
     if (session) {
-      const paneId =
+      const matchedPaneId =
         Object.entries(session.panes).find(([, pane]) => pane?.currentPtyId === event.ptyId)?.[0] ??
         firstPaneId(session);
+      const paneId = (event.paneId && session.panes[event.paneId] ? event.paneId : "") || matchedPaneId;
       return { main: "session" as const, sessionId: session.id, paneId };
     }
   }

@@ -1805,6 +1805,7 @@ func TestRuntimeReportStatusPersistsAndPublishes(t *testing.T) {
 	root := t.TempDir()
 	store := &memoryWorkItemStore{}
 	sink := &memoryEventSink{}
+	ptyBackend := newMemoryPTYBackend()
 	nextID := 0
 	runtime := app.NewRuntime(app.RuntimeConfig{
 		IDGenerator: func() string {
@@ -1813,6 +1814,7 @@ func TestRuntimeReportStatusPersistsAndPublishes(t *testing.T) {
 		},
 		WorkItemStore: store,
 		EventSink:     sink,
+		PTYBackend:    ptyBackend,
 	})
 
 	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: root})
@@ -1823,10 +1825,19 @@ func TestRuntimeReportStatusPersistsAndPublishes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create work item: %v", err)
 	}
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Run session",
+		RootDir:    root,
+		ProjectID:  project.ID,
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
 	run, err := runtime.StartWorkItemRun(ctx, app.StartWorkItemRunRequest{
 		WorkItemID: item.ID,
-		SessionID:  "sess_01",
-		PTYID:      "pty_01",
+		SessionID:  created.Session.ID,
+		PTYID:      created.MainPtyID,
 		Actor:      "agent",
 	})
 	if err != nil {
@@ -1844,6 +1855,12 @@ func TestRuntimeReportStatusPersistsAndPublishes(t *testing.T) {
 	}
 	if report.Event.Kind != workitem.StatusKindQuestion || !report.Event.RequiresAttention {
 		t.Fatalf("report = %#v", report)
+	}
+	if report.Event.SessionID != created.Session.ID || report.Event.PaneID != created.PaneID || report.Event.PTYID != created.MainPtyID {
+		t.Fatalf("report target = %#v, created = %#v", report.Event, created)
+	}
+	if report.Event.NotificationKey != fmt.Sprintf("status|session:%s|pane:%s|actor:agent|kind:question", created.Session.ID, created.PaneID) {
+		t.Fatalf("notification key = %q", report.Event.NotificationKey)
 	}
 	if report.Run == nil || report.Run.Status != workitem.RunStateAwaitingInput {
 		t.Fatalf("report run = %#v", report.Run)

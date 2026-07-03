@@ -7,5 +7,6 @@ export {
 };
 
 export {
-    DaemonStatus
+    DaemonStatus,
+    NotificationFocusContext
 } from "./models.js";

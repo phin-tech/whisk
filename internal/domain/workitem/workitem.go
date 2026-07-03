@@ -44,6 +44,10 @@ const (
 	StatusScopePTY     = "pty"
 	StatusScopeSession = "session"
 
+	StatusNotificationSeverityAttention = "attention"
+	StatusNotificationSeverityWarning   = "warning"
+	StatusNotificationSeverityInfo      = "info"
+
 	AttachmentKindFile     = "file"
 	AttachmentKindURL      = "url"
 	AttachmentKindNote     = "note"
@@ -309,19 +313,22 @@ type WorkflowEvent struct {
 }
 
 type StatusEvent struct {
-	ID                string     `json:"id"`
-	Scope             string     `json:"scope"`
-	Kind              string     `json:"kind"`
-	Message           string     `json:"message"`
-	Actor             string     `json:"actor,omitempty"`
-	ProjectID         string     `json:"projectId,omitempty"`
-	WorkItemID        string     `json:"workItemId,omitempty"`
-	RunID             string     `json:"runId,omitempty"`
-	SessionID         string     `json:"sessionId,omitempty"`
-	PTYID             string     `json:"ptyId,omitempty"`
-	RequiresAttention bool       `json:"requiresAttention"`
-	CreatedAt         time.Time  `json:"createdAt"`
-	ReadAt            *time.Time `json:"readAt,omitempty"`
+	ID                   string     `json:"id"`
+	Scope                string     `json:"scope"`
+	Kind                 string     `json:"kind"`
+	Message              string     `json:"message"`
+	Actor                string     `json:"actor,omitempty"`
+	ProjectID            string     `json:"projectId,omitempty"`
+	WorkItemID           string     `json:"workItemId,omitempty"`
+	RunID                string     `json:"runId,omitempty"`
+	SessionID            string     `json:"sessionId,omitempty"`
+	PaneID               string     `json:"paneId,omitempty"`
+	PTYID                string     `json:"ptyId,omitempty"`
+	RequiresAttention    bool       `json:"requiresAttention"`
+	NotificationKey      string     `json:"notificationKey,omitempty"`
+	NotificationSeverity string     `json:"notificationSeverity,omitempty"`
+	CreatedAt            time.Time  `json:"createdAt"`
+	ReadAt               *time.Time `json:"readAt,omitempty"`
 }
 
 type RunEvent struct {
@@ -754,6 +761,7 @@ type ReportStatus struct {
 	WorkItemID   string
 	RunID        string
 	SessionID    string
+	PaneID       string
 	PTYID        string
 	Now          time.Time
 }
@@ -2856,6 +2864,7 @@ func (s *State) ReportStatus(req ReportStatus) (StatusEvent, error) {
 	workItemID := strings.TrimSpace(req.WorkItemID)
 	projectID := strings.TrimSpace(req.ProjectID)
 	sessionID := strings.TrimSpace(req.SessionID)
+	paneID := strings.TrimSpace(req.PaneID)
 	ptyID := strings.TrimSpace(req.PTYID)
 	scope := StatusScopeSession
 
@@ -2925,18 +2934,21 @@ func (s *State) ReportStatus(req ReportStatus) (StatusEvent, error) {
 	}
 
 	event := StatusEvent{
-		ID:                req.ID,
-		Scope:             scope,
-		Kind:              kind,
-		Message:           message,
-		Actor:             req.Actor,
-		ProjectID:         projectID,
-		WorkItemID:        workItemID,
-		RunID:             runID,
-		SessionID:         sessionID,
-		PTYID:             ptyID,
-		RequiresAttention: kind == StatusKindQuestion || kind == StatusKindBlocked,
-		CreatedAt:         req.Now,
+		ID:                   req.ID,
+		Scope:                scope,
+		Kind:                 kind,
+		Message:              message,
+		Actor:                req.Actor,
+		ProjectID:            projectID,
+		WorkItemID:           workItemID,
+		RunID:                runID,
+		SessionID:            sessionID,
+		PaneID:               paneID,
+		PTYID:                ptyID,
+		RequiresAttention:    statusRequiresAttention(kind),
+		NotificationKey:      statusNotificationKey(sessionID, paneID, ptyID, req.Actor, kind),
+		NotificationSeverity: statusNotificationSeverity(kind),
+		CreatedAt:            req.Now,
 	}
 	if err := s.validateStatusEvent(event); err != nil {
 		return StatusEvent{}, err
@@ -3599,6 +3611,9 @@ func (s *State) validateStatusEvent(event StatusEvent) error {
 	if strings.TrimSpace(event.Message) == "" {
 		return fmt.Errorf("status message required")
 	}
+	if event.NotificationSeverity != "" && !validStatusNotificationSeverity(event.NotificationSeverity) {
+		return fmt.Errorf("unsupported status notification severity %s", event.NotificationSeverity)
+	}
 	switch event.Scope {
 	case StatusScopeRun:
 		if event.RunID == "" {
@@ -3628,6 +3643,54 @@ func validStatusKind(kind string) bool {
 	default:
 		return false
 	}
+}
+
+func statusRequiresAttention(kind string) bool {
+	return kind == StatusKindQuestion || kind == StatusKindBlocked
+}
+
+func statusNotificationSeverity(kind string) string {
+	switch kind {
+	case StatusKindQuestion:
+		return StatusNotificationSeverityAttention
+	case StatusKindBlocked:
+		return StatusNotificationSeverityWarning
+	case StatusKindDone:
+		return StatusNotificationSeverityInfo
+	default:
+		return ""
+	}
+}
+
+func validStatusNotificationSeverity(severity string) bool {
+	switch severity {
+	case StatusNotificationSeverityAttention, StatusNotificationSeverityWarning, StatusNotificationSeverityInfo:
+		return true
+	default:
+		return false
+	}
+}
+
+func statusNotificationKey(sessionID string, paneID string, ptyID string, actor string, kind string) string {
+	sessionPart := strings.TrimSpace(sessionID)
+	if sessionPart == "" {
+		sessionPart = "none"
+	}
+	targetPart := "session"
+	if pane := strings.TrimSpace(paneID); pane != "" {
+		targetPart = "pane:" + pane
+	} else if pty := strings.TrimSpace(ptyID); pty != "" {
+		targetPart = "pty:" + pty
+	}
+	actorPart := strings.TrimSpace(actor)
+	if actorPart == "" {
+		actorPart = "unknown"
+	}
+	kindPart := strings.TrimSpace(kind)
+	if kindPart == "" {
+		kindPart = "status"
+	}
+	return strings.Join([]string{"status", "session:" + sessionPart, targetPart, "actor:" + actorPart, "kind:" + kindPart}, "|")
 }
 
 func validPreset(preset string) bool {

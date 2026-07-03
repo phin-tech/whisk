@@ -2399,6 +2399,7 @@ export interface components {
             actor?: string;
             kind: string;
             message: string;
+            paneId?: string;
             projectId?: string;
             ptyId?: string;
             runId?: string;
@@ -2572,6 +2573,9 @@ export interface components {
             id: string;
             kind: string;
             message: string;
+            notificationKey?: string;
+            notificationSeverity?: string;
+            paneId?: string;
             projectId?: string;
             ptyId?: string;
             /** Format: date-time */

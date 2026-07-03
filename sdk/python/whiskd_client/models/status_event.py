@@ -23,6 +23,9 @@ class StatusEvent:
         requires_attention (bool):
         scope (str):
         actor (str | Unset):
+        notification_key (str | Unset):
+        notification_severity (str | Unset):
+        pane_id (str | Unset):
         project_id (str | Unset):
         pty_id (str | Unset):
         read_at (datetime.datetime | None | Unset):
@@ -38,6 +41,9 @@ class StatusEvent:
     requires_attention: bool
     scope: str
     actor: str | Unset = UNSET
+    notification_key: str | Unset = UNSET
+    notification_severity: str | Unset = UNSET
+    pane_id: str | Unset = UNSET
     project_id: str | Unset = UNSET
     pty_id: str | Unset = UNSET
     read_at: datetime.datetime | None | Unset = UNSET
@@ -60,6 +66,12 @@ class StatusEvent:
         scope = self.scope
 
         actor = self.actor
+
+        notification_key = self.notification_key
+
+        notification_severity = self.notification_severity
+
+        pane_id = self.pane_id
 
         project_id = self.project_id
 
@@ -93,6 +105,12 @@ class StatusEvent:
         )
         if actor is not UNSET:
             field_dict["actor"] = actor
+        if notification_key is not UNSET:
+            field_dict["notificationKey"] = notification_key
+        if notification_severity is not UNSET:
+            field_dict["notificationSeverity"] = notification_severity
+        if pane_id is not UNSET:
+            field_dict["paneId"] = pane_id
         if project_id is not UNSET:
             field_dict["projectId"] = project_id
         if pty_id is not UNSET:
@@ -124,6 +142,12 @@ class StatusEvent:
         scope = d.pop("scope")
 
         actor = d.pop("actor", UNSET)
+
+        notification_key = d.pop("notificationKey", UNSET)
+
+        notification_severity = d.pop("notificationSeverity", UNSET)
+
+        pane_id = d.pop("paneId", UNSET)
 
         project_id = d.pop("projectId", UNSET)
 
@@ -160,6 +184,9 @@ class StatusEvent:
             requires_attention=requires_attention,
             scope=scope,
             actor=actor,
+            notification_key=notification_key,
+            notification_severity=notification_severity,
+            pane_id=pane_id,
             project_id=project_id,
             pty_id=pty_id,
             read_at=read_at,

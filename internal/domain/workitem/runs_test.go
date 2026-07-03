@@ -337,6 +337,9 @@ func TestReportStatusQuestionBlockedAndDoneTransitionRunAndWorkItem(t *testing.T
 	if question.Kind != StatusKindQuestion || !question.RequiresAttention || question.Message != "Need the staging API key." {
 		t.Fatalf("question = %#v", question)
 	}
+	if question.NotificationSeverity != StatusNotificationSeverityAttention || question.NotificationKey != "status|session:sess_01|pty:pty_01|actor:agent|kind:question" {
+		t.Fatalf("question notification metadata = key %q severity %q", question.NotificationKey, question.NotificationSeverity)
+	}
 	runs := state.ListRuns(item.ID)
 	if len(runs) != 1 || runs[0].Status != RunStateAwaitingInput || runs[0].CompletedAt != nil {
 		t.Fatalf("runs after question = %#v", runs)
@@ -368,6 +371,9 @@ func TestReportStatusQuestionBlockedAndDoneTransitionRunAndWorkItem(t *testing.T
 	if blocked.Kind != StatusKindBlocked || !blocked.RequiresAttention {
 		t.Fatalf("blocked = %#v", blocked)
 	}
+	if blocked.NotificationSeverity != StatusNotificationSeverityWarning {
+		t.Fatalf("blocked notification severity = %q", blocked.NotificationSeverity)
+	}
 	runs = state.ListRuns(item.ID)
 	if len(runs) != 1 || runs[0].Status != RunStateAwaitingInput || runs[0].CompletedAt != nil {
 		t.Fatalf("runs after blocked = %#v", runs)
@@ -391,6 +397,9 @@ func TestReportStatusQuestionBlockedAndDoneTransitionRunAndWorkItem(t *testing.T
 	}
 	if done.Kind != StatusKindDone || done.RequiresAttention {
 		t.Fatalf("done = %#v", done)
+	}
+	if done.NotificationSeverity != StatusNotificationSeverityInfo {
+		t.Fatalf("done notification severity = %q", done.NotificationSeverity)
 	}
 	runs = state.ListRuns(item.ID)
 	if len(runs) != 1 || runs[0].Status != RunStateCompleted || runs[0].CompletedAt == nil {
@@ -477,6 +486,7 @@ func TestReportStatusStoresSessionScopedEventsWithoutMutatingWorkItems(t *testin
 		Actor:     "agent",
 		Message:   "Which branch should I use?",
 		SessionID: "sess_01",
+		PaneID:    "pane_01",
 		PTYID:     "pty_01",
 		Now:       now,
 	})
@@ -485,6 +495,9 @@ func TestReportStatusStoresSessionScopedEventsWithoutMutatingWorkItems(t *testin
 	}
 	if event.Scope != StatusScopePTY || event.RunID != "" || !event.RequiresAttention {
 		t.Fatalf("event = %#v", event)
+	}
+	if event.PaneID != "pane_01" || event.NotificationKey != "status|session:sess_01|pane:pane_01|actor:agent|kind:question" {
+		t.Fatalf("event notification target = pane %q key %q", event.PaneID, event.NotificationKey)
 	}
 	events := state.ListStatusEvents(ListStatusEvents{SessionID: "sess_01", UnreadOnly: true})
 	if len(events) != 1 || events[0].ID != event.ID {
