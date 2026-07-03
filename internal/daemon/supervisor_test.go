@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/daemon"
 	"github.com/phin-tech/whisk/internal/protocol"
 )
@@ -75,6 +76,10 @@ func TestEnsureRestartsIncompatibleDaemon(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
+	mux.HandleFunc("/v1/compat", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"apiVersion":%d}`, protocol.DaemonAPIVersion+1)
+	})
 	mux.HandleFunc("/v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		close(shutdownCalled)
@@ -102,6 +107,241 @@ func TestEnsureRestartsIncompatibleDaemon(t *testing.T) {
 	case <-shutdownCalled:
 	default:
 		t.Fatalf("incompatible daemon was not asked to shut down")
+	}
+}
+
+func TestEnsureFailsFastWhenSpawnedDaemonExits(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell helper is unix-only")
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatalf("close listener: %v", err)
+	}
+
+	t.Setenv("WHISK_HELPER_MODE", "exit")
+	t.Setenv("WHISKD_PATH", writeWhiskHelper(t))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatalf("expected spawn failure")
+	}
+	if started {
+		t.Fatalf("expected Ensure not to report a started daemon")
+	}
+	if elapsed > time.Second {
+		t.Fatalf("Ensure returned after %s, want fast failure", elapsed)
+	}
+	if !strings.Contains(err.Error(), "exit status 42") {
+		t.Fatalf("expected exit status in error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "helper daemon failed before readiness") {
+		t.Fatalf("expected log tail in error, got %v", err)
+	}
+}
+
+func TestEnsureFailsFastWhenSpawnedDaemonReportsWrongVersion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell helper is unix-only")
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatalf("close listener: %v", err)
+	}
+
+	t.Setenv("WHISK_HELPER_MODE", "wrong-version")
+	t.Setenv("WHISKD_PATH", writeWhiskHelper(t))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatalf("expected wrong-version error")
+	}
+	if started {
+		t.Fatalf("expected Ensure not to report a compatible started daemon")
+	}
+	if elapsed > time.Second {
+		t.Fatalf("Ensure returned after %s, want fast version failure", elapsed)
+	}
+	if !strings.Contains(err.Error(), fmt.Sprintf("daemon api version %d does not match required %d", protocol.DaemonAPIVersion+1, protocol.DaemonAPIVersion)) {
+		t.Fatalf("expected explicit version mismatch, got %v", err)
+	}
+	if strings.Contains(err.Error(), "deadline exceeded") {
+		t.Fatalf("expected mismatch instead of deadline, got %v", err)
+	}
+}
+
+func TestEnsureVerifiesReplacementBeforeStoppingIncompatibleDaemon(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell helper is unix-only")
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	shutdownCalled := make(chan struct{})
+	oldServer := &http.Server{ReadHeaderTimeout: time.Second}
+	mux := http.NewServeMux()
+	oldServer.Handler = mux
+	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.HandleFunc("/v1/compat", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"apiVersion":%d}`, protocol.DaemonAPIVersion+1)
+	})
+	mux.HandleFunc("/v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		close(shutdownCalled)
+		go func() {
+			_ = oldServer.Shutdown(context.Background())
+		}()
+	})
+	go func() {
+		_ = oldServer.Serve(listener)
+	}()
+	t.Cleanup(func() { _ = oldServer.Shutdown(context.Background()) })
+
+	t.Setenv("WHISK_HELPER_MODE", "wrong-version")
+	t.Setenv("WHISKD_PATH", writeWhiskHelper(t))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	if err == nil {
+		t.Fatalf("expected replacement verification error")
+	}
+	if started {
+		t.Fatalf("expected Ensure not to start a replacement daemon")
+	}
+	if !strings.Contains(err.Error(), "replacement whiskd") || !strings.Contains(err.Error(), "daemon api version") {
+		t.Fatalf("expected explicit replacement version error, got %v", err)
+	}
+	select {
+	case <-shutdownCalled:
+		t.Fatalf("incompatible daemon was shut down before replacement was verified")
+	default:
+	}
+	if err := client.NewHTTP("http://"+addr, nil).Health(ctx); err != nil {
+		t.Fatalf("old daemon should still be running: %v", err)
+	}
+}
+
+func TestEnsureAdoptsSlowCompatibleDaemonWithoutShutdown(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	shutdownCalled := make(chan struct{})
+	server := &http.Server{ReadHeaderTimeout: time.Second}
+	mux := http.NewServeMux()
+	server.Handler = mux
+	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.HandleFunc("/v1/compat", func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(350 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"apiVersion":%d}`, protocol.DaemonAPIVersion)
+	})
+	mux.HandleFunc("/v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		close(shutdownCalled)
+	})
+	go func() {
+		_ = server.Serve(listener)
+	}()
+	t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
+
+	t.Setenv("PATH", "")
+	t.Setenv("WHISKD_PATH", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	if err != nil {
+		t.Fatalf("ensure daemon: %v", err)
+	}
+	if started {
+		t.Fatalf("expected Ensure to adopt the existing daemon")
+	}
+	select {
+	case <-shutdownCalled:
+		t.Fatalf("slow compatible daemon was asked to shut down")
+	default:
+	}
+}
+
+func TestEnsureLeavesDaemonRunningWhenCompatibilityUnknown(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	shutdownCalled := make(chan struct{})
+	server := &http.Server{ReadHeaderTimeout: time.Second}
+	mux := http.NewServeMux()
+	server.Handler = mux
+	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.HandleFunc("/v1/compat", func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	})
+	mux.HandleFunc("/v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		close(shutdownCalled)
+	})
+	go func() {
+		_ = server.Serve(listener)
+	}()
+	t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
+
+	t.Setenv("PATH", "")
+	t.Setenv("WHISKD_PATH", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+	defer cancel()
+
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	if err == nil {
+		t.Fatalf("expected compatibility error")
+	}
+	if started {
+		t.Fatalf("expected Ensure not to start a replacement daemon")
+	}
+	if !strings.Contains(err.Error(), "compatibility") {
+		t.Fatalf("expected clear compatibility error, got %v", err)
+	}
+	select {
+	case <-shutdownCalled:
+		t.Fatalf("unknown compatibility daemon was asked to shut down")
+	default:
 	}
 }
 
@@ -133,6 +373,10 @@ func TestWhiskHelperProcess(t *testing.T) {
 	if addr == "" {
 		os.Exit(2)
 	}
+	if os.Getenv("WHISK_HELPER_MODE") == "exit" {
+		fmt.Fprintln(os.Stderr, "helper daemon failed before readiness")
+		os.Exit(42)
+	}
 
 	done := make(chan struct{})
 	var doneOnce sync.Once
@@ -145,11 +389,18 @@ func TestWhiskHelperProcess(t *testing.T) {
 	})
 	mux.HandleFunc("/v1/compat", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"apiVersion":%d}`, protocol.DaemonAPIVersion)
-		doneOnce.Do(func() { close(done) })
+		apiVersion := protocol.DaemonAPIVersion
+		if os.Getenv("WHISK_HELPER_MODE") == "wrong-version" {
+			apiVersion++
+		}
+		_, _ = fmt.Fprintf(w, `{"apiVersion":%d}`, apiVersion)
+		if os.Getenv("WHISK_HELPER_MODE") != "wrong-version" {
+			doneOnce.Do(func() { close(done) })
+		}
 	})
 	mux.HandleFunc("/v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
+		doneOnce.Do(func() { close(done) })
 		shutdownOnce.Do(func() { close(shutdown) })
 	})
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: time.Second}
@@ -694,6 +945,61 @@ func TestDaemonPathCanFindBundledWhiskHelper(t *testing.T) {
 	}
 	if err := os.WriteFile(helper, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write helper: %v", err)
+	}
+
+	path, err := daemon.DaemonPathForTest(appExecutable)
+	if err != nil {
+		t.Fatalf("daemon path: %v", err)
+	}
+	if path != helper {
+		t.Fatalf("daemon path = %q, want %q", path, helper)
+	}
+}
+
+func TestDaemonPathIgnoresWorkingDirectoryBinCandidate(t *testing.T) {
+	t.Setenv("PATH", "")
+	t.Setenv("WHISKD_PATH", "")
+
+	workDir := t.TempDir()
+	binDir := filepath.Join(workDir, "bin")
+	if err := os.Mkdir(binDir, 0o755); err != nil {
+		t.Fatalf("make bin dir: %v", err)
+	}
+	cwdHelper := filepath.Join(binDir, "whisk")
+	if err := os.WriteFile(cwdHelper, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write cwd helper: %v", err)
+	}
+	t.Chdir(workDir)
+
+	appDir := t.TempDir()
+	appExecutable := filepath.Join(appDir, "whisk-app")
+	if err := os.WriteFile(appExecutable, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write app executable: %v", err)
+	}
+
+	if path, err := daemon.DaemonPathForTest(appExecutable); err == nil {
+		t.Fatalf("expected cwd-relative bin/whisk to be ignored, got %q", path)
+	}
+}
+
+func TestDaemonPathCanFindWhiskOnPATH(t *testing.T) {
+	t.Setenv("WHISKD_PATH", "")
+
+	pathDir := t.TempDir()
+	helperName := "whisk"
+	if runtime.GOOS == "windows" {
+		helperName = "whisk.exe"
+	}
+	helper := filepath.Join(pathDir, helperName)
+	if err := os.WriteFile(helper, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write path helper: %v", err)
+	}
+	t.Setenv("PATH", pathDir)
+
+	appDir := t.TempDir()
+	appExecutable := filepath.Join(appDir, "whisk-app")
+	if err := os.WriteFile(appExecutable, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write app executable: %v", err)
 	}
 
 	path, err := daemon.DaemonPathForTest(appExecutable)

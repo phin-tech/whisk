@@ -62,7 +62,7 @@ def _build_response(
 def sync_detailed(
     approval_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResolveAgentBridgeApprovalRequest,
 ) -> Response[AgentBridgeApproval | ErrorResponse]:
     """Resolve a pending daemon-owned agent bridge approval
@@ -94,7 +94,7 @@ def sync_detailed(
 def sync(
     approval_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResolveAgentBridgeApprovalRequest,
 ) -> AgentBridgeApproval | ErrorResponse | None:
     """Resolve a pending daemon-owned agent bridge approval
@@ -121,7 +121,7 @@ def sync(
 async def asyncio_detailed(
     approval_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResolveAgentBridgeApprovalRequest,
 ) -> Response[AgentBridgeApproval | ErrorResponse]:
     """Resolve a pending daemon-owned agent bridge approval
@@ -151,7 +151,7 @@ async def asyncio_detailed(
 async def asyncio(
     approval_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResolveAgentBridgeApprovalRequest,
 ) -> AgentBridgeApproval | ErrorResponse | None:
     """Resolve a pending daemon-owned agent bridge approval

@@ -75,7 +75,7 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     project_id: str | Unset = UNSET,
     work_item_id: str | Unset = UNSET,
     run_id: str | Unset = UNSET,
@@ -118,7 +118,7 @@ def sync_detailed(
 
 def sync(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     project_id: str | Unset = UNSET,
     work_item_id: str | Unset = UNSET,
     run_id: str | Unset = UNSET,
@@ -156,7 +156,7 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     project_id: str | Unset = UNSET,
     work_item_id: str | Unset = UNSET,
     run_id: str | Unset = UNSET,
@@ -197,7 +197,7 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     project_id: str | Unset = UNSET,
     work_item_id: str | Unset = UNSET,
     run_id: str | Unset = UNSET,

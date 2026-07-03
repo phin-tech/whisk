@@ -60,7 +60,7 @@ def _build_response(
 def sync_detailed(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: KillPTYRequest,
 ) -> Response[ErrorResponse | PTYInfo]:
     """
@@ -91,7 +91,7 @@ def sync_detailed(
 def sync(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: KillPTYRequest,
 ) -> ErrorResponse | PTYInfo | None:
     """
@@ -117,7 +117,7 @@ def sync(
 async def asyncio_detailed(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: KillPTYRequest,
 ) -> Response[ErrorResponse | PTYInfo]:
     """
@@ -146,7 +146,7 @@ async def asyncio_detailed(
 async def asyncio(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: KillPTYRequest,
 ) -> ErrorResponse | PTYInfo | None:
     """

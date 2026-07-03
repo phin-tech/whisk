@@ -16,6 +16,9 @@ describe("ptyStream", () => {
     expect(ptyAttachWebSocketURL("http://127.0.0.1:8787", "pty_01", 7)).toBe(
       "ws://127.0.0.1:8787/v1/ptys/pty_01/attach?from=7",
     );
+    expect(ptyAttachWebSocketURL("http://127.0.0.1:8787", "pty_01", 7, "secret token")).toBe(
+      "ws://127.0.0.1:8787/v1/ptys/pty_01/attach?from=7&access_token=secret+token",
+    );
     expect(ptyAttachWebSocketURL("https://daemon.local", "pty/a", -1)).toBe(
       "wss://daemon.local/v1/ptys/pty%2Fa/attach?from=0",
     );

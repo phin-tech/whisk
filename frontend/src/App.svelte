@@ -274,6 +274,7 @@
   let offsets: Record<string, number> = {};
   let bottomJumpRevisions: Record<string, number> = {};
   let daemonAddress = "";
+  let daemonControlToken = "";
   let ptyStreams: Record<string, WebSocket> = {};
   let ptyTraceEnabled = false;
   let outputReconcileTimer: number | undefined;
@@ -742,6 +743,7 @@
     if (daemonAddress) return daemonAddress;
     const status = await LoadDaemonStatus();
     daemonAddress = status.address;
+    daemonControlToken = status.controlToken ?? "";
     return daemonAddress;
   }
 
@@ -766,7 +768,7 @@
     const existing = ptyStreams[ptyId];
     if (existing && existing.readyState !== WebSocket.CLOSED && existing.readyState !== WebSocket.CLOSING) return;
     const address = await loadDaemonAddress();
-    const socket = new WebSocket(ptyAttachWebSocketURL(address, ptyId, offsets[ptyId] ?? 0));
+    const socket = new WebSocket(ptyAttachWebSocketURL(address, ptyId, offsets[ptyId] ?? 0, daemonControlToken));
     ptyStreams = { ...ptyStreams, [ptyId]: socket };
     socket.onmessage = (event) => {
       const frame = JSON.parse(String(event.data)) as PTYStreamFrame;

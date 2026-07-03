@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -24,7 +26,14 @@ var (
 	errProcessStillAlive  = errors.New("process still running")
 )
 
-const daemonStateVersion = 1
+const (
+	daemonStateVersion          = 1
+	compatibilityProbeTimeout   = 250 * time.Millisecond
+	compatibilityRetryWindow    = 2 * time.Second
+	compatibilityInitialBackoff = 50 * time.Millisecond
+	compatibilityMaxBackoff     = 250 * time.Millisecond
+	daemonLogTailBytes          = 4096
+)
 
 type daemonStateFile struct {
 	Version          int    `json:"version"`
@@ -34,6 +43,14 @@ type daemonStateFile struct {
 	APIVersion       int    `json:"apiVersion"`
 	BinaryPath       string `json:"binaryPath"`
 }
+
+type compatibilityDecision int
+
+const (
+	compatibilityUnknown compatibilityDecision = iota
+	compatibilityCompatible
+	compatibilityIncompatible
+)
 
 // StopPolicy holds every timing used by the daemon stop escalation ladder.
 type StopPolicy struct {
@@ -98,6 +115,20 @@ func (policy StopPolicy) normalized() StopPolicy {
 	return policy
 }
 
+type daemonStartOptions struct {
+	writeState bool
+	binaryPath string
+	env        map[string]string
+	label      string
+}
+
+type spawnedDaemon struct {
+	cmd       *exec.Cmd
+	waitCh    chan error
+	logPath   string
+	logOffset int64
+}
+
 // Ensure makes sure a compatible daemon is reachable at baseURL, starting one if needed.
 // It reports whether it started a new daemon (started == true) versus adopting one that was
 // already running (started == false). Callers use this to decide ownership: a daemon the app
@@ -114,11 +145,21 @@ func Ensure(ctx context.Context, baseURL string) (started bool, err error) {
 
 func ensureLocked(ctx context.Context, baseURL string) (started bool, err error) {
 	daemonClient := client.NewHTTP(baseURL, nil)
-	compatibilityErr := compatibilityCheck(ctx, daemonClient)
-	if compatibilityErr == nil {
-		return false, nil
-	}
 	if healthCheck(ctx, daemonClient) == nil {
+		decision, compatibilityErr := compatibilityCheckWithRetry(ctx, daemonClient)
+		if decision == compatibilityCompatible {
+			return false, nil
+		}
+		if decision == compatibilityUnknown {
+			return false, fmt.Errorf("check whiskd compatibility: %w", compatibilityErr)
+		}
+		path, err := daemonPath()
+		if err != nil {
+			return false, fmt.Errorf("find replacement whiskd: %w", err)
+		}
+		if err := verifyReplacementDaemon(ctx, path); err != nil {
+			return false, fmt.Errorf("replacement whiskd at %s failed compatibility verification; leaving existing daemon running: %w", path, err)
+		}
 		log.Printf("whiskd at %s is incompatible (%v); shutting it down", baseURL, compatibilityErr)
 		if err := stopWithPolicyLocked(ctx, baseURL, DefaultStopPolicy()); err != nil {
 			return false, fmt.Errorf("stop incompatible whiskd: %w", err)
@@ -138,56 +179,256 @@ func ensureLocked(ctx context.Context, baseURL string) (started bool, err error)
 		binaryPath = abs
 	}
 
-	log.Printf("starting whisk daemon at %s from %s", baseURL, binaryPath)
-	cmd := exec.CommandContext(context.Background(), binaryPath, "daemon", "run", "-addr", addr)
-	logFile, err := os.OpenFile(filepath.Join(os.TempDir(), "whiskd.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if _, err := startDaemonAndWait(ctx, baseURL, addr, binaryPath, daemonStartOptions{writeState: true, binaryPath: binaryPath}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func verifyReplacementDaemon(ctx context.Context, path string) error {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return false, fmt.Errorf("open whiskd log: %w", err)
+		return fmt.Errorf("reserve probe address: %w", err)
 	}
-	defer logFile.Close()
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-	detach(cmd)
-	if err := cmd.Start(); err != nil {
-		return false, fmt.Errorf("start whiskd: %w", err)
+	addr := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		return fmt.Errorf("release probe address: %w", err)
 	}
-	startTime, err := processStartTime(cmd.Process.Pid)
+	configDir, err := os.MkdirTemp("", "whiskd-verify-*")
 	if err != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return false, fmt.Errorf("read whiskd process start time: %w", err)
+		return fmt.Errorf("create probe config dir: %w", err)
 	}
-	if err := writeStateFile(baseURL, daemonStateFile{
-		Version:          daemonStateVersion,
-		PID:              cmd.Process.Pid,
-		ProcessStartTime: startTime,
-		ListenAddress:    addr,
-		APIVersion:       protocol.DaemonAPIVersion,
-		BinaryPath:       binaryPath,
-	}); err != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return false, fmt.Errorf("write whiskd state file: %w", err)
+	defer func() { _ = os.RemoveAll(configDir) }()
+
+	probeCtx, cancel := context.WithTimeout(ctx, compatibilityRetryWindow)
+	defer cancel()
+	proc, err := startDaemonAndWait(probeCtx, "http://"+addr, addr, path, daemonStartOptions{
+		env:   map[string]string{"XDG_CONFIG_HOME": configDir},
+		label: "replacement probe whisk daemon",
+	})
+	if err != nil {
+		return err
 	}
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			log.Printf("whiskd exited: %v", err)
-		}
-	}()
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer stopCancel()
+	if err := stopSpawnedDaemon(stopCtx, "http://"+addr, proc, false); err != nil {
+		return fmt.Errorf("stop replacement probe whiskd: %w", err)
+	}
+	return nil
+}
+
+func startDaemonAndWait(ctx context.Context, baseURL, addr, path string, opts daemonStartOptions) (*spawnedDaemon, error) {
+	label := opts.label
+	if label == "" {
+		label = "whisk daemon"
+	}
+	log.Printf("starting %s at %s from %s", label, baseURL, path)
+	proc, err := startDaemonProcess(baseURL, addr, path, opts)
+	if err != nil {
+		return nil, err
+	}
+	daemonClient := client.NewHTTP(baseURL, nil)
 
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		if err := compatibilityCheck(ctx, daemonClient); err == nil {
+		decision, err := compatibilityProbe(ctx, daemonClient, compatibilityProbeTimeout)
+		if decision == compatibilityCompatible {
 			log.Printf("whiskd ready at %s", baseURL)
-			return true, nil
+			return proc, nil
+		}
+		if decision == compatibilityIncompatible {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_ = stopSpawnedDaemon(cleanupCtx, baseURL, proc, opts.writeState)
+			cancel()
+			return nil, fmt.Errorf("started whiskd is incompatible: %w%s", err, proc.logTailMessage())
 		}
 		select {
+		case waitErr := <-proc.waitCh:
+			if opts.writeState {
+				removeStateFile(baseURL)
+			}
+			return nil, proc.exitBeforeReadyError(waitErr)
 		case <-ticker.C:
 		case <-ctx.Done():
-			return false, fmt.Errorf("wait for whiskd: %w", ctx.Err())
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_ = stopSpawnedDaemon(cleanupCtx, baseURL, proc, opts.writeState)
+			cancel()
+			return nil, fmt.Errorf("wait for whiskd: %w%s", ctx.Err(), proc.logTailMessage())
 		}
 	}
+}
+
+func startDaemonProcess(baseURL, addr, path string, opts daemonStartOptions) (*spawnedDaemon, error) {
+	logPath := filepath.Join(os.TempDir(), "whiskd.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open whiskd log: %w", err)
+	}
+	info, statErr := logFile.Stat()
+	if statErr != nil {
+		_ = logFile.Close()
+		return nil, fmt.Errorf("stat whiskd log: %w", statErr)
+	}
+	logOffset := info.Size()
+	cmd := exec.CommandContext(context.Background(), path, "daemon", "run", "-addr", addr)
+	if len(opts.env) > 0 {
+		cmd.Env = environWithOverrides(opts.env)
+	}
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	detach(cmd)
+	if err := cmd.Start(); err != nil {
+		_ = logFile.Close()
+		return nil, fmt.Errorf("start whiskd: %w", err)
+	}
+	if err := logFile.Close(); err != nil {
+		log.Printf("close whiskd log handle: %v", err)
+	}
+	if opts.writeState {
+		binaryPath := opts.binaryPath
+		if binaryPath == "" {
+			binaryPath = path
+		}
+		startTime, err := processStartTime(cmd.Process.Pid)
+		if err != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+			return nil, fmt.Errorf("read whiskd process start time: %w", err)
+		}
+		if err := writeStateFile(baseURL, daemonStateFile{
+			Version:          daemonStateVersion,
+			PID:              cmd.Process.Pid,
+			ProcessStartTime: startTime,
+			ListenAddress:    addr,
+			APIVersion:       protocol.DaemonAPIVersion,
+			BinaryPath:       binaryPath,
+		}); err != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+			return nil, fmt.Errorf("write whiskd state file: %w", err)
+		}
+	}
+	proc := &spawnedDaemon{
+		cmd:       cmd,
+		waitCh:    make(chan error, 1),
+		logPath:   logPath,
+		logOffset: logOffset,
+	}
+	go func() {
+		err := cmd.Wait()
+		proc.waitCh <- err
+		if err != nil {
+			log.Printf("whiskd exited: %v", err)
+		}
+	}()
+	return proc, nil
+}
+
+func stopSpawnedDaemon(ctx context.Context, baseURL string, proc *spawnedDaemon, removeState bool) error {
+	if proc == nil {
+		return nil
+	}
+	defer func() {
+		if removeState {
+			removeStateFile(baseURL)
+		}
+	}()
+	select {
+	case err := <-proc.waitCh:
+		return err
+	default:
+	}
+
+	if proc.cmd.Process != nil {
+		if err := proc.cmd.Process.Signal(os.Interrupt); err != nil {
+			_ = proc.cmd.Process.Kill()
+		}
+	}
+	grace := time.NewTimer(500 * time.Millisecond)
+	defer grace.Stop()
+	select {
+	case err := <-proc.waitCh:
+		return err
+	case <-grace.C:
+	case <-ctx.Done():
+	}
+	if proc.cmd.Process != nil {
+		_ = proc.cmd.Process.Kill()
+	}
+	select {
+	case <-proc.waitCh:
+		return nil
+	case <-ctx.Done():
+		if proc.cmd.Process != nil {
+			_ = proc.cmd.Process.Kill()
+		}
+		return ctx.Err()
+	case <-time.After(500 * time.Millisecond):
+		return ctx.Err()
+	}
+}
+
+func environWithOverrides(overrides map[string]string) []string {
+	env := os.Environ()
+	out := env[:0]
+	for _, entry := range env {
+		key := entry
+		if idx := strings.IndexByte(entry, '='); idx >= 0 {
+			key = entry[:idx]
+		}
+		if _, ok := overrides[key]; ok {
+			continue
+		}
+		out = append(out, entry)
+	}
+	for key, value := range overrides {
+		out = append(out, key+"="+value)
+	}
+	return out
+}
+
+func (p *spawnedDaemon) exitBeforeReadyError(waitErr error) error {
+	return fmt.Errorf("started whiskd exited before readiness: %s%s", exitStatusText(waitErr), p.logTailMessage())
+}
+
+func exitStatusText(err error) string {
+	if err == nil {
+		return "exit status 0"
+	}
+	return err.Error()
+}
+
+func (p *spawnedDaemon) logTailMessage() string {
+	tail := readLogTail(p.logPath, p.logOffset, daemonLogTailBytes)
+	if tail == "" {
+		return ""
+	}
+	return "; whiskd log tail:\n" + tail
+}
+
+func readLogTail(path string, offset int64, maxBytes int64) string {
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || info.Size() <= offset {
+		return ""
+	}
+	start := info.Size() - maxBytes
+	if start < offset {
+		start = offset
+	}
+	if _, err := file.Seek(start, io.SeekStart); err != nil {
+		return ""
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // Stop shuts down the daemon at baseURL whether or not this process started it.
@@ -491,20 +732,58 @@ func healthCheckWithPolicy(ctx context.Context, daemonClient *client.HTTPClient,
 	return daemonClient.Health(checkCtx)
 }
 
-func compatibilityCheck(ctx context.Context, daemonClient *client.HTTPClient) error {
+func compatibilityProbe(ctx context.Context, daemonClient *client.HTTPClient, timeout time.Duration) (compatibilityDecision, error) {
 	if err := healthCheck(ctx, daemonClient); err != nil {
-		return err
+		return compatibilityUnknown, fmt.Errorf("daemon health check failed before compatibility probe: %w", err)
 	}
-	checkCtx, cancel := context.WithTimeout(ctx, DefaultStopPolicy().HealthCheckTimeout)
+	checkCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	compatibility, err := daemonClient.Compatibility(checkCtx)
 	if err != nil {
-		return fmt.Errorf("daemon is missing required compatibility API: %w", err)
+		return compatibilityUnknown, fmt.Errorf("daemon compatibility probe is unknown: %w", err)
 	}
 	if compatibility.APIVersion != protocol.DaemonAPIVersion {
-		return fmt.Errorf("daemon api version %d does not match required %d", compatibility.APIVersion, protocol.DaemonAPIVersion)
+		return compatibilityIncompatible, fmt.Errorf("daemon api version %d does not match required %d", compatibility.APIVersion, protocol.DaemonAPIVersion)
 	}
-	return nil
+	return compatibilityCompatible, nil
+}
+
+func compatibilityCheckWithRetry(ctx context.Context, daemonClient *client.HTTPClient) (compatibilityDecision, error) {
+	retryCtx, cancel := context.WithTimeout(ctx, compatibilityRetryWindow)
+	defer cancel()
+
+	probeTimeout := compatibilityProbeTimeout
+	backoff := compatibilityInitialBackoff
+	var lastErr error
+	for {
+		decision, err := compatibilityProbe(retryCtx, daemonClient, probeTimeout)
+		if decision == compatibilityCompatible || decision == compatibilityIncompatible {
+			return decision, err
+		}
+		lastErr = err
+
+		timer := time.NewTimer(backoff)
+		select {
+		case <-timer.C:
+		case <-retryCtx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			if lastErr == nil {
+				lastErr = retryCtx.Err()
+			}
+			return compatibilityUnknown, fmt.Errorf("compatibility probe did not complete before deadline: %w", lastErr)
+		}
+
+		probeTimeout = compatibilityRetryWindow
+		backoff *= 2
+		if backoff > compatibilityMaxBackoff {
+			backoff = compatibilityMaxBackoff
+		}
+	}
 }
 
 func shutdownExistingWithPolicy(ctx context.Context, baseURL string, policy StopPolicy) error {
@@ -512,6 +791,9 @@ func shutdownExistingWithPolicy(ctx context.Context, baseURL string, policy Stop
 	defer cancel()
 	req, err := http.NewRequestWithContext(shutdownCtx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/v1/shutdown", nil)
 	if err != nil {
+		return err
+	}
+	if err := client.NewHTTP(baseURL, nil).AuthorizeRequest(req); err != nil {
 		return err
 	}
 	resp, err := http.DefaultClient.Do(req)
@@ -581,7 +863,6 @@ func daemonPathForExecutable(executable string) (string, error) {
 	if executable != "" {
 		candidates = append(candidates, filepath.Join(filepath.Dir(executable), "whisk"))
 	}
-	candidates = append(candidates, filepath.Join("bin", "whisk"))
 	if path, err := exec.LookPath("whisk"); err == nil {
 		candidates = append(candidates, path)
 	}

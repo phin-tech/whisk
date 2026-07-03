@@ -51,7 +51,7 @@ def _build_response(
 def sync_detailed(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | PTYHistory]:
     """Read one persisted PTY transcript
 
@@ -80,7 +80,7 @@ def sync_detailed(
 def sync(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | PTYHistory | None:
     """Read one persisted PTY transcript
 
@@ -104,7 +104,7 @@ def sync(
 async def asyncio_detailed(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | PTYHistory]:
     """Read one persisted PTY transcript
 
@@ -131,7 +131,7 @@ async def asyncio_detailed(
 async def asyncio(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | PTYHistory | None:
     """Read one persisted PTY transcript
 
