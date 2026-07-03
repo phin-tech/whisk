@@ -7,6 +7,7 @@
   import TerminalIcon from "@lucide/svelte/icons/terminal";
   import X from "@lucide/svelte/icons/x";
   import type { AgentBridgeEvent, AgentHookIntegration, AgentHookLogStatus, PluginStatus, RegistryPlugin } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { DaemonStatus } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/models";
   import DaemonSettings from "./DaemonSettings.svelte";
   import KeybindingsPanel from "./KeybindingsPanel.svelte";
   import GeneralSettings from "./settings/GeneralSettings.svelte";
@@ -22,6 +23,8 @@
   export let terminalFontSize = 13;
   export let terminalCursorBlink = true;
   export let keepDaemonAlive = true;
+  export let autoRestartManagedDaemon = false;
+  export let daemonStatus: DaemonStatus | null = null;
   export let worktrunkPath = "/opt/homebrew/bin/wt";
   export let agentHookIntegrations: AgentHookIntegration[] = [];
   export let plugins: PluginStatus[] = [];
@@ -35,6 +38,8 @@
   export let onTerminalFontSize: (size: number) => void;
   export let onTerminalCursorBlink: (blink: boolean) => void;
   export let onKeepDaemonAlive: (keep: boolean) => void;
+  export let onAutoRestartManagedDaemon: (enabled: boolean) => void;
+  export let onDaemonStatus: (status: DaemonStatus) => void;
   export let onWorktrunkPath: (path: string) => void;
   export let onRefreshAgentHookIntegrations: () => void;
   export let onRefreshPlugins: () => void;
@@ -165,8 +170,12 @@
         {:else if selected === "daemon"}
           <DaemonSettings
             {keepDaemonAlive}
+            {autoRestartManagedDaemon}
+            status={daemonStatus}
             {worktrunkPath}
             onKeepDaemonAlive={onKeepDaemonAlive}
+            onAutoRestartManagedDaemon={onAutoRestartManagedDaemon}
+            onDaemonStatus={onDaemonStatus}
             onWorktrunkPath={onWorktrunkPath}
           />
         {:else if selected === "plugins"}

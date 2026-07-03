@@ -204,6 +204,21 @@ function seedState() {
   ];
   return {
     now,
+    daemonStatus: {
+      running: true,
+      address: "http://127.0.0.1:8877",
+      managed: false,
+      apiVersion: 1,
+      gitSha: "e2e",
+      version: "e2e",
+      dirty: true,
+      error: "",
+      autoRestartEnabled: false,
+      restarting: false,
+      restartAttempt: 0,
+      restartMaxAttempts: 0,
+      autoRestartExhausted: false,
+    },
     project,
     projects: [project],
     workflowDefinitions: [
@@ -668,6 +683,7 @@ function dispatch(methodName: string, args: unknown[]) {
         terminalFontSize: 13,
         terminalCursorBlink: true,
         keepDaemonAlive: true,
+        autoRestartManagedDaemon: false,
         hookLogEnabled: true,
         clearHookLogAfterSession: false,
         worktrunkPath: "/opt/homebrew/bin/wt",
@@ -676,16 +692,7 @@ function dispatch(methodName: string, args: unknown[]) {
     case "SaveAppSettings":
       return args[0];
     case "DaemonStatus":
-      return {
-        running: true,
-        address: "http://127.0.0.1:8877",
-        managed: false,
-        apiVersion: 1,
-        gitSha: "e2e",
-        version: "e2e",
-        dirty: true,
-        error: "",
-      };
+      return clone(state.daemonStatus);
     case "SyncSessionMenu":
       return undefined;
     case "ListSessions":
@@ -1079,6 +1086,11 @@ function emitRuntimeEvent(event: unknown) {
   if (waiter) waiter(event);
 }
 
+function emitDaemonStatus(status: unknown) {
+  state.daemonStatus = { ...state.daemonStatus, ...(status as Record<string, unknown>) };
+  emitWailsEvent("daemon-status:changed", clone(state.daemonStatus));
+}
+
 function reset() {
   state = seedState();
   calls = [];
@@ -1138,6 +1150,7 @@ declare global {
       openedURLs: () => string[];
       reset: () => void;
       emit: (event: unknown) => void;
+      emitDaemonStatus: (status: unknown) => void;
       emitCommand: (commandID: string) => void;
     };
   }
@@ -1150,6 +1163,7 @@ if (typeof window !== "undefined") {
     openedURLs: () => clone(openedURLs),
     reset,
     emit: emitRuntimeEvent,
+    emitDaemonStatus,
     emitCommand: (commandID: string) => emitWailsEvent("command:run", commandID),
   };
 }

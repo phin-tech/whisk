@@ -3,6 +3,8 @@ package wailsapp
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/phin-tech/whisk/internal/appmenu"
 	"github.com/phin-tech/whisk/internal/appsettings"
@@ -11,12 +13,23 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/ptytrace"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type AppSettingsStore interface {
 	Load(context.Context) (appsettings.Settings, error)
 	Save(context.Context, appsettings.Settings) (appsettings.Settings, error)
 }
+
+const (
+	// EventDaemonStatusChanged is emitted over the Wails event bridge whenever the client-side
+	// daemon read model changes.
+	EventDaemonStatusChanged = "daemon-status:changed"
+
+	defaultDaemonStatusInterval     = time.Second
+	defaultDaemonStatusTimeout      = 750 * time.Millisecond
+	defaultDaemonRestartMaxAttempts = 3
+)
 
 // MenuController is the subset of the native menu controller the service drives: it re-applies
 // accelerators and the session list to the menu bar. main.go injects the concrete
@@ -26,11 +39,47 @@ type MenuController interface {
 	SetSessions([]appmenu.SessionRef)
 }
 
+type EventEmitter interface {
+	Emit(name string, data ...any) bool
+}
+
+type daemonSupervisor interface {
+	Ensure(context.Context, string) (bool, error)
+	Stop(context.Context, string) error
+	IsManaged(string) bool
+}
+
+type daemonSupervisorAdapter struct{}
+
+func (daemonSupervisorAdapter) Ensure(ctx context.Context, baseURL string) (bool, error) {
+	return daemon.Ensure(ctx, baseURL)
+}
+
+func (daemonSupervisorAdapter) Stop(ctx context.Context, baseURL string) error {
+	return daemon.Stop(ctx, baseURL)
+}
+
+func (daemonSupervisorAdapter) IsManaged(baseURL string) bool {
+	return daemon.IsManaged(baseURL)
+}
+
 type Service struct {
 	client    client.RuntimeClient
 	forwarder *client.LocalForwarder
 	settings  AppSettingsStore
 	menu      MenuController
+
+	events     EventEmitter
+	supervisor daemonSupervisor
+
+	daemonWatchMu            sync.Mutex
+	daemonWatchCancel        context.CancelFunc
+	daemonWatchDone          chan struct{}
+	daemonExpectedStopped    bool
+	daemonStatusInterval     time.Duration
+	daemonStatusTimeout      time.Duration
+	daemonControlTimeout     time.Duration
+	daemonRestartMaxAttempts int
 }
 
 func NewService(runtimeClient client.RuntimeClient) *Service {
@@ -38,7 +87,15 @@ func NewService(runtimeClient client.RuntimeClient) *Service {
 }
 
 func NewServiceWithSettings(runtimeClient client.RuntimeClient, settings AppSettingsStore) *Service {
-	service := &Service{client: runtimeClient, settings: settings}
+	service := &Service{
+		client:                   runtimeClient,
+		settings:                 settings,
+		supervisor:               daemonSupervisorAdapter{},
+		daemonStatusInterval:     defaultDaemonStatusInterval,
+		daemonStatusTimeout:      defaultDaemonStatusTimeout,
+		daemonControlTimeout:     daemon.DefaultControlTimeout(),
+		daemonRestartMaxAttempts: defaultDaemonRestartMaxAttempts,
+	}
 	if httpClient, ok := runtimeClient.(*client.HTTPClient); ok {
 		service.forwarder = client.NewLocalForwarder(httpClient, nil)
 	}
@@ -65,6 +122,34 @@ func (s *Service) SaveAppSettings(ctx context.Context, settings appsettings.Sett
 // before the Wails app — and therefore the menu — exists, so main.go calls this afterwards.
 func AttachMenuController(s *Service, controller MenuController) {
 	s.menu = controller
+}
+
+func AttachEventEmitter(s *Service, emitter EventEmitter) {
+	s.events = emitter
+}
+
+// StopDaemonStatusWatcher stops the client-side daemon health watcher before external lifecycle
+// code intentionally stops the daemon, such as the desktop quit path.
+func StopDaemonStatusWatcher(s *Service) {
+	if s == nil {
+		return
+	}
+	s.stopDaemonStatusWatcher()
+}
+
+func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	if s.events == nil {
+		if app := application.Get(); app != nil && app.Event != nil {
+			s.events = app.Event
+		}
+	}
+	s.startDaemonStatusWatcher(ctx)
+	return nil
+}
+
+func (s *Service) ServiceShutdown() error {
+	s.stopDaemonStatusWatcher()
+	return nil
 }
 
 // LoadKeybindings returns the command registry with each command's effective accelerator for the
@@ -137,6 +222,16 @@ type DaemonStatus struct {
 	Dirty      bool   `json:"dirty"`
 	// Error holds a human-readable reason when the daemon is unreachable or incompatible.
 	Error string `json:"error"`
+	// AutoRestartEnabled mirrors the opt-in app preference used by the client-side watcher.
+	AutoRestartEnabled bool `json:"autoRestartEnabled"`
+	// Restarting is true while the watcher is actively trying to re-ensure a managed daemon.
+	Restarting bool `json:"restarting"`
+	// RestartAttempt is the current bounded auto-restart attempt number, when any.
+	RestartAttempt int `json:"restartAttempt"`
+	// RestartMaxAttempts is the retry budget for one unexpected managed-daemon loss.
+	RestartMaxAttempts int `json:"restartMaxAttempts"`
+	// AutoRestartExhausted is true after the watcher spends the bounded retry budget.
+	AutoRestartExhausted bool `json:"autoRestartExhausted"`
 }
 
 func (s *Service) httpClient() (*client.HTTPClient, error) {
@@ -149,7 +244,7 @@ func (s *Service) httpClient() (*client.HTTPClient, error) {
 
 func (s *Service) daemonStatus(ctx context.Context, httpClient *client.HTTPClient) DaemonStatus {
 	baseURL := httpClient.BaseURL()
-	status := DaemonStatus{Address: baseURL, Managed: daemon.IsManaged(baseURL)}
+	status := DaemonStatus{Address: baseURL, Managed: s.supervisor.IsManaged(baseURL)}
 	if err := httpClient.Health(ctx); err != nil {
 		status.Error = err.Error()
 		return status
@@ -167,13 +262,32 @@ func (s *Service) daemonStatus(ctx context.Context, httpClient *client.HTTPClien
 	return status
 }
 
+func (s *Service) daemonStatusWithSettings(ctx context.Context, httpClient *client.HTTPClient) DaemonStatus {
+	status := s.daemonStatus(ctx, httpClient)
+	settings, err := s.loadSettings(ctx)
+	if err == nil {
+		status.AutoRestartEnabled = settings.AutoRestartManagedDaemon
+	}
+	return status
+}
+
+func (s *Service) daemonStatusSnapshot(ctx context.Context, httpClient *client.HTTPClient) DaemonStatus {
+	timeout := s.statusTimeout()
+	if timeout <= 0 {
+		return s.daemonStatusWithSettings(ctx, httpClient)
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return s.daemonStatusWithSettings(checkCtx, httpClient)
+}
+
 // DaemonStatus reports the current state of the daemon for display in the preferences panel.
 func (s *Service) DaemonStatus(ctx context.Context) (DaemonStatus, error) {
 	httpClient, err := s.httpClient()
 	if err != nil {
 		return DaemonStatus{}, err
 	}
-	return s.daemonStatus(ctx, httpClient), nil
+	return s.daemonStatusWithSettings(ctx, httpClient), nil
 }
 
 // StartDaemon starts a daemon if one is not already running, then returns the resulting status.
@@ -182,12 +296,17 @@ func (s *Service) StartDaemon(ctx context.Context) (DaemonStatus, error) {
 	if err != nil {
 		return DaemonStatus{}, err
 	}
-	opCtx, cancel := context.WithTimeout(ctx, daemon.DefaultControlTimeout())
+	s.setDaemonExpectedStopped(false)
+	opCtx, cancel := context.WithTimeout(ctx, s.controlTimeout())
 	defer cancel()
-	if _, err := daemon.Ensure(opCtx, httpClient.BaseURL()); err != nil {
-		return s.daemonStatus(ctx, httpClient), err
+	if _, err := s.supervisor.Ensure(opCtx, httpClient.BaseURL()); err != nil {
+		status := s.daemonStatusWithSettings(ctx, httpClient)
+		s.emitDaemonStatus(status)
+		return status, err
 	}
-	return s.daemonStatus(ctx, httpClient), nil
+	status := s.daemonStatusWithSettings(ctx, httpClient)
+	s.emitDaemonStatus(status)
+	return status, nil
 }
 
 // StopDaemon shuts the daemon down and returns the resulting status.
@@ -196,12 +315,23 @@ func (s *Service) StopDaemon(ctx context.Context) (DaemonStatus, error) {
 	if err != nil {
 		return DaemonStatus{}, err
 	}
-	opCtx, cancel := context.WithTimeout(ctx, daemon.DefaultControlTimeout())
+	s.setDaemonExpectedStopped(true)
+	opCtx, cancel := context.WithTimeout(ctx, s.controlTimeout())
 	defer cancel()
-	if err := daemon.Stop(opCtx, httpClient.BaseURL()); err != nil {
-		return s.daemonStatus(ctx, httpClient), err
+	if err := s.supervisor.Stop(opCtx, httpClient.BaseURL()); err != nil {
+		status := s.daemonStatusWithSettings(ctx, httpClient)
+		if status.Running {
+			s.setDaemonExpectedStopped(false)
+		}
+		s.emitDaemonStatus(status)
+		return status, err
 	}
-	return s.daemonStatus(ctx, httpClient), nil
+	status := s.daemonStatusWithSettings(ctx, httpClient)
+	if status.Running {
+		s.setDaemonExpectedStopped(false)
+	}
+	s.emitDaemonStatus(status)
+	return status, nil
 }
 
 // RestartDaemon stops the daemon and starts a fresh one, returning the resulting status.
@@ -210,16 +340,239 @@ func (s *Service) RestartDaemon(ctx context.Context) (DaemonStatus, error) {
 	if err != nil {
 		return DaemonStatus{}, err
 	}
-	opCtx, cancel := context.WithTimeout(ctx, daemon.DefaultControlTimeout())
+	opCtx, cancel := context.WithTimeout(ctx, s.controlTimeout())
 	defer cancel()
 	baseURL := httpClient.BaseURL()
-	if err := daemon.Stop(opCtx, baseURL); err != nil {
-		return s.daemonStatus(ctx, httpClient), err
+	s.setDaemonExpectedStopped(true)
+	if err := s.supervisor.Stop(opCtx, baseURL); err != nil {
+		status := s.daemonStatusWithSettings(ctx, httpClient)
+		if status.Running {
+			s.setDaemonExpectedStopped(false)
+		}
+		s.emitDaemonStatus(status)
+		return status, err
 	}
-	if _, err := daemon.Ensure(opCtx, baseURL); err != nil {
-		return s.daemonStatus(ctx, httpClient), err
+	s.setDaemonExpectedStopped(false)
+	if _, err := s.supervisor.Ensure(opCtx, baseURL); err != nil {
+		status := s.daemonStatusWithSettings(ctx, httpClient)
+		s.emitDaemonStatus(status)
+		return status, err
 	}
-	return s.daemonStatus(ctx, httpClient), nil
+	status := s.daemonStatusWithSettings(ctx, httpClient)
+	s.emitDaemonStatus(status)
+	return status, nil
+}
+
+func (s *Service) startDaemonStatusWatcher(ctx context.Context) {
+	httpClient, err := s.httpClient()
+	if err != nil || s.events == nil {
+		return
+	}
+
+	s.daemonWatchMu.Lock()
+	if s.daemonWatchCancel != nil {
+		s.daemonWatchMu.Unlock()
+		return
+	}
+	watchCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	s.daemonWatchCancel = cancel
+	s.daemonWatchDone = done
+	s.daemonWatchMu.Unlock()
+
+	go s.runDaemonStatusWatcher(watchCtx, httpClient, done)
+}
+
+func (s *Service) stopDaemonStatusWatcher() {
+	s.daemonWatchMu.Lock()
+	cancel := s.daemonWatchCancel
+	done := s.daemonWatchDone
+	s.daemonWatchCancel = nil
+	s.daemonWatchDone = nil
+	s.daemonWatchMu.Unlock()
+
+	if cancel == nil {
+		return
+	}
+	cancel()
+	<-done
+}
+
+func (s *Service) runDaemonStatusWatcher(ctx context.Context, httpClient *client.HTTPClient, done chan<- struct{}) {
+	defer close(done)
+
+	policy := newDaemonRestartPolicy(s.restartMaxAttempts())
+	var lastStatus *DaemonStatus
+	observe := func() {
+		status := s.daemonStatusSnapshot(ctx, httpClient)
+		status = s.maybeAutoRestartDaemon(ctx, httpClient, status, policy)
+		if status.Running {
+			s.setDaemonExpectedStopped(false)
+		}
+		if lastStatus == nil || *lastStatus != status {
+			s.emitDaemonStatus(status)
+			next := status
+			lastStatus = &next
+		}
+	}
+
+	observe()
+	ticker := time.NewTicker(s.watchInterval())
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			observe()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *Service) maybeAutoRestartDaemon(ctx context.Context, httpClient *client.HTTPClient, status DaemonStatus, policy *daemonRestartPolicy) DaemonStatus {
+	attempt, ok := policy.Next(status, status.AutoRestartEnabled, s.isDaemonExpectedStopped())
+	if !ok {
+		if policy.Exhausted() && status.AutoRestartEnabled && !status.Running {
+			status.RestartAttempt = policy.Attempts()
+			status.RestartMaxAttempts = policy.MaxAttempts()
+			status.AutoRestartExhausted = true
+		}
+		return status
+	}
+
+	maxAttempts := policy.MaxAttempts()
+	progress := status
+	progress.Restarting = true
+	progress.RestartAttempt = attempt
+	progress.RestartMaxAttempts = maxAttempts
+	progress.Error = fmt.Sprintf("daemon unavailable; auto-restart attempt %d of %d", attempt, maxAttempts)
+	s.emitDaemonStatus(progress)
+
+	opCtx, cancel := context.WithTimeout(ctx, s.controlTimeout())
+	defer cancel()
+	if _, err := s.supervisor.Ensure(opCtx, httpClient.BaseURL()); err != nil {
+		policy.RecordFailure()
+		failed := s.daemonStatusSnapshot(ctx, httpClient)
+		failed.RestartAttempt = attempt
+		failed.RestartMaxAttempts = maxAttempts
+		failed.AutoRestartExhausted = policy.Exhausted()
+		failed.Error = fmt.Sprintf("auto-restart attempt %d of %d failed: %v", attempt, maxAttempts, err)
+		return failed
+	}
+
+	recovered := s.daemonStatusSnapshot(ctx, httpClient)
+	policy.RecordRunning(recovered, recovered.AutoRestartEnabled)
+	recovered.RestartAttempt = 0
+	recovered.RestartMaxAttempts = 0
+	recovered.Restarting = false
+	recovered.AutoRestartExhausted = false
+	return recovered
+}
+
+func (s *Service) emitDaemonStatus(status DaemonStatus) {
+	if s.events == nil {
+		return
+	}
+	s.events.Emit(EventDaemonStatusChanged, status)
+}
+
+func (s *Service) watchInterval() time.Duration {
+	if s.daemonStatusInterval <= 0 {
+		return defaultDaemonStatusInterval
+	}
+	return s.daemonStatusInterval
+}
+
+func (s *Service) statusTimeout() time.Duration {
+	if s.daemonStatusTimeout <= 0 {
+		return defaultDaemonStatusTimeout
+	}
+	return s.daemonStatusTimeout
+}
+
+func (s *Service) controlTimeout() time.Duration {
+	if s.daemonControlTimeout <= 0 {
+		return daemon.DefaultControlTimeout()
+	}
+	return s.daemonControlTimeout
+}
+
+func (s *Service) restartMaxAttempts() int {
+	if s.daemonRestartMaxAttempts <= 0 {
+		return defaultDaemonRestartMaxAttempts
+	}
+	return s.daemonRestartMaxAttempts
+}
+
+func (s *Service) setDaemonExpectedStopped(expected bool) {
+	s.daemonWatchMu.Lock()
+	s.daemonExpectedStopped = expected
+	s.daemonWatchMu.Unlock()
+}
+
+func (s *Service) isDaemonExpectedStopped() bool {
+	s.daemonWatchMu.Lock()
+	defer s.daemonWatchMu.Unlock()
+	return s.daemonExpectedStopped
+}
+
+type daemonRestartPolicy struct {
+	maxAttempts int
+	attempts    int
+	candidate   bool
+	exhausted   bool
+}
+
+func newDaemonRestartPolicy(maxAttempts int) *daemonRestartPolicy {
+	if maxAttempts <= 0 {
+		maxAttempts = defaultDaemonRestartMaxAttempts
+	}
+	return &daemonRestartPolicy{maxAttempts: maxAttempts}
+}
+
+func (p *daemonRestartPolicy) Next(status DaemonStatus, enabled bool, expectedStopped bool) (int, bool) {
+	if status.Running {
+		p.RecordRunning(status, enabled)
+		return 0, false
+	}
+	if !enabled || expectedStopped {
+		p.candidate = false
+		p.attempts = 0
+		p.exhausted = false
+		return 0, false
+	}
+	if !p.candidate || p.attempts >= p.maxAttempts {
+		if p.candidate && p.attempts >= p.maxAttempts {
+			p.exhausted = true
+		}
+		return 0, false
+	}
+	p.attempts++
+	return p.attempts, true
+}
+
+func (p *daemonRestartPolicy) RecordRunning(status DaemonStatus, enabled bool) {
+	p.candidate = enabled && status.Managed
+	p.attempts = 0
+	p.exhausted = false
+}
+
+func (p *daemonRestartPolicy) RecordFailure() {
+	if p.attempts >= p.maxAttempts {
+		p.exhausted = true
+	}
+}
+
+func (p *daemonRestartPolicy) Attempts() int {
+	return p.attempts
+}
+
+func (p *daemonRestartPolicy) MaxAttempts() int {
+	return p.maxAttempts
+}
+
+func (p *daemonRestartPolicy) Exhausted() bool {
+	return p.exhausted
 }
 
 func (s *Service) ClearDaemon(ctx context.Context, req protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error) {

@@ -21,6 +21,7 @@ type Settings struct {
 	// quits. It defaults to true so sessions persist across app restarts; setting it false makes
 	// the app stop the daemon it started on quit.
 	KeepDaemonAlive          bool   `json:"keepDaemonAlive"`
+	AutoRestartManagedDaemon bool   `json:"autoRestartManagedDaemon,omitempty"`
 	HookLogEnabled           bool   `json:"hookLogEnabled"`
 	ClearHookLogAfterSession bool   `json:"clearHookLogAfterSession,omitempty"`
 	WorktrunkPath            string `json:"worktrunkPath,omitempty"`
