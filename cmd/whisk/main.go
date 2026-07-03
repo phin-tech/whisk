@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -110,7 +108,11 @@ func runDaemon(args []string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	controlTimeout := 5 * time.Second
+	if args[0] == "start" || args[0] == "stop" {
+		controlTimeout = daemon.DefaultControlTimeout()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), controlTimeout)
 	defer cancel()
 
 	switch args[0] {
@@ -127,7 +129,11 @@ func runDaemon(args []string) error {
 		fmt.Printf("whiskd running at %s\n", *baseURL)
 		return nil
 	case "stop":
-		return stop(ctx, *baseURL)
+		if err := daemon.Stop(ctx, *baseURL); err != nil {
+			return err
+		}
+		fmt.Printf("whiskd stopped at %s\n", *baseURL)
+		return nil
 	case "clear":
 		if !*yes {
 			return fmt.Errorf("daemon clear requires -yes")
@@ -223,29 +229,6 @@ func startLocalForward(ctx context.Context, baseURL string, req protocol.StartHT
 	return started, func(ctx context.Context) error {
 		return forwarder.Stop(ctx, started.ID)
 	}, nil
-}
-
-func stop(ctx context.Context, baseURL string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/v1/shutdown", bytes.NewReader(nil))
-	if err != nil {
-		return err
-	}
-	response, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("stop whiskd: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode >= 400 {
-		if response.StatusCode == http.StatusNotFound {
-			if err := daemon.StopPID(baseURL); err == nil {
-				fmt.Printf("whiskd stopped at %s\n", baseURL)
-				return nil
-			}
-		}
-		return fmt.Errorf("stop whiskd: %s", response.Status)
-	}
-	fmt.Printf("whiskd stopped at %s\n", baseURL)
-	return nil
 }
 
 func envOrDefault(name string, fallback string) string {
