@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +15,11 @@ import (
 
 	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/protocol"
+)
+
+var (
+	errDaemonStillHealthy = errors.New("daemon still answers health checks")
+	errProcessStillAlive  = errors.New("process still running")
 )
 
 const (
@@ -31,6 +37,69 @@ const (
 	compatibilityIncompatible
 )
 
+// StopPolicy holds every timing used by the daemon stop escalation ladder.
+type StopPolicy struct {
+	ShutdownRequestTimeout time.Duration
+	HealthCheckTimeout     time.Duration
+	HealthDownGrace        time.Duration
+	ProcessExitGrace       time.Duration
+	SignalGrace            time.Duration
+	KillGrace              time.Duration
+	PollInterval           time.Duration
+}
+
+// DefaultStopPolicy is intentionally generous enough for normal daemon drains: HTTP shutdown
+// should get the first chance to flush PTYs, transcripts, and sqlite before signals are used.
+func DefaultStopPolicy() StopPolicy {
+	return StopPolicy{
+		ShutdownRequestTimeout: 500 * time.Millisecond,
+		HealthCheckTimeout:     250 * time.Millisecond,
+		HealthDownGrace:        2 * time.Second,
+		ProcessExitGrace:       10 * time.Second,
+		SignalGrace:            2 * time.Second,
+		KillGrace:              time.Second,
+		PollInterval:           50 * time.Millisecond,
+	}
+}
+
+// DefaultControlTimeout gives UI/CLI callers a single timeout large enough to observe the default
+// stop policy before their parent context cancels the ladder.
+func DefaultControlTimeout() time.Duration {
+	policy := DefaultStopPolicy().normalized()
+	return policy.ShutdownRequestTimeout +
+		policy.HealthDownGrace +
+		policy.ProcessExitGrace +
+		policy.SignalGrace +
+		policy.KillGrace +
+		time.Second
+}
+
+func (policy StopPolicy) normalized() StopPolicy {
+	defaults := DefaultStopPolicy()
+	if policy.ShutdownRequestTimeout <= 0 {
+		policy.ShutdownRequestTimeout = defaults.ShutdownRequestTimeout
+	}
+	if policy.HealthCheckTimeout <= 0 {
+		policy.HealthCheckTimeout = defaults.HealthCheckTimeout
+	}
+	if policy.HealthDownGrace <= 0 {
+		policy.HealthDownGrace = defaults.HealthDownGrace
+	}
+	if policy.ProcessExitGrace <= 0 {
+		policy.ProcessExitGrace = defaults.ProcessExitGrace
+	}
+	if policy.SignalGrace <= 0 {
+		policy.SignalGrace = defaults.SignalGrace
+	}
+	if policy.KillGrace <= 0 {
+		policy.KillGrace = defaults.KillGrace
+	}
+	if policy.PollInterval <= 0 {
+		policy.PollInterval = defaults.PollInterval
+	}
+	return policy
+}
+
 // Ensure makes sure a compatible daemon is reachable at baseURL, starting one if needed.
 // It reports whether it started a new daemon (started == true) versus adopting one that was
 // already running (started == false). Callers use this to decide ownership: a daemon the app
@@ -47,24 +116,8 @@ func Ensure(ctx context.Context, baseURL string) (started bool, err error) {
 			return false, fmt.Errorf("check whiskd compatibility: %w", compatibilityErr)
 		}
 		log.Printf("whiskd at %s is incompatible (%v); shutting it down", baseURL, compatibilityErr)
-		// Capture the PID before StopPID removes the file so we can wait for the actual
-		// process to exit, not just for the HTTP server to stop answering.
-		existingPID, _ := readPIDFile(baseURL)
-		if err := shutdownExisting(ctx, baseURL); err != nil {
-			log.Printf("shutdown incompatible whiskd: %v", err)
-		}
-		_ = StopPID(baseURL)
-		if err := waitUntilDown(ctx, daemonClient); err != nil {
+		if err := Stop(ctx, baseURL); err != nil {
 			return false, fmt.Errorf("stop incompatible whiskd: %w", err)
-		}
-		// httpServer.Shutdown stops answering health immediately, but the process keeps
-		// draining (PTYs/NATS/sqlite) for some time afterwards. Wait for the process itself
-		// to be gone before spawning a replacement, otherwise the old and new daemons
-		// coexist on the same address.
-		if existingPID > 0 {
-			if err := waitForProcessExit(ctx, existingPID); err != nil {
-				return false, fmt.Errorf("stop incompatible whiskd: %w", err)
-			}
 		}
 	}
 
@@ -118,58 +171,97 @@ func Ensure(ctx context.Context, baseURL string) (started bool, err error) {
 	}
 }
 
-func StopPID(baseURL string) error {
-	pidPath, err := PIDPath(baseURL)
-	if err != nil {
-		return err
-	}
-	data, err := os.ReadFile(pidPath)
-	if err != nil {
-		return err
-	}
-	pid := 0
-	if _, err := fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &pid); err != nil {
-		return err
-	}
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return err
-	}
-	if err := process.Signal(os.Interrupt); err != nil {
-		// Interrupt is unsupported (e.g. Windows) or the process is already gone; force-kill.
-		if killErr := process.Kill(); killErr != nil {
-			return err
-		}
-	} else {
-		// Give the daemon a moment to shut down gracefully, then force-kill if it lingers so
-		// we never leave an orphaned process holding the port.
-		deadline := 2 * time.Second
-		interval := 50 * time.Millisecond
-		for waited := time.Duration(0); waited < deadline && processAlive(pid); waited += interval {
-			time.Sleep(interval)
-		}
-		if processAlive(pid) {
-			_ = process.Kill()
-		}
-	}
-	_ = os.Remove(pidPath)
-	return nil
+// Stop shuts down the daemon at baseURL whether or not this process started it.
+func Stop(ctx context.Context, baseURL string) error {
+	return StopWithPolicy(ctx, baseURL, DefaultStopPolicy())
 }
 
-// Stop shuts down the daemon at baseURL whether or not this process started it. It first asks the
-// daemon to shut itself down over HTTP, then signals the recorded PID as a fallback, and waits for
-// it to stop answering health checks. A daemon that is already down is treated as success.
-func Stop(ctx context.Context, baseURL string) error {
+// StopWithPolicy applies the single daemon stop ladder: request HTTP shutdown, wait for health to
+// go down, wait for the recorded process to exit, escalate to SIGTERM, and use SIGKILL only last.
+func StopWithPolicy(ctx context.Context, baseURL string, policy StopPolicy) error {
+	policy = policy.normalized()
 	daemonClient := client.NewHTTP(baseURL, nil)
-	if healthCheck(ctx, daemonClient) != nil {
-		_ = StopPID(baseURL) // clean up a stale PID file if one is lying around
+
+	pid, pidErr := readPIDFile(baseURL)
+	pidKnown := pidErr == nil && pid > 0
+	if pidErr != nil && !errors.Is(pidErr, os.ErrNotExist) {
+		if _, pathErr := PIDPath(baseURL); pathErr != nil {
+			return pathErr
+		}
+		log.Printf("read whiskd pid file for %s: %v", baseURL, pidErr)
+	}
+
+	healthy := healthCheckWithPolicy(ctx, daemonClient, policy) == nil
+	waitForGracefulProcessExit := !healthy
+	var shutdownErr error
+	if healthy {
+		if err := shutdownExistingWithPolicy(ctx, baseURL, policy); err != nil {
+			shutdownErr = err
+			log.Printf("shutdown whiskd at %s: %v", baseURL, err)
+			if !pidKnown {
+				return fmt.Errorf("stop whiskd: %w", err)
+			}
+		}
+		if err := waitUntilDownWithPolicy(ctx, daemonClient, policy); err != nil {
+			if !errors.Is(err, errDaemonStillHealthy) {
+				return fmt.Errorf("wait for whiskd health down: %w", err)
+			}
+			log.Printf("whiskd at %s still answers health after shutdown request", baseURL)
+			if !pidKnown {
+				if shutdownErr != nil {
+					return fmt.Errorf("stop whiskd: %w", shutdownErr)
+				}
+				return fmt.Errorf("stop whiskd: %w", err)
+			}
+		} else {
+			waitForGracefulProcessExit = true
+		}
+	}
+
+	if !pidKnown {
 		return nil
 	}
-	if err := shutdownExisting(ctx, baseURL); err != nil {
-		log.Printf("shutdown whiskd at %s: %v", baseURL, err)
+
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("find whiskd process %d: %w", pid, err)
 	}
-	_ = StopPID(baseURL)
-	return waitUntilDown(ctx, daemonClient)
+	if waitForGracefulProcessExit {
+		if err := waitForProcessExitWithPolicy(ctx, pid, policy.ProcessExitGrace, policy); err == nil {
+			removePIDFile(baseURL)
+			return nil
+		} else if !errors.Is(err, errProcessStillAlive) {
+			return fmt.Errorf("wait for whiskd process exit: %w", err)
+		}
+	} else if !processAlive(pid) {
+		removePIDFile(baseURL)
+		return nil
+	}
+
+	if waitForGracefulProcessExit {
+		log.Printf("whiskd process %d still running after %s; sending SIGTERM", pid, policy.ProcessExitGrace)
+	} else {
+		log.Printf("whiskd process %d still running while health is up; sending SIGTERM", pid)
+	}
+	if err := signalProcessTerm(process); err != nil && processAlive(pid) {
+		log.Printf("SIGTERM whiskd process %d: %v", pid, err)
+	}
+	if err := waitForProcessExitWithPolicy(ctx, pid, policy.SignalGrace, policy); err == nil {
+		removePIDFile(baseURL)
+		return nil
+	} else if !errors.Is(err, errProcessStillAlive) {
+		return fmt.Errorf("wait for whiskd process after SIGTERM: %w", err)
+	}
+
+	log.Printf("whiskd process %d still running after SIGTERM; sending SIGKILL", pid)
+	if err := process.Kill(); err != nil && processAlive(pid) {
+		return fmt.Errorf("SIGKILL whiskd process %d: %w", pid, err)
+	}
+	if err := waitForProcessExitWithPolicy(ctx, pid, policy.KillGrace, policy); err != nil && !errors.Is(err, errProcessStillAlive) {
+		return fmt.Errorf("wait for whiskd process after SIGKILL: %w", err)
+	}
+	removePIDFile(baseURL)
+	return nil
 }
 
 // IsManaged reports whether the daemon at baseURL was started by this machine's whisk app, i.e. a
@@ -199,8 +291,16 @@ func readPIDFile(baseURL string) (int, error) {
 	return pid, nil
 }
 
-func waitForProcessExit(ctx context.Context, pid int) error {
-	ticker := time.NewTicker(50 * time.Millisecond)
+func waitForProcessExitWithPolicy(ctx context.Context, pid int, grace time.Duration, policy StopPolicy) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !processAlive(pid) {
+		return nil
+	}
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	ticker := time.NewTicker(policy.PollInterval)
 	defer ticker.Stop()
 	for {
 		if !processAlive(pid) {
@@ -208,6 +308,11 @@ func waitForProcessExit(ctx context.Context, pid int) error {
 		}
 		select {
 		case <-ticker.C:
+		case <-timer.C:
+			if !processAlive(pid) {
+				return nil
+			}
+			return errProcessStillAlive
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -231,8 +336,19 @@ func writePIDFile(baseURL string, pid int) error {
 	return os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", pid)), 0o600)
 }
 
+func removePIDFile(baseURL string) {
+	pidPath, err := PIDPath(baseURL)
+	if err == nil {
+		_ = os.Remove(pidPath)
+	}
+}
+
 func healthCheck(ctx context.Context, daemonClient *client.HTTPClient) error {
-	checkCtx, cancel := context.WithTimeout(ctx, compatibilityProbeTimeout)
+	return healthCheckWithPolicy(ctx, daemonClient, DefaultStopPolicy())
+}
+
+func healthCheckWithPolicy(ctx context.Context, daemonClient *client.HTTPClient, policy StopPolicy) error {
+	checkCtx, cancel := context.WithTimeout(ctx, policy.HealthCheckTimeout)
 	defer cancel()
 	return daemonClient.Health(checkCtx)
 }
@@ -291,8 +407,8 @@ func compatibilityCheckWithRetry(ctx context.Context, daemonClient *client.HTTPC
 	}
 }
 
-func shutdownExisting(ctx context.Context, baseURL string) error {
-	shutdownCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+func shutdownExistingWithPolicy(ctx context.Context, baseURL string, policy StopPolicy) error {
+	shutdownCtx, cancel := context.WithTimeout(ctx, policy.ShutdownRequestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(shutdownCtx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/v1/shutdown", nil)
 	if err != nil {
@@ -309,15 +425,28 @@ func shutdownExisting(ctx context.Context, baseURL string) error {
 	return nil
 }
 
-func waitUntilDown(ctx context.Context, daemonClient *client.HTTPClient) error {
-	ticker := time.NewTicker(50 * time.Millisecond)
+func waitUntilDownWithPolicy(ctx context.Context, daemonClient *client.HTTPClient, policy StopPolicy) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	timer := time.NewTimer(policy.HealthDownGrace)
+	defer timer.Stop()
+	ticker := time.NewTicker(policy.PollInterval)
 	defer ticker.Stop()
 	for {
-		if healthCheck(ctx, daemonClient) != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if healthCheckWithPolicy(ctx, daemonClient, policy) != nil {
 			return nil
 		}
 		select {
 		case <-ticker.C:
+		case <-timer.C:
+			if healthCheckWithPolicy(ctx, daemonClient, policy) != nil {
+				return nil
+			}
+			return errDaemonStillHealthy
 		case <-ctx.Done():
 			return ctx.Err()
 		}

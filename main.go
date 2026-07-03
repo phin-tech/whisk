@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"runtime"
-	"time"
 
 	"github.com/phin-tech/whisk/internal/appmenu"
 	"github.com/phin-tech/whisk/internal/appsettings"
@@ -29,7 +28,7 @@ func main() {
 	}
 
 	daemonURL := envOrDefault("WHISKD_URL", "http://127.0.0.1:8787")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), daemon.DefaultControlTimeout())
 	defer cancel()
 	startedDaemon, err := daemon.Ensure(ctx, daemonURL)
 	if err != nil {
@@ -66,7 +65,9 @@ func main() {
 			if loadErr != nil || settings.KeepDaemonAlive {
 				return
 			}
-			_ = daemon.StopPID(daemonURL)
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), daemon.DefaultControlTimeout())
+			defer stopCancel()
+			_ = daemon.Stop(stopCtx, daemonURL)
 		},
 	})
 

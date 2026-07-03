@@ -21,3 +21,7 @@ func processAlive(pid int) bool {
 	}
 	return process.Signal(syscall.Signal(0)) == nil
 }
+
+func signalProcessTerm(process *os.Process) error {
+	return process.Signal(syscall.SIGTERM)
+}
