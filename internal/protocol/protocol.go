@@ -250,6 +250,7 @@ type AgentBridgeHookRequest struct {
 	Token            string                  `json:"token"`
 	Provider         string                  `json:"provider"`
 	EventName        string                  `json:"eventName"`
+	HookProtocol     int                     `json:"hookProtocol,omitempty"`
 	ToolName         string                  `json:"toolName,omitempty"`
 	ToolInput        map[string]any          `json:"toolInput,omitempty"`
 	ToolOutput       string                  `json:"toolOutput,omitempty"`
@@ -361,6 +362,7 @@ type ResolveAgentPromptRequest struct {
 
 type AgentHookIntegration struct {
 	Provider         string `json:"provider"`
+	State            string `json:"state"`
 	Status           string `json:"status"`
 	InstalledVersion string `json:"installedVersion,omitempty"`
 	LatestVersion    string `json:"latestVersion"`

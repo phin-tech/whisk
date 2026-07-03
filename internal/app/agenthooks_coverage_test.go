@@ -122,6 +122,37 @@ func TestRuntimeAgentHookLogWritesNormalizedQuestions(t *testing.T) {
 	}
 }
 
+func TestRuntimeRecordAgentHookEventTruncatesRawPayload(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	if _, err := runtime.RecordAgentHookEvent(context.Background(), app.AgentBridgeHookRequest{
+		Provider:  "claude",
+		EventName: "Notification",
+		Message:   strings.Repeat("m", 20*1024),
+		RawPayload: map[string]any{
+			"body": strings.Repeat("x", 20*1024),
+		},
+	}); err != nil {
+		t.Fatalf("record event: %v", err)
+	}
+
+	events, err := runtime.ListAgentBridgeEvents(context.Background(), app.ListAgentBridgeEventsRequest{})
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events = %#v", events)
+	}
+	body, _ := events[0].Raw["body"].(string)
+	if len(body) >= 20*1024 || !strings.Contains(body, "[truncated]") {
+		t.Fatalf("raw body was not truncated: len=%d suffix=%q", len(body), tail(body, 32))
+	}
+	if len(events[0].Message) >= 20*1024 || !strings.Contains(events[0].Message, "[truncated]") {
+		t.Fatalf("message was not truncated: len=%d suffix=%q", len(events[0].Message), tail(events[0].Message, 32))
+	}
+}
+
 func TestRuntimeAgentBridgeListsAndResolveError(t *testing.T) {
 	runtime := app.NewRuntime(app.RuntimeConfig{})
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
@@ -288,6 +319,62 @@ func toolCallHook(bridgeID, token string) app.AgentBridgeHookRequest {
 		ToolName:  "Bash",
 		ToolInput: map[string]any{"command": "ls"},
 	}
+}
+
+func tail(value string, max int) string {
+	if len(value) <= max {
+		return value
+	}
+	return value[len(value)-max:]
+}
+
+func TestRuntimeAgentBridgeHookLogsProtocolMismatch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	runtime, bridgeID, token := launchAgentBridge(t, time.Second)
+	ctx := context.Background()
+
+	if _, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+		BridgeID:     bridgeID,
+		Token:        token,
+		Provider:     "claude",
+		EventName:    "Notification",
+		HookProtocol: agentbridge.HookProtocolVersion + 1,
+		RawPayload:   map[string]any{"hook_event_name": "Notification"},
+	}); err != nil {
+		t.Fatalf("hook: %v", err)
+	}
+
+	status, err := runtime.AgentHookLogStatus(ctx)
+	if err != nil {
+		t.Fatalf("hook log status: %v", err)
+	}
+	file, err := os.Open(status.Path)
+	if err != nil {
+		t.Fatalf("open log: %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var entry agenthooklog.Entry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			t.Fatalf("parse log line: %v", err)
+		}
+		if entry.Result != "hook_protocol_mismatch" {
+			continue
+		}
+		if entry.Raw["warning"] != "hook_protocol_mismatch" ||
+			entry.Raw["expectedProtocol"] != float64(agentbridge.HookProtocolVersion) ||
+			entry.Raw["receivedProtocol"] != float64(agentbridge.HookProtocolVersion+1) {
+			t.Fatalf("mismatch log raw = %#v", entry.Raw)
+		}
+		return
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan log: %v", err)
+	}
+	t.Fatalf("missing hook protocol mismatch log at %s", status.Path)
 }
 
 func launchPlanningAgentBridge(t *testing.T) (*app.Runtime, string, string) {

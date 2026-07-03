@@ -32,6 +32,7 @@ describe("agent hook integration view state", () => {
       [],
       {
         provider: "",
+        state: "",
         status: "current",
         latestVersion: "1.1.0",
         helperPath: "/helper",
@@ -43,6 +44,7 @@ describe("agent hook integration view state", () => {
 
     expect(agentHookIntegrationFor(integrations, "claude")).toMatchObject({
       provider: "claude",
+      state: "installed",
       status: "current",
       helperPath: "/helper",
     });
@@ -53,6 +55,7 @@ describe("agent hook integration view state", () => {
       [
         {
           provider: "claude",
+          state: "not_installed",
           status: "missing",
           latestVersion: "",
           helperPath: "",
@@ -62,6 +65,7 @@ describe("agent hook integration view state", () => {
       ],
       {
         provider: "claude",
+        state: "installed",
         status: "current",
         latestVersion: "1.1.0",
         helperPath: "/helper",
@@ -72,7 +76,16 @@ describe("agent hook integration view state", () => {
     );
 
     expect(integrations).toHaveLength(1);
+    expect(integrations[0].state).toBe("installed");
     expect(integrations[0].status).toBe("current");
+  });
+
+  it("defaults missing providers to not installed state", () => {
+    expect(agentHookIntegrationFor([], "codex")).toMatchObject({
+      provider: "codex",
+      state: "not_installed",
+      status: "missing",
+    });
   });
 
   it("formats debug hook events newest first", () => {

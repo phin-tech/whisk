@@ -5666,6 +5666,10 @@
           "eventName": {
             "type": "string"
           },
+          "hookProtocol": {
+            "format": "int64",
+            "type": "integer"
+          },
           "message": {
             "type": "string"
           },
@@ -5738,12 +5742,16 @@
           "provider": {
             "type": "string"
           },
+          "state": {
+            "type": "string"
+          },
           "status": {
             "type": "string"
           }
         },
         "required": [
           "provider",
+          "state",
           "status",
           "latestVersion",
           "helperPath",

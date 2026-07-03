@@ -632,6 +632,32 @@ func TestHTTPServerAgentHookLogAndBridgeRoutes(t *testing.T) {
 	}
 }
 
+func TestHTTPServerAgentHookReceiverRejectsOversizedPayload(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	handler := server.NewHTTP(runtime, server.WithAgentHookReceiverLimits(128, time.Second))
+
+	body := `{"provider":"claude","eventName":"Notification","rawPayload":{"body":"` + strings.Repeat("x", 512) + `"}}`
+	assertStatus(t, handler, http.MethodPost, "/v1/agent-hook-events", body, http.StatusRequestEntityTooLarge)
+}
+
+func TestHTTPServerAgentHookReceiverTimesOutSlowBody(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	handler := server.NewHTTP(runtime, server.WithAgentHookReceiverLimits(1024, 10*time.Millisecond))
+	body := newBlockingReadCloser()
+	req := httptest.NewRequest(http.MethodPost, "/v1/agent-hook-events", nil)
+	req.Body = body
+	recorder := httptest.NewRecorder()
+
+	started := time.Now()
+	handler.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusRequestTimeout {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("timeout took too long: %v", elapsed)
+	}
+}
+
 func TestHTTPServerAgentBridgeApprovalLifecycle(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 	backend := newFakePTYBackend()
@@ -1351,6 +1377,25 @@ func newFakePTYBackend() *fakePTYBackend {
 		outputs: map[string][]byte{},
 		spawns:  map[string]app.SpawnPTYRequest{},
 	}
+}
+
+type blockingReadCloser struct {
+	once sync.Once
+	done chan struct{}
+}
+
+func newBlockingReadCloser() *blockingReadCloser {
+	return &blockingReadCloser{done: make(chan struct{})}
+}
+
+func (b *blockingReadCloser) Read([]byte) (int, error) {
+	<-b.done
+	return 0, io.EOF
+}
+
+func (b *blockingReadCloser) Close() error {
+	b.once.Do(func() { close(b.done) })
+	return nil
 }
 
 func (b *fakePTYBackend) Spawn(_ context.Context, req app.SpawnPTYRequest) (app.PTYRecord, error) {

@@ -22,6 +22,7 @@ export function normalizeAgentHookIntegration(
   return {
     ...integration,
     provider: integration.provider || provider,
+    state: integration.state || stateForStatus(integration.status),
   };
 }
 
@@ -44,6 +45,7 @@ export function agentHookIntegrationFor(
   return (
     integrations.find((integration) => integration.provider === provider) ?? {
       provider,
+      state: "not_installed",
       status: "missing",
       latestVersion: "",
       helperPath: "",
@@ -51,6 +53,13 @@ export function agentHookIntegrationFor(
       manifestPath: "",
     }
   );
+}
+
+function stateForStatus(status: string) {
+  if (status === "current") return "installed";
+  if (["modified", "outdated", "untrusted"].includes(status)) return "partial";
+  if (status === "unavailable") return "error";
+  return "not_installed";
 }
 
 export function agentHookDebugRows(events: AgentBridgeEvent[]) {

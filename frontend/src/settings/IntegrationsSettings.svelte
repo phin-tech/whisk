@@ -82,18 +82,26 @@
   }
 
   function isInstalled(integration: AgentHookIntegration) {
+    if (integration.state) {
+      return integration.state === "installed" || integration.state === "partial";
+    }
     return ["current", "modified", "outdated", "untrusted"].includes(integration.status);
   }
 
-  function statusClass(status: string) {
-    if (status === "current") return "border-green/35 bg-green/10 text-green";
-    if (status === "untrusted" || status === "outdated") {
+  function statusClass(integration: AgentHookIntegration) {
+    const state = integration.state || "";
+    if (state === "installed" || integration.status === "current") return "border-green/35 bg-green/10 text-green";
+    if (state === "partial" || integration.status === "untrusted" || integration.status === "outdated") {
       return "border-amber/35 bg-amber/10 text-amber";
     }
-    if (status === "modified" || status === "unavailable") {
+    if (state === "error" || integration.status === "modified" || integration.status === "unavailable") {
       return "border-red/30 bg-red/10 text-red";
     }
     return "border-border bg-bg-deep text-text-muted";
+  }
+
+  function statusLabel(integration: AgentHookIntegration) {
+    return integration.state || (integration.status === "missing" ? "not_installed" : integration.status || "not_installed");
   }
 
   function installLabel(status: string) {
@@ -148,10 +156,10 @@
           <span class="block text-[13px] font-medium text-text-primary">{provider.label}</span>
           <span
             class="mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider {statusClass(
-              integration.status,
+              integration,
             )}"
           >
-            {integration.status || "missing"}
+            {statusLabel(integration)}
           </span>
         </div>
       </div>
@@ -159,6 +167,11 @@
       <div class="min-w-0 space-y-1 text-[11px] text-text-muted">
         {#if integration.detail}
           <div class="text-text-secondary">{integration.detail}</div>
+        {/if}
+        {#if integration.status && integration.status !== integration.state}
+          <div>
+            Status <span class="font-mono text-text-secondary">{integration.status}</span>
+          </div>
         {/if}
         <div class="truncate">
           Config <span class="font-mono text-text-secondary">{integration.configPath || "not checked"}</span>

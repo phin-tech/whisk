@@ -31,6 +31,7 @@ class AgentBridgeHookRequest:
         action (str | Unset):
         decision (AgentBridgeHookDecision | Unset):
         elicitation_id (str | Unset):
+        hook_protocol (int | Unset):
         message (str | Unset):
         notification_type (str | Unset):
         pty_id (str | Unset):
@@ -47,6 +48,7 @@ class AgentBridgeHookRequest:
     action: str | Unset = UNSET
     decision: AgentBridgeHookDecision | Unset = UNSET
     elicitation_id: str | Unset = UNSET
+    hook_protocol: int | Unset = UNSET
     message: str | Unset = UNSET
     notification_type: str | Unset = UNSET
     pty_id: str | Unset = UNSET
@@ -71,6 +73,8 @@ class AgentBridgeHookRequest:
             decision = self.decision.to_dict()
 
         elicitation_id = self.elicitation_id
+
+        hook_protocol = self.hook_protocol
 
         message = self.message
 
@@ -107,6 +111,8 @@ class AgentBridgeHookRequest:
             field_dict["decision"] = decision
         if elicitation_id is not UNSET:
             field_dict["elicitationId"] = elicitation_id
+        if hook_protocol is not UNSET:
+            field_dict["hookProtocol"] = hook_protocol
         if message is not UNSET:
             field_dict["message"] = message
         if notification_type is not UNSET:
@@ -154,6 +160,8 @@ class AgentBridgeHookRequest:
 
         elicitation_id = d.pop("elicitationId", UNSET)
 
+        hook_protocol = d.pop("hookProtocol", UNSET)
+
         message = d.pop("message", UNSET)
 
         notification_type = d.pop("notificationType", UNSET)
@@ -187,6 +195,7 @@ class AgentBridgeHookRequest:
             action=action,
             decision=decision,
             elicitation_id=elicitation_id,
+            hook_protocol=hook_protocol,
             message=message,
             notification_type=notification_type,
             pty_id=pty_id,

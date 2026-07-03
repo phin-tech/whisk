@@ -283,6 +283,7 @@ export class AgentBridgeHookDecision {
 
 export class AgentHookIntegration {
     "provider": string;
+    "state": string;
     "status": string;
     "installedVersion"?: string;
     "latestVersion": string;
@@ -295,6 +296,9 @@ export class AgentHookIntegration {
     constructor($$source: Partial<AgentHookIntegration> = {}) {
         if (!("provider" in $$source)) {
             this["provider"] = "";
+        }
+        if (!("state" in $$source)) {
+            this["state"] = "";
         }
         if (!("status" in $$source)) {
             this["status"] = "";

@@ -15,6 +15,9 @@ const (
 	ProviderCodex  Provider = "codex"
 )
 
+// HookProtocolVersion changes only when the installed hook request wire format changes.
+const HookProtocolVersion = 1
+
 type Phase string
 
 const (
