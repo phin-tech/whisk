@@ -3,6 +3,7 @@
 package daemon
 
 import (
+	"os"
 	"os/exec"
 	"syscall"
 )
@@ -16,4 +17,8 @@ func detach(cmd *exec.Cmd) {
 // this preserves the pre-existing Windows behaviour.
 func processAlive(_ int) bool {
 	return false
+}
+
+func signalProcessTerm(process *os.Process) error {
+	return process.Kill()
 }
