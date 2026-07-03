@@ -3,9 +3,13 @@
 package daemon
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
+
+	"golang.org/x/sys/windows"
 )
 
 func detach(cmd *exec.Cmd) {
@@ -21,4 +25,23 @@ func processAlive(_ int) bool {
 
 func signalProcessTerm(process *os.Process) error {
 	return process.Kill()
+}
+
+func processStartTime(pid int) (string, error) {
+	if pid <= 0 {
+		return "", fmt.Errorf("pid must be positive")
+	}
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return "", err
+	}
+	defer windows.CloseHandle(handle)
+	var created windows.Filetime
+	var exited windows.Filetime
+	var kernel windows.Filetime
+	var user windows.Filetime
+	if err := windows.GetProcessTimes(handle, &created, &exited, &kernel, &user); err != nil {
+		return "", err
+	}
+	return time.Unix(0, created.Nanoseconds()).UTC().Format(time.RFC3339Nano), nil
 }

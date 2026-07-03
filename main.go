@@ -30,8 +30,7 @@ func main() {
 	daemonURL := envOrDefault("WHISKD_URL", "http://127.0.0.1:8787")
 	ctx, cancel := context.WithTimeout(context.Background(), daemon.DefaultControlTimeout())
 	defer cancel()
-	startedDaemon, err := daemon.Ensure(ctx, daemonURL)
-	if err != nil {
+	if _, err := daemon.Ensure(ctx, daemonURL); err != nil {
 		log.Fatal(err)
 	}
 
@@ -54,11 +53,10 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 		// Leave the daemon running by default so sessions persist across app restarts. Only stop
-		// it when the user opted out via the KeepDaemonAlive preference, and only if this process
-		// started it — a daemon adopted from elsewhere (e.g. `whisk daemon run` in a dev terminal)
-		// is owned by whoever launched it, so we never kill that one on quit.
+		// it when the user opted out via the KeepDaemonAlive preference and the current state file
+		// still identifies a daemon this app owns.
 		OnShutdown: func() {
-			if !startedDaemon {
+			if !daemon.IsManaged(daemonURL) {
 				return
 			}
 			settings, loadErr := settingsStore.Load(context.Background())

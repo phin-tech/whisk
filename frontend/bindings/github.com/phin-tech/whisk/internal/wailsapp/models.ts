@@ -20,8 +20,8 @@ export class DaemonStatus {
     "address": string;
 
     /**
-     * Managed is true when this app started the daemon (a live PID file names it), as opposed to
-     * one started independently (e.g. `whisk daemon run`).
+     * Managed is true when this app started the daemon (the state file matches its live process),
+     * as opposed to one started independently (e.g. `whisk daemon run`).
      */
     "managed": boolean;
 

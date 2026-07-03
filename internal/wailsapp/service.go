@@ -127,8 +127,8 @@ type DaemonStatus struct {
 	Running bool `json:"running"`
 	// Address is the daemon URL (e.g. http://127.0.0.1:8787).
 	Address string `json:"address"`
-	// Managed is true when this app started the daemon (a live PID file names it), as opposed to
-	// one started independently (e.g. `whisk daemon run`).
+	// Managed is true when this app started the daemon (the state file matches its live process),
+	// as opposed to one started independently (e.g. `whisk daemon run`).
 	Managed bool `json:"managed"`
 	// APIVersion and GitSHA come from the daemon's compatibility endpoint when it is reachable.
 	APIVersion int    `json:"apiVersion"`
