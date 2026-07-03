@@ -8,6 +8,13 @@ import datetime as dt
 
 from whiskd_client.api.sessions import list_sessions
 from whiskd_client.api.system import clear_daemon, get_compatibility
+from whiskd_client.api.mail import (
+    list_mail,
+    mark_mail_read,
+    next_mail,
+    reply_mail,
+    send_mail,
+)
 from whiskd_client.api.workitems import (
     answer_question,
     approve_done,
@@ -44,9 +51,15 @@ from whiskd_client.models import (
     CreateWorkItemRequest,
     AddProjectAttachmentRequest,
     GateReport,
+    MailAddress,
+    MailMessage,
+    MarkMailReadRequest,
+    NextMailResponse,
     Project,
     ProjectContext,
     Question,
+    ReplyMailRequest,
+    SendMailRequest,
     StartExecutionRequest,
     StartPlanningRequest,
     SubmitDraftPlanRequest,
@@ -92,6 +105,55 @@ def test_daemon_clear_resets_work_item_state(base_url, tmp_path):
     assert cleared.work_items_cleared >= 1
 
     assert list_work_items.sync(client=client) == []
+
+
+def test_mailbox_round_trip(base_url):
+    client = local_client(base_url=base_url)
+
+    sent = send_mail.sync(
+        client=client,
+        body=SendMailRequest(
+            from_=MailAddress(kind="pty", id="pty_py"),
+            to=[MailAddress(kind="run", id="run_py")],
+            type_="status",
+            priority="high",
+            subject="Python SDK mailbox",
+            body="hello from python",
+        ),
+    )
+    assert isinstance(sent, MailMessage), f"unexpected: {sent!r}"
+    assert sent.id
+
+    listed = list_mail.sync(client=client, to="run:run_py", unread=True, types="status")
+    assert isinstance(listed, list), f"unexpected: {listed!r}"
+    assert len(listed) == 1
+    assert listed[0].id == sent.id
+
+    next_result = next_mail.sync(client=client, to="run:run_py", types="status", timeout_ms=0)
+    assert isinstance(next_result, NextMailResponse), f"unexpected: {next_result!r}"
+    assert next_result.message is not None
+    assert next_result.message.id == sent.id
+
+    read = mark_mail_read.sync(
+        sent.id,
+        client=client,
+        body=MarkMailReadRequest(to=MailAddress(kind="run", id="run_py")),
+    )
+    assert isinstance(read, MailMessage), f"unexpected: {read!r}"
+    assert read.recipients is not None
+    assert read.recipients[0].read_at is not None
+
+    reply = reply_mail.sync(
+        sent.id,
+        client=client,
+        body=ReplyMailRequest(
+            from_=MailAddress(kind="run", id="run_py"),
+            body="reply from python",
+        ),
+    )
+    assert isinstance(reply, MailMessage), f"unexpected: {reply!r}"
+    assert reply.reply_to_id == sent.id
+    assert reply.thread_id == sent.id
 
 
 def test_work_item_round_trip(base_url, tmp_path):

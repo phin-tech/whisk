@@ -423,6 +423,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List daemon-owned mailbox messages */
+        get: operations["listMail"];
+        put?: never;
+        /** Send a daemon-owned mailbox message */
+        post: operations["sendMail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the next unread mailbox message, optionally waiting */
+        get: operations["nextMail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/{mailID}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a mailbox message read */
+        post: operations["markMailRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/{mailID}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reply to a mailbox message */
+        post: operations["replyMail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/onboarding": {
         parameters: {
             query?: never;
@@ -2131,8 +2200,41 @@ export interface components {
             overridePath?: string;
             repoPath: string;
         };
+        MailAddress: {
+            id: string;
+            kind: string;
+        };
+        MailMessage: {
+            body?: string;
+            /** Format: date-time */
+            createdAt: string;
+            dispatchId?: string;
+            from: components["schemas"]["MailAddress"];
+            id: string;
+            /** Format: byte */
+            payload?: string;
+            priority: string;
+            projectId?: string;
+            ptyId?: string;
+            recipients: components["schemas"]["MailRecipient"][] | null;
+            replyToId?: string;
+            runId?: string;
+            sessionId?: string;
+            subject?: string;
+            threadId?: string;
+            type: string;
+            workItemId?: string;
+        };
+        MailRecipient: {
+            address: components["schemas"]["MailAddress"];
+            /** Format: date-time */
+            readAt?: string | null;
+        };
         MarkAgentBridgeEventReadRequest: {
             id: string;
+        };
+        MarkMailReadRequest: {
+            to?: components["schemas"]["MailAddress"] | null;
         };
         MarkStatusEventReadRequest: {
             id: string;
@@ -2153,6 +2255,10 @@ export interface components {
         NextEventResponse: {
             event: components["schemas"]["RuntimeEvent"];
             missed: boolean;
+        };
+        NextMailResponse: {
+            message?: components["schemas"]["MailMessage"] | null;
+            timeout?: boolean;
         };
         OnboardingApplyRequest: {
             itemIds: string[] | null;
@@ -2395,6 +2501,15 @@ export interface components {
             repoPath: string;
             worktreePath: string;
         };
+        ReplyMailRequest: {
+            body?: string;
+            from: components["schemas"]["MailAddress"];
+            /** Format: byte */
+            payload?: string;
+            priority?: string;
+            subject?: string;
+            type?: string;
+        };
         ReportStatusRequest: {
             actor?: string;
             kind: string;
@@ -2456,6 +2571,24 @@ export interface components {
             /** Format: int64 */
             seq: number;
             type: string;
+        };
+        SendMailRequest: {
+            body?: string;
+            dispatchId?: string;
+            from: components["schemas"]["MailAddress"];
+            /** Format: byte */
+            payload?: string;
+            priority?: string;
+            projectId?: string;
+            ptyId?: string;
+            replyToId?: string;
+            runId?: string;
+            sessionId?: string;
+            subject?: string;
+            threadId?: string;
+            to: components["schemas"]["MailAddress"][] | null;
+            type: string;
+            workItemId?: string;
         };
         Session: {
             id: string;
@@ -3687,6 +3820,181 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listMail: {
+        parameters: {
+            query?: {
+                to?: string;
+                unread?: boolean;
+                types?: string;
+                projectId?: string;
+                workItemId?: string;
+                runId?: string;
+                threadId?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessage"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sendMail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMailRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessage"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    nextMail: {
+        parameters: {
+            query?: {
+                to?: string;
+                types?: string;
+                timeoutMs?: number;
+                projectId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextMailResponse"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    markMailRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mailID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkMailReadRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessage"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    replyMail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mailID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyMailRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessage"];
+                };
             };
             /** @description error */
             default: {

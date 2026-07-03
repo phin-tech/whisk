@@ -66,11 +66,16 @@ from .launch_execution_request import LaunchExecutionRequest
 from .launch_work_item_run_request import LaunchWorkItemRunRequest
 from .layout_node import LayoutNode
 from .list_worktrees_request import ListWorktreesRequest
+from .mail_address import MailAddress
+from .mail_message import MailMessage
+from .mail_recipient import MailRecipient
 from .mark_agent_bridge_event_read_request import MarkAgentBridgeEventReadRequest
+from .mark_mail_read_request import MarkMailReadRequest
 from .mark_status_event_read_request import MarkStatusEventReadRequest
 from .metadata_value import MetadataValue
 from .move_work_item_request import MoveWorkItemRequest
 from .next_event_response import NextEventResponse
+from .next_mail_response import NextMailResponse
 from .onboarding_apply_request import OnboardingApplyRequest
 from .onboarding_status import OnboardingStatus
 from .output_snapshot import OutputSnapshot
@@ -102,6 +107,7 @@ from .ready_work_item import ReadyWorkItem
 from .ready_work_summary import ReadyWorkSummary
 from .registry_plugin import RegistryPlugin
 from .remove_worktree_request import RemoveWorktreeRequest
+from .reply_mail_request import ReplyMailRequest
 from .report_status_request import ReportStatusRequest
 from .report_status_response import ReportStatusResponse
 from .resize_pty_request import ResizePTYRequest
@@ -117,6 +123,7 @@ from .run_plugin_project_attachment_template_request_values import (
     RunPluginProjectAttachmentTemplateRequestValues,
 )
 from .runtime_event import RuntimeEvent
+from .send_mail_request import SendMailRequest
 from .session import Session
 from .session_panes_type_0 import SessionPanesType0
 from .session_window import SessionWindow
@@ -245,11 +252,16 @@ __all__ = (
     "LaunchWorkItemRunRequest",
     "LayoutNode",
     "ListWorktreesRequest",
+    "MailAddress",
+    "MailMessage",
+    "MailRecipient",
     "MarkAgentBridgeEventReadRequest",
+    "MarkMailReadRequest",
     "MarkStatusEventReadRequest",
     "MetadataValue",
     "MoveWorkItemRequest",
     "NextEventResponse",
+    "NextMailResponse",
     "OnboardingApplyRequest",
     "OnboardingStatus",
     "OutputSnapshot",
@@ -279,6 +291,7 @@ __all__ = (
     "ReadyWorkSummary",
     "RegistryPlugin",
     "RemoveWorktreeRequest",
+    "ReplyMailRequest",
     "ReportStatusRequest",
     "ReportStatusResponse",
     "ResizePTYRequest",
@@ -290,6 +303,7 @@ __all__ = (
     "RunPluginProjectAttachmentTemplateRequest",
     "RunPluginProjectAttachmentTemplateRequestValues",
     "RuntimeEvent",
+    "SendMailRequest",
     "Session",
     "SessionPanesType0",
     "SessionWindow",

@@ -43,6 +43,7 @@ var (
 	apiGateList                 = []GateReport(nil)
 	apiWorkflowEventList        = []WorkflowEvent(nil)
 	apiStatusList               = []StatusEvent(nil)
+	apiMailList                 = []MailMessage(nil)
 	apiAgentBridgeApprovalList  = []AgentBridgeApproval(nil)
 	apiAgentBridgeEventList     = []AgentBridgeEvent(nil)
 	apiAgentPromptList          = []AgentPrompt(nil)
@@ -102,6 +103,26 @@ var APIRoutes = []APIRoute{
 	{Method: "GET", Path: "/v1/ptys/{ptyID}/output", OperationID: "getPTYOutput", Tag: "ptys", Response: OutputSnapshot{}, Query: []APIQueryParam{{Name: "from", Type: "integer"}}},
 
 	{Method: "GET", Path: "/v1/events/next", OperationID: "nextEvent", Tag: "events", Response: NextEventResponse{}, Query: []APIQueryParam{{Name: "timeoutMs", Type: "integer"}, {Name: "afterSeq", Type: "integer"}}},
+
+	{Method: "POST", Path: "/v1/mail", OperationID: "sendMail", Tag: "mail", Summary: "Send a daemon-owned mailbox message", Request: SendMailRequest{}, Response: MailMessage{}, Status: 201},
+	{Method: "GET", Path: "/v1/mail", OperationID: "listMail", Tag: "mail", Summary: "List daemon-owned mailbox messages", Response: apiMailList, Query: []APIQueryParam{
+		{Name: "to", Type: "string"},
+		{Name: "unread", Type: "boolean"},
+		{Name: "types", Type: "string"},
+		{Name: "projectId", Type: "string"},
+		{Name: "workItemId", Type: "string"},
+		{Name: "runId", Type: "string"},
+		{Name: "threadId", Type: "string"},
+		{Name: "limit", Type: "integer"},
+	}},
+	{Method: "GET", Path: "/v1/mail/next", OperationID: "nextMail", Tag: "mail", Summary: "Get the next unread mailbox message, optionally waiting", Response: NextMailResponse{}, Query: []APIQueryParam{
+		{Name: "to", Type: "string"},
+		{Name: "types", Type: "string"},
+		{Name: "timeoutMs", Type: "integer"},
+		{Name: "projectId", Type: "string"},
+	}},
+	{Method: "POST", Path: "/v1/mail/{mailID}/read", OperationID: "markMailRead", Tag: "mail", Summary: "Mark a mailbox message read", Request: MarkMailReadRequest{}, Response: MailMessage{}},
+	{Method: "POST", Path: "/v1/mail/{mailID}/reply", OperationID: "replyMail", Tag: "mail", Summary: "Reply to a mailbox message", Request: ReplyMailRequest{}, Response: MailMessage{}, Status: 201},
 
 	{Method: "POST", Path: "/v1/worktrunk/detect", OperationID: "detectWorktrunk", Tag: "worktrees", Request: DetectWorktrunkRequest{}, Response: WorktrunkStatus{}},
 	{Method: "POST", Path: "/v1/worktrees/list", OperationID: "listWorktrees", Tag: "worktrees", Request: ListWorktreesRequest{}, Response: apiWorktreeList},

@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/phin-tech/whisk/internal/domain/onboarding"
@@ -8,7 +9,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 24
+const DaemonAPIVersion = 25
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
@@ -239,6 +240,90 @@ type RuntimeEvent struct {
 type NextEventResponse struct {
 	Event  RuntimeEvent `json:"event"`
 	Missed bool         `json:"missed"`
+}
+
+type MailAddress struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+}
+
+type MailRecipient struct {
+	Address MailAddress `json:"address"`
+	ReadAt  *time.Time  `json:"readAt,omitempty"`
+}
+
+type MailMessage struct {
+	ID         string          `json:"id"`
+	ThreadID   string          `json:"threadId,omitempty"`
+	ReplyToID  string          `json:"replyToId,omitempty"`
+	From       MailAddress     `json:"from"`
+	Recipients []MailRecipient `json:"recipients"`
+	Type       string          `json:"type"`
+	Priority   string          `json:"priority"`
+	Subject    string          `json:"subject,omitempty"`
+	Body       string          `json:"body,omitempty"`
+	Payload    json.RawMessage `json:"payload,omitempty"`
+	ProjectID  string          `json:"projectId,omitempty"`
+	WorkItemID string          `json:"workItemId,omitempty"`
+	RunID      string          `json:"runId,omitempty"`
+	SessionID  string          `json:"sessionId,omitempty"`
+	PTYID      string          `json:"ptyId,omitempty"`
+	DispatchID string          `json:"dispatchId,omitempty"`
+	CreatedAt  time.Time       `json:"createdAt"`
+}
+
+type SendMailRequest struct {
+	From       MailAddress     `json:"from"`
+	To         []MailAddress   `json:"to"`
+	Type       string          `json:"type"`
+	Priority   string          `json:"priority,omitempty"`
+	Subject    string          `json:"subject,omitempty"`
+	Body       string          `json:"body,omitempty"`
+	Payload    json.RawMessage `json:"payload,omitempty"`
+	ThreadID   string          `json:"threadId,omitempty"`
+	ReplyToID  string          `json:"replyToId,omitempty"`
+	ProjectID  string          `json:"projectId,omitempty"`
+	WorkItemID string          `json:"workItemId,omitempty"`
+	RunID      string          `json:"runId,omitempty"`
+	SessionID  string          `json:"sessionId,omitempty"`
+	PTYID      string          `json:"ptyId,omitempty"`
+	DispatchID string          `json:"dispatchId,omitempty"`
+}
+
+type ListMailRequest struct {
+	To         []MailAddress `json:"to,omitempty"`
+	UnreadOnly bool          `json:"unreadOnly,omitempty"`
+	Types      []string      `json:"types,omitempty"`
+	ProjectID  string        `json:"projectId,omitempty"`
+	WorkItemID string        `json:"workItemId,omitempty"`
+	RunID      string        `json:"runId,omitempty"`
+	ThreadID   string        `json:"threadId,omitempty"`
+	Limit      int           `json:"limit,omitempty"`
+}
+
+type NextMailRequest struct {
+	To        []MailAddress `json:"to,omitempty"`
+	Types     []string      `json:"types,omitempty"`
+	TimeoutMs int           `json:"timeoutMs,omitempty"`
+	ProjectID string        `json:"projectId,omitempty"`
+}
+
+type NextMailResponse struct {
+	Message *MailMessage `json:"message,omitempty"`
+	Timeout bool         `json:"timeout,omitempty"`
+}
+
+type MarkMailReadRequest struct {
+	To *MailAddress `json:"to,omitempty"`
+}
+
+type ReplyMailRequest struct {
+	From     MailAddress     `json:"from"`
+	Type     string          `json:"type,omitempty"`
+	Priority string          `json:"priority,omitempty"`
+	Subject  string          `json:"subject,omitempty"`
+	Body     string          `json:"body,omitempty"`
+	Payload  json.RawMessage `json:"payload,omitempty"`
 }
 
 type AgentBridgeHookDecision struct {
