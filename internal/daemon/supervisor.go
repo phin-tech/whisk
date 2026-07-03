@@ -22,6 +22,21 @@ var (
 	errProcessStillAlive  = errors.New("process still running")
 )
 
+const (
+	compatibilityProbeTimeout   = 250 * time.Millisecond
+	compatibilityRetryWindow    = 2 * time.Second
+	compatibilityInitialBackoff = 50 * time.Millisecond
+	compatibilityMaxBackoff     = 250 * time.Millisecond
+)
+
+type compatibilityDecision int
+
+const (
+	compatibilityUnknown compatibilityDecision = iota
+	compatibilityCompatible
+	compatibilityIncompatible
+)
+
 // StopPolicy holds every timing used by the daemon stop escalation ladder.
 type StopPolicy struct {
 	ShutdownRequestTimeout time.Duration
@@ -92,11 +107,14 @@ func (policy StopPolicy) normalized() StopPolicy {
 // developer's `whisk daemon run`) must be left alone.
 func Ensure(ctx context.Context, baseURL string) (started bool, err error) {
 	daemonClient := client.NewHTTP(baseURL, nil)
-	compatibilityErr := compatibilityCheck(ctx, daemonClient)
-	if compatibilityErr == nil {
-		return false, nil
-	}
 	if healthCheck(ctx, daemonClient) == nil {
+		decision, compatibilityErr := compatibilityCheckWithRetry(ctx, daemonClient)
+		if decision == compatibilityCompatible {
+			return false, nil
+		}
+		if decision == compatibilityUnknown {
+			return false, fmt.Errorf("check whiskd compatibility: %w", compatibilityErr)
+		}
 		log.Printf("whiskd at %s is incompatible (%v); shutting it down", baseURL, compatibilityErr)
 		if err := Stop(ctx, baseURL); err != nil {
 			return false, fmt.Errorf("stop incompatible whiskd: %w", err)
@@ -137,9 +155,13 @@ func Ensure(ctx context.Context, baseURL string) (started bool, err error) {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		if err := compatibilityCheck(ctx, daemonClient); err == nil {
+		decision, err := compatibilityProbe(ctx, daemonClient, compatibilityProbeTimeout)
+		if decision == compatibilityCompatible {
 			log.Printf("whiskd ready at %s", baseURL)
 			return true, nil
+		}
+		if decision == compatibilityIncompatible {
+			return false, fmt.Errorf("started whiskd is incompatible: %w", err)
 		}
 		select {
 		case <-ticker.C:
@@ -331,20 +353,58 @@ func healthCheckWithPolicy(ctx context.Context, daemonClient *client.HTTPClient,
 	return daemonClient.Health(checkCtx)
 }
 
-func compatibilityCheck(ctx context.Context, daemonClient *client.HTTPClient) error {
+func compatibilityProbe(ctx context.Context, daemonClient *client.HTTPClient, timeout time.Duration) (compatibilityDecision, error) {
 	if err := healthCheck(ctx, daemonClient); err != nil {
-		return err
+		return compatibilityUnknown, fmt.Errorf("daemon health check failed before compatibility probe: %w", err)
 	}
-	checkCtx, cancel := context.WithTimeout(ctx, DefaultStopPolicy().HealthCheckTimeout)
+	checkCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	compatibility, err := daemonClient.Compatibility(checkCtx)
 	if err != nil {
-		return fmt.Errorf("daemon is missing required compatibility API: %w", err)
+		return compatibilityUnknown, fmt.Errorf("daemon compatibility probe is unknown: %w", err)
 	}
 	if compatibility.APIVersion != protocol.DaemonAPIVersion {
-		return fmt.Errorf("daemon api version %d does not match required %d", compatibility.APIVersion, protocol.DaemonAPIVersion)
+		return compatibilityIncompatible, fmt.Errorf("daemon api version %d does not match required %d", compatibility.APIVersion, protocol.DaemonAPIVersion)
 	}
-	return nil
+	return compatibilityCompatible, nil
+}
+
+func compatibilityCheckWithRetry(ctx context.Context, daemonClient *client.HTTPClient) (compatibilityDecision, error) {
+	retryCtx, cancel := context.WithTimeout(ctx, compatibilityRetryWindow)
+	defer cancel()
+
+	probeTimeout := compatibilityProbeTimeout
+	backoff := compatibilityInitialBackoff
+	var lastErr error
+	for {
+		decision, err := compatibilityProbe(retryCtx, daemonClient, probeTimeout)
+		if decision == compatibilityCompatible || decision == compatibilityIncompatible {
+			return decision, err
+		}
+		lastErr = err
+
+		timer := time.NewTimer(backoff)
+		select {
+		case <-timer.C:
+		case <-retryCtx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			if lastErr == nil {
+				lastErr = retryCtx.Err()
+			}
+			return compatibilityUnknown, fmt.Errorf("compatibility probe did not complete before deadline: %w", lastErr)
+		}
+
+		probeTimeout = compatibilityRetryWindow
+		backoff *= 2
+		if backoff > compatibilityMaxBackoff {
+			backoff = compatibilityMaxBackoff
+		}
+	}
 }
 
 func shutdownExistingWithPolicy(ctx context.Context, baseURL string, policy StopPolicy) error {
