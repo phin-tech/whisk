@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/worktrunk"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/appsettings"
+	"github.com/phin-tech/whisk/internal/daemon"
 	"github.com/phin-tech/whisk/internal/events"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/server"
@@ -42,10 +44,22 @@ func runDaemonRun(args []string) error {
 	return serveDaemon(*addr)
 }
 
-func serveDaemon(addr string) error {
+func serveDaemon(addr string) (err error) {
 	if err := validateListenAddr(addr); err != nil {
 		return err
 	}
+	_, cleanupLogging, err := configureDaemonLogging(addr, os.Stderr, daemon.DefaultLogRotation())
+	if err != nil {
+		return fmt.Errorf("configure daemon log: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			log.Printf("whisk daemon error: %v", err)
+		}
+		if err := cleanupLogging(); err != nil {
+			fmt.Fprintf(os.Stderr, "close daemon log: %v\n", err)
+		}
+	}()
 
 	// Bind the listener before any other setup so a duplicate instance fails fast and
 	// cheaply. Building NATS/sqlite/the runtime first would leave a heavyweight process
@@ -153,6 +167,30 @@ func serveDaemon(addr string) error {
 		return err
 	}
 	return <-serveErr
+}
+
+func configureDaemonLogging(addr string, stderr io.Writer, rotation daemon.LogRotation) (string, func() error, error) {
+	if stderr == nil {
+		stderr = io.Discard
+	}
+	logPath, err := daemon.LogPathForListenAddress(addr)
+	if err != nil {
+		return "", nil, err
+	}
+	logWriter, err := daemon.NewRotatingLogWriter(logPath, rotation)
+	if err != nil {
+		return "", nil, err
+	}
+	previousWriter := log.Writer()
+	previousFlags := log.Flags()
+	previousPrefix := log.Prefix()
+	log.SetOutput(io.MultiWriter(logWriter, stderr))
+	return logPath, func() error {
+		log.SetOutput(previousWriter)
+		log.SetFlags(previousFlags)
+		log.SetPrefix(previousPrefix)
+		return logWriter.Close()
+	}, nil
 }
 
 func pluginDirsFromEnv() []string {

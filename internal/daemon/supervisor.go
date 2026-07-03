@@ -140,22 +140,21 @@ func ensureLocked(ctx context.Context, baseURL string) (started bool, err error)
 
 	log.Printf("starting whisk daemon at %s from %s", baseURL, binaryPath)
 	cmd := exec.CommandContext(context.Background(), binaryPath, "daemon", "run", "-addr", addr)
-	logFile, err := os.OpenFile(filepath.Join(os.TempDir(), "whiskd.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return false, fmt.Errorf("open whiskd log: %w", err)
-	}
-	defer logFile.Close()
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
+	stderrCapture := newLimitedCapture(supervisorStderrCaptureBytes)
+	cmd.Stderr = stderrCapture
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
-		return false, fmt.Errorf("start whiskd: %w", err)
+		return false, fmt.Errorf("start whiskd: %w%s", err, daemonStartDiagnostics(baseURL, stderrCapture))
 	}
+	waitErr := make(chan error, 1)
+	go func() {
+		waitErr <- cmd.Wait()
+	}()
 	startTime, err := processStartTime(cmd.Process.Pid)
 	if err != nil {
 		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return false, fmt.Errorf("read whiskd process start time: %w", err)
+		<-waitErr
+		return false, fmt.Errorf("read whiskd process start time: %w%s", err, daemonStartDiagnostics(baseURL, stderrCapture))
 	}
 	if err := writeStateFile(baseURL, daemonStateFile{
 		Version:          daemonStateVersion,
@@ -166,26 +165,33 @@ func ensureLocked(ctx context.Context, baseURL string) (started bool, err error)
 		BinaryPath:       binaryPath,
 	}); err != nil {
 		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return false, fmt.Errorf("write whiskd state file: %w", err)
+		<-waitErr
+		return false, fmt.Errorf("write whiskd state file: %w%s", err, daemonStartDiagnostics(baseURL, stderrCapture))
 	}
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			log.Printf("whiskd exited: %v", err)
-		}
-	}()
 
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		if err := compatibilityCheck(ctx, daemonClient); err == nil {
+			stderrCapture.StopRecording()
+			go func() {
+				if err := <-waitErr; err != nil {
+					log.Printf("whiskd exited: %v", err)
+				}
+			}()
 			log.Printf("whiskd ready at %s", baseURL)
 			return true, nil
 		}
 		select {
 		case <-ticker.C:
+		case err := <-waitErr:
+			removeStateFile(baseURL)
+			if err != nil {
+				return false, fmt.Errorf("whiskd exited before ready: %w%s", err, daemonStartDiagnostics(baseURL, stderrCapture))
+			}
+			return false, fmt.Errorf("whiskd exited before ready%s", daemonStartDiagnostics(baseURL, stderrCapture))
 		case <-ctx.Done():
-			return false, fmt.Errorf("wait for whiskd: %w", ctx.Err())
+			return false, fmt.Errorf("wait for whiskd: %w%s", ctx.Err(), daemonStartDiagnostics(baseURL, stderrCapture))
 		}
 	}
 }

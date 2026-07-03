@@ -1,10 +1,17 @@
 package main
 
 import (
+	"bytes"
+	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/phin-tech/whisk/internal/daemon"
 )
 
 func TestRunDaemonStatusUsesHealthEndpoint(t *testing.T) {
@@ -105,6 +112,68 @@ func TestRunDaemonRunValidatesListenAddress(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "refusing non-loopback bind") {
 		t.Fatalf("daemon run error = %q", err.Error())
+	}
+}
+
+func TestConfigureDaemonLoggingWritesStateDirLogAndMirrorsStderr(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "state")
+	t.Setenv("WHISK_STATE_DIR", stateDir)
+
+	var stderr bytes.Buffer
+	logPath, cleanup, err := configureDaemonLogging("127.0.0.1:19996", &stderr, daemon.LogRotation{
+		MaxBytes:   1024,
+		MaxBackups: 1,
+	})
+	if err != nil {
+		t.Fatalf("configure daemon logging: %v", err)
+	}
+	log.Print("daemon mirror test")
+	if err := cleanup(); err != nil {
+		t.Fatalf("cleanup daemon logging: %v", err)
+	}
+
+	if !strings.HasPrefix(logPath, stateDir+string(filepath.Separator)) {
+		t.Fatalf("log path = %q, want under %q", logPath, stateDir)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read daemon log: %v", err)
+	}
+	if !strings.Contains(string(data), "daemon mirror test") {
+		t.Fatalf("daemon log did not contain message: %q", string(data))
+	}
+	if !strings.Contains(stderr.String(), "daemon mirror test") {
+		t.Fatalf("stderr mirror did not contain message: %q", stderr.String())
+	}
+}
+
+func TestServeDaemonWritesOwnPerAddressLogOnDuplicateListenAddress(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "state")
+	t.Setenv("WHISK_STATE_DIR", stateDir)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer listener.Close()
+	addr := listener.Addr().String()
+
+	if err := serveDaemon(addr); err != nil {
+		t.Fatalf("serve daemon on duplicate address: %v", err)
+	}
+
+	logPath, err := daemon.LogPath("http://" + addr)
+	if err != nil {
+		t.Fatalf("log path: %v", err)
+	}
+	if !strings.HasPrefix(logPath, stateDir+string(filepath.Separator)) {
+		t.Fatalf("log path = %q, want under %q", logPath, stateDir)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read daemon log: %v", err)
+	}
+	if !strings.Contains(string(data), "another instance is already listening on "+addr) {
+		t.Fatalf("daemon log did not contain duplicate-address message: %q", string(data))
 	}
 }
 
