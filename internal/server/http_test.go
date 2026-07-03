@@ -3,6 +3,7 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -78,8 +79,8 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 		t.Fatalf("pending agent events = %#v", pendingAgentEvents)
 	}
 	for range 2 {
-		event := getJSON[protocol.RuntimeEvent](t, handler, "/v1/events/next?timeoutMs=10", http.StatusOK)
-		if event.Type != "agent_hook_events.changed" {
+		event := getJSON[protocol.NextEventResponse](t, handler, "/v1/events/next?timeoutMs=10", http.StatusOK)
+		if event.Event.Type != "agent_hook_events.changed" || event.Event.Seq == 0 {
 			t.Fatalf("agent hook event = %#v", event)
 		}
 	}
@@ -142,8 +143,8 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 		t.Fatalf("selected pty history = %#v", selectedHistory)
 	}
 
-	event := getJSON[protocol.RuntimeEvent](t, handler, "/v1/events/next?timeoutMs=10", http.StatusOK)
-	if event.Type != "session.changed" {
+	event := getJSON[protocol.NextEventResponse](t, handler, "/v1/events/next?timeoutMs=10", http.StatusOK)
+	if event.Event.Type != "session.changed" || event.Event.Seq == 0 {
 		t.Fatalf("event = %#v", event)
 	}
 
@@ -419,6 +420,46 @@ func TestHTTPServerAttachesPTYWebSocketOutputStream(t *testing.T) {
 	}
 }
 
+func TestHTTPServerAttachPTYWebSocketResynchronizesOutputGap(t *testing.T) {
+	backend := newFakePTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
+	handler := server.NewHTTP(runtime)
+	httpServer := httptest.NewServer(handler)
+	defer httpServer.Close()
+
+	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    t.TempDir(),
+		InitialPTY: &protocol.StartPTYOptions{Cols: 80, Rows: 24},
+	}, http.StatusCreated)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, strings.Replace(httpServer.URL, "http", "ws", 1)+"/v1/ptys/"+created.MainPtyID+"/attach?from=0", nil)
+	if err != nil {
+		t.Fatalf("dial attach: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	payload := []byte("0123456789ABCDE")
+	backend.mu.Lock()
+	backend.outputs[created.MainPtyID] = append([]byte(nil), payload...)
+	events := backend.events
+	backend.mu.Unlock()
+	if events == nil {
+		t.Fatalf("attach did not register event stream")
+	}
+	events <- app.PTYEvent{Kind: app.PTYOutput, Offset: 10, Bytes: payload[10:]}
+
+	recovered := readPTYStreamFrame(t, ctx, conn)
+	if recovered.Type != "output" ||
+		recovered.PtyID != created.MainPtyID ||
+		recovered.Offset != 0 ||
+		recovered.OutputBase64 != base64.StdEncoding.EncodeToString(payload) {
+		t.Fatalf("recovered frame = %#v", recovered)
+	}
+}
+
 func readPTYStreamFrame(t *testing.T, ctx context.Context, conn *websocket.Conn) protocol.PTYStreamFrame {
 	t.Helper()
 	typ, data, err := conn.Read(ctx)
@@ -442,8 +483,8 @@ func TestHTTPServerNextEventTimeoutReturnsNoop(t *testing.T) {
 	})
 	handler := server.NewHTTP(runtime)
 
-	event := getJSON[protocol.RuntimeEvent](t, handler, "/v1/events/next?timeoutMs=1", http.StatusOK)
-	if event.Type != protocol.RuntimeEventNone {
+	event := getJSON[protocol.NextEventResponse](t, handler, "/v1/events/next?timeoutMs=1", http.StatusOK)
+	if event.Event.Type != protocol.RuntimeEventNone || event.Missed {
 		t.Fatalf("event = %#v", event)
 	}
 }
@@ -1457,7 +1498,9 @@ func (b *fakePTYBackend) Shutdown(context.Context) error {
 }
 
 type fakeEventBus struct {
-	ch chan app.RuntimeEvent
+	ch       chan app.RuntimeEvent
+	afterSeq uint64
+	missed   bool
 }
 
 type pluginRegistryFake struct {
@@ -1519,12 +1562,13 @@ func (b *fakeEventBus) Publish(_ context.Context, event app.RuntimeEvent) error 
 	return nil
 }
 
-func (b *fakeEventBus) Next(ctx context.Context) (app.RuntimeEvent, error) {
+func (b *fakeEventBus) Next(ctx context.Context, afterSeq uint64) (app.NextRuntimeEventResult, error) {
+	b.afterSeq = afterSeq
 	select {
 	case event := <-b.ch:
-		return event, nil
+		return app.NextRuntimeEventResult{Event: event, Missed: b.missed}, nil
 	case <-ctx.Done():
-		return app.RuntimeEvent{}, ctx.Err()
+		return app.NextRuntimeEventResult{}, ctx.Err()
 	}
 }
 

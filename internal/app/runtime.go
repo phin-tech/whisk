@@ -176,6 +176,8 @@ type Runtime struct {
 	agentBridgeApprovalTimeout time.Duration
 	nextID                     int
 	eventSink                  EventSink
+	eventMu                    sync.Mutex
+	eventSeq                   uint64
 	watchCtx                   context.Context
 	watchCancel                context.CancelFunc
 }
@@ -226,8 +228,14 @@ const (
 
 type RuntimeEvent struct {
 	Type   RuntimeEventType `json:"type"`
+	Seq    uint64           `json:"seq"`
 	PtyID  string           `json:"ptyId,omitempty"`
 	Offset uint64           `json:"offset,omitempty"`
+}
+
+type NextRuntimeEventResult struct {
+	Event  RuntimeEvent
+	Missed bool
 }
 
 type EventSink interface {
@@ -235,7 +243,7 @@ type EventSink interface {
 }
 
 type EventSource interface {
-	Next(ctx context.Context) (RuntimeEvent, error)
+	Next(ctx context.Context, afterSeq uint64) (NextRuntimeEventResult, error)
 }
 
 type SessionStore interface {
@@ -1274,12 +1282,12 @@ func (r *Runtime) ReadPTYHistory(ctx context.Context, ptyID string) (PTYHistory,
 	return r.transcriptStore.ReadPTYHistory(ctx, ptyID)
 }
 
-func (r *Runtime) NextEvent(ctx context.Context) (RuntimeEvent, error) {
+func (r *Runtime) NextEvent(ctx context.Context, afterSeq uint64) (NextRuntimeEventResult, error) {
 	source, ok := r.eventSink.(EventSource)
 	if !ok || source == nil {
-		return RuntimeEvent{}, fmt.Errorf("runtime event source unavailable")
+		return NextRuntimeEventResult{}, fmt.Errorf("runtime event source unavailable")
 	}
-	return source.Next(ctx)
+	return source.Next(ctx, afterSeq)
 }
 
 func (r *Runtime) Shutdown(ctx context.Context) error {
@@ -1345,10 +1353,17 @@ func (r *Runtime) generatedID() string {
 }
 
 func (r *Runtime) publish(ctx context.Context, event RuntimeEvent) {
-	if r.eventSink == nil {
+	r.eventMu.Lock()
+	defer r.eventMu.Unlock()
+
+	sink := r.eventSink
+	if sink == nil {
 		return
 	}
-	_ = r.eventSink.Publish(ctx, event)
+	r.eventSeq++
+	event.Seq = r.eventSeq
+
+	_ = sink.Publish(ctx, event)
 }
 
 func validateExistingRootDir(rootDir string) (string, error) {

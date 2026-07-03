@@ -672,7 +672,7 @@ func (s *Service) ReadPTYHistory(ctx context.Context, ptyID string) (protocol.PT
 	return s.client.ReadPTYHistory(ctx, ptyID)
 }
 
-func (s *Service) NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error) {
+func (s *Service) NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.NextEventResponse, error) {
 	return s.client.NextEvent(ctx, req)
 }
 

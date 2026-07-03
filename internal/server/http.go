@@ -1027,6 +1027,7 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	nextOffset := attach.ReplayOffset + uint64(len(attach.ReplayBytes))
 	for {
 		select {
 		case event, ok := <-attach.Events:
@@ -1035,12 +1036,9 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 			}
 			switch event.Kind {
 			case app.PTYOutput:
-				if err := writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
-					Type:         "output",
-					PtyID:        ptyID,
-					Offset:       event.Offset,
-					OutputBase64: base64.StdEncoding.EncodeToString(event.Bytes),
-				}); err != nil {
+				var err error
+				nextOffset, err = s.writePTYOutputEvent(ctx, conn, ptyID, nextOffset, event)
+				if err != nil {
 					return
 				}
 			case app.PTYExit:
@@ -1051,6 +1049,48 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func (s *HTTPServer) writePTYOutputEvent(ctx context.Context, conn *websocket.Conn, ptyID string, nextOffset uint64, event app.PTYEvent) (uint64, error) {
+	if event.Offset != nextOffset {
+		snapshot, err := s.runtime.PTYOutput(ctx, ptyID, nextOffset)
+		if err != nil {
+			return nextOffset, err
+		}
+		if len(snapshot.OutputBytes) > 0 {
+			if err := writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
+				Type:         "output",
+				PtyID:        ptyID,
+				Offset:       snapshot.Offset,
+				OutputBase64: base64.StdEncoding.EncodeToString(snapshot.OutputBytes),
+			}); err != nil {
+				return nextOffset, err
+			}
+			nextOffset = snapshot.Offset + uint64(len(snapshot.OutputBytes))
+		} else {
+			nextOffset = snapshot.Offset
+		}
+	}
+	if event.Offset < nextOffset {
+		overlap := nextOffset - event.Offset
+		if overlap >= uint64(len(event.Bytes)) {
+			return nextOffset, nil
+		}
+		event.Bytes = event.Bytes[overlap:]
+		event.Offset = nextOffset
+	}
+	if len(event.Bytes) == 0 {
+		return nextOffset, nil
+	}
+	if err := writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
+		Type:         "output",
+		PtyID:        ptyID,
+		Offset:       event.Offset,
+		OutputBase64: base64.StdEncoding.EncodeToString(event.Bytes),
+	}); err != nil {
+		return nextOffset, err
+	}
+	return event.Offset + uint64(len(event.Bytes)), nil
 }
 
 func (s *HTTPServer) readPTYStreamInput(ctx context.Context, cancel context.CancelFunc, conn *websocket.Conn, ptyID string) {
@@ -1106,25 +1146,38 @@ func (s *HTTPServer) nextEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		timeoutMs = parsed
 	}
+	var afterSeq uint64
+	if raw := r.URL.Query().Get("afterSeq"); raw != "" {
+		parsed, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid afterSeq"))
+			return
+		}
+		afterSeq = parsed
+	}
 	ctx := r.Context()
 	if timeoutMs > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 		defer cancel()
 	}
-	event, err := s.runtime.NextEvent(ctx)
+	event, err := s.runtime.NextEvent(ctx, afterSeq)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			writeJSON(w, http.StatusOK, protocol.RuntimeEvent{Type: protocol.RuntimeEventNone})
+			writeJSON(w, http.StatusOK, protocol.NextEventResponse{Event: protocol.RuntimeEvent{Type: protocol.RuntimeEventNone}})
 			return
 		}
 		writeError(w, http.StatusRequestTimeout, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, protocol.RuntimeEvent{
-		Type:   string(event.Type),
-		PtyID:  event.PtyID,
-		Offset: event.Offset,
+	writeJSON(w, http.StatusOK, protocol.NextEventResponse{
+		Event: protocol.RuntimeEvent{
+			Type:   string(event.Event.Type),
+			Seq:    event.Event.Seq,
+			PtyID:  event.Event.PtyID,
+			Offset: event.Event.Offset,
+		},
+		Missed: event.Missed,
 	})
 }
 

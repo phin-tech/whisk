@@ -24,3 +24,32 @@ func TestSubjectForRuntimeEvents(t *testing.T) {
 		}
 	}
 }
+
+func TestNATSBusNextRetainedReportsMissedCursor(t *testing.T) {
+	bus := &NATSBus{
+		retained: []app.RuntimeEvent{
+			{Seq: 3, Type: app.EventSessionChanged},
+			{Seq: 4, Type: app.EventPTYChanged, PtyID: "pty_01"},
+		},
+		notify: make(chan struct{}, 1),
+	}
+
+	result, ok := bus.nextRetainedLocked(1)
+	if !ok || !result.Missed || result.Event.Seq != 3 {
+		t.Fatalf("old cursor result = %#v, ok=%v", result, ok)
+	}
+
+	result, ok = bus.nextRetainedLocked(3)
+	if !ok || result.Missed || result.Event.Seq != 4 {
+		t.Fatalf("next cursor result = %#v, ok=%v", result, ok)
+	}
+
+	if result, ok = bus.nextRetainedLocked(4); ok {
+		t.Fatalf("current cursor result = %#v, ok=%v", result, ok)
+	}
+
+	result, ok = bus.nextRetainedLocked(99)
+	if !ok || !result.Missed || result.Event.Seq != 3 {
+		t.Fatalf("future cursor result = %#v, ok=%v", result, ok)
+	}
+}

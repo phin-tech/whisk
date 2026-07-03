@@ -387,12 +387,15 @@ func (c *HTTPClient) ReadPTYHistory(ctx context.Context, ptyID string) (protocol
 	return history, err
 }
 
-func (c *HTTPClient) NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.RuntimeEvent, error) {
+func (c *HTTPClient) NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.NextEventResponse, error) {
 	query := url.Values{}
 	if req.TimeoutMs > 0 {
 		query.Set("timeoutMs", strconv.Itoa(req.TimeoutMs))
 	}
-	var event protocol.RuntimeEvent
+	if req.AfterSeq > 0 {
+		query.Set("afterSeq", strconv.FormatUint(req.AfterSeq, 10))
+	}
+	var event protocol.NextEventResponse
 	err := c.get(ctx, "/v1/events/next", query, &event)
 	return event, err
 }

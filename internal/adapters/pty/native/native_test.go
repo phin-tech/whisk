@@ -2,6 +2,7 @@ package native
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -161,6 +162,55 @@ func TestBackendSpawnResolvesCommandWithRequestPATH(t *testing.T) {
 		case <-ctx.Done():
 			t.Fatalf("timed out waiting for PATH command output; got %q", string(snapshot.OutputBytes))
 		}
+	}
+}
+
+func TestBackendAttachSlowConsumerCatchesUpFromBuffer(t *testing.T) {
+	backend := NewBackend()
+	backend.ptys["pty_slow"] = &proc{
+		record: app.PTYRecord{ID: "pty_slow", WorkingDir: ".", Cols: 80, Rows: 24, Running: true},
+		buffer: newOutputBuffer(16 * 1024),
+		subs:   map[*subscriber]struct{}{},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	attach, err := backend.Attach(ctx, app.AttachPTYRequest{PtyID: "pty_slow"})
+	if err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	defer attach.Close()
+
+	var expected strings.Builder
+	for i := range 128 {
+		chunk := fmt.Sprintf("chunk-%03d\n", i)
+		expected.WriteString(chunk)
+		backend.broadcastOutput("pty_slow", []byte(chunk))
+	}
+
+	want := expected.String()
+	var got strings.Builder
+	nextOffset := attach.ReplayOffset + uint64(len(attach.ReplayBytes))
+	for got.Len() < len(want) {
+		select {
+		case event, ok := <-attach.Events:
+			if !ok {
+				t.Fatalf("attach closed after %d bytes, want %d", got.Len(), len(want))
+			}
+			if event.Kind != app.PTYOutput {
+				continue
+			}
+			if event.Offset != nextOffset {
+				t.Fatalf("output offset gap: got %d, want %d", event.Offset, nextOffset)
+			}
+			got.Write(event.Bytes)
+			nextOffset += uint64(len(event.Bytes))
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for slow consumer catch-up; got %d bytes, want %d", got.Len(), len(want))
+		}
+	}
+	if got.String() != want {
+		t.Fatalf("output mismatch:\n got %q\nwant %q", got.String(), want)
 	}
 }
 

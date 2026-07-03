@@ -70,6 +70,7 @@ from .mark_agent_bridge_event_read_request import MarkAgentBridgeEventReadReques
 from .mark_status_event_read_request import MarkStatusEventReadRequest
 from .metadata_value import MetadataValue
 from .move_work_item_request import MoveWorkItemRequest
+from .next_event_response import NextEventResponse
 from .onboarding_apply_request import OnboardingApplyRequest
 from .onboarding_status import OnboardingStatus
 from .output_snapshot import OutputSnapshot
@@ -248,6 +249,7 @@ __all__ = (
     "MarkStatusEventReadRequest",
     "MetadataValue",
     "MoveWorkItemRequest",
+    "NextEventResponse",
     "OnboardingApplyRequest",
     "OnboardingStatus",
     "OutputSnapshot",

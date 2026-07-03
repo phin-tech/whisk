@@ -5,18 +5,21 @@ import httpx
 
 from ...client import AuthenticatedClient, Client
 from ...models.error_response import ErrorResponse
-from ...models.runtime_event import RuntimeEvent
+from ...models.next_event_response import NextEventResponse
 from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     *,
     timeout_ms: int | Unset = UNSET,
+    after_seq: int | Unset = UNSET,
 ) -> dict[str, Any]:
 
     params: dict[str, Any] = {}
 
     params["timeoutMs"] = timeout_ms
+
+    params["afterSeq"] = after_seq
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -31,9 +34,9 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> ErrorResponse | RuntimeEvent:
+) -> ErrorResponse | NextEventResponse:
     if response.status_code == 200:
-        response_200 = RuntimeEvent.from_dict(response.json())
+        response_200 = NextEventResponse.from_dict(response.json())
 
         return response_200
 
@@ -44,7 +47,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[ErrorResponse | RuntimeEvent]:
+) -> Response[ErrorResponse | NextEventResponse]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -57,21 +60,24 @@ def sync_detailed(
     *,
     client: AuthenticatedClient,
     timeout_ms: int | Unset = UNSET,
-) -> Response[ErrorResponse | RuntimeEvent]:
+    after_seq: int | Unset = UNSET,
+) -> Response[ErrorResponse | NextEventResponse]:
     """
     Args:
         timeout_ms (int | Unset):
+        after_seq (int | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ErrorResponse | RuntimeEvent]
+        Response[ErrorResponse | NextEventResponse]
     """
 
     kwargs = _get_kwargs(
         timeout_ms=timeout_ms,
+        after_seq=after_seq,
     )
 
     response = client.get_httpx_client().request(
@@ -85,22 +91,25 @@ def sync(
     *,
     client: AuthenticatedClient,
     timeout_ms: int | Unset = UNSET,
-) -> ErrorResponse | RuntimeEvent | None:
+    after_seq: int | Unset = UNSET,
+) -> ErrorResponse | NextEventResponse | None:
     """
     Args:
         timeout_ms (int | Unset):
+        after_seq (int | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ErrorResponse | RuntimeEvent
+        ErrorResponse | NextEventResponse
     """
 
     return sync_detailed(
         client=client,
         timeout_ms=timeout_ms,
+        after_seq=after_seq,
     ).parsed
 
 
@@ -108,21 +117,24 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
     timeout_ms: int | Unset = UNSET,
-) -> Response[ErrorResponse | RuntimeEvent]:
+    after_seq: int | Unset = UNSET,
+) -> Response[ErrorResponse | NextEventResponse]:
     """
     Args:
         timeout_ms (int | Unset):
+        after_seq (int | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ErrorResponse | RuntimeEvent]
+        Response[ErrorResponse | NextEventResponse]
     """
 
     kwargs = _get_kwargs(
         timeout_ms=timeout_ms,
+        after_seq=after_seq,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -134,22 +146,25 @@ async def asyncio(
     *,
     client: AuthenticatedClient,
     timeout_ms: int | Unset = UNSET,
-) -> ErrorResponse | RuntimeEvent | None:
+    after_seq: int | Unset = UNSET,
+) -> ErrorResponse | NextEventResponse | None:
     """
     Args:
         timeout_ms (int | Unset):
+        after_seq (int | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ErrorResponse | RuntimeEvent
+        ErrorResponse | NextEventResponse
     """
 
     return (
         await asyncio_detailed(
             client=client,
             timeout_ms=timeout_ms,
+            after_seq=after_seq,
         )
     ).parsed
