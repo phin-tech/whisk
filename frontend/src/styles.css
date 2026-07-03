@@ -22,6 +22,24 @@
   --color-red: #fb7185;
   --color-blue: #38bdf8;
   --color-hairline: rgba(255, 255, 255, 0.18);
+  --color-app-surface: var(--color-bg-deep);
+  --color-app-foreground: var(--color-text-primary);
+  --color-panel-surface: var(--color-bg-surface);
+  --color-panel-foreground: var(--color-text-primary);
+  --color-panel-elevated: var(--color-bg-elevated);
+  --color-sidebar-rail: var(--color-bg-base);
+  --color-sidebar-surface: var(--color-bg-deep);
+  --color-sidebar-foreground: var(--color-text-secondary);
+  --color-sidebar-muted: var(--color-text-muted);
+  --color-sidebar-hover: var(--color-bg-surface);
+  --color-sidebar-active: var(--color-bg-surface);
+  --color-sidebar-active-foreground: var(--color-text-primary);
+  --color-sidebar-border: var(--color-hairline);
+  --color-sidebar-ring: var(--color-accent-dim);
+  --color-terminal-surface: var(--color-bg-deep);
+  --color-terminal-foreground: var(--color-text-primary);
+  --color-terminal-cursor: var(--color-accent);
+  --color-terminal-selection: var(--color-bg-active);
   --font-mono: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
   --font-sans: "Geist", "Inter", "SF Pro Display", "Segoe UI", sans-serif;
 }

@@ -80,7 +80,7 @@
   <div
     class="flex h-full w-[36px] shrink-0 flex-col {side === 'left'
       ? 'border-r'
-      : 'border-l'} border-hairline bg-bg-base/96"
+      : 'border-l'} border-sidebar-border bg-sidebar-rail/96"
   >
     <ActivityRail
       activeSidebar={railActiveSidebar}

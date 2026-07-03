@@ -23,3 +23,4 @@ question in notifications and sends the selected number back to the PTY.
 
 - [Agent Interface](agent-interface.md)
 - [Plugins](plugins.md)
+- [Style Guide](STYLEGUIDE.md)

@@ -54,10 +54,10 @@
 
   function terminalTheme() {
     return {
-      background: cssToken("--color-bg-deep", "rgb(9, 9, 11)"),
-      foreground: cssToken("--color-text-primary", "rgb(250, 250, 250)"),
-      cursor: cssToken("--color-accent", "rgb(125, 211, 252)"),
-      selectionBackground: cssToken("--color-bg-active", "rgba(39, 39, 42, 0.72)"),
+      background: cssToken("--color-terminal-surface", "rgb(9, 9, 11)"),
+      foreground: cssToken("--color-terminal-foreground", "rgb(250, 250, 250)"),
+      cursor: cssToken("--color-terminal-cursor", "rgb(125, 211, 252)"),
+      selectionBackground: cssToken("--color-terminal-selection", "rgba(39, 39, 42, 0.72)"),
     };
   }
 
@@ -231,7 +231,7 @@
 
 <div
   class:focused
-  class="group flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-border-subtle/70 bg-bg-deep text-left text-text-primary outline-none transition-[filter,border-color] duration-150 {focused
+  class="group flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-border-subtle/70 bg-terminal-surface text-left text-terminal-foreground outline-none transition-[filter,border-color] duration-150 {focused
     ? 'border-accent-dim brightness-105'
     : 'brightness-90 hover:brightness-100'}"
   onclick={focusTerminal}

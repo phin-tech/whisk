@@ -9,10 +9,10 @@ describe("TerminalPane", () => {
   it("themes xterm from design-system tokens instead of hardcoded hex", () => {
     const withoutSvelteBlocks = source.replace(/\{#[a-z]+/g, "");
     expect(withoutSvelteBlocks).not.toMatch(/#[0-9a-fA-F]{3,8}/);
-    expect(source).toContain('cssToken("--color-bg-deep"');
-    expect(source).toContain('cssToken("--color-text-primary"');
-    expect(source).toContain('cssToken("--color-accent"');
-    expect(source).toContain('cssToken("--color-bg-active"');
+    expect(source).toContain('cssToken("--color-terminal-surface"');
+    expect(source).toContain('cssToken("--color-terminal-foreground"');
+    expect(source).toContain('cssToken("--color-terminal-cursor"');
+    expect(source).toContain('cssToken("--color-terminal-selection"');
     expect(source).toContain("theme: terminalTheme()");
   });
 
