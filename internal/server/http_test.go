@@ -109,6 +109,10 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	if snapshot.Output != "hello" || snapshot.OutputBase64 != "aGVsbG8=" || snapshot.Offset != 5 {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
+	assertStatus(t, handler, http.MethodPost, "/v1/ptys/missing/write", `{"data":"x"}`, http.StatusBadRequest)
+	if runtime.PTYInputRecent("missing", time.Hour) {
+		t.Fatalf("failed HTTP pty write should not be recent")
+	}
 	assertStatus(t, handler, http.MethodPost, "/v1/ptys/"+created.MainPtyID+"/bookmarks", `{"offset":3}`, http.StatusNotFound)
 	assertStatus(t, handler, http.MethodGet, "/v1/ptys/"+created.MainPtyID+"/bookmarks", "", http.StatusNotFound)
 	assertStatus(t, handler, http.MethodDelete, "/v1/pty-bookmarks/bm_01", "", http.StatusNotFound)
@@ -457,6 +461,82 @@ func TestHTTPServerAttachPTYWebSocketResynchronizesOutputGap(t *testing.T) {
 		recovered.Offset != 0 ||
 		recovered.OutputBase64 != base64.StdEncoding.EncodeToString(payload) {
 		t.Fatalf("recovered frame = %#v", recovered)
+	}
+}
+
+func TestHTTPServerAttachPTYWebSocketBatchesBackgroundOutput(t *testing.T) {
+	backend := newFakePTYBackend()
+	_, err := backend.Spawn(context.Background(), app.SpawnPTYRequest{
+		ID:         "pty_background",
+		WorkingDir: t.TempDir(),
+		Cols:       80,
+		Rows:       24,
+	})
+	if err != nil {
+		t.Fatalf("spawn fake pty: %v", err)
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	defer httpServer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, strings.Replace(httpServer.URL, "http", "ws", 1)+"/v1/ptys/pty_background/attach?from=0", nil)
+	if err != nil {
+		t.Fatalf("dial attach: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+	backend.waitForSubscriber(t)
+
+	backend.emitOutput(t, "pty_background", []byte("a"))
+	backend.emitOutput(t, "pty_background", []byte("b"))
+
+	batched := readPTYStreamFrame(t, ctx, conn)
+	if batched.Type != "output" ||
+		batched.PtyID != "pty_background" ||
+		batched.Offset != 0 ||
+		batched.OutputBase64 != base64.StdEncoding.EncodeToString([]byte("ab")) {
+		t.Fatalf("batched frame = %#v", batched)
+	}
+}
+
+func TestHTTPServerAttachPTYWebSocketFlushesPendingOutputBeforeExit(t *testing.T) {
+	backend := newFakePTYBackend()
+	_, err := backend.Spawn(context.Background(), app.SpawnPTYRequest{
+		ID:         "pty_exit",
+		WorkingDir: t.TempDir(),
+		Cols:       80,
+		Rows:       24,
+	})
+	if err != nil {
+		t.Fatalf("spawn fake pty: %v", err)
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	defer httpServer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, strings.Replace(httpServer.URL, "http", "ws", 1)+"/v1/ptys/pty_exit/attach?from=0", nil)
+	if err != nil {
+		t.Fatalf("dial attach: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+	backend.waitForSubscriber(t)
+
+	backend.emitOutput(t, "pty_exit", []byte("done"))
+	backend.emitExit(t, "pty_exit", 7)
+
+	output := readPTYStreamFrame(t, ctx, conn)
+	if output.Type != "output" ||
+		output.PtyID != "pty_exit" ||
+		output.Offset != 0 ||
+		output.OutputBase64 != base64.StdEncoding.EncodeToString([]byte("done")) {
+		t.Fatalf("output frame = %#v", output)
+	}
+	exit := readPTYStreamFrame(t, ctx, conn)
+	if exit.Type != "exit" || exit.PtyID != "pty_exit" || exit.Code == nil || *exit.Code != 7 {
+		t.Fatalf("exit frame = %#v", exit)
 	}
 }
 
@@ -1449,6 +1529,59 @@ func (b *fakePTYBackend) Write(_ context.Context, ptyID string, data []byte) err
 	}
 	b.mu.Unlock()
 	return nil
+}
+
+func (b *fakePTYBackend) waitForSubscriber(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for {
+		b.mu.Lock()
+		ready := b.events != nil
+		b.mu.Unlock()
+		if ready {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for fake PTY subscriber")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func (b *fakePTYBackend) emitOutput(t *testing.T, ptyID string, data []byte) {
+	t.Helper()
+	b.mu.Lock()
+	if _, ok := b.records[ptyID]; !ok {
+		b.mu.Unlock()
+		t.Fatalf("pty %s not found", ptyID)
+	}
+	offset := uint64(len(b.outputs[ptyID]))
+	b.outputs[ptyID] = append(b.outputs[ptyID], data...)
+	event := app.PTYEvent{Kind: app.PTYOutput, Offset: offset, Bytes: append([]byte(nil), data...)}
+	events := b.events
+	b.mu.Unlock()
+	if events == nil {
+		t.Fatalf("pty %s has no subscriber", ptyID)
+	}
+	events <- event
+}
+
+func (b *fakePTYBackend) emitExit(t *testing.T, ptyID string, code int) {
+	t.Helper()
+	b.mu.Lock()
+	record, ok := b.records[ptyID]
+	if !ok {
+		b.mu.Unlock()
+		t.Fatalf("pty %s not found", ptyID)
+	}
+	record.Running = false
+	b.records[ptyID] = record
+	events := b.events
+	b.mu.Unlock()
+	if events == nil {
+		t.Fatalf("pty %s has no subscriber", ptyID)
+	}
+	events <- app.PTYEvent{Kind: app.PTYExit, Code: &code}
 }
 
 func (b *fakePTYBackend) Resize(_ context.Context, ptyID string, size app.PTYSize) error {

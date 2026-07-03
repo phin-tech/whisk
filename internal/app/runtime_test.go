@@ -108,6 +108,37 @@ func TestRuntimeWritePTYNormalizesTrailingLineFeed(t *testing.T) {
 	}
 }
 
+func TestRuntimeWritePTYTracksRecentInput(t *testing.T) {
+	ptyBackend := newMemoryPTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: ptyBackend})
+
+	ctx := context.Background()
+	if err := runtime.WritePTY(ctx, "missing", []byte("x")); err == nil {
+		t.Fatalf("expected missing pty write error")
+	}
+	if runtime.PTYInputRecent("missing", time.Hour) {
+		t.Fatalf("failed pty write should not be recent")
+	}
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    t.TempDir(),
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if runtime.PTYInputRecent(created.MainPtyID, time.Hour) {
+		t.Fatalf("pty input should not be recent before write")
+	}
+	if err := runtime.WritePTY(ctx, created.MainPtyID, []byte("x")); err != nil {
+		t.Fatalf("write pty: %v", err)
+	}
+	if !runtime.PTYInputRecent(created.MainPtyID, time.Hour) {
+		t.Fatalf("pty input should be recent after write")
+	}
+}
+
 func TestRuntimeCreateSessionRunsInitialCommand(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	runtime := app.NewRuntime(app.RuntimeConfig{
