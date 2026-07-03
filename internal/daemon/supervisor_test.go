@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -63,6 +64,10 @@ func TestEnsureRestartsIncompatibleDaemon(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
+	mux.HandleFunc("/v1/compat", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"apiVersion":%d}`, protocol.DaemonAPIVersion+1)
+	})
 	mux.HandleFunc("/v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		close(shutdownCalled)
@@ -90,6 +95,103 @@ func TestEnsureRestartsIncompatibleDaemon(t *testing.T) {
 	case <-shutdownCalled:
 	default:
 		t.Fatalf("incompatible daemon was not asked to shut down")
+	}
+}
+
+func TestEnsureAdoptsSlowCompatibleDaemonWithoutShutdown(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	shutdownCalled := make(chan struct{})
+	server := &http.Server{ReadHeaderTimeout: time.Second}
+	mux := http.NewServeMux()
+	server.Handler = mux
+	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.HandleFunc("/v1/compat", func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(350 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"apiVersion":%d}`, protocol.DaemonAPIVersion)
+	})
+	mux.HandleFunc("/v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		close(shutdownCalled)
+	})
+	go func() {
+		_ = server.Serve(listener)
+	}()
+	t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
+
+	t.Setenv("PATH", "")
+	t.Setenv("WHISKD_PATH", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	if err != nil {
+		t.Fatalf("ensure daemon: %v", err)
+	}
+	if started {
+		t.Fatalf("expected Ensure to adopt the existing daemon")
+	}
+	select {
+	case <-shutdownCalled:
+		t.Fatalf("slow compatible daemon was asked to shut down")
+	default:
+	}
+}
+
+func TestEnsureLeavesDaemonRunningWhenCompatibilityUnknown(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	shutdownCalled := make(chan struct{})
+	server := &http.Server{ReadHeaderTimeout: time.Second}
+	mux := http.NewServeMux()
+	server.Handler = mux
+	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.HandleFunc("/v1/compat", func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	})
+	mux.HandleFunc("/v1/shutdown", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		close(shutdownCalled)
+	})
+	go func() {
+		_ = server.Serve(listener)
+	}()
+	t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
+
+	t.Setenv("PATH", "")
+	t.Setenv("WHISKD_PATH", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+	defer cancel()
+
+	started, err := daemon.Ensure(ctx, "http://"+addr)
+	if err == nil {
+		t.Fatalf("expected compatibility error")
+	}
+	if started {
+		t.Fatalf("expected Ensure not to start a replacement daemon")
+	}
+	if !strings.Contains(err.Error(), "compatibility") {
+		t.Fatalf("expected clear compatibility error, got %v", err)
+	}
+	select {
+	case <-shutdownCalled:
+		t.Fatalf("unknown compatibility daemon was asked to shut down")
+	default:
 	}
 }
 
