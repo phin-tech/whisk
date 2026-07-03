@@ -110,6 +110,7 @@ func serveDaemon(addr string) (err error) {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = mailboxStore.Close() }()
 	settingsStore, err := appsettings.NewDefaultStore()
 	if err != nil {
 		return err

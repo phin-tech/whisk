@@ -16,6 +16,7 @@ import (
 
 type SQLiteStore struct {
 	path string
+	db   *sql.DB
 }
 
 func NewSQLiteStore(path string) (*SQLiteStore, error) {
@@ -26,16 +27,20 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 		}
 		path = defaultPath
 	}
-	store := &SQLiteStore{path: filepath.Clean(path)}
-	db, err := store.open()
+	cleaned := filepath.Clean(path)
+	db, err := openSQLite(cleaned)
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
-	if err := migrateSQLite(db); err != nil {
+	if err := configureSQLite(db); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
-	return store, nil
+	if err := migrateSQLite(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return &SQLiteStore{path: cleaned, db: db}, nil
 }
 
 func DefaultSQLitePath() (string, error) {
@@ -54,11 +59,10 @@ func (s *SQLiteStore) SaveMessage(ctx context.Context, message mailbox.Message) 
 	if err := validateMessage(message); err != nil {
 		return err
 	}
-	db, err := s.openMigrated()
+	db, err := s.database()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -103,11 +107,10 @@ func (s *SQLiteStore) ListMessages(ctx context.Context, filter mailbox.ListFilte
 	if err != nil {
 		return nil, err
 	}
-	db, err := s.openMigrated()
+	db, err := s.database()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	ids, err := queryMessageIDs(ctx, db, normalized)
 	if err != nil {
@@ -132,11 +135,10 @@ func (s *SQLiteStore) MarkMessageRead(ctx context.Context, req mailbox.MarkRead)
 	if readAt.IsZero() {
 		readAt = time.Now().UTC()
 	}
-	db, err := s.openMigrated()
+	db, err := s.database()
 	if err != nil {
 		return mailbox.Message{}, err
 	}
-	defer db.Close()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return mailbox.Message{}, err
@@ -181,11 +183,10 @@ func (s *SQLiteStore) MarkMessageRead(ctx context.Context, req mailbox.MarkRead)
 }
 
 func (s *SQLiteStore) DeleteAll(ctx context.Context) error {
-	db, err := s.openMigrated()
+	db, err := s.database()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -200,23 +201,55 @@ func (s *SQLiteStore) DeleteAll(ctx context.Context) error {
 	return tx.Commit()
 }
 
-func (s *SQLiteStore) openMigrated() (*sql.DB, error) {
-	db, err := s.open()
+func (s *SQLiteStore) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Close()
+}
+
+func (s *SQLiteStore) database() (*sql.DB, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("mailbox sqlite store is closed")
+	}
+	return s.db, nil
+}
+
+func openSQLite(path string) (*sql.DB, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
 	}
-	if err := migrateSQLite(db); err != nil {
-		db.Close()
-		return nil, err
-	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	return db, nil
 }
 
-func (s *SQLiteStore) open() (*sql.DB, error) {
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
-		return nil, err
+func configureSQLite(db *sql.DB) error {
+	if _, err := db.Exec(`pragma busy_timeout = 5000`); err != nil {
+		return fmt.Errorf("enable sqlite busy_timeout: %w", err)
 	}
-	return sql.Open("sqlite", s.path)
+	var journalMode string
+	if err := db.QueryRow(`pragma journal_mode = WAL`).Scan(&journalMode); err != nil {
+		return fmt.Errorf("enable sqlite WAL: %w", err)
+	}
+	if !strings.EqualFold(journalMode, "wal") {
+		return fmt.Errorf("enable sqlite WAL: journal_mode is %s", journalMode)
+	}
+	if _, err := db.Exec(`pragma foreign_keys = ON`); err != nil {
+		return fmt.Errorf("enable sqlite foreign_keys: %w", err)
+	}
+	var foreignKeys int
+	if err := db.QueryRow(`pragma foreign_keys`).Scan(&foreignKeys); err != nil {
+		return fmt.Errorf("verify sqlite foreign_keys: %w", err)
+	}
+	if foreignKeys != 1 {
+		return fmt.Errorf("enable sqlite foreign_keys: pragma remained disabled")
+	}
+	return nil
 }
 
 func migrateSQLite(db *sql.DB) error {

@@ -17,6 +17,11 @@ func TestHTTPServerMailRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new mailbox store: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("close mailbox store: %v", err)
+		}
+	})
 	runtime := app.NewRuntime(app.RuntimeConfig{
 		MailboxStore: store,
 		EventSink:    newFakeEventBus(),

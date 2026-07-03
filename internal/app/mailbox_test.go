@@ -9,6 +9,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/mailboxstore"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/domain/mailbox"
+	"github.com/phin-tech/whisk/internal/events"
 )
 
 func TestRuntimeMailboxSendListReadReplyPublishesEvents(t *testing.T) {
@@ -125,6 +126,65 @@ func TestRuntimeNextMailWaitsForMailboxChanged(t *testing.T) {
 	}
 }
 
+func TestRuntimeNextMailWakesMultipleWaitersForMailboxChanged(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	store := newMailboxStore(t)
+	eventBus, err := events.NewNATSBus()
+	if err != nil {
+		t.Fatalf("new event bus: %v", err)
+	}
+	t.Cleanup(eventBus.Close)
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		MailboxStore: store,
+		EventSink:    eventBus,
+		IDGenerator:  sequentialIDs("mail_01"),
+	})
+	to := mailbox.Address{Kind: mailbox.AddressKindPTY, ID: "pty_01"}
+
+	type nextResult struct {
+		result app.NextMailResult
+		err    error
+	}
+	const waiterCount = 2
+	start := make(chan struct{})
+	results := make(chan nextResult, waiterCount)
+	for range waiterCount {
+		go func() {
+			<-start
+			result, err := runtime.NextMail(ctx, app.NextMailRequest{
+				To:      []mailbox.Address{to},
+				Timeout: time.Second,
+			})
+			results <- nextResult{result: result, err: err}
+		}()
+	}
+	close(start)
+	time.Sleep(20 * time.Millisecond)
+	if _, err := runtime.SendMail(ctx, app.SendMailRequest{
+		From:       mailbox.Address{Kind: mailbox.AddressKindRun, ID: "run_01"},
+		Recipients: []mailbox.Address{to},
+		Type:       mailbox.TypeStatus,
+		Subject:    "Ready",
+	}); err != nil {
+		t.Fatalf("send mail: %v", err)
+	}
+
+	for range waiterCount {
+		select {
+		case got := <-results:
+			if got.err != nil {
+				t.Fatalf("next mail: %v", got.err)
+			}
+			if got.result.Timeout || got.result.Message == nil || got.result.Message.ID != "mail_01" {
+				t.Fatalf("result = %#v", got.result)
+			}
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for next mail waiters: %v", ctx.Err())
+		}
+	}
+}
+
 func TestRuntimeClearDaemonClearsMailboxStore(t *testing.T) {
 	ctx := context.Background()
 	store := newMailboxStore(t)
@@ -163,6 +223,11 @@ func newMailboxStore(t *testing.T) *mailboxstore.SQLiteStore {
 	if err != nil {
 		t.Fatalf("new mailbox store: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("close mailbox store: %v", err)
+		}
+	})
 	return store
 }
 

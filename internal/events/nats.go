@@ -54,7 +54,7 @@ func NewNATSBus() (*NATSBus, error) {
 		server.Shutdown()
 		return nil, err
 	}
-	return &NATSBus{server: server, conn: conn, notify: make(chan struct{}, 1)}, nil
+	return &NATSBus{server: server, conn: conn, notify: make(chan struct{})}, nil
 }
 
 func (b *NATSBus) Publish(_ context.Context, event app.RuntimeEvent) error {
@@ -66,10 +66,9 @@ func (b *NATSBus) Publish(_ context.Context, event app.RuntimeEvent) error {
 	if len(b.retained) > retainedRuntimeEventLimit {
 		b.retained = append([]app.RuntimeEvent(nil), b.retained[len(b.retained)-retainedRuntimeEventLimit:]...)
 	}
-	select {
-	case b.notify <- struct{}{}:
-	default:
-	}
+	notify := b.notify
+	b.notify = make(chan struct{})
+	close(notify)
 	b.mu.Unlock()
 
 	data, err := json.Marshal(event)

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/phin-tech/whisk/internal/domain/mailbox"
 	"github.com/phin-tech/whisk/internal/protocol"
@@ -123,6 +124,57 @@ func TestRunMailCheckDefaultsToEnvRecipients(t *testing.T) {
 	}
 	if !response.Timeout {
 		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestRunMailCheckAckUsesReturnedUnreadDefaultRecipient(t *testing.T) {
+	t.Setenv("WHISK_RUN_ID", "run_env")
+	t.Setenv("WHISK_PROJECT_ID", "proj_env")
+	readAt := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)
+	var readReq protocol.MarkMailReadRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/mail/next":
+			to := r.URL.Query().Get("to")
+			for _, want := range []string{"run:run_env", "project:proj_env"} {
+				if !strings.Contains(to, want) {
+					t.Fatalf("to query = %q, missing %q", to, want)
+				}
+			}
+			_ = json.NewEncoder(w).Encode(protocol.NextMailResponse{Message: &protocol.MailMessage{
+				ID: "mail_01",
+				Recipients: []protocol.MailRecipient{
+					{Address: protocol.MailAddress{Kind: mailbox.AddressKindRun, ID: "run_env"}, ReadAt: &readAt},
+					{Address: protocol.MailAddress{Kind: mailbox.AddressKindProject, ID: "proj_env"}},
+				},
+			}})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/mail/mail_01/read":
+			if err := json.NewDecoder(r.Body).Decode(&readReq); err != nil {
+				t.Fatalf("decode read: %v", err)
+			}
+			if readReq.To == nil {
+				t.Fatalf("read request To is nil")
+			}
+			_ = json.NewEncoder(w).Encode(protocol.MailMessage{
+				ID: "mail_01",
+				Recipients: []protocol.MailRecipient{
+					{Address: protocol.MailAddress{Kind: mailbox.AddressKindRun, ID: "run_env"}, ReadAt: &readAt},
+					{Address: *readReq.To, ReadAt: &readAt},
+				},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	if _, err := captureStdout(func() error {
+		return run([]string{"mail", "check", "-url", server.URL, "-ack", "-json"})
+	}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if readReq.To == nil || readReq.To.Kind != mailbox.AddressKindProject || readReq.To.ID != "proj_env" {
+		t.Fatalf("read request = %#v", readReq)
 	}
 }
 

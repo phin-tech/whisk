@@ -198,7 +198,11 @@ func runMailCheck(args []string) error {
 		return err
 	}
 	if *ack && response.Message != nil {
-		read, err := daemonClient.MarkMailRead(ctx, response.Message.ID, protocol.MarkMailReadRequest{To: ackAddress(to)})
+		ackTo, err := ackAddressForMessage(to, *response.Message)
+		if err != nil {
+			return err
+		}
+		read, err := daemonClient.MarkMailRead(ctx, response.Message.ID, protocol.MarkMailReadRequest{To: ackTo})
 		if err != nil {
 			return err
 		}
@@ -354,11 +358,20 @@ func mailReadAddress(raw string) (*protocol.MailAddress, error) {
 	return &address, nil
 }
 
-func ackAddress(to []protocol.MailAddress) *protocol.MailAddress {
+func ackAddressForMessage(to []protocol.MailAddress, message protocol.MailMessage) (*protocol.MailAddress, error) {
 	if len(to) == 1 {
-		return &to[0]
+		address := to[0]
+		return &address, nil
 	}
-	return nil
+	for _, requested := range to {
+		for _, recipient := range message.Recipients {
+			if recipient.ReadAt == nil && recipient.Address == requested {
+				address := requested
+				return &address, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("mail %s has no unread recipient matching requested addresses", message.ID)
 }
 
 func mailBodyAndPayload(body string, bodyFile string, payloadRaw string) (string, json.RawMessage, error) {

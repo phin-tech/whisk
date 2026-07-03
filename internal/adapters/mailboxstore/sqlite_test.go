@@ -3,6 +3,8 @@ package mailboxstore
 import (
 	"context"
 	"path/filepath"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +30,11 @@ func TestSQLiteStoreRoundTripsMessagesWithRecipientReadState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("close store: %v", err)
+		}
+	})
 	now := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)
 	message, err := mailbox.NewMessage(mailbox.Send{
 		ID:         "mail_01",
@@ -91,6 +98,11 @@ func TestSQLiteStoreOrdersNextChronologicallyAndDeletesAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("close store: %v", err)
+		}
+	})
 	to := mailbox.Address{Kind: mailbox.AddressKindPTY, ID: "pty_01"}
 	for _, spec := range []struct {
 		id string
@@ -130,5 +142,138 @@ func TestSQLiteStoreOrdersNextChronologicallyAndDeletesAll(t *testing.T) {
 	}
 	if len(remaining) != 0 {
 		t.Fatalf("remaining = %#v", remaining)
+	}
+}
+
+func TestSQLiteStoreSupportsConcurrentOperations(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewSQLiteStore(filepath.Join(t.TempDir(), "mailbox.sqlite"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("close store: %v", err)
+		}
+	})
+
+	to := mailbox.Address{Kind: mailbox.AddressKindRun, ID: "run_01"}
+	const messageCount = 24
+	var wg sync.WaitGroup
+	errCh := make(chan error, messageCount)
+	for i := range messageCount {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			id := "mail_" + strconv.Itoa(i)
+			message, err := mailbox.NewMessage(mailbox.Send{
+				ID:      id,
+				From:    mailbox.Address{Kind: mailbox.AddressKindPTY, ID: "pty_" + strconv.Itoa(i)},
+				To:      []mailbox.Address{to},
+				Type:    mailbox.TypeStatus,
+				Subject: id,
+				Now:     time.Date(2026, 7, 3, 12, i, 0, 0, time.UTC),
+			})
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if err := store.SaveMessage(ctx, message); err != nil {
+				errCh <- err
+				return
+			}
+			if _, err := store.ListMessages(ctx, mailbox.ListFilter{To: []mailbox.Address{to}, UnreadOnly: true, Limit: 1}); err != nil {
+				errCh <- err
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("concurrent operation: %v", err)
+		}
+	}
+
+	messages, err := store.ListMessages(ctx, mailbox.ListFilter{To: []mailbox.Address{to}, UnreadOnly: true})
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(messages) != messageCount {
+		t.Fatalf("messages len = %d, want %d", len(messages), messageCount)
+	}
+
+	errCh = make(chan error, messageCount)
+	for _, message := range messages {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			if _, err := store.MarkMessageRead(ctx, mailbox.MarkRead{ID: id, Recipient: &to}); err != nil {
+				errCh <- err
+			}
+		}(message.ID)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("concurrent mark read: %v", err)
+		}
+	}
+
+	unread, err := store.ListMessages(ctx, mailbox.ListFilter{To: []mailbox.Address{to}, UnreadOnly: true})
+	if err != nil {
+		t.Fatalf("list unread: %v", err)
+	}
+	if len(unread) != 0 {
+		t.Fatalf("unread after mark read = %#v", unread)
+	}
+	if err := store.DeleteAll(ctx); err != nil {
+		t.Fatalf("delete all: %v", err)
+	}
+}
+
+func TestSQLiteStoreEnforcesForeignKeysAndCascadesRecipients(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewSQLiteStore(filepath.Join(t.TempDir(), "mailbox.sqlite"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("close store: %v", err)
+		}
+	})
+
+	if _, err := store.db.ExecContext(ctx, `
+		insert into message_recipients (message_id, recipient_kind, recipient_id)
+		values ('missing_mail', 'run', 'run_01')
+	`); err == nil {
+		t.Fatalf("expected foreign key violation for orphan recipient")
+	}
+
+	message, err := mailbox.NewMessage(mailbox.Send{
+		ID:      "mail_01",
+		From:    mailbox.Address{Kind: mailbox.AddressKindPTY, ID: "pty_01"},
+		To:      []mailbox.Address{{Kind: mailbox.AddressKindRun, ID: "run_01"}},
+		Type:    mailbox.TypeStatus,
+		Subject: "Cascade",
+		Now:     time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("new message: %v", err)
+	}
+	if err := store.SaveMessage(ctx, message); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx, `delete from messages where id = ?`, message.ID); err != nil {
+		t.Fatalf("delete message: %v", err)
+	}
+	var recipients int
+	if err := store.db.QueryRowContext(ctx, `select count(*) from message_recipients where message_id = ?`, message.ID).Scan(&recipients); err != nil {
+		t.Fatalf("count recipients: %v", err)
+	}
+	if recipients != 0 {
+		t.Fatalf("recipients after parent delete = %d", recipients)
 	}
 }
