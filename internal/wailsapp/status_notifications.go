@@ -224,10 +224,10 @@ func (s *Service) runStatusNotificationWatcher(ctx context.Context, done chan<- 
 			}
 			continue
 		}
-		if event.Type == protocol.RuntimeEventNone {
+		if event.Event.Type == protocol.RuntimeEventNone {
 			continue
 		}
-		if event.Type != "status.changed" {
+		if event.Event.Type != "status.changed" {
 			continue
 		}
 		events, err := s.client.ListStatusEvents(ctx, protocol.ListStatusEventsRequest{UnreadOnly: true})

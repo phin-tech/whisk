@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -140,8 +141,54 @@ func TestStatusNotificationsReuseNativeIDAndActivateLatestEventAfterCooldown(t *
 	}
 }
 
+func TestStatusNotificationWatcherRefreshesUnreadEvents(t *testing.T) {
+	presenter := &statusNotificationPresenterFake{presentedCh: make(chan statusNotification, 1)}
+	runtimeClient := &statusNotificationRuntimeClientFake{
+		nextEvents: make(chan protocol.NextEventResponse, 1),
+		statusEvents: []protocol.StatusEvent{{
+			ID:                   "status_01",
+			Kind:                 workitem.StatusKindQuestion,
+			Message:              "Need API key.",
+			SessionID:            "sess_01",
+			PaneID:               "pane_01",
+			RequiresAttention:    true,
+			NotificationKey:      "status|session:sess_01|pane:pane_01|actor:codex|kind:question",
+			NotificationSeverity: workitem.StatusNotificationSeverityAttention,
+			CreatedAt:            time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC),
+		}},
+	}
+	service := &Service{
+		client:                   runtimeClient,
+		notificationPresenter:    presenter,
+		notificationShown:        map[string]struct{}{},
+		notificationEvents:       map[string]protocol.StatusEvent{},
+		notificationEventTimeout: time.Millisecond,
+	}
+
+	ctx := context.Background()
+	runtimeClient.nextEvents <- protocol.NextEventResponse{Event: protocol.RuntimeEvent{Type: "status.changed", Seq: 1}}
+	service.startStatusNotificationWatcher(ctx)
+	defer service.stopStatusNotificationWatcher()
+
+	select {
+	case notification := <-presenter.presentedCh:
+		if notification.Event.ID != "status_01" {
+			t.Fatalf("notification event = %#v", notification.Event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for notification")
+	}
+	if runtimeClient.nextEventReq.TimeoutMs != 1 {
+		t.Fatalf("next event timeout = %d, want 1", runtimeClient.nextEventReq.TimeoutMs)
+	}
+	if !runtimeClient.listStatusEventsReq.UnreadOnly {
+		t.Fatalf("list status events request = %#v, want unread-only", runtimeClient.listStatusEventsReq)
+	}
+}
+
 type statusNotificationPresenterFake struct {
-	presented []statusNotification
+	presented   []statusNotification
+	presentedCh chan statusNotification
 }
 
 func (f *statusNotificationPresenterFake) Start(context.Context, application.ServiceOptions, func(string)) error {
@@ -154,6 +201,9 @@ func (f *statusNotificationPresenterFake) Stop() error {
 
 func (f *statusNotificationPresenterFake) Present(_ context.Context, notification statusNotification) error {
 	f.presented = append(f.presented, notification)
+	if f.presentedCh != nil {
+		f.presentedCh <- notification
+	}
 	return nil
 }
 
@@ -171,4 +221,28 @@ func (f *statusNotificationEmitterFake) Emit(name string, data ...any) bool {
 	}
 	f.activations = append(f.activations, activation)
 	return true
+}
+
+type statusNotificationRuntimeClientFake struct {
+	client.RuntimeClient
+
+	nextEvents          chan protocol.NextEventResponse
+	statusEvents        []protocol.StatusEvent
+	nextEventReq        protocol.NextEventRequest
+	listStatusEventsReq protocol.ListStatusEventsRequest
+}
+
+func (f *statusNotificationRuntimeClientFake) NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.NextEventResponse, error) {
+	f.nextEventReq = req
+	select {
+	case event := <-f.nextEvents:
+		return event, nil
+	case <-ctx.Done():
+		return protocol.NextEventResponse{}, ctx.Err()
+	}
+}
+
+func (f *statusNotificationRuntimeClientFake) ListStatusEvents(_ context.Context, req protocol.ListStatusEventsRequest) ([]protocol.StatusEvent, error) {
+	f.listStatusEventsReq = req
+	return f.statusEvents, nil
 }
