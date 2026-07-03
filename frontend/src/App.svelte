@@ -34,6 +34,7 @@
     WorkflowValidationReport,
     ReadyWorkExplanation,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+  import type { DaemonStatus } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/models";
   import {
     AddProjectAttachment,
     AddWorkItemLink,
@@ -168,6 +169,7 @@
   type RailSide = "left" | "right";
 
   const SETTINGS_KEY = "whisk.ui.settings";
+  const DAEMON_STATUS_EVENT = "daemon-status:changed";
 
   let sessions: Session[] = [];
   let ptys: PTYInfo[] = [];
@@ -260,6 +262,7 @@
   let closeDialogMessage = "";
   let pendingClosePaneTarget: ReturnType<typeof closePaneTarget> = null;
   let keepDaemonAlive = true;
+  let autoRestartManagedDaemon = false;
   let hookLogEnabled = true;
   let clearHookLogAfterSession = false;
   let worktrunkPath = "/opt/homebrew/bin/wt";
@@ -273,6 +276,7 @@
   let outputChunkStartOffsets: Record<string, number[]> = {};
   let offsets: Record<string, number> = {};
   let bottomJumpRevisions: Record<string, number> = {};
+  let daemonStatus: DaemonStatus | null = null;
   let daemonAddress = "";
   let daemonControlToken = "";
   let ptyStreams: Record<string, WebSocket> = {};
@@ -280,6 +284,7 @@
   let outputReconcileTimer: number | undefined;
   let workReconcileTimer: number | undefined;
   let stopCommandEvents: (() => void) | undefined;
+  let stopDaemonStatusEvents: (() => void) | undefined;
   let eventLoopRunning = false;
   let settingsLoaded = false;
   let stopped = false;
@@ -411,6 +416,9 @@
       const loaded = await LoadAppSettings();
       startupView = normalizeStartupView(loaded.startupView);
       keepDaemonAlive = loaded.keepDaemonAlive;
+      if (typeof loaded.autoRestartManagedDaemon === "boolean") {
+        autoRestartManagedDaemon = loaded.autoRestartManagedDaemon;
+      }
       if (typeof loaded.hookLogEnabled === "boolean") hookLogEnabled = loaded.hookLogEnabled;
       if (typeof loaded.clearHookLogAfterSession === "boolean") {
         clearHookLogAfterSession = loaded.clearHookLogAfterSession;
@@ -442,12 +450,15 @@
       const saved = await SaveAppSettings({
         startupView,
         keepDaemonAlive,
+        autoRestartManagedDaemon,
         hookLogEnabled,
         clearHookLogAfterSession,
         worktrunkPath,
       });
       startupView = normalizeStartupView(saved.startupView);
       keepDaemonAlive = saved.keepDaemonAlive;
+      autoRestartManagedDaemon =
+        typeof saved.autoRestartManagedDaemon === "boolean" ? saved.autoRestartManagedDaemon : false;
       if (typeof saved.hookLogEnabled === "boolean") hookLogEnabled = saved.hookLogEnabled;
       if (typeof saved.clearHookLogAfterSession === "boolean") {
         clearHookLogAfterSession = saved.clearHookLogAfterSession;
@@ -468,9 +479,24 @@
     await persistAppSettings();
   }
 
+  async function setAutoRestartManagedDaemon(enabled: boolean) {
+    autoRestartManagedDaemon = enabled;
+    await persistAppSettings();
+  }
+
   async function setWorktrunkPath(path: string) {
     worktrunkPath = path;
     await persistAppSettings();
+  }
+
+  function applyDaemonStatus(status: DaemonStatus) {
+    daemonStatus = status;
+    if (status.address) daemonAddress = status.address;
+    daemonControlToken = status.controlToken ?? "";
+  }
+
+  async function refreshDaemonStatus() {
+    applyDaemonStatus(await LoadDaemonStatus());
   }
 
   async function refreshSessions() {
@@ -741,9 +767,8 @@
 
   async function loadDaemonAddress() {
     if (daemonAddress) return daemonAddress;
-    const status = await LoadDaemonStatus();
-    daemonAddress = status.address;
-    daemonControlToken = status.controlToken ?? "";
+    if (!daemonStatus) await refreshDaemonStatus();
+    daemonAddress = daemonStatus?.address ?? "";
     return daemonAddress;
   }
 
@@ -981,8 +1006,10 @@
       await SaveAppSettings({
         startupView,
         keepDaemonAlive,
+        autoRestartManagedDaemon,
         hookLogEnabled: agentHookLogStatus.enabled,
         clearHookLogAfterSession,
+        worktrunkPath,
       });
       agentHookNotice = `Hook logging ${agentHookLogStatus.enabled ? "enabled" : "disabled"}.`;
     });
@@ -995,8 +1022,10 @@
       await SaveAppSettings({
         startupView,
         keepDaemonAlive,
+        autoRestartManagedDaemon,
         hookLogEnabled,
         clearHookLogAfterSession: agentHookLogStatus.clearAfterSession,
+        worktrunkPath,
       });
       agentHookNotice = `Clear hook log after session ${agentHookLogStatus.clearAfterSession ? "enabled" : "disabled"}.`;
     });
@@ -2103,6 +2132,9 @@
     stopCommandEvents = Events.On("command:run", (event) => {
       void executeCommand(String(event.data));
     });
+    stopDaemonStatusEvents = Events.On(DAEMON_STATUS_EVENT, (event) => {
+      applyDaemonStatus(event.data as DaemonStatus);
+    });
     PTYTraceEnabled()
       .then((enabled) => {
         ptyTraceEnabled = enabled;
@@ -2114,6 +2146,7 @@
       .then(() => {
         settingsLoaded = true;
       })
+      .then(refreshDaemonStatus)
       .then(refreshSessions)
       .then(refreshPTYs)
       .then(refreshPlugins)
@@ -2149,6 +2182,7 @@
   onDestroy(() => {
     stopped = true;
     stopCommandEvents?.();
+    stopDaemonStatusEvents?.();
     if (outputReconcileTimer) window.clearInterval(outputReconcileTimer);
     if (workReconcileTimer) window.clearInterval(workReconcileTimer);
     for (const socket of Object.values(ptyStreams)) socket.close();
@@ -2350,6 +2384,8 @@
           {terminalFontSize}
           {terminalCursorBlink}
           {keepDaemonAlive}
+          {autoRestartManagedDaemon}
+          {daemonStatus}
           {worktrunkPath}
           {agentHookIntegrations}
           {plugins}
@@ -2365,6 +2401,8 @@
           onTerminalFontSize={(size) => (terminalFontSize = size)}
           onTerminalCursorBlink={(blink) => (terminalCursorBlink = blink)}
           onKeepDaemonAlive={(keep) => void setKeepDaemonAlive(keep)}
+          onAutoRestartManagedDaemon={(enabled) => void setAutoRestartManagedDaemon(enabled)}
+          onDaemonStatus={applyDaemonStatus}
           onWorktrunkPath={(path) => void setWorktrunkPath(path)}
           onRefreshAgentHookIntegrations={() => void refreshAgentHookIntegrations()}
           onRefreshPlugins={() => void rescanPlugins()}

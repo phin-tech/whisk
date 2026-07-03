@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onMount } from "svelte";
   import Play from "@lucide/svelte/icons/play";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import RotateCw from "@lucide/svelte/icons/rotate-cw";
@@ -17,18 +17,18 @@
   import type { DaemonStatus } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/models";
 
   export let keepDaemonAlive = true;
+  export let autoRestartManagedDaemon = false;
+  export let status: DaemonStatus | null = null;
   export let worktrunkPath = "/opt/homebrew/bin/wt";
   export let onKeepDaemonAlive: (value: boolean) => void;
+  export let onAutoRestartManagedDaemon: (value: boolean) => void;
+  export let onDaemonStatus: (status: DaemonStatus) => void;
   export let onWorktrunkPath: (value: string) => void;
 
-  let status: DaemonStatus | null = null;
   let busy = false;
   let actionError = "";
-  let pollTimer: number | undefined;
   let pendingWorktrunkPath = worktrunkPath;
   let lastWorktrunkPath = worktrunkPath;
-
-  const POLL_MS = 3000;
 
   function describeError(err: unknown): string {
     return err instanceof Error ? err.message : String(err);
@@ -36,7 +36,9 @@
 
   async function refresh() {
     try {
-      status = await FetchDaemonStatus();
+      const next = await FetchDaemonStatus();
+      status = next;
+      onDaemonStatus(next);
     } catch (err) {
       actionError = describeError(err);
     }
@@ -47,7 +49,9 @@
     busy = true;
     actionError = "";
     try {
-      status = await action();
+      const next = await action();
+      status = next;
+      onDaemonStatus(next);
     } catch (err) {
       actionError = describeError(err);
       await refresh();
@@ -72,14 +76,7 @@
   }
 
   onMount(() => {
-    void refresh();
-    pollTimer = window.setInterval(() => {
-      if (!busy) void refresh();
-    }, POLL_MS);
-  });
-
-  onDestroy(() => {
-    if (pollTimer !== undefined) window.clearInterval(pollTimer);
+    if (!status) void refresh();
   });
 
   $: running = status?.running ?? false;
@@ -90,6 +87,11 @@
   $: versionLabel = status?.running
     ? `${buildLabel || "unknown build"} · API v${status.apiVersion}`
     : "";
+  $: restartLabel = status?.restarting
+    ? `Auto-restart attempt ${status.restartAttempt} of ${status.restartMaxAttempts}`
+    : status?.autoRestartExhausted
+      ? `Auto-restart stopped after ${status.restartAttempt} attempts`
+      : "";
   $: if (worktrunkPath !== lastWorktrunkPath) {
     pendingWorktrunkPath = worktrunkPath;
     lastWorktrunkPath = worktrunkPath;
@@ -156,6 +158,9 @@
   {#if actionError}
     <div class="mt-2 text-[11px] text-red">{actionError}</div>
   {/if}
+  {#if restartLabel}
+    <div class="mt-2 text-[11px] text-text-secondary">{restartLabel}</div>
+  {/if}
 </div>
 
 <div class="mt-4 py-2">
@@ -190,5 +195,19 @@
     label="Toggle keep daemon running"
     checked={keepDaemonAlive}
     onCheckedChange={onKeepDaemonAlive}
+  />
+</div>
+
+<div class="mt-4 flex items-center justify-between gap-3 py-2">
+  <div>
+    <div class="text-[13px]">Auto-restart managed daemon</div>
+    <div class="mt-0.5 text-[11px] text-text-muted">
+      Re-ensures a daemon Whisk started when it exits unexpectedly. Unmanaged daemons are left alone.
+    </div>
+  </div>
+  <Switch
+    label="Toggle managed daemon auto-restart"
+    checked={autoRestartManagedDaemon}
+    onCheckedChange={onAutoRestartManagedDaemon}
   />
 </div>

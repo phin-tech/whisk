@@ -56,6 +56,7 @@ func main() {
 		// it when the user opted out via the KeepDaemonAlive preference and the current state file
 		// still identifies a daemon this app owns.
 		OnShutdown: func() {
+			wailsapp.StopDaemonStatusWatcher(whisk)
 			if !daemon.IsManaged(daemonURL) {
 				return
 			}
@@ -68,6 +69,7 @@ func main() {
 			_ = daemon.Stop(stopCtx, daemonURL)
 		},
 	})
+	wailsapp.AttachEventEmitter(whisk, desktop.Event)
 
 	desktop.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Whisk",

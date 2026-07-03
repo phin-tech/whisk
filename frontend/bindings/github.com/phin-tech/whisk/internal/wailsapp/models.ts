@@ -43,6 +43,31 @@ export class DaemonStatus {
      */
     "error": string;
 
+    /**
+     * AutoRestartEnabled mirrors the opt-in app preference used by the client-side watcher.
+     */
+    "autoRestartEnabled": boolean;
+
+    /**
+     * Restarting is true while the watcher is actively trying to re-ensure a managed daemon.
+     */
+    "restarting": boolean;
+
+    /**
+     * RestartAttempt is the current bounded auto-restart attempt number, when any.
+     */
+    "restartAttempt": number;
+
+    /**
+     * RestartMaxAttempts is the retry budget for one unexpected managed-daemon loss.
+     */
+    "restartMaxAttempts": number;
+
+    /**
+     * AutoRestartExhausted is true after the watcher spends the bounded retry budget.
+     */
+    "autoRestartExhausted": boolean;
+
     /** Creates a new DaemonStatus instance. */
     constructor($$source: Partial<DaemonStatus> = {}) {
         if (!("running" in $$source)) {
@@ -71,6 +96,21 @@ export class DaemonStatus {
         }
         if (!("error" in $$source)) {
             this["error"] = "";
+        }
+        if (!("autoRestartEnabled" in $$source)) {
+            this["autoRestartEnabled"] = false;
+        }
+        if (!("restarting" in $$source)) {
+            this["restarting"] = false;
+        }
+        if (!("restartAttempt" in $$source)) {
+            this["restartAttempt"] = 0;
+        }
+        if (!("restartMaxAttempts" in $$source)) {
+            this["restartMaxAttempts"] = 0;
+        }
+        if (!("autoRestartExhausted" in $$source)) {
+            this["autoRestartExhausted"] = false;
         }
 
         Object.assign(this, $$source);
