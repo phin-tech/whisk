@@ -30,6 +30,11 @@ Trust changes are applied live inside `whiskd`; the daemon is not restarted and 
 
 ## Manifest
 
+`manifestVersion` is optional and defaults to `1`. Version 1 keeps the original
+permissive manifest behavior for existing plugins. Version 2 is stricter: Whisk
+rejects unsupported future versions and unknown top-level fields so new
+contribution kinds do not get silently ignored.
+
 ```json
 {
   "id": "github",
@@ -64,6 +69,43 @@ Trust changes are applied live inside `whiskd`; the daemon is not restarted and 
   }
 }
 ```
+
+Manifest version 2 also parses daemon-owned foundations for future plugin
+events, hooks, workflow gates/actions, and permission disclosures:
+
+```json
+{
+  "manifestVersion": 2,
+  "id": "linear",
+  "name": "Linear",
+  "version": "0.2.0",
+  "events": [
+    {
+      "id": "linear.sync-work",
+      "subjects": ["workitem.stage.changed"],
+      "command": "node ./on-event.mjs",
+      "timeoutMs": 10000
+    }
+  ],
+  "hooks": [
+    {
+      "id": "linear.approval-policy",
+      "point": "approval.evaluate",
+      "command": "node ./policy.mjs",
+      "timeoutMs": 3000
+    }
+  ],
+  "permissions": {
+    "ptyOutput": false,
+    "envPrefixes": ["LINEAR_"],
+    "network": ["api.linear.app"]
+  }
+}
+```
+
+These version 2 sections are catalog foundations only in this release. Whisk
+does not dispatch plugin events, invoke blocking hooks, or run workflow
+gate/action commands yet.
 
 Attachment templates are declarative UI hints. Whisk renders the form and sends the values to the daemon. The plugin command receives JSON on stdin:
 

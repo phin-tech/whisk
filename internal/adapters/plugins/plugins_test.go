@@ -5,11 +5,204 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/appsettings"
 )
+
+func TestReadManifestDefaultsV1AndAllowsAdHocFields(t *testing.T) {
+	dir := t.TempDir()
+	writeManifestOnly(t, dir, `{
+		"id": "legacy",
+		"name": "Legacy",
+		"version": "0.1.0",
+		"panels": [{"id": "legacy.panel"}],
+		"events": [{"id": "legacy.event"}],
+		"ui": {
+			"reviewActions": [{
+				"id": "legacy.review",
+				"label": "Legacy Review",
+				"urlTemplate": "https://example.test/review",
+				"submitCommand": "node ./review.mjs",
+				"blocking": true
+			}]
+		}
+	}`)
+
+	manifest, err := ReadManifest(dir)
+	if err != nil {
+		t.Fatalf("ReadManifest: %v", err)
+	}
+	if manifest.ManifestVersion != 1 {
+		t.Fatalf("ManifestVersion = %d, want 1", manifest.ManifestVersion)
+	}
+	if len(manifest.Events) != 1 || manifest.Events[0].ID != "legacy.event" {
+		t.Fatalf("events = %#v", manifest.Events)
+	}
+	if len(manifest.UI.ReviewActions) != 1 || !manifest.UI.ReviewActions[0].Blocking {
+		t.Fatalf("review actions = %#v", manifest.UI.ReviewActions)
+	}
+}
+
+func TestReadManifestParsesAndNormalizesManifestV2(t *testing.T) {
+	dir := t.TempDir()
+	writeManifestOnly(t, dir, `{
+		"manifestVersion": 2,
+		"id": "linear",
+		"name": "Linear",
+		"version": "0.2.0",
+		"events": [{
+			"id": "linear.sync-work",
+			"subjects": ["workitem.stage.changed", "run.*"],
+			"filter": {"entity.projectId": "proj_01", "data.requiresAttention": true},
+			"command": "node ./on-event.mjs",
+			"timeoutMs": 999999,
+			"outputCapBytes": 999999999
+		}],
+		"hooks": [{
+			"id": "linear.approval-policy",
+			"point": "approval.evaluate",
+			"command": "node ./policy.mjs"
+		}],
+		"gates": [{
+			"id": "linear.issue-done",
+			"label": "Linear issue done",
+			"appliesTo": {"gateKinds": ["review"], "phases": ["review"]},
+			"open": {"urlTemplate": "https://linear.app/acme/issue/{{work_item.number.url}}"},
+			"resolve": {"command": "node ./resolve-gate.mjs"},
+			"blocking": true
+		}],
+		"workflowActions": [{
+			"id": "linear.sync",
+			"label": "Sync Linear issue",
+			"command": "node ./sync.mjs",
+			"phases": ["planning"],
+			"timeoutMs": 1,
+			"outputCapBytes": 2
+		}],
+		"permissions": {
+			"ptyOutput": true,
+			"envPrefixes": ["LINEAR_", "ACME_"],
+			"network": ["api.linear.app"]
+		}
+	}`)
+
+	manifest, err := ReadManifest(dir)
+	if err != nil {
+		t.Fatalf("ReadManifest: %v", err)
+	}
+	if manifest.ManifestVersion != 2 {
+		t.Fatalf("ManifestVersion = %d, want 2", manifest.ManifestVersion)
+	}
+	if got := manifest.Events[0].TimeoutMs; got != manifestEventMaxTimeoutMs {
+		t.Fatalf("event timeout = %d, want %d", got, manifestEventMaxTimeoutMs)
+	}
+	if got := manifest.Events[0].OutputCapBytes; got != manifestCommandMaxOutputCapBytes {
+		t.Fatalf("event output cap = %d, want %d", got, manifestCommandMaxOutputCapBytes)
+	}
+	if got := manifest.Hooks[0].TimeoutMs; got != manifestHookDefaultTimeoutMs {
+		t.Fatalf("hook timeout = %d, want %d", got, manifestHookDefaultTimeoutMs)
+	}
+	if got := manifest.Gates[0].TimeoutMs; got != manifestGateDefaultTimeoutMs {
+		t.Fatalf("gate timeout = %d, want %d", got, manifestGateDefaultTimeoutMs)
+	}
+	if got := manifest.WorkflowActions[0].TimeoutMs; got != 1 {
+		t.Fatalf("workflow action timeout = %d, want 1", got)
+	}
+	if got := manifest.WorkflowActions[0].OutputCapBytes; got != 2 {
+		t.Fatalf("workflow action output cap = %d, want 2", got)
+	}
+	if !manifest.Permissions.PTYOutput || len(manifest.Permissions.EnvPrefixes) != 2 || len(manifest.Permissions.Network) != 1 {
+		t.Fatalf("permissions = %#v", manifest.Permissions)
+	}
+}
+
+func TestReadManifestRejectsUnsupportedFutureManifestVersion(t *testing.T) {
+	dir := t.TempDir()
+	writeManifestOnly(t, dir, `{"manifestVersion":3,"id":"future"}`)
+
+	_, err := ReadManifest(dir)
+	if err == nil || !strings.Contains(err.Error(), "unsupported manifestVersion 3") {
+		t.Fatalf("ReadManifest error = %v", err)
+	}
+}
+
+func TestReadManifestRejectsUnknownV2TopLevelField(t *testing.T) {
+	dir := t.TempDir()
+	writeManifestOnly(t, dir, `{"manifestVersion":2,"id":"future-ui","panels":[]}`)
+
+	_, err := ReadManifest(dir)
+	if err == nil || !strings.Contains(err.Error(), `unsupported top-level field "panels"`) {
+		t.Fatalf("ReadManifest error = %v", err)
+	}
+}
+
+func TestReadManifestRejectsInvalidV2Contributions(t *testing.T) {
+	tests := []struct {
+		name     string
+		manifest string
+		want     string
+	}{
+		{
+			name: "event command required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"events": [{"id": "bad.event", "subjects": ["workitem.updated"]}]
+			}`,
+			want: "events[bad.event].command required",
+		},
+		{
+			name: "event wildcard must trail",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"events": [{"id": "bad.event", "subjects": ["work*item.updated"], "command": "true"}]
+			}`,
+			want: "unsupported wildcard",
+		},
+		{
+			name: "duplicate contribution id",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"events": [{"id": "dup", "subjects": ["workitem.updated"], "command": "true"}],
+				"hooks": [{"id": "dup", "point": "approval.evaluate", "command": "true"}]
+			}`,
+			want: `duplicate manifest contribution id "dup"`,
+		},
+		{
+			name: "negative timeout",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"hooks": [{"id": "bad.hook", "point": "approval.evaluate", "command": "true", "timeoutMs": -1}]
+			}`,
+			want: "timeoutMs must be non-negative",
+		},
+		{
+			name: "duplicate permission",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"permissions": {"envPrefixes": ["LINEAR_", "LINEAR_"]}
+			}`,
+			want: `permissions.envPrefixes contains duplicate value "LINEAR_"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeManifestOnly(t, dir, tt.manifest)
+			_, err := ReadManifest(dir)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("ReadManifest error = %v, want containing %q", err, tt.want)
+			}
+		})
+	}
+}
 
 func TestScanTrustedResolversRunsCommandResolver(t *testing.T) {
 	dir := t.TempDir()
@@ -128,13 +321,18 @@ func TestManagerRunTemplateRejectsUntrustedPlugin(t *testing.T) {
 
 func writePlugin(t *testing.T, dir string, manifest string) {
 	t.Helper()
+	writeManifestOnly(t, dir, manifest)
+	if runtime.GOOS == "windows" {
+		t.Skip("shell command quoting in this test is POSIX-only")
+	}
+}
+
+func writeManifestOnly(t *testing.T, dir string, manifest string) {
+	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "plugin.json"), []byte(manifest), 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
-	}
-	if runtime.GOOS == "windows" {
-		t.Skip("shell command quoting in this test is POSIX-only")
 	}
 }
