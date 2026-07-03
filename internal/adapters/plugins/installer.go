@@ -2,7 +2,6 @@ package plugins
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -164,12 +163,9 @@ func manifestFromBundle(files map[string][]byte) (Manifest, error) {
 	if !ok {
 		return Manifest{}, fmt.Errorf("bundle is missing plugin.json")
 	}
-	var manifest Manifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
+	manifest, err := parseManifest(data)
+	if err != nil {
 		return Manifest{}, fmt.Errorf("parse plugin.json: %w", err)
-	}
-	if strings.TrimSpace(manifest.ID) == "" {
-		return Manifest{}, fmt.Errorf("plugin.json is missing an id")
 	}
 	return manifest, nil
 }

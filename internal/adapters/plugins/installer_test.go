@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/domain/pluginregistry"
@@ -132,6 +133,20 @@ func TestInstallerRejectsBundleWithoutManifest(t *testing.T) {
 	installer, _, _ := newFixtureInstaller(t, transport)
 	if _, err := installer.Install(context.Background(), "test", "x"); err == nil {
 		t.Fatal("Install without plugin.json = nil error, want error")
+	}
+}
+
+func TestInstallerRejectsUnsupportedManifestVersion(t *testing.T) {
+	transport := &fakeTransport{
+		registry: []byte(`{"version":1,"plugins":[{"id":"future","source":{"type":"path","path":"p"}}]}`),
+		bundles: map[string]map[string][]byte{
+			"p": {"plugin.json": []byte(`{"manifestVersion":3,"id":"future"}`)},
+		},
+	}
+	installer, _, _ := newFixtureInstaller(t, transport)
+	_, err := installer.Install(context.Background(), "test", "future")
+	if err == nil || !strings.Contains(err.Error(), "unsupported manifestVersion 3") {
+		t.Fatalf("Install unsupported manifest version error = %v", err)
 	}
 }
 
