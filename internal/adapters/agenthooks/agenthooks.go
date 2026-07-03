@@ -25,6 +25,11 @@ const (
 	StatusUntrusted   = "untrusted"
 	StatusUnavailable = "unavailable"
 
+	StateInstalled    = "installed"
+	StateNotInstalled = "not_installed"
+	StatePartial      = "partial"
+	StateError        = "error"
+
 	SchemaVersion    = 1
 	InstallerVersion = "1.1.0"
 )
@@ -100,6 +105,7 @@ type Installer struct {
 
 type Integration struct {
 	Provider         string `json:"provider"`
+	State            string `json:"state"`
 	Status           string `json:"status"`
 	InstalledVersion string `json:"installedVersion,omitempty"`
 	LatestVersion    string `json:"latestVersion"`
@@ -175,7 +181,7 @@ func (i *Installer) Check(_ context.Context, provider string) (Integration, erro
 	if manifestErr != nil {
 		base.Status = StatusUnavailable
 		base.Detail = manifestErr.Error()
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	providerManifest, hasManifest := manifest.Providers[provider]
 	if hasManifest {
@@ -185,55 +191,55 @@ func (i *Installer) Check(_ context.Context, provider string) (Integration, erro
 	if helperErr != nil && !os.IsNotExist(helperErr) {
 		base.Status = StatusUnavailable
 		base.Detail = helperErr.Error()
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	configCommand, configComplete, configErr := i.findProviderCommand(provider)
 	if configErr != nil {
 		base.Status = StatusUnavailable
 		base.Detail = configErr.Error()
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	if !hasManifest && configCommand == "" {
 		base.Status = StatusMissing
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	expectedCommand := i.hookCommand(provider)
 	if configCommand == "" {
 		base.Status = StatusModified
 		base.Detail = "managed manifest exists but provider hook is missing"
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	if configCommand != expectedCommand || !configComplete {
 		base.Status = StatusModified
 		base.Detail = "provider hook command differs from manifest"
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	if !hasManifest {
 		base.Status = StatusModified
 		base.Detail = "provider hook exists but Whisk manifest is missing"
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	if manifest.SchemaVersion != SchemaVersion || manifest.InstallerVersion != InstallerVersion {
 		base.Status = StatusOutdated
 		base.Detail = "managed manifest version is outdated"
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	if helperErr != nil {
 		base.Status = StatusModified
 		base.Detail = "helper binary is missing"
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	if manifest.HelperHash != helperHash {
 		base.Status = StatusModified
 		base.Detail = "helper binary hash differs from manifest"
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	if providerManifest.CommandHash != hashText(expectedCommand) ||
 		providerManifest.ConfigPath != i.configPath(provider) ||
 		!sameStrings(providerManifest.Events, providerEvents(provider)) {
 		base.Status = StatusModified
 		base.Detail = "provider manifest does not match expected hook config"
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	if provider == ProviderCodex && !providerManifest.TrustVerified {
 		base.Status = StatusUntrusted
@@ -242,10 +248,10 @@ func (i *Installer) Check(_ context.Context, provider string) (Integration, erro
 		} else {
 			base.Detail = "Codex hook trust has not been verified"
 		}
-		return base, nil
+		return finalizeIntegration(base), nil
 	}
 	base.Status = StatusCurrent
-	return base, nil
+	return finalizeIntegration(base), nil
 }
 
 func (i *Installer) Install(ctx context.Context, provider string) (Integration, error) {
@@ -330,6 +336,22 @@ func (i *Installer) baseIntegration(provider string) Integration {
 		ConfigPath:    i.configPath(provider),
 		ManifestPath:  i.manifestPath(),
 	}
+}
+
+func finalizeIntegration(integration Integration) Integration {
+	switch integration.Status {
+	case StatusCurrent:
+		integration.State = StateInstalled
+	case StatusMissing:
+		integration.State = StateNotInstalled
+	case StatusUnavailable:
+		integration.State = StateError
+	case StatusOutdated, StatusModified, StatusUntrusted:
+		integration.State = StatePartial
+	default:
+		integration.State = StateNotInstalled
+	}
+	return integration
 }
 
 func (i *Installer) installHelper() error {

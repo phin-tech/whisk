@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
@@ -100,6 +101,40 @@ func (r *Runtime) appendAgentHookLog(event agentbridge.Event) error {
 		Options:           options,
 		Answerable:        normalized.Answerable,
 		Raw:               event.Raw,
+	})
+}
+
+func (r *Runtime) appendAgentHookProtocolMismatchLog(bridge agentbridge.Bridge, provider agentbridge.Provider, req AgentBridgeHookRequest, now time.Time) {
+	r.mu.Lock()
+	enabled := r.agentHookLogEnabled
+	r.mu.Unlock()
+	if !enabled {
+		return
+	}
+	logger, err := r.agentHookLogger()
+	if err != nil {
+		return
+	}
+	_ = logger.Append(agenthooklog.Entry{
+		Timestamp:        now,
+		Provider:         string(provider),
+		EventName:        req.EventName,
+		BridgeID:         bridge.ID,
+		SessionID:        bridge.SessionID,
+		PTYID:            bridge.PTYID,
+		ToolName:         req.ToolName,
+		Message:          "Agent hook protocol mismatch",
+		NotificationType: req.NotificationType,
+		ElicitationID:    req.ElicitationID,
+		Action:           "warning",
+		Result:           "hook_protocol_mismatch",
+		Raw: map[string]any{
+			"warning":          "hook_protocol_mismatch",
+			"expectedProtocol": agentbridge.HookProtocolVersion,
+			"receivedProtocol": req.HookProtocol,
+			"bridgeId":         bridge.ID,
+			"provider":         string(provider),
+		},
 	})
 }
 

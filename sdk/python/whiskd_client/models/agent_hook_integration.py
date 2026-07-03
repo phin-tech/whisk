@@ -20,6 +20,7 @@ class AgentHookIntegration:
         latest_version (str):
         manifest_path (str):
         provider (str):
+        state (str):
         status (str):
         detail (str | Unset):
         installed_version (str | Unset):
@@ -30,6 +31,7 @@ class AgentHookIntegration:
     latest_version: str
     manifest_path: str
     provider: str
+    state: str
     status: str
     detail: str | Unset = UNSET
     installed_version: str | Unset = UNSET
@@ -46,6 +48,8 @@ class AgentHookIntegration:
 
         provider = self.provider
 
+        state = self.state
+
         status = self.status
 
         detail = self.detail
@@ -61,6 +65,7 @@ class AgentHookIntegration:
                 "latestVersion": latest_version,
                 "manifestPath": manifest_path,
                 "provider": provider,
+                "state": state,
                 "status": status,
             }
         )
@@ -84,6 +89,8 @@ class AgentHookIntegration:
 
         provider = d.pop("provider")
 
+        state = d.pop("state")
+
         status = d.pop("status")
 
         detail = d.pop("detail", UNSET)
@@ -96,6 +103,7 @@ class AgentHookIntegration:
             latest_version=latest_version,
             manifest_path=manifest_path,
             provider=provider,
+            state=state,
             status=status,
             detail=detail,
             installed_version=installed_version,

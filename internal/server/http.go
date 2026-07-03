@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,7 +25,9 @@ import (
 type HTTPOption func(*httpOptions)
 
 type httpOptions struct {
-	controlToken string
+	controlToken             string
+	agentHookRequestMaxBytes int64
+	agentHookReadTimeout     time.Duration
 }
 
 func WithControlToken(token string) HTTPOption {
@@ -32,6 +35,18 @@ func WithControlToken(token string) HTTPOption {
 		opts.controlToken = token
 	}
 }
+
+func WithAgentHookReceiverLimits(maxBytes int64, readTimeout time.Duration) HTTPOption {
+	return func(opts *httpOptions) {
+		opts.agentHookRequestMaxBytes = maxBytes
+		opts.agentHookReadTimeout = readTimeout
+	}
+}
+
+const (
+	defaultAgentHookRequestMaxBytes = 1 * 1024 * 1024
+	defaultAgentHookReadTimeout     = 5 * time.Second
+)
 
 func RequireBearerAuth(token string, next http.Handler) http.Handler {
 	if token == "" {
@@ -65,7 +80,17 @@ func NewHTTP(runtime *app.Runtime, optionFns ...HTTPOption) http.Handler {
 	for _, option := range optionFns {
 		option(&opts)
 	}
-	server := &HTTPServer{runtime: runtime}
+	if opts.agentHookRequestMaxBytes <= 0 {
+		opts.agentHookRequestMaxBytes = defaultAgentHookRequestMaxBytes
+	}
+	if opts.agentHookReadTimeout <= 0 {
+		opts.agentHookReadTimeout = defaultAgentHookReadTimeout
+	}
+	server := &HTTPServer{
+		runtime:                  runtime,
+		agentHookRequestMaxBytes: opts.agentHookRequestMaxBytes,
+		agentHookReadTimeout:     opts.agentHookReadTimeout,
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", server.health)
 	mux.HandleFunc("GET /v1/compat", server.compatibility)
@@ -230,7 +255,7 @@ func (s *HTTPServer) clearDaemon(w http.ResponseWriter, r *http.Request) {
 
 func (s *HTTPServer) agentBridgeHook(w http.ResponseWriter, r *http.Request) {
 	var req protocol.AgentBridgeHookRequest
-	if !decodeJSON(w, r, &req) {
+	if !s.decodeAgentHookJSON(w, r, &req) {
 		return
 	}
 	bridgeID := pathValue(r, "bridgeID", "")
@@ -239,6 +264,7 @@ func (s *HTTPServer) agentBridgeHook(w http.ResponseWriter, r *http.Request) {
 		Token:            req.Token,
 		Provider:         req.Provider,
 		EventName:        req.EventName,
+		HookProtocol:     req.HookProtocol,
 		ToolName:         req.ToolName,
 		ToolInput:        req.ToolInput,
 		ToolOutput:       req.ToolOutput,
@@ -267,12 +293,13 @@ func (s *HTTPServer) agentBridgeHook(w http.ResponseWriter, r *http.Request) {
 
 func (s *HTTPServer) recordAgentHookEvent(w http.ResponseWriter, r *http.Request) {
 	var req protocol.AgentBridgeHookRequest
-	if !decodeJSON(w, r, &req) {
+	if !s.decodeAgentHookJSON(w, r, &req) {
 		return
 	}
 	event, err := s.runtime.RecordAgentHookEvent(r.Context(), app.AgentBridgeHookRequest{
 		Provider:         req.Provider,
 		EventName:        req.EventName,
+		HookProtocol:     req.HookProtocol,
 		ToolName:         req.ToolName,
 		ToolInput:        req.ToolInput,
 		ToolOutput:       req.ToolOutput,
@@ -570,6 +597,7 @@ func toProtocolAgentHookLogStatus(status app.AgentHookLogStatus) protocol.AgentH
 func toProtocolAgentHookIntegration(integration app.AgentHookIntegration) protocol.AgentHookIntegration {
 	return protocol.AgentHookIntegration{
 		Provider:         integration.Provider,
+		State:            integration.State,
 		Status:           integration.Status,
 		InstalledVersion: integration.InstalledVersion,
 		LatestVersion:    integration.LatestVersion,
@@ -796,7 +824,9 @@ func (s *HTTPServer) closePane(w http.ResponseWriter, r *http.Request) {
 }
 
 type HTTPServer struct {
-	runtime *app.Runtime
+	runtime                  *app.Runtime
+	agentHookRequestMaxBytes int64
+	agentHookReadTimeout     time.Duration
 }
 
 func (s *HTTPServer) health(w http.ResponseWriter, _ *http.Request) {
@@ -1188,6 +1218,58 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, out any) bool {
 		return false
 	}
 	return true
+}
+
+func (s *HTTPServer) decodeAgentHookJSON(w http.ResponseWriter, r *http.Request, out any) bool {
+	return decodeJSONWithLimits(w, r, out, s.agentHookRequestMaxBytes, s.agentHookReadTimeout)
+}
+
+func decodeJSONWithLimits(w http.ResponseWriter, r *http.Request, out any, maxBytes int64, readTimeout time.Duration) bool {
+	if maxBytes > 0 {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	}
+	if readTimeout <= 0 {
+		return decodeJSON(w, r, out)
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), readTimeout)
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() {
+		defer r.Body.Close()
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(out); err != nil {
+			errCh <- err
+			return
+		}
+		var extra any
+		err := decoder.Decode(&extra)
+		if errors.Is(err, io.EOF) {
+			errCh <- nil
+			return
+		}
+		if err == nil {
+			errCh <- fmt.Errorf("request body must contain only one JSON value")
+			return
+		}
+		errCh <- err
+	}()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				writeError(w, http.StatusRequestEntityTooLarge, fmt.Errorf("request body too large"))
+				return false
+			}
+			writeError(w, http.StatusBadRequest, err)
+			return false
+		}
+		return true
+	case <-ctx.Done():
+		_ = r.Body.Close()
+		writeError(w, http.StatusRequestTimeout, ctx.Err())
+		return false
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

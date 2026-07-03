@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/phin-tech/whisk/internal/client"
@@ -27,6 +28,7 @@ func runAgentBridgeHook(args []string, stdin io.Reader, stdout io.Writer) error 
 	bridgeID := flags.String("bridge", envOrDefault("WHISK_AGENT_BRIDGE_ID", ""), "agent bridge id")
 	token := flags.String("token", envOrDefault("WHISK_AGENT_BRIDGE_TOKEN", ""), "agent bridge hook token")
 	provider := flags.String("provider", envOrDefault("WHISK_AGENT_BRIDGE_PROVIDER", ""), "agent provider")
+	hookProtocol := flags.String("hook-protocol", envOrDefault("WHISK_AGENT_BRIDGE_HOOK_PROTOCOL", ""), "agent bridge hook protocol version")
 	eventName := flags.String("event", "", "provider hook event name")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -41,6 +43,9 @@ func runAgentBridgeHook(args []string, stdin io.Reader, stdout io.Writer) error 
 	}
 	req := hookRequestFromPayload(payload)
 	req.Token = *token
+	if parsedHookProtocol, err := strconv.Atoi(*hookProtocol); err == nil {
+		req.HookProtocol = parsedHookProtocol
+	}
 	if req.Provider == "" {
 		req.Provider = *provider
 	}

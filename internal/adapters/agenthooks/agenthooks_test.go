@@ -42,6 +42,9 @@ func TestClaudeInstallCheckAndRemovePreservesUnrelatedHooks(t *testing.T) {
 	if missing.Status != StatusMissing {
 		t.Fatalf("missing status = %#v", missing)
 	}
+	if missing.State != StateNotInstalled {
+		t.Fatalf("missing state = %#v", missing)
+	}
 
 	installed, err := installer.Install(context.Background(), ProviderClaude)
 	if err != nil {
@@ -49,6 +52,9 @@ func TestClaudeInstallCheckAndRemovePreservesUnrelatedHooks(t *testing.T) {
 	}
 	if installed.Status != StatusCurrent {
 		t.Fatalf("installed status = %#v", installed)
+	}
+	if installed.State != StateInstalled {
+		t.Fatalf("installed state = %#v", installed)
 	}
 
 	cfg := readConfigFile(t, paths.ClaudeSettingsPath)
@@ -147,6 +153,9 @@ func TestCheckDetectsOutdatedManifestAndModifiedCommand(t *testing.T) {
 	if status.Status != StatusOutdated {
 		t.Fatalf("outdated status = %#v", status)
 	}
+	if status.State != StatePartial {
+		t.Fatalf("outdated state = %#v", status)
+	}
 
 	manifest.InstallerVersion = InstallerVersion
 	writeManifestFile(t, installer.manifestPath(), manifest)
@@ -159,6 +168,9 @@ func TestCheckDetectsOutdatedManifestAndModifiedCommand(t *testing.T) {
 	}
 	if status.Status != StatusModified {
 		t.Fatalf("modified status = %#v", status)
+	}
+	if status.State != StatePartial {
+		t.Fatalf("modified state = %#v", status)
 	}
 }
 
@@ -177,6 +189,53 @@ func TestCheckDetectsMissingHelperAfterInstall(t *testing.T) {
 	}
 	if status.Status != StatusModified {
 		t.Fatalf("status = %#v", status)
+	}
+	if status.State != StatePartial {
+		t.Fatalf("state = %#v", status)
+	}
+}
+
+func TestCheckReportsErrorForUnreadableProviderSettings(t *testing.T) {
+	paths := testPaths(t)
+	writeFile(t, paths.ClaudeSettingsPath, `{`)
+	installer := NewInstaller(paths)
+
+	status, err := installer.Check(context.Background(), ProviderClaude)
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	if status.State != StateError || status.Status != StatusUnavailable || status.ConfigPath != paths.ClaudeSettingsPath || status.Detail == "" {
+		t.Fatalf("status = %#v", status)
+	}
+}
+
+func TestCheckParsesProviderSettingsAndReportsPartialHooks(t *testing.T) {
+	paths := testPaths(t)
+	writeFile(t, paths.ClaudeSettingsPath, `{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "`+installedCommand(paths, ProviderClaude)+`"
+          }
+        ]
+      }
+    ]
+  }
+}`)
+	installer := NewInstaller(paths)
+
+	status, err := installer.Check(context.Background(), ProviderClaude)
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	if status.State != StatePartial || status.Status != StatusModified {
+		t.Fatalf("status = %#v", status)
+	}
+	if status.Detail == "" || status.ConfigPath != paths.ClaudeSettingsPath {
+		t.Fatalf("diagnosis missing detail/config path: %#v", status)
 	}
 }
 

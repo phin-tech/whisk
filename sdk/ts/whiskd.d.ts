@@ -1775,6 +1775,8 @@ export interface components {
             decision?: components["schemas"]["AgentBridgeHookDecision"];
             elicitationId?: string;
             eventName: string;
+            /** Format: int64 */
+            hookProtocol?: number;
             message?: string;
             notificationType?: string;
             provider: string;
@@ -1803,6 +1805,7 @@ export interface components {
             latestVersion: string;
             manifestPath: string;
             provider: string;
+            state: string;
             status: string;
         };
         AgentHookIntegrationRequest: {

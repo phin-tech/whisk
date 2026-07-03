@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ type AgentBridgeHookRequest struct {
 	Token            string
 	Provider         string
 	EventName        string
+	HookProtocol     int
 	ToolName         string
 	ToolInput        map[string]any
 	ToolOutput       string
@@ -76,6 +78,9 @@ func (r *Runtime) HandleAgentBridgeHook(ctx context.Context, req AgentBridgeHook
 	provider := agentbridge.Provider(req.Provider)
 	if provider == "" {
 		provider = bridge.Provider
+	}
+	if req.HookProtocol != agentbridge.HookProtocolVersion {
+		r.appendAgentHookProtocolMismatchLog(bridge, provider, req, time.Now().UTC())
 	}
 	if r.shouldStopPlanningExitPlanMode(bridge, req) {
 		hasPlanText := exitPlanModePlanBody(req) != ""
@@ -615,12 +620,12 @@ func (r *Runtime) recordAgentBridgeEvent(ctx context.Context, req AgentBridgeHoo
 		Provider:         provider,
 		EventName:        req.EventName,
 		ToolName:         req.ToolName,
-		Message:          req.Message,
+		Message:          truncateAgentHookString(req.Message),
 		NotificationType: req.NotificationType,
 		ElicitationID:    req.ElicitationID,
 		Action:           req.Action,
 		Result:           result,
-		Raw:              req.RawPayload,
+		Raw:              truncateAgentHookRawPayload(req.RawPayload),
 		Now:              now,
 	})
 	if err != nil {
@@ -636,6 +641,55 @@ func (r *Runtime) recordAgentBridgeEvent(ctx context.Context, req AgentBridgeHoo
 	}
 	r.publish(ctx, RuntimeEvent{Type: EventAgentHookEventsChanged})
 	return event, nil
+}
+
+const (
+	agentHookStoredStringMaxBytes = 16 * 1024
+	agentHookStoredRawMaxBytes    = 64 * 1024
+)
+
+func truncateAgentHookRawPayload(raw map[string]any) map[string]any {
+	if raw == nil {
+		return nil
+	}
+	truncated, _ := truncateAgentHookValue(raw).(map[string]any)
+	encoded, err := json.Marshal(truncated)
+	if err != nil || len(encoded) <= agentHookStoredRawMaxBytes {
+		return truncated
+	}
+	return map[string]any{
+		"whisk_truncated": true,
+		"originalBytes":   len(encoded),
+		"preview":         truncateAgentHookString(string(encoded)),
+	}
+}
+
+func truncateAgentHookValue(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return truncateAgentHookString(typed)
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, value := range typed {
+			out[key] = truncateAgentHookValue(value)
+		}
+		return out
+	case []any:
+		out := make([]any, len(typed))
+		for idx, value := range typed {
+			out[idx] = truncateAgentHookValue(value)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func truncateAgentHookString(value string) string {
+	if len(value) <= agentHookStoredStringMaxBytes {
+		return value
+	}
+	return value[:agentHookStoredStringMaxBytes] + "...[truncated]"
 }
 
 func firstNonEmpty(values ...string) string {
