@@ -65,7 +65,7 @@ def sync_detailed(
     plugin_id: str,
     template_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: RunPluginProjectAttachmentTemplateRequest,
 ) -> Response[ErrorResponse | Project]:
     """Run a trusted plugin project attachment template
@@ -100,7 +100,7 @@ def sync(
     plugin_id: str,
     template_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: RunPluginProjectAttachmentTemplateRequest,
 ) -> ErrorResponse | Project | None:
     """Run a trusted plugin project attachment template
@@ -130,7 +130,7 @@ async def asyncio_detailed(
     plugin_id: str,
     template_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: RunPluginProjectAttachmentTemplateRequest,
 ) -> Response[ErrorResponse | Project]:
     """Run a trusted plugin project attachment template
@@ -163,7 +163,7 @@ async def asyncio(
     plugin_id: str,
     template_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: RunPluginProjectAttachmentTemplateRequest,
 ) -> ErrorResponse | Project | None:
     """Run a trusted plugin project attachment template

@@ -105,16 +105,6 @@ func TestRunDaemonClearUsesClearEndpoint(t *testing.T) {
 	}
 }
 
-func TestRunDaemonRunValidatesListenAddress(t *testing.T) {
-	err := run([]string{"daemon", "run", "-addr", "0.0.0.0:8787"})
-	if err == nil {
-		t.Fatalf("expected non-loopback daemon run address to be rejected")
-	}
-	if !strings.Contains(err.Error(), "refusing non-loopback bind") {
-		t.Fatalf("daemon run error = %q", err.Error())
-	}
-}
-
 func TestConfigureDaemonLoggingWritesStateDirLogAndMirrorsStderr(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "state")
 	t.Setenv("WHISK_STATE_DIR", stateDir)

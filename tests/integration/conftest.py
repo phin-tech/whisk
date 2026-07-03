@@ -30,6 +30,9 @@ def daemon(tmp_path: pathlib.Path, whisk_bin: pathlib.Path):
         "WHISKD_URL": url,
         "WHISK_CLI": str(whisk_bin),
         "XDG_CONFIG_HOME": str(tmp_path / "config"),
+        "XDG_DATA_HOME": str(tmp_path / "data"),
+        "XDG_STATE_HOME": str(tmp_path / "state"),
+        "XDG_CACHE_HOME": str(tmp_path / "cache"),
     }
     proc = subprocess.Popen(
         [str(whisk_bin), "daemon", "run", "-addr", f"127.0.0.1:{port}"],

@@ -25,6 +25,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/worktrunk"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/appsettings"
+	"github.com/phin-tech/whisk/internal/controlauth"
 	"github.com/phin-tech/whisk/internal/daemon"
 	"github.com/phin-tech/whisk/internal/events"
 	"github.com/phin-tech/whisk/internal/protocol"
@@ -60,6 +61,11 @@ func serveDaemon(addr string) (err error) {
 			fmt.Fprintf(os.Stderr, "close daemon log: %v\n", err)
 		}
 	}()
+
+	controlToken, err := controlauth.EnsureToken()
+	if err != nil {
+		return fmt.Errorf("ensure daemon auth token: %w", err)
+	}
 
 	// Bind the listener before any other setup so a duplicate instance fails fast and
 	// cheaply. Building NATS/sqlite/the runtime first would leave a heavyweight process
@@ -139,6 +145,7 @@ func serveDaemon(addr string) (err error) {
 		default:
 		}
 	})
+	httpServer.Handler = server.RequireBearerAuth(controlToken, mux)
 
 	serveErr := make(chan error, 1)
 	serveStarted = true
@@ -220,18 +227,8 @@ func trustedPluginsFromEnv() map[string]bool {
 }
 
 func validateListenAddr(addr string) error {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return err
-	}
-	if host == "localhost" {
-		return nil
-	}
-	ip := net.ParseIP(host)
-	if ip == nil || !ip.IsLoopback() {
-		return fmt.Errorf("refusing non-loopback bind %q until daemon auth is implemented", addr)
-	}
-	return nil
+	_, _, err := net.SplitHostPort(addr)
+	return err
 }
 
 func whiskCLIPath() string {

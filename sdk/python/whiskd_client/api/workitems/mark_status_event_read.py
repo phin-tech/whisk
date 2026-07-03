@@ -60,7 +60,7 @@ def _build_response(
 def sync_detailed(
     status_event_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: MarkStatusEventReadRequest,
 ) -> Response[ErrorResponse | StatusEvent]:
     """
@@ -91,7 +91,7 @@ def sync_detailed(
 def sync(
     status_event_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: MarkStatusEventReadRequest,
 ) -> ErrorResponse | StatusEvent | None:
     """
@@ -117,7 +117,7 @@ def sync(
 async def asyncio_detailed(
     status_event_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: MarkStatusEventReadRequest,
 ) -> Response[ErrorResponse | StatusEvent]:
     """
@@ -146,7 +146,7 @@ async def asyncio_detailed(
 async def asyncio(
     status_event_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: MarkStatusEventReadRequest,
 ) -> ErrorResponse | StatusEvent | None:
     """

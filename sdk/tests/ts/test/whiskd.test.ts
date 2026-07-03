@@ -1,13 +1,16 @@
 import createClient from "openapi-fetch";
 import { describe, expect, inject, it } from "vitest";
+import { whiskdClientOptions } from "../../../ts/client";
 import type { paths } from "../../../ts/whiskd";
 
 // End-to-end: the generated TS types + openapi-fetch against a live whiskd.
 // Mirrors the Python suite so both clients are proven against real wire behavior.
 const baseUrl = inject("baseUrl");
+const stateHome = inject("stateHome");
+if (stateHome) process.env.XDG_STATE_HOME = stateHome;
 
 describe.skipIf(!baseUrl)("whiskd headless TS client", () => {
-  const client = createClient<paths>({ baseUrl });
+  const client = createClient<paths>(whiskdClientOptions({ baseUrl }));
 
   it("compatibility handshake", async () => {
     const { data, error } = await client.GET("/v1/compat");

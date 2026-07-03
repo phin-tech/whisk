@@ -8,7 +8,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 23
+const DaemonAPIVersion = 24
 
 type CompatibilityResponse struct {
 	APIVersion int    `json:"apiVersion"`
