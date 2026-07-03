@@ -129,8 +129,8 @@ type DaemonStatus struct {
 	Address string `json:"address"`
 	// ControlToken is used by the renderer only for daemon WebSocket attach handshakes.
 	ControlToken string `json:"controlToken"`
-	// Managed is true when this app started the daemon (a live PID file names it), as opposed to
-	// one started independently (e.g. `whisk daemon run`).
+	// Managed is true when this app started the daemon (the state file matches its live process),
+	// as opposed to one started independently (e.g. `whisk daemon run`).
 	Managed bool `json:"managed"`
 	// APIVersion and GitSHA come from the daemon's compatibility endpoint when it is reachable.
 	APIVersion int    `json:"apiVersion"`
