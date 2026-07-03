@@ -361,15 +361,21 @@ func stopSpawnedDaemon(ctx context.Context, baseURL string, proc *spawnedDaemon,
 	default:
 	}
 
+	sentInterrupt := false
 	if proc.cmd.Process != nil {
 		if err := proc.cmd.Process.Signal(os.Interrupt); err != nil {
 			_ = proc.cmd.Process.Kill()
+		} else {
+			sentInterrupt = true
 		}
 	}
 	grace := time.NewTimer(policy.SpawnInterruptGrace)
 	defer grace.Stop()
 	select {
 	case err := <-proc.waitCh:
+		if sentInterrupt && processExitedByInterrupt(err) {
+			return nil
+		}
 		return err
 	case <-grace.C:
 	case <-ctx.Done():

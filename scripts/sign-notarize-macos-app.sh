@@ -27,7 +27,7 @@ assert_embedded_certificates() {
 }
 
 unexpected_executable="$(
-  find "${APP_PATH}/Contents/MacOS" -type f -perm +111 \
+  find "${APP_PATH}/Contents/MacOS" -type f \( -perm -u=x -o -perm -g=x -o -perm -o=x \) \
     ! -name "whisk-app" \
     ! -name "whisk" \
     -print -quit

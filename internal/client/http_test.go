@@ -630,6 +630,109 @@ func TestHTTPClientOpenAgentHookLog(t *testing.T) {
 	}
 }
 
+func TestHTTPClientCoversLightweightRouteWrappers(t *testing.T) {
+	seen := map[string]bool{}
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen[r.Method+" "+r.URL.RequestURI()] = true
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method + " " + r.URL.Path {
+		case "GET /v1/onboarding":
+			_, _ = w.Write([]byte(`{"shouldShow":true,"localDaemon":true,"statePath":"/tmp/onboarding.json"}`))
+		case "POST /v1/onboarding/apply":
+			_, _ = w.Write([]byte(`{"shouldShow":false,"localDaemon":true,"statePath":"/tmp/onboarding.json"}`))
+		case "POST /v1/plugins/rescan":
+			_, _ = w.Write([]byte(`[{"id":"github","name":"GitHub","valid":true}]`))
+		case "POST /v1/plugins/github/untrust":
+			_, _ = w.Write([]byte(`{"id":"github","name":"GitHub","valid":true}`))
+		case "DELETE /v1/ptys/pty_01":
+			w.WriteHeader(http.StatusNoContent)
+		case "POST /v1/projects/proj_01/delete":
+			_, _ = w.Write([]byte(`{"id":"proj_01","name":"App","rootDir":"/repo"}`))
+		case "POST /v1/projects/proj_01/attachments":
+			_, _ = w.Write([]byte(`{"id":"proj_01","name":"App","rootDir":"/repo","attachments":[{"id":"att_01","kind":"note"}]}`))
+		case "POST /v1/project-attachments/att_01/update":
+			_, _ = w.Write([]byte(`{"id":"proj_01","name":"App","rootDir":"/repo","attachments":[{"id":"att_01","title":"Updated"}]}`))
+		case "POST /v1/project-attachments/att_01/delete":
+			_, _ = w.Write([]byte(`{"id":"proj_01","name":"App","rootDir":"/repo"}`))
+		case "GET /v1/projects/proj_01/context":
+			_, _ = w.Write([]byte(`{"projectId":"proj_01","items":[{"kind":"note","delivery":"inline","content":"Context"}]}`))
+		case "POST /v1/workflow-definitions/validate-file":
+			_, _ = w.Write([]byte(`{"valid":true,"identity":"workflow@1"}`))
+		case "POST /v1/workflow-definitions/import-file":
+			_, _ = w.Write([]byte(`{"id":"workflow","version":1,"sourcePath":"/tmp/workflow.json"}`))
+		case "POST /v1/workflow-definitions/export-file":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.RequestURI())
+		}
+	}))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx := context.Background()
+
+	if status, err := daemon.OnboardingStatus(ctx); err != nil || !status.ShouldShow {
+		t.Fatalf("onboarding status = %#v, err = %v", status, err)
+	}
+	if status, err := daemon.ApplyOnboarding(ctx, protocol.OnboardingApplyRequest{ItemIDs: []string{"daemon:version"}}); err != nil || status.ShouldShow {
+		t.Fatalf("apply onboarding = %#v, err = %v", status, err)
+	}
+	if plugins, err := daemon.RescanPlugins(ctx); err != nil || len(plugins) != 1 {
+		t.Fatalf("rescan plugins = %#v, err = %v", plugins, err)
+	}
+	if plugin, err := daemon.UntrustPlugin(ctx, "github"); err != nil || plugin.ID != "github" || plugin.Trusted {
+		t.Fatalf("untrust plugin = %#v, err = %v", plugin, err)
+	}
+	if err := daemon.DeletePTY(ctx, protocol.DeletePTYRequest{PTYID: "pty_01"}); err != nil {
+		t.Fatalf("delete pty: %v", err)
+	}
+	if project, err := daemon.DeleteProject(ctx, "proj_01", protocol.DeleteProjectRequest{Actor: "human"}); err != nil || project.ID != "proj_01" {
+		t.Fatalf("delete project = %#v, err = %v", project, err)
+	}
+	if project, err := daemon.AddProjectAttachment(ctx, protocol.AddProjectAttachmentRequest{ProjectID: "proj_01", Kind: "note", Note: "Context"}); err != nil || len(project.Attachments) != 1 {
+		t.Fatalf("add project attachment = %#v, err = %v", project, err)
+	}
+	title := "Updated"
+	if project, err := daemon.UpdateProjectAttachment(ctx, "att_01", protocol.UpdateProjectAttachmentRequest{Title: &title}); err != nil || project.Attachments[0].Title != title {
+		t.Fatalf("update project attachment = %#v, err = %v", project, err)
+	}
+	if project, err := daemon.DeleteProjectAttachment(ctx, "att_01", protocol.DeleteProjectAttachmentRequest{ProjectID: "proj_01"}); err != nil || len(project.Attachments) != 0 {
+		t.Fatalf("delete project attachment = %#v, err = %v", project, err)
+	}
+	if contextBundle, err := daemon.GetProjectContext(ctx, "proj_01"); err != nil || contextBundle.ProjectID != "proj_01" {
+		t.Fatalf("project context = %#v, err = %v", contextBundle, err)
+	}
+	if report, err := daemon.ValidateWorkflowDefinitionFile(ctx, protocol.ValidateWorkflowDefinitionFileRequest{Path: "/tmp/workflow.json"}); err != nil || !report.Valid {
+		t.Fatalf("validate workflow file = %#v, err = %v", report, err)
+	}
+	if record, err := daemon.ImportWorkflowDefinitionFile(ctx, protocol.ImportWorkflowDefinitionFileRequest{Path: "/tmp/workflow.json"}); err != nil || record.SourcePath != "/tmp/workflow.json" {
+		t.Fatalf("import workflow file = %#v, err = %v", record, err)
+	}
+	if err := daemon.ExportWorkflowDefinitionFile(ctx, protocol.ExportWorkflowDefinitionFileRequest{ID: "workflow", Version: 1, Path: "/tmp/out.json"}); err != nil {
+		t.Fatalf("export workflow file: %v", err)
+	}
+
+	for _, key := range []string{
+		"GET /v1/onboarding",
+		"POST /v1/onboarding/apply",
+		"POST /v1/plugins/rescan",
+		"POST /v1/plugins/github/untrust",
+		"DELETE /v1/ptys/pty_01",
+		"POST /v1/projects/proj_01/delete",
+		"POST /v1/projects/proj_01/attachments",
+		"POST /v1/project-attachments/att_01/update",
+		"POST /v1/project-attachments/att_01/delete",
+		"GET /v1/projects/proj_01/context",
+		"POST /v1/workflow-definitions/validate-file",
+		"POST /v1/workflow-definitions/import-file",
+		"POST /v1/workflow-definitions/export-file",
+	} {
+		if !seen[key] {
+			t.Fatalf("missing request %s; seen = %#v", key, seen)
+		}
+	}
+}
+
 func TestHTTPClientNextEventTimeoutReturnsNoop(t *testing.T) {
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: native.NewBackend(), EventSink: newFakeEventBus()})
 	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })

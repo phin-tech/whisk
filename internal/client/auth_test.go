@@ -34,6 +34,22 @@ func TestHTTPClientAddsControlBearerTokenFromStateDir(t *testing.T) {
 	}
 }
 
+func TestHTTPClientAddsExplicitControlBearerToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.Header.Get("Authorization"), "Bearer explicit-secret"; got != want {
+			t.Fatalf("authorization = %q, want %q", got, want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"apiVersion":1,"gitSha":"abc","version":"dev","dirty":false}`)
+	}))
+	defer server.Close()
+
+	daemon := client.NewHTTP(server.URL, server.Client(), client.WithControlToken("explicit-secret"))
+	if _, err := daemon.Compatibility(context.Background()); err != nil {
+		t.Fatalf("compatibility: %v", err)
+	}
+}
+
 func TestHTTPClientHealthWorksWithoutTokenFile(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("HOME", t.TempDir())

@@ -3,6 +3,7 @@
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,6 +29,15 @@ func processAlive(pid int) bool {
 
 func signalProcessTerm(process *os.Process) error {
 	return process.Signal(syscall.SIGTERM)
+}
+
+func processExitedByInterrupt(err error) bool {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		return false
+	}
+	status, ok := exitErr.ProcessState.Sys().(syscall.WaitStatus)
+	return ok && status.Signaled() && status.Signal() == syscall.SIGINT
 }
 
 func processStartTime(pid int) (string, error) {

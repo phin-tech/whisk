@@ -252,8 +252,18 @@ func TestHTTPServerSessionLifecycleActions(t *testing.T) {
 	if created.PTYID != nil {
 		t.Fatalf("created should be empty: %#v", created)
 	}
+	project := postJSON[protocol.Project](t, handler, "/v1/projects", protocol.CreateProjectRequest{
+		Name:    "Session Project",
+		RootDir: rootDir,
+	}, http.StatusCreated)
+	updated := postJSON[map[string]any](t, handler, "/v1/sessions/"+created.Session.ID+"/set-project", protocol.SetSessionProjectRequest{
+		ProjectID: project.ID,
+	}, http.StatusOK)
+	if updated["projectId"] != project.ID {
+		t.Fatalf("updated project = %#v", updated)
+	}
 
-	updated := postJSON[map[string]any](t, handler, "/v1/sessions/"+created.Session.ID+"/set-root-dir", protocol.SetSessionRootDirRequest{
+	updated = postJSON[map[string]any](t, handler, "/v1/sessions/"+created.Session.ID+"/set-root-dir", protocol.SetSessionRootDirRequest{
 		RootDir: nextRoot,
 	}, http.StatusOK)
 	if updated["rootDir"] != nextRoot {
@@ -327,6 +337,10 @@ func TestHTTPServerSessionLifecycleActions(t *testing.T) {
 	}, http.StatusCreated)
 	if restarted.PTYID == "" || restarted.OldPTYID != restartSession.MainPtyID || backend.records[restarted.PTYID].Cols != 100 {
 		t.Fatalf("restarted = %#v record = %#v", restarted, backend.records[restarted.PTYID])
+	}
+	deleteNoContent(t, handler, "/v1/ptys/"+restarted.OldPTYID)
+	if _, ok := backend.records[restarted.OldPTYID]; ok {
+		t.Fatalf("deleted pty still in backend: %#v", backend.records[restarted.OldPTYID])
 	}
 
 	closeSession := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
@@ -431,6 +445,36 @@ func TestHTTPServerNextEventTimeoutReturnsNoop(t *testing.T) {
 	event := getJSON[protocol.RuntimeEvent](t, handler, "/v1/events/next?timeoutMs=1", http.StatusOK)
 	if event.Type != protocol.RuntimeEventNone {
 		t.Fatalf("event = %#v", event)
+	}
+}
+
+func TestHTTPServerOnboardingRoutes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".state"))
+
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		DaemonURL:           "http://127.0.0.1:8787",
+		OnboardingStatePath: filepath.Join(t.TempDir(), "onboarding.json"),
+		AgentHookPaths: &agenthooks.Paths{
+			ConfigRoot:         filepath.Join(t.TempDir(), "whisk"),
+			HelperSourcePath:   os.Args[0],
+			ClaudeSettingsPath: filepath.Join(t.TempDir(), "claude.json"),
+			CodexHooksPath:     filepath.Join(t.TempDir(), "codex.json"),
+		},
+	})
+	handler := server.NewHTTP(runtime)
+
+	status := getJSON[protocol.OnboardingStatus](t, handler, "/v1/onboarding", http.StatusOK)
+	if !status.LocalDaemon || status.StatePath == "" || len(status.Items) == 0 {
+		t.Fatalf("onboarding status = %#v", status)
+	}
+	applied := postJSON[protocol.OnboardingStatus](t, handler, "/v1/onboarding/apply", protocol.OnboardingApplyRequest{
+		ItemIDs: []string{"daemon:version"},
+	}, http.StatusOK)
+	if !applied.LocalDaemon || applied.StatePath != status.StatePath {
+		t.Fatalf("applied onboarding = %#v, status = %#v", applied, status)
 	}
 }
 
@@ -614,6 +658,10 @@ func TestHTTPServerAgentBridgeApprovalLifecycle(t *testing.T) {
 	if approvalID == "" {
 		t.Fatalf("no pending approval appeared")
 	}
+	pendingPrompts := getJSON[[]protocol.AgentPrompt](t, handler, "/v1/agent-prompts?status=pending", http.StatusOK)
+	if len(pendingPrompts) != 1 || pendingPrompts[0].ID != approvalID || pendingPrompts[0].Kind != "approval" || len(pendingPrompts[0].Options) != 2 {
+		t.Fatalf("pending prompts = %#v, approval = %q", pendingPrompts, approvalID)
+	}
 
 	resolved := postJSON[protocol.AgentBridgeApproval](t, handler, "/v1/agent-bridge-approvals/"+approvalID+"/resolve",
 		protocol.ResolveAgentBridgeApprovalRequest{Action: "allow"}, http.StatusOK)
@@ -628,6 +676,49 @@ func TestHTTPServerAgentBridgeApprovalLifecycle(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatalf("hook did not return after approval")
+	}
+
+	secondHookStatus := make(chan int, 1)
+	go func() {
+		recorder := httptest.NewRecorder()
+		recorder.Body = &bytes.Buffer{}
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/v1/agent-bridges/"+bridgeID+"/hooks", bytes.NewReader(hookBody)))
+		secondHookStatus <- recorder.Code
+	}()
+
+	var promptID string
+	for i := 0; i < 200; i++ {
+		prompts := getJSON[[]protocol.AgentPrompt](t, handler, "/v1/agent-prompts?status=pending", http.StatusOK)
+		for _, prompt := range prompts {
+			if prompt.ID != approvalID {
+				promptID = prompt.ID
+				break
+			}
+		}
+		if promptID != "" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if promptID == "" {
+		t.Fatalf("no second pending prompt appeared")
+	}
+	resolvedPrompt := postJSON[protocol.AgentPrompt](t, handler, "/v1/agent-prompts/"+promptID+"/resolve",
+		protocol.ResolveAgentPromptRequest{Answer: "deny"}, http.StatusOK)
+	if resolvedPrompt.ID != promptID || resolvedPrompt.Status != "resolved" || resolvedPrompt.Answer != "deny" {
+		t.Fatalf("resolved prompt = %#v", resolvedPrompt)
+	}
+	resolvedPrompts := getJSON[[]protocol.AgentPrompt](t, handler, "/v1/agent-prompts?status=resolved", http.StatusOK)
+	if len(resolvedPrompts) == 0 {
+		t.Fatalf("resolved prompts = %#v", resolvedPrompts)
+	}
+	select {
+	case code := <-secondHookStatus:
+		if code != http.StatusOK {
+			t.Fatalf("second hook status = %d", code)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("second hook did not return after prompt resolution")
 	}
 }
 
@@ -698,6 +789,81 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	if prompts := getJSON[[]protocol.PromptTemplate](t, handler, "/v1/prompt-templates", http.StatusOK); len(prompts) == 0 {
 		t.Fatalf("prompt templates = %#v", prompts)
 	}
+	if profiles := getJSON[[]protocol.AgentProfile](t, handler, "/v1/agent-profiles", http.StatusOK); len(profiles) == 0 || profiles[0].ID == "" {
+		t.Fatalf("agent profiles = %#v", profiles)
+	}
+
+	routeWorkflow := workitem.DefaultWorkflowDefinition()
+	routeWorkflow.ID = "route-workflow"
+	routeWorkflow.Version = 7
+	report := postJSON[protocol.WorkflowValidationReport](t, handler, "/v1/workflow-definitions/validate", protocol.ValidateWorkflowDefinitionRequest{
+		Definition: routeWorkflow,
+	}, http.StatusOK)
+	if !report.Valid || report.Identity != "route-workflow@7" {
+		t.Fatalf("workflow validation = %#v", report)
+	}
+	imported := postJSON[protocol.WorkflowDefinitionRecord](t, handler, "/v1/workflow-definitions/import", protocol.ImportWorkflowDefinitionRequest{
+		Definition: routeWorkflow,
+		Source:     "test",
+	}, http.StatusCreated)
+	if imported.ID != routeWorkflow.ID || imported.Version != routeWorkflow.Version {
+		t.Fatalf("imported workflow = %#v", imported)
+	}
+	definitions := getJSON[[]protocol.WorkflowDefinitionRecord](t, handler, "/v1/workflow-definitions", http.StatusOK)
+	if len(definitions) < 2 {
+		t.Fatalf("workflow definitions = %#v", definitions)
+	}
+
+	fileWorkflow := routeWorkflow
+	fileWorkflow.ID = "route-workflow-file"
+	fileWorkflow.Version = 1
+	workflowPath := filepath.Join(t.TempDir(), "workflow.json")
+	workflowPayload, err := json.Marshal(fileWorkflow)
+	if err != nil {
+		t.Fatalf("marshal workflow: %v", err)
+	}
+	if err := os.WriteFile(workflowPath, workflowPayload, 0o600); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
+	fileReport := postJSON[protocol.WorkflowValidationReport](t, handler, "/v1/workflow-definitions/validate-file", protocol.ValidateWorkflowDefinitionFileRequest{
+		Path: workflowPath,
+	}, http.StatusOK)
+	if !fileReport.Valid || fileReport.Identity != "route-workflow-file@1" {
+		t.Fatalf("file workflow validation = %#v", fileReport)
+	}
+	fileImported := postJSON[protocol.WorkflowDefinitionRecord](t, handler, "/v1/workflow-definitions/import-file", protocol.ImportWorkflowDefinitionFileRequest{
+		Path: workflowPath,
+	}, http.StatusCreated)
+	if fileImported.ID != fileWorkflow.ID || fileImported.Source != "file" {
+		t.Fatalf("file imported workflow = %#v", fileImported)
+	}
+	exportPath := filepath.Join(t.TempDir(), "exported-workflow.json")
+	postNoContent(t, handler, "/v1/workflow-definitions/export-file", protocol.ExportWorkflowDefinitionFileRequest{
+		ID:      fileImported.ID,
+		Version: fileImported.Version,
+		Path:    exportPath,
+	})
+	if _, err := os.Stat(exportPath); err != nil {
+		t.Fatalf("exported workflow stat: %v", err)
+	}
+	migration := postJSON[protocol.WorkflowMigrationPlan](t, handler, "/v1/projects/"+project.ID+"/workflow-migration-plan", protocol.PlanProjectWorkflowMigrationRequest{
+		ID:      imported.ID,
+		Version: imported.Version,
+	}, http.StatusOK)
+	if migration.ProjectID != project.ID || migration.TargetID != imported.ID {
+		t.Fatalf("migration = %#v", migration)
+	}
+	project = postJSON[protocol.Project](t, handler, "/v1/projects/"+project.ID+"/workflow-definition", protocol.SetProjectWorkflowDefinitionRequest{
+		ID:      imported.ID,
+		Version: imported.Version,
+	}, http.StatusOK)
+	if project.Workflow.DefinitionID != imported.ID || project.Workflow.DefinitionVersion != imported.Version {
+		t.Fatalf("workflow project = %#v", project.Workflow)
+	}
+	deletedWorkflow := postJSON[protocol.WorkflowDefinitionRecord](t, handler, "/v1/workflow-definitions/"+fileImported.ID+"/"+strconv.Itoa(fileImported.Version)+"/delete", struct{}{}, http.StatusOK)
+	if deletedWorkflow.ID != fileImported.ID {
+		t.Fatalf("deleted workflow = %#v", deletedWorkflow)
+	}
 
 	item := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
 		ProjectID:    project.ID,
@@ -722,6 +888,10 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	items := getJSON[[]protocol.WorkItem](t, handler, "/v1/work-items?projectId="+project.ID, http.StatusOK)
 	if len(items) != 1 || items[0].ID != item.ID {
 		t.Fatalf("items = %#v", items)
+	}
+	actions := getJSON[[]protocol.WorkflowActionAvailability](t, handler, "/v1/work-items/"+item.ID+"/workflow-actions", http.StatusOK)
+	if len(actions) == 0 || actions[0].Action.ID == "" {
+		t.Fatalf("workflow actions = %#v", actions)
 	}
 	moved := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/move", protocol.MoveWorkItemRequest{
 		StageID: workitem.StagePlanning,
@@ -904,6 +1074,48 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	if launchExecution.Status != workitem.RunStateRunning || launchExecution.PTYID == "" {
 		t.Fatalf("launch execution = %#v", launchExecution)
 	}
+	blockedItem := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
+		ProjectID: project.ID,
+		Title:     "Blocked by dependency",
+		Actor:     "human",
+	}, http.StatusCreated)
+	blockedItem = postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+blockedItem.ID+"/move", protocol.MoveWorkItemRequest{
+		StageID: workitem.StageReady,
+		Actor:   "human",
+	}, http.StatusOK)
+	blockerItem := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
+		ProjectID: project.ID,
+		Title:     "Dependency",
+		Actor:     "human",
+	}, http.StatusCreated)
+	blockerItem = postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+blockerItem.ID+"/move", protocol.MoveWorkItemRequest{
+		StageID: workitem.StageReady,
+		Actor:   "human",
+	}, http.StatusOK)
+	link := postJSON[protocol.WorkItemLink](t, handler, "/v1/work-item-links", protocol.AddWorkItemLinkRequest{
+		SourceWorkItemID: blockedItem.ID,
+		TargetWorkItemID: blockerItem.ID,
+		Type:             workitem.WorkItemLinkBlocks,
+		Actor:            "human",
+	}, http.StatusCreated)
+	if link.SourceWorkItemID != blockedItem.ID || link.TargetWorkItemID != blockerItem.ID {
+		t.Fatalf("link = %#v", link)
+	}
+	links := getJSON[[]protocol.WorkItemLink](t, handler, "/v1/work-item-links?workItemId="+blockedItem.ID, http.StatusOK)
+	if len(links) != 1 || links[0].ID != link.ID {
+		t.Fatalf("links = %#v", links)
+	}
+	readyWork := getJSON[protocol.ReadyWorkExplanation](t, handler, "/v1/ready-work?projectId="+project.ID, http.StatusOK)
+	foundBlocked := false
+	for _, blocked := range readyWork.Blocked {
+		if blocked.WorkItem.ID == blockedItem.ID {
+			foundBlocked = true
+			break
+		}
+	}
+	if !foundBlocked || readyWork.Summary.TotalBlocked == 0 {
+		t.Fatalf("ready work = %#v", readyWork)
+	}
 
 	deleteItem := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
 		ProjectID: project.ID,
@@ -915,6 +1127,13 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	}, http.StatusOK)
 	if deleted.ID != deleteItem.ID || len(deleted.History) == 0 || deleted.History[len(deleted.History)-1].Type != workitem.HistoryDeleted {
 		t.Fatalf("deleted = %#v", deleted)
+	}
+	deletedProject := postJSON[protocol.Project](t, handler, "/v1/projects/"+project.ID+"/delete", protocol.DeleteProjectRequest{Actor: "human"}, http.StatusOK)
+	if deletedProject.ID != project.ID {
+		t.Fatalf("deleted project = %#v", deletedProject)
+	}
+	if projects := getJSON[[]protocol.Project](t, handler, "/v1/projects", http.StatusOK); len(projects) != 0 {
+		t.Fatalf("projects after delete = %#v", projects)
 	}
 }
 
