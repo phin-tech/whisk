@@ -481,7 +481,6 @@ func daemonPathForExecutable(executable string) (string, error) {
 	if executable != "" {
 		candidates = append(candidates, filepath.Join(filepath.Dir(executable), "whisk"))
 	}
-	candidates = append(candidates, filepath.Join("bin", "whisk"))
 	if path, err := exec.LookPath("whisk"); err == nil {
 		candidates = append(candidates, path)
 	}

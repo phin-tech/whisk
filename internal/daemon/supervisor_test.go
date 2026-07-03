@@ -645,6 +645,61 @@ func TestDaemonPathCanFindBundledWhiskHelper(t *testing.T) {
 	}
 }
 
+func TestDaemonPathIgnoresWorkingDirectoryBinCandidate(t *testing.T) {
+	t.Setenv("PATH", "")
+	t.Setenv("WHISKD_PATH", "")
+
+	workDir := t.TempDir()
+	binDir := filepath.Join(workDir, "bin")
+	if err := os.Mkdir(binDir, 0o755); err != nil {
+		t.Fatalf("make bin dir: %v", err)
+	}
+	cwdHelper := filepath.Join(binDir, "whisk")
+	if err := os.WriteFile(cwdHelper, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write cwd helper: %v", err)
+	}
+	t.Chdir(workDir)
+
+	appDir := t.TempDir()
+	appExecutable := filepath.Join(appDir, "whisk-app")
+	if err := os.WriteFile(appExecutable, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write app executable: %v", err)
+	}
+
+	if path, err := daemon.DaemonPathForTest(appExecutable); err == nil {
+		t.Fatalf("expected cwd-relative bin/whisk to be ignored, got %q", path)
+	}
+}
+
+func TestDaemonPathCanFindWhiskOnPATH(t *testing.T) {
+	t.Setenv("WHISKD_PATH", "")
+
+	pathDir := t.TempDir()
+	helperName := "whisk"
+	if runtime.GOOS == "windows" {
+		helperName = "whisk.exe"
+	}
+	helper := filepath.Join(pathDir, helperName)
+	if err := os.WriteFile(helper, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write path helper: %v", err)
+	}
+	t.Setenv("PATH", pathDir)
+
+	appDir := t.TempDir()
+	appExecutable := filepath.Join(appDir, "whisk-app")
+	if err := os.WriteFile(appExecutable, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write app executable: %v", err)
+	}
+
+	path, err := daemon.DaemonPathForTest(appExecutable)
+	if err != nil {
+		t.Fatalf("daemon path: %v", err)
+	}
+	if path != helper {
+		t.Fatalf("daemon path = %q, want %q", path, helper)
+	}
+}
+
 // TestDaemonPathRejectsRunningExecutable guards against the fork loop: if daemon discovery
 // ever resolves to the running executable itself (e.g. a name collision aliases the GUI
 // binary into a daemon-candidate path), it must be skipped rather than relaunched.
