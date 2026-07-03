@@ -56,7 +56,7 @@ def _build_response(
 def sync_detailed(
     session_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | list[Session]]:
     """
     Args:
@@ -84,7 +84,7 @@ def sync_detailed(
 def sync(
     session_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | list[Session] | None:
     """
     Args:
@@ -107,7 +107,7 @@ def sync(
 async def asyncio_detailed(
     session_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | list[Session]]:
     """
     Args:
@@ -133,7 +133,7 @@ async def asyncio_detailed(
 async def asyncio(
     session_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | list[Session] | None:
     """
     Args:

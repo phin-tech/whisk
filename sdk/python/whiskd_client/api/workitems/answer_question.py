@@ -60,7 +60,7 @@ def _build_response(
 def sync_detailed(
     question_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: AnswerQuestionRequest,
 ) -> Response[ErrorResponse | Question]:
     """
@@ -91,7 +91,7 @@ def sync_detailed(
 def sync(
     question_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: AnswerQuestionRequest,
 ) -> ErrorResponse | Question | None:
     """
@@ -117,7 +117,7 @@ def sync(
 async def asyncio_detailed(
     question_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: AnswerQuestionRequest,
 ) -> Response[ErrorResponse | Question]:
     """
@@ -146,7 +146,7 @@ async def asyncio_detailed(
 async def asyncio(
     question_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: AnswerQuestionRequest,
 ) -> ErrorResponse | Question | None:
     """

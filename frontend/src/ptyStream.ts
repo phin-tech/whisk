@@ -4,10 +4,11 @@ export type PTYStreamFrame =
   | { type: "exit"; ptyId: string; code?: number | null }
   | { type: "error"; ptyId: string; message: string };
 
-export function ptyAttachWebSocketURL(daemonAddress: string, ptyId: string, fromOffset: number) {
+export function ptyAttachWebSocketURL(daemonAddress: string, ptyId: string, fromOffset: number, controlToken = "") {
   const url = new URL(`/v1/ptys/${encodeURIComponent(ptyId)}/attach`, daemonAddress);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.searchParams.set("from", String(Math.max(0, fromOffset)));
+  if (controlToken) url.searchParams.set("access_token", controlToken);
   return url.toString();
 }
 

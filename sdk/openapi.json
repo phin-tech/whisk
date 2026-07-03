@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "23",
+    "version": "24",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -26,6 +26,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -82,6 +87,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -121,6 +131,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -177,6 +192,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -228,6 +248,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -269,6 +294,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -299,6 +329,11 @@
         "summary": "List globally installed provider hook integrations",
         "tags": [
           "agent-bridges"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -344,6 +379,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -385,6 +425,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -426,6 +471,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -456,6 +506,11 @@
         "summary": "Get hook log status and path",
         "tags": [
           "agent-bridges"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -488,6 +543,11 @@
         "tags": [
           "agent-bridges"
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -518,6 +578,11 @@
         "summary": "Open hook log in the platform editor",
         "tags": [
           "agent-bridges"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -560,6 +625,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -590,6 +660,11 @@
         "summary": "List selectable builtin agent profiles",
         "tags": [
           "agents"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -633,6 +708,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -689,6 +769,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -729,6 +814,11 @@
             }
           }
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -762,6 +852,11 @@
         "summary": "Daemon API version and git SHA",
         "tags": [
           "system"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -804,6 +899,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -844,6 +944,11 @@
             }
           }
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -882,6 +987,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -937,6 +1047,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -966,6 +1081,11 @@
         "operationId": "listHTTPForwards",
         "tags": [
           "forwards"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -1008,6 +1128,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -1048,6 +1173,11 @@
             }
           }
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "204": {
             "description": "no content"
@@ -1071,6 +1201,11 @@
         "summary": "Get local onboarding status",
         "tags": [
           "system"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -1113,6 +1248,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1143,6 +1283,11 @@
         "summary": "List installable plugins from the configured registries",
         "tags": [
           "plugins"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -1188,6 +1333,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -1218,6 +1368,11 @@
         "summary": "List discovered plugins",
         "tags": [
           "plugins"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -1252,6 +1407,11 @@
         "summary": "Rescan plugin directories",
         "tags": [
           "plugins"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -1315,6 +1475,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -1356,6 +1521,11 @@
             }
           }
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1395,6 +1565,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -1447,6 +1622,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1497,6 +1677,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1526,6 +1711,11 @@
         "operationId": "listProjects",
         "tags": [
           "workitems"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -1568,6 +1758,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -1618,6 +1813,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -1656,6 +1856,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -1708,6 +1913,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1746,6 +1956,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -1798,6 +2013,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1848,6 +2068,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1898,6 +2123,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1927,6 +2157,11 @@
         "operationId": "listPromptTemplates",
         "tags": [
           "workitems"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -1961,6 +2196,11 @@
         "summary": "List persisted PTY transcripts",
         "tags": [
           "ptys"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -2006,6 +2246,11 @@
             }
           }
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2035,6 +2280,11 @@
         "operationId": "listPTYs",
         "tags": [
           "ptys"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -2077,6 +2327,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -2122,6 +2377,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2168,6 +2428,11 @@
             "schema": {
               "type": "integer"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -2220,6 +2485,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "204": {
             "description": "no content"
@@ -2263,6 +2533,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "204": {
             "description": "no content"
@@ -2294,6 +2569,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -2337,6 +2617,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -2387,6 +2672,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2427,6 +2717,11 @@
             }
           }
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2456,6 +2751,11 @@
         "operationId": "listSessions",
         "tags": [
           "sessions"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -2498,6 +2798,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -2536,6 +2841,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -2599,6 +2909,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2657,6 +2972,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -2715,6 +3035,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2773,6 +3098,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -2823,6 +3153,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2873,6 +3208,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2923,6 +3263,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2989,6 +3334,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3029,6 +3379,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -3109,6 +3464,11 @@
             }
           }
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3162,6 +3522,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3200,6 +3565,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -3243,6 +3613,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -3281,6 +3656,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -3324,6 +3704,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -3374,6 +3759,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3424,6 +3814,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3474,6 +3869,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3512,6 +3912,11 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
           }
         ],
         "responses": {
@@ -3555,6 +3960,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -3605,6 +4015,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3655,6 +4070,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3705,6 +4125,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -3755,6 +4180,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3805,6 +4235,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3855,6 +4290,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3905,6 +4345,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -3955,6 +4400,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4005,6 +4455,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -4055,6 +4510,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -4105,6 +4565,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -4155,6 +4620,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -4205,6 +4675,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -4255,6 +4730,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4295,6 +4775,11 @@
             }
           }
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4327,6 +4812,11 @@
         "operationId": "listWorkflowDefinitions",
         "tags": [
           "workitems"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -4371,6 +4861,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "204": {
             "description": "no content"
@@ -4404,6 +4899,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -4444,6 +4944,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -4484,6 +4989,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4524,6 +5034,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4572,6 +5087,11 @@
             }
           }
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4612,6 +5132,11 @@
             }
           }
         ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4644,6 +5169,11 @@
         "operationId": "listWorkflowTemplates",
         "tags": [
           "workitems"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
         ],
         "responses": {
           "200": {
@@ -4688,6 +5218,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -4728,6 +5263,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4771,6 +5311,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "204": {
             "description": "no content"
@@ -4804,6 +5349,11 @@
             }
           }
         },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -8895,6 +9445,13 @@
           "data"
         ],
         "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "controlBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "whiskd-control-token"
       }
     }
   }

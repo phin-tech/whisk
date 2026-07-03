@@ -62,7 +62,7 @@ def _build_response(
 def sync_detailed(
     project_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetProjectWorkflowDefinitionRequest,
 ) -> Response[ErrorResponse | Project]:
     """
@@ -93,7 +93,7 @@ def sync_detailed(
 def sync(
     project_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetProjectWorkflowDefinitionRequest,
 ) -> ErrorResponse | Project | None:
     """
@@ -119,7 +119,7 @@ def sync(
 async def asyncio_detailed(
     project_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetProjectWorkflowDefinitionRequest,
 ) -> Response[ErrorResponse | Project]:
     """
@@ -148,7 +148,7 @@ async def asyncio_detailed(
 async def asyncio(
     project_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetProjectWorkflowDefinitionRequest,
 ) -> ErrorResponse | Project | None:
     """

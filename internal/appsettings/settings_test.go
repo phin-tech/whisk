@@ -21,6 +21,9 @@ func TestDefaultSettingsOpenToSessions(t *testing.T) {
 	if !settings.HookLogEnabled {
 		t.Fatalf("hook log enabled = false, want true by default")
 	}
+	if settings.AutoRestartManagedDaemon {
+		t.Fatalf("auto-restart managed daemon = true, want false by default")
+	}
 }
 
 func TestStoreRoundTripsKeepDaemonAlive(t *testing.T) {
@@ -35,6 +38,21 @@ func TestStoreRoundTripsKeepDaemonAlive(t *testing.T) {
 	}
 	if loaded.KeepDaemonAlive {
 		t.Fatalf("keep daemon alive = true, want false after saving false")
+	}
+}
+
+func TestStoreRoundTripsAutoRestartManagedDaemon(t *testing.T) {
+	store := appsettings.NewStore(filepath.Join(t.TempDir(), "whisk.json"))
+
+	if _, err := store.Save(context.Background(), appsettings.Settings{StartupView: appsettings.StartupViewSessions, AutoRestartManagedDaemon: true}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !loaded.AutoRestartManagedDaemon {
+		t.Fatalf("auto-restart managed daemon = false, want true after saving true")
 	}
 }
 

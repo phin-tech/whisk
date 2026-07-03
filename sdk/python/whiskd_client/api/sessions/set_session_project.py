@@ -60,7 +60,7 @@ def _build_response(
 def sync_detailed(
     session_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetSessionProjectRequest,
 ) -> Response[ErrorResponse | Session]:
     """
@@ -91,7 +91,7 @@ def sync_detailed(
 def sync(
     session_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetSessionProjectRequest,
 ) -> ErrorResponse | Session | None:
     """
@@ -117,7 +117,7 @@ def sync(
 async def asyncio_detailed(
     session_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetSessionProjectRequest,
 ) -> Response[ErrorResponse | Session]:
     """
@@ -146,7 +146,7 @@ async def asyncio_detailed(
 async def asyncio(
     session_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: SetSessionProjectRequest,
 ) -> ErrorResponse | Session | None:
     """

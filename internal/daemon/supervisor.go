@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -26,10 +25,7 @@ var (
 	errProcessStillAlive  = errors.New("process still running")
 )
 
-const (
-	daemonStateVersion = 1
-	daemonLogTailBytes = 4096
-)
+const daemonStateVersion = 1
 
 type daemonStateFile struct {
 	Version          int    `json:"version"`
@@ -153,15 +149,15 @@ const (
 
 type daemonStartOptions struct {
 	writeState bool
+	binaryPath string
 	env        map[string]string
 	label      string
 }
 
 type spawnedDaemon struct {
-	cmd       *exec.Cmd
-	waitCh    chan error
-	logPath   string
-	logOffset int64
+	cmd    *exec.Cmd
+	waitCh chan error
+	stderr *limitedCapture
 }
 
 // Ensure makes sure a compatible daemon is reachable at baseURL, starting one if needed.
@@ -217,7 +213,7 @@ func ensureLocked(ctx context.Context, baseURL string, policy Policy) (started b
 		binaryPath = abs
 	}
 
-	if _, err := startDaemonAndWait(ctx, baseURL, addr, binaryPath, policy, daemonStartOptions{writeState: true}); err != nil {
+	if _, err := startDaemonAndWait(ctx, baseURL, addr, binaryPath, policy, daemonStartOptions{writeState: true, binaryPath: binaryPath}); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -272,6 +268,9 @@ func startDaemonAndWait(ctx context.Context, baseURL, addr, path string, policy 
 	for {
 		decision, err := compatibilityProbe(ctx, daemonClient, policy, policy.CompatibilityProbeTimeout)
 		if decision == compatibilityCompatible {
+			if proc.stderr != nil {
+				proc.stderr.StopRecording()
+			}
 			log.Printf("whiskd ready at %s", baseURL)
 			return proc, nil
 		}
@@ -279,62 +278,63 @@ func startDaemonAndWait(ctx context.Context, baseURL, addr, path string, policy 
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), policy.SpawnCleanupTimeout)
 			_ = stopSpawnedDaemon(cleanupCtx, baseURL, proc, opts.writeState, policy)
 			cancel()
-			return nil, fmt.Errorf("started whiskd is incompatible: %w%s", err, proc.logTailMessage())
+			return nil, fmt.Errorf("started whiskd is incompatible: %w%s", err, proc.diagnostics(baseURL))
 		}
 		select {
 		case waitErr := <-proc.waitCh:
 			if opts.writeState {
 				removeStateFile(baseURL)
 			}
-			return nil, proc.exitBeforeReadyError(waitErr)
+			return nil, proc.exitBeforeReadyError(baseURL, waitErr)
 		case <-ticker.C:
 		case <-ctx.Done():
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), policy.SpawnCleanupTimeout)
 			_ = stopSpawnedDaemon(cleanupCtx, baseURL, proc, opts.writeState, policy)
 			cancel()
-			return nil, fmt.Errorf("wait for whiskd: %w%s", ctx.Err(), proc.logTailMessage())
+			return nil, fmt.Errorf("wait for whiskd: %w%s", ctx.Err(), proc.diagnostics(baseURL))
 		}
 	}
 }
 
 func startDaemonProcess(baseURL, addr, path string, opts daemonStartOptions) (*spawnedDaemon, error) {
-	logPath := filepath.Join(os.TempDir(), "whiskd.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("open whiskd log: %w", err)
-	}
-	info, statErr := logFile.Stat()
-	if statErr != nil {
-		_ = logFile.Close()
-		return nil, fmt.Errorf("stat whiskd log: %w", statErr)
-	}
-	logOffset := info.Size()
 	cmd := exec.CommandContext(context.Background(), path, "daemon", "run", "-addr", addr)
 	if len(opts.env) > 0 {
 		cmd.Env = environWithOverrides(opts.env)
 	}
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
+	stderrCapture := newLimitedCapture(supervisorStderrCaptureBytes)
+	cmd.Stderr = stderrCapture
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
-		_ = logFile.Close()
-		return nil, fmt.Errorf("start whiskd: %w", err)
-	}
-	if err := logFile.Close(); err != nil {
-		log.Printf("close whiskd log handle: %v", err)
+		return nil, fmt.Errorf("start whiskd: %w%s", err, daemonStartDiagnostics(baseURL, stderrCapture))
 	}
 	if opts.writeState {
-		if err := writeProcessStateFile(baseURL, addr, cmd.Process.Pid, path); err != nil {
+		binaryPath := opts.binaryPath
+		if binaryPath == "" {
+			binaryPath = path
+		}
+		startTime, err := processStartTime(cmd.Process.Pid)
+		if err != nil {
 			_ = cmd.Process.Kill()
 			_ = cmd.Wait()
-			return nil, fmt.Errorf("write whiskd state file: %w", err)
+			return nil, fmt.Errorf("read whiskd process start time: %w%s", err, daemonStartDiagnostics(baseURL, stderrCapture))
+		}
+		if err := writeStateFile(baseURL, daemonStateFile{
+			Version:          daemonStateVersion,
+			PID:              cmd.Process.Pid,
+			ProcessStartTime: startTime,
+			ListenAddress:    addr,
+			APIVersion:       protocol.DaemonAPIVersion,
+			BinaryPath:       binaryPath,
+		}); err != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+			return nil, fmt.Errorf("write whiskd state file: %w%s", err, daemonStartDiagnostics(baseURL, stderrCapture))
 		}
 	}
 	proc := &spawnedDaemon{
-		cmd:       cmd,
-		waitCh:    make(chan error, 1),
-		logPath:   logPath,
-		logOffset: logOffset,
+		cmd:    cmd,
+		waitCh: make(chan error, 1),
+		stderr: stderrCapture,
 	}
 	go func() {
 		err := cmd.Wait()
@@ -344,21 +344,6 @@ func startDaemonProcess(baseURL, addr, path string, opts daemonStartOptions) (*s
 		}
 	}()
 	return proc, nil
-}
-
-func writeProcessStateFile(baseURL, addr string, pid int, binaryPath string) error {
-	startTime, err := processStartTime(pid)
-	if err != nil {
-		return fmt.Errorf("read whiskd process start time: %w", err)
-	}
-	return writeStateFile(baseURL, daemonStateFile{
-		Version:          daemonStateVersion,
-		PID:              pid,
-		ProcessStartTime: startTime,
-		ListenAddress:    addr,
-		APIVersion:       protocol.DaemonAPIVersion,
-		BinaryPath:       binaryPath,
-	})
 }
 
 func stopSpawnedDaemon(ctx context.Context, baseURL string, proc *spawnedDaemon, removeState bool, policy Policy) error {
@@ -424,8 +409,8 @@ func environWithOverrides(overrides map[string]string) []string {
 	return out
 }
 
-func (p *spawnedDaemon) exitBeforeReadyError(waitErr error) error {
-	return fmt.Errorf("started whiskd exited before readiness: %s%s", exitStatusText(waitErr), p.logTailMessage())
+func (p *spawnedDaemon) exitBeforeReadyError(baseURL string, waitErr error) error {
+	return fmt.Errorf("started whiskd exited before readiness: %s%s", exitStatusText(waitErr), p.diagnostics(baseURL))
 }
 
 func exitStatusText(err error) string {
@@ -435,36 +420,11 @@ func exitStatusText(err error) string {
 	return err.Error()
 }
 
-func (p *spawnedDaemon) logTailMessage() string {
-	tail := readLogTail(p.logPath, p.logOffset, daemonLogTailBytes)
-	if tail == "" {
+func (p *spawnedDaemon) diagnostics(baseURL string) string {
+	if p == nil {
 		return ""
 	}
-	return "; whiskd log tail:\n" + tail
-}
-
-func readLogTail(path string, offset int64, maxBytes int64) string {
-	file, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || info.Size() <= offset {
-		return ""
-	}
-	start := info.Size() - maxBytes
-	if start < offset {
-		start = offset
-	}
-	if _, err := file.Seek(start, io.SeekStart); err != nil {
-		return ""
-	}
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
+	return daemonStartDiagnostics(baseURL, p.stderr)
 }
 
 // Stop shuts down the daemon at baseURL whether or not this process started it.
@@ -480,7 +440,7 @@ func Stop(ctx context.Context, baseURL string, policies ...Policy) error {
 	return stopLocked(ctx, baseURL, policy)
 }
 
-type statusReport struct {
+type StatusReport struct {
 	Running    bool   `json:"running"`
 	Address    string `json:"address"`
 	Managed    bool   `json:"managed"`
@@ -492,9 +452,9 @@ type statusReport struct {
 }
 
 // Status reports the daemon's current health, ownership, compatibility, and build metadata.
-func Status(ctx context.Context, baseURL string, policies ...Policy) statusReport {
+func Status(ctx context.Context, baseURL string, policies ...Policy) StatusReport {
 	policy := selectedPolicy(policies)
-	status := statusReport{Address: strings.TrimRight(baseURL, "/")}
+	status := StatusReport{Address: strings.TrimRight(baseURL, "/")}
 	if _, managed, err := verifiedStateFile(baseURL, false); err == nil && managed {
 		status.Managed = true
 	}
@@ -856,6 +816,9 @@ func shutdownExistingWithPolicy(ctx context.Context, baseURL string, policy Poli
 	if err != nil {
 		return err
 	}
+	if err := client.NewHTTP(baseURL, nil).AuthorizeRequest(req); err != nil {
+		return err
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -923,7 +886,6 @@ func daemonPathForExecutable(executable string) (string, error) {
 	if executable != "" {
 		candidates = append(candidates, filepath.Join(filepath.Dir(executable), "whisk"))
 	}
-	candidates = append(candidates, filepath.Join("bin", "whisk"))
 	if path, err := exec.LookPath("whisk"); err == nil {
 		candidates = append(candidates, path)
 	}

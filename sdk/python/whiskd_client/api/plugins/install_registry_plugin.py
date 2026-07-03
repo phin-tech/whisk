@@ -55,7 +55,7 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: InstallRegistryPluginRequest,
 ) -> Response[ErrorResponse | PluginStatus]:
     """Install a plugin from a configured registry (untrusted)
@@ -84,7 +84,7 @@ def sync_detailed(
 
 def sync(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: InstallRegistryPluginRequest,
 ) -> ErrorResponse | PluginStatus | None:
     """Install a plugin from a configured registry (untrusted)
@@ -108,7 +108,7 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: InstallRegistryPluginRequest,
 ) -> Response[ErrorResponse | PluginStatus]:
     """Install a plugin from a configured registry (untrusted)
@@ -135,7 +135,7 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: InstallRegistryPluginRequest,
 ) -> ErrorResponse | PluginStatus | None:
     """Install a plugin from a configured registry (untrusted)

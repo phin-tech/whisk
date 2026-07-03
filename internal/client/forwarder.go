@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/controlauth"
 	"github.com/phin-tech/whisk/internal/domain/httpforward"
 	"github.com/phin-tech/whisk/internal/protocol"
 )
@@ -108,6 +109,9 @@ func (f *LocalForwarder) localProxy(target *url.URL) http.Handler {
 			proxyReq.Out.URL.Path = localProxyPath(target.Path, in.URL.Path)
 			proxyReq.Out.URL.RawPath = ""
 			proxyReq.Out.URL.RawQuery = mergeRawQuery(target.RawQuery, in.URL.RawQuery)
+			if token, err := f.daemon.ControlToken(); err == nil && token != "" {
+				proxyReq.Out.Header.Set(controlauth.AuthorizationHeader, controlauth.BearerHeader(token))
+			}
 		},
 		FlushInterval: -1 * time.Nanosecond,
 	}

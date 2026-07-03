@@ -20,6 +20,11 @@ export class DaemonStatus {
     "address": string;
 
     /**
+     * ControlToken is used by the renderer only for daemon WebSocket attach handshakes.
+     */
+    "controlToken": string;
+
+    /**
      * Managed is true when this app started the daemon (the state file matches its live process),
      * as opposed to one started independently (e.g. `whisk daemon run`).
      */
@@ -38,6 +43,31 @@ export class DaemonStatus {
      */
     "error": string;
 
+    /**
+     * AutoRestartEnabled mirrors the opt-in app preference used by the client-side watcher.
+     */
+    "autoRestartEnabled": boolean;
+
+    /**
+     * Restarting is true while the watcher is actively trying to re-ensure a managed daemon.
+     */
+    "restarting": boolean;
+
+    /**
+     * RestartAttempt is the current bounded auto-restart attempt number, when any.
+     */
+    "restartAttempt": number;
+
+    /**
+     * RestartMaxAttempts is the retry budget for one unexpected managed-daemon loss.
+     */
+    "restartMaxAttempts": number;
+
+    /**
+     * AutoRestartExhausted is true after the watcher spends the bounded retry budget.
+     */
+    "autoRestartExhausted": boolean;
+
     /** Creates a new DaemonStatus instance. */
     constructor($$source: Partial<DaemonStatus> = {}) {
         if (!("running" in $$source)) {
@@ -45,6 +75,9 @@ export class DaemonStatus {
         }
         if (!("address" in $$source)) {
             this["address"] = "";
+        }
+        if (!("controlToken" in $$source)) {
+            this["controlToken"] = "";
         }
         if (!("managed" in $$source)) {
             this["managed"] = false;
@@ -63,6 +96,21 @@ export class DaemonStatus {
         }
         if (!("error" in $$source)) {
             this["error"] = "";
+        }
+        if (!("autoRestartEnabled" in $$source)) {
+            this["autoRestartEnabled"] = false;
+        }
+        if (!("restarting" in $$source)) {
+            this["restarting"] = false;
+        }
+        if (!("restartAttempt" in $$source)) {
+            this["restartAttempt"] = 0;
+        }
+        if (!("restartMaxAttempts" in $$source)) {
+            this["restartMaxAttempts"] = 0;
+        }
+        if (!("autoRestartExhausted" in $$source)) {
+            this["autoRestartExhausted"] = false;
         }
 
         Object.assign(this, $$source);

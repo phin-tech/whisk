@@ -64,6 +64,7 @@ export class Settings {
      * the app stop the daemon it started on quit.
      */
     "keepDaemonAlive": boolean;
+    "autoRestartManagedDaemon"?: boolean;
     "hookLogEnabled": boolean;
     "clearHookLogAfterSession"?: boolean;
     "worktrunkPath"?: string;
@@ -103,18 +104,18 @@ export class Settings {
      * Creates a new Settings instance from a string or object.
      */
     static createFrom($$source: any = {}): Settings {
-        const $$createField5_0 = $$createType0;
-        const $$createField6_0 = $$createType1;
-        const $$createField7_0 = $$createType3;
+        const $$createField6_0 = $$createType0;
+        const $$createField7_0 = $$createType1;
+        const $$createField8_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("keybindings" in $$parsedSource) {
-            $$parsedSource["keybindings"] = $$createField5_0($$parsedSource["keybindings"]);
+            $$parsedSource["keybindings"] = $$createField6_0($$parsedSource["keybindings"]);
         }
         if ("trustedPlugins" in $$parsedSource) {
-            $$parsedSource["trustedPlugins"] = $$createField6_0($$parsedSource["trustedPlugins"]);
+            $$parsedSource["trustedPlugins"] = $$createField7_0($$parsedSource["trustedPlugins"]);
         }
         if ("pluginRegistries" in $$parsedSource) {
-            $$parsedSource["pluginRegistries"] = $$createField7_0($$parsedSource["pluginRegistries"]);
+            $$parsedSource["pluginRegistries"] = $$createField8_0($$parsedSource["pluginRegistries"]);
         }
         return new Settings($$parsedSource as Partial<Settings>);
     }
