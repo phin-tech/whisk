@@ -640,6 +640,28 @@ func TestHTTPServerAgentHookReceiverRejectsOversizedPayload(t *testing.T) {
 	assertStatus(t, handler, http.MethodPost, "/v1/agent-hook-events", body, http.StatusRequestEntityTooLarge)
 }
 
+func TestHTTPServerAgentHookReceiverRejectsTrailingJSON(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	handler := server.NewHTTP(runtime, server.WithAgentHookReceiverLimits(1024, time.Second))
+
+	for name, body := range map[string]string{
+		"garbage":      `{"provider":"claude","eventName":"Notification"} trailing`,
+		"second_value": `{"provider":"claude","eventName":"Notification"} {}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			assertStatus(t, handler, http.MethodPost, "/v1/agent-hook-events", body, http.StatusBadRequest)
+		})
+	}
+}
+
+func TestHTTPServerAgentHookReceiverRejectsOversizedTrailingBody(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	handler := server.NewHTTP(runtime, server.WithAgentHookReceiverLimits(64, time.Second))
+
+	body := `{"provider":"claude","eventName":"Notification"}` + strings.Repeat(" ", 128)
+	assertStatus(t, handler, http.MethodPost, "/v1/agent-hook-events", body, http.StatusRequestEntityTooLarge)
+}
+
 func TestHTTPServerAgentHookReceiverTimesOutSlowBody(t *testing.T) {
 	runtime := app.NewRuntime(app.RuntimeConfig{})
 	handler := server.NewHTTP(runtime, server.WithAgentHookReceiverLimits(1024, 10*time.Millisecond))

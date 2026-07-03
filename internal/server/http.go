@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1235,7 +1236,22 @@ func decodeJSONWithLimits(w http.ResponseWriter, r *http.Request, out any, maxBy
 	errCh := make(chan error, 1)
 	go func() {
 		defer r.Body.Close()
-		errCh <- json.NewDecoder(r.Body).Decode(out)
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(out); err != nil {
+			errCh <- err
+			return
+		}
+		var extra any
+		err := decoder.Decode(&extra)
+		if errors.Is(err, io.EOF) {
+			errCh <- nil
+			return
+		}
+		if err == nil {
+			errCh <- fmt.Errorf("request body must contain only one JSON value")
+			return
+		}
+		errCh <- err
 	}()
 	select {
 	case err := <-errCh:
