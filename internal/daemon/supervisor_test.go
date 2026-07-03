@@ -56,6 +56,47 @@ func TestEnsureStartsDaemonWhenDown(t *testing.T) {
 	}
 }
 
+func TestEnsureStartFailureIncludesDaemonLogTailAndEarlyStderr(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell helper is unix-only")
+	}
+	useSupervisorStateDir(t)
+	tempDir := filepath.Join(t.TempDir(), "tmp")
+	t.Setenv("TMPDIR", tempDir)
+
+	addr := freeSupervisorAddr(t)
+	baseURL := "http://" + addr
+	t.Setenv("WHISKD_PATH", writeWhiskHelper(t))
+	t.Setenv("WHISK_HELPER_FAIL_BEFORE_READY", "1")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	started, err := daemon.Ensure(ctx, baseURL)
+	if err == nil {
+		t.Fatalf("expected failed daemon startup")
+	}
+	if started {
+		t.Fatalf("failed daemon startup should not report started")
+	}
+	message := err.Error()
+	for _, want := range []string{
+		"started whiskd exited before readiness",
+		"daemon log tail:",
+		"new daemon log line",
+		"early stderr line",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("startup error %q does not contain %q", message, want)
+		}
+	}
+	if strings.Contains(message, "old daemon log start") {
+		t.Fatalf("startup error should include only the daemon log tail, got %q", message)
+	}
+	if _, err := os.Stat(filepath.Join(tempDir, "whiskd.log")); !os.IsNotExist(err) {
+		t.Fatalf("supervisor should not create shared temp log, stat err=%v", err)
+	}
+}
+
 func TestEnsureRestartsIncompatibleDaemon(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell helper is unix-only")
@@ -372,6 +413,24 @@ func TestWhiskHelperProcess(t *testing.T) {
 	}
 	if addr == "" {
 		os.Exit(2)
+	}
+	if os.Getenv("WHISK_HELPER_FAIL_BEFORE_READY") == "1" {
+		logPath, err := daemon.LogPath("http://" + addr)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(6)
+		}
+		if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(7)
+		}
+		logData := "old daemon log start\n" + strings.Repeat("x", 64*1024) + "\nnew daemon log line\n"
+		if err := os.WriteFile(logPath, []byte(logData), 0o600); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(8)
+		}
+		fmt.Fprintln(os.Stderr, "early stderr line")
+		os.Exit(9)
 	}
 	if os.Getenv("WHISK_HELPER_MODE") == "exit" {
 		fmt.Fprintln(os.Stderr, "helper daemon failed before readiness")

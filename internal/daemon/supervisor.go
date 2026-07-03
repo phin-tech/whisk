@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -32,7 +31,6 @@ const (
 	compatibilityRetryWindow    = 2 * time.Second
 	compatibilityInitialBackoff = 50 * time.Millisecond
 	compatibilityMaxBackoff     = 250 * time.Millisecond
-	daemonLogTailBytes          = 4096
 )
 
 type daemonStateFile struct {
@@ -123,10 +121,9 @@ type daemonStartOptions struct {
 }
 
 type spawnedDaemon struct {
-	cmd       *exec.Cmd
-	waitCh    chan error
-	logPath   string
-	logOffset int64
+	cmd    *exec.Cmd
+	waitCh chan error
+	stderr *limitedCapture
 }
 
 // Ensure makes sure a compatible daemon is reachable at baseURL, starting one if needed.
@@ -234,6 +231,9 @@ func startDaemonAndWait(ctx context.Context, baseURL, addr, path string, opts da
 	for {
 		decision, err := compatibilityProbe(ctx, daemonClient, compatibilityProbeTimeout)
 		if decision == compatibilityCompatible {
+			if proc.stderr != nil {
+				proc.stderr.StopRecording()
+			}
 			log.Printf("whiskd ready at %s", baseURL)
 			return proc, nil
 		}
@@ -241,49 +241,34 @@ func startDaemonAndWait(ctx context.Context, baseURL, addr, path string, opts da
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			_ = stopSpawnedDaemon(cleanupCtx, baseURL, proc, opts.writeState)
 			cancel()
-			return nil, fmt.Errorf("started whiskd is incompatible: %w%s", err, proc.logTailMessage())
+			return nil, fmt.Errorf("started whiskd is incompatible: %w%s", err, proc.diagnostics(baseURL))
 		}
 		select {
 		case waitErr := <-proc.waitCh:
 			if opts.writeState {
 				removeStateFile(baseURL)
 			}
-			return nil, proc.exitBeforeReadyError(waitErr)
+			return nil, proc.exitBeforeReadyError(baseURL, waitErr)
 		case <-ticker.C:
 		case <-ctx.Done():
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			_ = stopSpawnedDaemon(cleanupCtx, baseURL, proc, opts.writeState)
 			cancel()
-			return nil, fmt.Errorf("wait for whiskd: %w%s", ctx.Err(), proc.logTailMessage())
+			return nil, fmt.Errorf("wait for whiskd: %w%s", ctx.Err(), proc.diagnostics(baseURL))
 		}
 	}
 }
 
 func startDaemonProcess(baseURL, addr, path string, opts daemonStartOptions) (*spawnedDaemon, error) {
-	logPath := filepath.Join(os.TempDir(), "whiskd.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("open whiskd log: %w", err)
-	}
-	info, statErr := logFile.Stat()
-	if statErr != nil {
-		_ = logFile.Close()
-		return nil, fmt.Errorf("stat whiskd log: %w", statErr)
-	}
-	logOffset := info.Size()
 	cmd := exec.CommandContext(context.Background(), path, "daemon", "run", "-addr", addr)
 	if len(opts.env) > 0 {
 		cmd.Env = environWithOverrides(opts.env)
 	}
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
+	stderrCapture := newLimitedCapture(supervisorStderrCaptureBytes)
+	cmd.Stderr = stderrCapture
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
-		_ = logFile.Close()
-		return nil, fmt.Errorf("start whiskd: %w", err)
-	}
-	if err := logFile.Close(); err != nil {
-		log.Printf("close whiskd log handle: %v", err)
+		return nil, fmt.Errorf("start whiskd: %w%s", err, daemonStartDiagnostics(baseURL, stderrCapture))
 	}
 	if opts.writeState {
 		binaryPath := opts.binaryPath
@@ -294,7 +279,7 @@ func startDaemonProcess(baseURL, addr, path string, opts daemonStartOptions) (*s
 		if err != nil {
 			_ = cmd.Process.Kill()
 			_ = cmd.Wait()
-			return nil, fmt.Errorf("read whiskd process start time: %w", err)
+			return nil, fmt.Errorf("read whiskd process start time: %w%s", err, daemonStartDiagnostics(baseURL, stderrCapture))
 		}
 		if err := writeStateFile(baseURL, daemonStateFile{
 			Version:          daemonStateVersion,
@@ -306,14 +291,13 @@ func startDaemonProcess(baseURL, addr, path string, opts daemonStartOptions) (*s
 		}); err != nil {
 			_ = cmd.Process.Kill()
 			_ = cmd.Wait()
-			return nil, fmt.Errorf("write whiskd state file: %w", err)
+			return nil, fmt.Errorf("write whiskd state file: %w%s", err, daemonStartDiagnostics(baseURL, stderrCapture))
 		}
 	}
 	proc := &spawnedDaemon{
-		cmd:       cmd,
-		waitCh:    make(chan error, 1),
-		logPath:   logPath,
-		logOffset: logOffset,
+		cmd:    cmd,
+		waitCh: make(chan error, 1),
+		stderr: stderrCapture,
 	}
 	go func() {
 		err := cmd.Wait()
@@ -388,8 +372,8 @@ func environWithOverrides(overrides map[string]string) []string {
 	return out
 }
 
-func (p *spawnedDaemon) exitBeforeReadyError(waitErr error) error {
-	return fmt.Errorf("started whiskd exited before readiness: %s%s", exitStatusText(waitErr), p.logTailMessage())
+func (p *spawnedDaemon) exitBeforeReadyError(baseURL string, waitErr error) error {
+	return fmt.Errorf("started whiskd exited before readiness: %s%s", exitStatusText(waitErr), p.diagnostics(baseURL))
 }
 
 func exitStatusText(err error) string {
@@ -399,36 +383,11 @@ func exitStatusText(err error) string {
 	return err.Error()
 }
 
-func (p *spawnedDaemon) logTailMessage() string {
-	tail := readLogTail(p.logPath, p.logOffset, daemonLogTailBytes)
-	if tail == "" {
+func (p *spawnedDaemon) diagnostics(baseURL string) string {
+	if p == nil {
 		return ""
 	}
-	return "; whiskd log tail:\n" + tail
-}
-
-func readLogTail(path string, offset int64, maxBytes int64) string {
-	file, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || info.Size() <= offset {
-		return ""
-	}
-	start := info.Size() - maxBytes
-	if start < offset {
-		start = offset
-	}
-	if _, err := file.Seek(start, io.SeekStart); err != nil {
-		return ""
-	}
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
+	return daemonStartDiagnostics(baseURL, p.stderr)
 }
 
 // Stop shuts down the daemon at baseURL whether or not this process started it.
