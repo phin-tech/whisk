@@ -20,6 +20,11 @@ export class DaemonStatus {
     "address": string;
 
     /**
+     * ControlToken is used by the renderer only for daemon WebSocket attach handshakes.
+     */
+    "controlToken": string;
+
+    /**
      * Managed is true when this app started the daemon (the state file matches its live process),
      * as opposed to one started independently (e.g. `whisk daemon run`).
      */
@@ -70,6 +75,9 @@ export class DaemonStatus {
         }
         if (!("address" in $$source)) {
             this["address"] = "";
+        }
+        if (!("controlToken" in $$source)) {
+            this["controlToken"] = "";
         }
         if (!("managed" in $$source)) {
             this["managed"] = false;

@@ -14,13 +14,57 @@ import (
 	"github.com/coder/websocket"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/buildinfo"
+	"github.com/phin-tech/whisk/internal/controlauth"
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/ptytrace"
 )
 
-func NewHTTP(runtime *app.Runtime) http.Handler {
+type HTTPOption func(*httpOptions)
+
+type httpOptions struct {
+	controlToken string
+}
+
+func WithControlToken(token string) HTTPOption {
+	return func(opts *httpOptions) {
+		opts.controlToken = token
+	}
+}
+
+func RequireBearerAuth(token string, next http.Handler) http.Handler {
+	if token == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/health" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !controlauth.TokensEqual(token, requestControlToken(r)) {
+			writeError(w, http.StatusUnauthorized, fmt.Errorf("unauthorized"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func requestControlToken(r *http.Request) string {
+	if token, ok := controlauth.BearerToken(r.Header.Get(controlauth.AuthorizationHeader)); ok {
+		return token
+	}
+	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/ptys/") && strings.HasSuffix(r.URL.Path, "/attach") {
+		return r.URL.Query().Get(controlauth.AccessTokenQueryName)
+	}
+	return ""
+}
+
+func NewHTTP(runtime *app.Runtime, optionFns ...HTTPOption) http.Handler {
+	opts := httpOptions{}
+	for _, option := range optionFns {
+		option(&opts)
+	}
 	server := &HTTPServer{runtime: runtime}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", server.health)
@@ -137,6 +181,9 @@ func NewHTTP(runtime *app.Runtime) http.Handler {
 	mux.HandleFunc("POST /v1/status", server.reportStatus)
 	mux.HandleFunc("GET /v1/status-events", server.listStatusEvents)
 	mux.HandleFunc("POST /v1/status-events/{statusEventID}/read", server.markStatusEventRead)
+	if opts.controlToken != "" {
+		return RequireBearerAuth(opts.controlToken, mux)
+	}
 	return mux
 }
 

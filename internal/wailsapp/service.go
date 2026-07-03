@@ -212,6 +212,8 @@ type DaemonStatus struct {
 	Running bool `json:"running"`
 	// Address is the daemon URL (e.g. http://127.0.0.1:8787).
 	Address string `json:"address"`
+	// ControlToken is used by the renderer only for daemon WebSocket attach handshakes.
+	ControlToken string `json:"controlToken"`
 	// Managed is true when this app started the daemon (the state file matches its live process),
 	// as opposed to one started independently (e.g. `whisk daemon run`).
 	Managed bool `json:"managed"`
@@ -245,6 +247,9 @@ func (s *Service) httpClient() (*client.HTTPClient, error) {
 func (s *Service) daemonStatus(ctx context.Context, httpClient *client.HTTPClient) DaemonStatus {
 	baseURL := httpClient.BaseURL()
 	status := DaemonStatus{Address: baseURL, Managed: s.supervisor.IsManaged(baseURL)}
+	if token, err := httpClient.ControlToken(); err == nil {
+		status.ControlToken = token
+	}
 	if err := httpClient.Health(ctx); err != nil {
 		status.Error = err.Error()
 		return status

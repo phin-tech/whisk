@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -102,12 +103,17 @@ func startDaemon(t *testing.T) string {
 
 	addr := "127.0.0.1:" + freePort(t)
 	state := t.TempDir()
+	stateHome := filepath.Join(state, "state")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(state, "config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(state, "data"))
+	t.Setenv("XDG_STATE_HOME", stateHome)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(state, "cache"))
 	cmd := exec.Command(binary, "daemon", "run", "-addr", addr)
 	cmd.Env = append(os.Environ(),
 		"WHISKD_ADDR="+addr,
 		"XDG_CONFIG_HOME="+filepath.Join(state, "config"),
 		"XDG_DATA_HOME="+filepath.Join(state, "data"),
-		"XDG_STATE_HOME="+filepath.Join(state, "state"),
+		"XDG_STATE_HOME="+stateHome,
 		"XDG_CACHE_HOME="+filepath.Join(state, "cache"),
 	)
 	output := new(outputBuffer)
@@ -131,16 +137,30 @@ func startDaemon(t *testing.T) string {
 	})
 
 	url := "http://" + addr
+	tokenPath := filepath.Join(stateHome, "whisk", "control-token")
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
 			t.Fatalf("daemon exited early:\n%s", output.String())
 		}
-		resp, err := http.Get(url + "/v1/compat")
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				return url
+		token, readErr := os.ReadFile(tokenPath)
+		if readErr == nil {
+			req, err := http.NewRequest(http.MethodGet, url+"/v1/compat", nil)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
+			resp, err := http.DefaultClient.Do(req)
+			if err == nil {
+				_ = resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					return url
+				}
+			}
+		} else {
+			resp, err := http.Get(url + "/v1/health")
+			if err == nil {
+				_ = resp.Body.Close()
 			}
 		}
 		time.Sleep(100 * time.Millisecond)

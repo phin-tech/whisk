@@ -60,7 +60,7 @@ def _build_response(
 def sync_detailed(
     bridge_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: AgentBridgeHookRequest,
 ) -> Response[AgentBridgeHookResponse | ErrorResponse]:
     """Handle provider hook callback for a daemon-owned agent bridge
@@ -92,7 +92,7 @@ def sync_detailed(
 def sync(
     bridge_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: AgentBridgeHookRequest,
 ) -> AgentBridgeHookResponse | ErrorResponse | None:
     """Handle provider hook callback for a daemon-owned agent bridge
@@ -119,7 +119,7 @@ def sync(
 async def asyncio_detailed(
     bridge_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: AgentBridgeHookRequest,
 ) -> Response[AgentBridgeHookResponse | ErrorResponse]:
     """Handle provider hook callback for a daemon-owned agent bridge
@@ -149,7 +149,7 @@ async def asyncio_detailed(
 async def asyncio(
     bridge_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: AgentBridgeHookRequest,
 ) -> AgentBridgeHookResponse | ErrorResponse | None:
     """Handle provider hook callback for a daemon-owned agent bridge

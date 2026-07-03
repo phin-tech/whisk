@@ -60,7 +60,7 @@ def _build_response(
 def sync_detailed(
     run_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: CompleteExecutionRequest,
 ) -> Response[ErrorResponse | WorkItem]:
     """
@@ -91,7 +91,7 @@ def sync_detailed(
 def sync(
     run_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: CompleteExecutionRequest,
 ) -> ErrorResponse | WorkItem | None:
     """
@@ -117,7 +117,7 @@ def sync(
 async def asyncio_detailed(
     run_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: CompleteExecutionRequest,
 ) -> Response[ErrorResponse | WorkItem]:
     """
@@ -146,7 +146,7 @@ async def asyncio_detailed(
 async def asyncio(
     run_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: CompleteExecutionRequest,
 ) -> ErrorResponse | WorkItem | None:
     """

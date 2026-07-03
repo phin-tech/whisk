@@ -60,7 +60,7 @@ def _build_response(
 def sync_detailed(
     prompt_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResolveAgentPromptRequest,
 ) -> Response[AgentPrompt | ErrorResponse]:
     """Resolve a pending daemon-owned agent prompt
@@ -92,7 +92,7 @@ def sync_detailed(
 def sync(
     prompt_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResolveAgentPromptRequest,
 ) -> AgentPrompt | ErrorResponse | None:
     """Resolve a pending daemon-owned agent prompt
@@ -119,7 +119,7 @@ def sync(
 async def asyncio_detailed(
     prompt_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResolveAgentPromptRequest,
 ) -> Response[AgentPrompt | ErrorResponse]:
     """Resolve a pending daemon-owned agent prompt
@@ -149,7 +149,7 @@ async def asyncio_detailed(
 async def asyncio(
     prompt_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResolveAgentPromptRequest,
 ) -> AgentPrompt | ErrorResponse | None:
     """Resolve a pending daemon-owned agent prompt

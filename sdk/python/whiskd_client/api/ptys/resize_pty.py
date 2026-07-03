@@ -58,7 +58,7 @@ def _build_response(
 def sync_detailed(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResizePTYRequest,
 ) -> Response[Any | ErrorResponse]:
     """
@@ -89,7 +89,7 @@ def sync_detailed(
 def sync(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResizePTYRequest,
 ) -> Any | ErrorResponse | None:
     """
@@ -115,7 +115,7 @@ def sync(
 async def asyncio_detailed(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResizePTYRequest,
 ) -> Response[Any | ErrorResponse]:
     """
@@ -144,7 +144,7 @@ async def asyncio_detailed(
 async def asyncio(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ResizePTYRequest,
 ) -> Any | ErrorResponse | None:
     """

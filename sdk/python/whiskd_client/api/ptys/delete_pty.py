@@ -49,7 +49,7 @@ def _build_response(
 def sync_detailed(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[Any | ErrorResponse]:
     """
     Args:
@@ -77,7 +77,7 @@ def sync_detailed(
 def sync(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Any | ErrorResponse | None:
     """
     Args:
@@ -100,7 +100,7 @@ def sync(
 async def asyncio_detailed(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[Any | ErrorResponse]:
     """
     Args:
@@ -126,7 +126,7 @@ async def asyncio_detailed(
 async def asyncio(
     pty_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Any | ErrorResponse | None:
     """
     Args:

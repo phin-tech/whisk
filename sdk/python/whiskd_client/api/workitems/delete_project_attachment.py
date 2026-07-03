@@ -60,7 +60,7 @@ def _build_response(
 def sync_detailed(
     attachment_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: DeleteProjectAttachmentRequest,
 ) -> Response[ErrorResponse | Project]:
     """
@@ -91,7 +91,7 @@ def sync_detailed(
 def sync(
     attachment_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: DeleteProjectAttachmentRequest,
 ) -> ErrorResponse | Project | None:
     """
@@ -117,7 +117,7 @@ def sync(
 async def asyncio_detailed(
     attachment_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: DeleteProjectAttachmentRequest,
 ) -> Response[ErrorResponse | Project]:
     """
@@ -146,7 +146,7 @@ async def asyncio_detailed(
 async def asyncio(
     attachment_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: DeleteProjectAttachmentRequest,
 ) -> ErrorResponse | Project | None:
     """

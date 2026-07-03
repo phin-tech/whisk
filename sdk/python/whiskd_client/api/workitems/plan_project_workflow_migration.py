@@ -62,7 +62,7 @@ def _build_response(
 def sync_detailed(
     project_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: PlanProjectWorkflowMigrationRequest,
 ) -> Response[ErrorResponse | WorkflowMigrationPlan]:
     """
@@ -93,7 +93,7 @@ def sync_detailed(
 def sync(
     project_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: PlanProjectWorkflowMigrationRequest,
 ) -> ErrorResponse | WorkflowMigrationPlan | None:
     """
@@ -119,7 +119,7 @@ def sync(
 async def asyncio_detailed(
     project_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: PlanProjectWorkflowMigrationRequest,
 ) -> Response[ErrorResponse | WorkflowMigrationPlan]:
     """
@@ -148,7 +148,7 @@ async def asyncio_detailed(
 async def asyncio(
     project_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: PlanProjectWorkflowMigrationRequest,
 ) -> ErrorResponse | WorkflowMigrationPlan | None:
     """

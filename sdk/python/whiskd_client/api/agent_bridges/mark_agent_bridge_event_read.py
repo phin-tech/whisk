@@ -62,7 +62,7 @@ def _build_response(
 def sync_detailed(
     event_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: MarkAgentBridgeEventReadRequest,
 ) -> Response[AgentBridgeEvent | ErrorResponse]:
     """Mark a passive provider hook event read
@@ -94,7 +94,7 @@ def sync_detailed(
 def sync(
     event_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: MarkAgentBridgeEventReadRequest,
 ) -> AgentBridgeEvent | ErrorResponse | None:
     """Mark a passive provider hook event read
@@ -121,7 +121,7 @@ def sync(
 async def asyncio_detailed(
     event_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: MarkAgentBridgeEventReadRequest,
 ) -> Response[AgentBridgeEvent | ErrorResponse]:
     """Mark a passive provider hook event read
@@ -151,7 +151,7 @@ async def asyncio_detailed(
 async def asyncio(
     event_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: MarkAgentBridgeEventReadRequest,
 ) -> AgentBridgeEvent | ErrorResponse | None:
     """Mark a passive provider hook event read
