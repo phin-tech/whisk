@@ -28,6 +28,7 @@ type httpOptions struct {
 	controlToken             string
 	agentHookRequestMaxBytes int64
 	agentHookReadTimeout     time.Duration
+	ptyOutputBatchInterval   time.Duration
 }
 
 func WithControlToken(token string) HTTPOption {
@@ -43,9 +44,18 @@ func WithAgentHookReceiverLimits(maxBytes int64, readTimeout time.Duration) HTTP
 	}
 }
 
+func WithPTYOutputBatchInterval(interval time.Duration) HTTPOption {
+	return func(opts *httpOptions) {
+		opts.ptyOutputBatchInterval = interval
+	}
+}
+
 const (
 	defaultAgentHookRequestMaxBytes = 1 * 1024 * 1024
 	defaultAgentHookReadTimeout     = 5 * time.Second
+	defaultPTYOutputBatchInterval   = 8 * time.Millisecond
+	ptyRecentInputWindow            = 100 * time.Millisecond
+	ptyRecentInputFlushMaxBytes     = 1024
 )
 
 func RequireBearerAuth(token string, next http.Handler) http.Handler {
@@ -86,10 +96,14 @@ func NewHTTP(runtime *app.Runtime, optionFns ...HTTPOption) http.Handler {
 	if opts.agentHookReadTimeout <= 0 {
 		opts.agentHookReadTimeout = defaultAgentHookReadTimeout
 	}
+	if opts.ptyOutputBatchInterval <= 0 {
+		opts.ptyOutputBatchInterval = defaultPTYOutputBatchInterval
+	}
 	server := &HTTPServer{
 		runtime:                  runtime,
 		agentHookRequestMaxBytes: opts.agentHookRequestMaxBytes,
 		agentHookReadTimeout:     opts.agentHookReadTimeout,
+		ptyOutputBatchInterval:   opts.ptyOutputBatchInterval,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", server.health)
@@ -827,6 +841,7 @@ type HTTPServer struct {
 	runtime                  *app.Runtime
 	agentHookRequestMaxBytes int64
 	agentHookReadTimeout     time.Duration
+	ptyOutputBatchInterval   time.Duration
 }
 
 func (s *HTTPServer) health(w http.ResponseWriter, _ *http.Request) {
@@ -1048,16 +1063,16 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 	go s.readPTYStreamInput(ctx, cancel, conn, ptyID)
 
 	if len(attach.ReplayBytes) > 0 {
-		if err := writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
-			Type:         "output",
-			PtyID:        ptyID,
-			Offset:       attach.ReplayOffset,
-			OutputBase64: base64.StdEncoding.EncodeToString(attach.ReplayBytes),
-		}); err != nil {
+		if err := writePTYOutputFrame(ctx, conn, ptyID, attach.ReplayOffset, attach.ReplayBytes); err != nil {
 			return
 		}
 	}
 	nextOffset := attach.ReplayOffset + uint64(len(attach.ReplayBytes))
+	batcher := newPTYOutputBatcher(func(ctx context.Context, segment ptyOutputSegment) error {
+		return writePTYOutputFrame(ctx, conn, ptyID, segment.offset, segment.bytes)
+	})
+	flushTicker := time.NewTicker(s.ptyOutputBatchInterval)
+	defer flushTicker.Stop()
 	for {
 		select {
 		case event, ok := <-attach.Events:
@@ -1066,13 +1081,30 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 			}
 			switch event.Kind {
 			case app.PTYOutput:
-				var err error
-				nextOffset, err = s.writePTYOutputEvent(ctx, conn, ptyID, nextOffset, event)
+				segments, updatedOffset, err := s.ptyOutputSegmentsForEvent(ctx, ptyID, nextOffset, event)
 				if err != nil {
 					return
 				}
+				nextOffset = updatedOffset
+				options := ptyOutputBatchOptions{}
+				if s.runtime.PTYInputRecent(ptyID, ptyRecentInputWindow) {
+					options.FlushImmediately = true
+					options.FlushMaxBytes = ptyRecentInputFlushMaxBytes
+				}
+				for _, segment := range segments {
+					if err := batcher.Enqueue(ctx, segment, options); err != nil {
+						return
+					}
+				}
 			case app.PTYExit:
+				if err := batcher.Flush(ctx); err != nil {
+					return
+				}
 				_ = writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{Type: "exit", PtyID: ptyID, Code: event.Code})
+				return
+			}
+		case <-flushTicker.C:
+			if err := batcher.Flush(ctx); err != nil {
 				return
 			}
 		case <-ctx.Done():
@@ -1081,21 +1113,18 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *HTTPServer) writePTYOutputEvent(ctx context.Context, conn *websocket.Conn, ptyID string, nextOffset uint64, event app.PTYEvent) (uint64, error) {
+func (s *HTTPServer) ptyOutputSegmentsForEvent(ctx context.Context, ptyID string, nextOffset uint64, event app.PTYEvent) ([]ptyOutputSegment, uint64, error) {
+	segments := make([]ptyOutputSegment, 0, 2)
 	if event.Offset != nextOffset {
 		snapshot, err := s.runtime.PTYOutput(ctx, ptyID, nextOffset)
 		if err != nil {
-			return nextOffset, err
+			return nil, nextOffset, err
 		}
 		if len(snapshot.OutputBytes) > 0 {
-			if err := writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
-				Type:         "output",
-				PtyID:        ptyID,
-				Offset:       snapshot.Offset,
-				OutputBase64: base64.StdEncoding.EncodeToString(snapshot.OutputBytes),
-			}); err != nil {
-				return nextOffset, err
-			}
+			segments = append(segments, ptyOutputSegment{
+				offset: snapshot.Offset,
+				bytes:  snapshot.OutputBytes,
+			})
 			nextOffset = snapshot.Offset + uint64(len(snapshot.OutputBytes))
 		} else {
 			nextOffset = snapshot.Offset
@@ -1104,23 +1133,19 @@ func (s *HTTPServer) writePTYOutputEvent(ctx context.Context, conn *websocket.Co
 	if event.Offset < nextOffset {
 		overlap := nextOffset - event.Offset
 		if overlap >= uint64(len(event.Bytes)) {
-			return nextOffset, nil
+			return segments, nextOffset, nil
 		}
 		event.Bytes = event.Bytes[overlap:]
 		event.Offset = nextOffset
 	}
 	if len(event.Bytes) == 0 {
-		return nextOffset, nil
+		return segments, nextOffset, nil
 	}
-	if err := writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
-		Type:         "output",
-		PtyID:        ptyID,
-		Offset:       event.Offset,
-		OutputBase64: base64.StdEncoding.EncodeToString(event.Bytes),
-	}); err != nil {
-		return nextOffset, err
-	}
-	return event.Offset + uint64(len(event.Bytes)), nil
+	segments = append(segments, ptyOutputSegment{
+		offset: event.Offset,
+		bytes:  event.Bytes,
+	})
+	return segments, event.Offset + uint64(len(event.Bytes)), nil
 }
 
 func (s *HTTPServer) readPTYStreamInput(ctx context.Context, cancel context.CancelFunc, conn *websocket.Conn, ptyID string) {
@@ -1156,6 +1181,15 @@ func ptyInputTraceLine(channel string, ptyID string, bytes int, at time.Time) st
 
 func writePTYInputTrace(channel string, ptyID string, bytes int) {
 	ptytrace.Write(ptyInputTraceLine(channel, ptyID, bytes, time.Now()))
+}
+
+func writePTYOutputFrame(ctx context.Context, conn *websocket.Conn, ptyID string, offset uint64, output []byte) error {
+	return writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
+		Type:         "output",
+		PtyID:        ptyID,
+		Offset:       offset,
+		OutputBase64: base64.StdEncoding.EncodeToString(output),
+	})
 }
 
 func writePTYStreamFrame(ctx context.Context, conn *websocket.Conn, frame protocol.PTYStreamFrame) error {

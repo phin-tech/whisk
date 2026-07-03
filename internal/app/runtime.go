@@ -168,6 +168,7 @@ type Runtime struct {
 	clearHookLogAfterSession   bool
 	agentHookEvents            []agentbridge.Event
 	ptyMeta                    map[string]ptyMetadata
+	ptyLastInputAt             map[string]time.Time
 	forwards                   *httpforward.State
 	workItems                  *workitem.State
 	agentBridges               agentbridge.State
@@ -480,6 +481,7 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		agentHookLogPaths:          config.AgentHookLogPaths,
 		agentHookLogEnabled:        true,
 		ptyMeta:                    map[string]ptyMetadata{},
+		ptyLastInputAt:             map[string]time.Time{},
 		forwards:                   httpforward.NewState(),
 		workItems:                  workItems,
 		agentBridges:               agentBridges,
@@ -1036,6 +1038,7 @@ func (r *Runtime) DeletePTY(ctx context.Context, req DeletePTYRequest) error {
 	}
 	r.mu.Lock()
 	delete(r.ptyMeta, req.PTYID)
+	delete(r.ptyLastInputAt, req.PTYID)
 	r.mu.Unlock()
 	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: req.PTYID})
 	return nil
@@ -1235,7 +1238,30 @@ func (r *Runtime) ListPTYs(ctx context.Context) ([]PTYInfo, error) {
 }
 
 func (r *Runtime) WritePTY(ctx context.Context, ptyID string, data []byte) error {
-	return r.ptys.Write(ctx, ptyID, terminalInput(data))
+	if err := r.ptys.Write(ctx, ptyID, terminalInput(data)); err != nil {
+		return err
+	}
+	r.MarkPTYInput(ptyID)
+	return nil
+}
+
+func (r *Runtime) MarkPTYInput(ptyID string) {
+	if ptyID == "" {
+		return
+	}
+	r.mu.Lock()
+	r.ptyLastInputAt[ptyID] = time.Now()
+	r.mu.Unlock()
+}
+
+func (r *Runtime) PTYInputRecent(ptyID string, within time.Duration) bool {
+	if within <= 0 {
+		return false
+	}
+	r.mu.Lock()
+	lastInputAt := r.ptyLastInputAt[ptyID]
+	r.mu.Unlock()
+	return !lastInputAt.IsZero() && time.Since(lastInputAt) <= within
 }
 
 func (r *Runtime) ResizePTY(ctx context.Context, ptyID string, size PTYSize) error {
@@ -1311,6 +1337,7 @@ func (r *Runtime) ClearDaemon(ctx context.Context) (ClearDaemonResult, error) {
 	forwardsCleared := len(r.forwards.List())
 	r.forwards = httpforward.NewState()
 	r.ptyMeta = map[string]ptyMetadata{}
+	r.ptyLastInputAt = map[string]time.Time{}
 	r.mu.Unlock()
 
 	result := ClearDaemonResult{

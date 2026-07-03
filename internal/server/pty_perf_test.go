@@ -50,6 +50,42 @@ func BenchmarkPTYInputWebSocketRoundTrip(b *testing.B) {
 	}
 }
 
+func TestPTYInputWebSocketRoundTripBypassesOutputBatch(t *testing.T) {
+	backend := newFakePTYBackend()
+	_, err := backend.Spawn(context.Background(), app.SpawnPTYRequest{
+		ID:         "pty_latency",
+		WorkingDir: t.TempDir(),
+		Cols:       80,
+		Rows:       24,
+	})
+	if err != nil {
+		t.Fatalf("spawn fake pty: %v", err)
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
+	handler := server.NewHTTP(runtime, server.WithPTYOutputBatchInterval(200*time.Millisecond))
+	httpServer := httptest.NewServer(handler)
+	defer httpServer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn := benchmarkAttachPTY(t, ctx, httpServer.URL, "pty_latency")
+	defer conn.Close(websocket.StatusNormalClosure, "")
+	backend.waitForSubscriber(t)
+
+	start := time.Now()
+	if err := conn.Write(ctx, websocket.MessageText, []byte(`{"type":"input","ptyId":"pty_latency","data":"x"}`)); err != nil {
+		t.Fatalf("write websocket input: %v", err)
+	}
+	echo := readPTYStreamFrame(t, ctx, conn)
+	elapsed := time.Since(start)
+	if echo.Type != "output" || echo.PtyID != "pty_latency" || echo.Offset != 0 || echo.OutputBase64 != "eA==" {
+		t.Fatalf("echo frame = %#v", echo)
+	}
+	if elapsed >= 100*time.Millisecond {
+		t.Fatalf("websocket input echo took %s; recent input should bypass output batching", elapsed)
+	}
+}
+
 func benchmarkPTYServer(b *testing.B) (http.Handler, string, string) {
 	b.Helper()
 	backend := newFakePTYBackend()
@@ -65,11 +101,11 @@ func benchmarkPTYServer(b *testing.B) (http.Handler, string, string) {
 	return handler, httpServer.URL, created.MainPtyID
 }
 
-func benchmarkAttachPTY(b *testing.B, ctx context.Context, url string, ptyID string) *websocket.Conn {
-	b.Helper()
+func benchmarkAttachPTY(tb testing.TB, ctx context.Context, url string, ptyID string) *websocket.Conn {
+	tb.Helper()
 	conn, _, err := websocket.Dial(ctx, strings.Replace(url, "http", "ws", 1)+"/v1/ptys/"+ptyID+"/attach?from=0", nil)
 	if err != nil {
-		b.Fatalf("dial attach: %v", err)
+		tb.Fatalf("dial attach: %v", err)
 	}
 	return conn
 }
