@@ -54,7 +54,7 @@ def sync_detailed(
     workflow_id: str,
     version: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | WorkflowDefinitionRecord]:
     """
     Args:
@@ -85,7 +85,7 @@ def sync(
     workflow_id: str,
     version: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | WorkflowDefinitionRecord | None:
     """
     Args:
@@ -111,7 +111,7 @@ async def asyncio_detailed(
     workflow_id: str,
     version: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> Response[ErrorResponse | WorkflowDefinitionRecord]:
     """
     Args:
@@ -140,7 +140,7 @@ async def asyncio(
     workflow_id: str,
     version: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 ) -> ErrorResponse | WorkflowDefinitionRecord | None:
     """
     Args:

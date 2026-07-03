@@ -60,7 +60,7 @@ def _build_response(
 def sync_detailed(
     gate_report_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: CompleteGateRequest,
 ) -> Response[ErrorResponse | GateReport]:
     """
@@ -91,7 +91,7 @@ def sync_detailed(
 def sync(
     gate_report_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: CompleteGateRequest,
 ) -> ErrorResponse | GateReport | None:
     """
@@ -117,7 +117,7 @@ def sync(
 async def asyncio_detailed(
     gate_report_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: CompleteGateRequest,
 ) -> Response[ErrorResponse | GateReport]:
     """
@@ -146,7 +146,7 @@ async def asyncio_detailed(
 async def asyncio(
     gate_report_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: CompleteGateRequest,
 ) -> ErrorResponse | GateReport | None:
     """

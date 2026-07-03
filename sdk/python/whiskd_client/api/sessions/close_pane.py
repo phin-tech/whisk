@@ -66,7 +66,7 @@ def sync_detailed(
     window_id: str,
     pane_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ClosePaneRequest,
 ) -> Response[ErrorResponse | Session]:
     """
@@ -103,7 +103,7 @@ def sync(
     window_id: str,
     pane_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ClosePaneRequest,
 ) -> ErrorResponse | Session | None:
     """
@@ -135,7 +135,7 @@ async def asyncio_detailed(
     window_id: str,
     pane_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ClosePaneRequest,
 ) -> Response[ErrorResponse | Session]:
     """
@@ -170,7 +170,7 @@ async def asyncio(
     window_id: str,
     pane_id: str,
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ClosePaneRequest,
 ) -> ErrorResponse | Session | None:
     """

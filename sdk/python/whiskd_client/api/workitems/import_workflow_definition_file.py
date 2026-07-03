@@ -57,7 +57,7 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ImportWorkflowDefinitionFileRequest,
 ) -> Response[ErrorResponse | WorkflowDefinitionRecord]:
     """
@@ -85,7 +85,7 @@ def sync_detailed(
 
 def sync(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ImportWorkflowDefinitionFileRequest,
 ) -> ErrorResponse | WorkflowDefinitionRecord | None:
     """
@@ -108,7 +108,7 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ImportWorkflowDefinitionFileRequest,
 ) -> Response[ErrorResponse | WorkflowDefinitionRecord]:
     """
@@ -134,7 +134,7 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     body: ImportWorkflowDefinitionFileRequest,
 ) -> ErrorResponse | WorkflowDefinitionRecord | None:
     """
