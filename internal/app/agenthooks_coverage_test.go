@@ -14,6 +14,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/app"
+	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
@@ -597,6 +598,54 @@ func TestRuntimeAgentBridgeApprovalHookWaitsForApprovalResolution(t *testing.T) 
 		}
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for hook response")
+	}
+}
+
+func TestRuntimeAgentPromptsIncludeAndResolveApprovalPrompts(t *testing.T) {
+	runtime, bridgeID, token := launchAgentBridge(t, time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	hookErr := make(chan error, 1)
+	go func() {
+		_, err := runtime.HandleAgentBridgeHook(ctx, toolCallHook(bridgeID, token))
+		hookErr <- err
+	}()
+
+	approval := waitForPendingAgentBridgeApproval(t, runtime)
+	prompts, err := runtime.ListAgentPrompts(ctx, app.ListAgentPromptsRequest{Status: string(agentbridge.PromptPending)})
+	if err != nil {
+		t.Fatalf("list pending prompts: %v", err)
+	}
+	if len(prompts) != 1 || prompts[0].ID != approval.ID || prompts[0].Kind != agentbridge.PromptKindApproval || prompts[0].Message != "Bash: ls" || len(prompts[0].Options) != 2 {
+		t.Fatalf("approval prompts = %#v, approval = %#v", prompts, approval)
+	}
+
+	resolved, err := runtime.ResolveAgentPrompt(ctx, app.ResolveAgentPromptRequest{
+		ID:     approval.ID,
+		Answer: string(agentbridge.PolicyDeny),
+	})
+	if err != nil {
+		t.Fatalf("resolve approval prompt: %v", err)
+	}
+	if resolved.ID != approval.ID || resolved.Status != agentbridge.PromptResolved || resolved.Answer != string(agentbridge.PolicyDeny) || resolved.ResolvedAt == nil {
+		t.Fatalf("resolved prompt = %#v", resolved)
+	}
+	resolvedPrompts, err := runtime.ListAgentPrompts(ctx, app.ListAgentPromptsRequest{Status: string(agentbridge.PromptResolved)})
+	if err != nil {
+		t.Fatalf("list resolved prompts: %v", err)
+	}
+	if len(resolvedPrompts) != 1 || resolvedPrompts[0].ID != approval.ID {
+		t.Fatalf("resolved prompts = %#v", resolvedPrompts)
+	}
+
+	select {
+	case err := <-hookErr:
+		if err != nil {
+			t.Fatalf("hook returned error: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("hook did not return after prompt resolution")
 	}
 }
 

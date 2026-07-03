@@ -126,6 +126,7 @@ tasks:
     dir: build/linux/appimage
     deps:
       - task: build
+      - task: build:cli
       - task: generate:dotdesktop
     cmds:
       - cp "{{.APP_BINARY}}" "{{.APP_NAME}}"
@@ -143,6 +144,7 @@ tasks:
     summary: Creates a deb package
     deps:
       - task: build
+      - task: build:cli
     cmds:
       - task: generate:dotdesktop
       - task: generate:deb
@@ -151,6 +153,7 @@ tasks:
     summary: Creates a rpm package
     deps:
       - task: build
+      - task: build:cli
     cmds:
       - task: generate:dotdesktop
       - task: generate:rpm
@@ -159,6 +162,7 @@ tasks:
     summary: Creates a arch linux packager package
     deps:
       - task: build
+      - task: build:cli
     cmds:
       - task: generate:dotdesktop
       - task: generate:aur

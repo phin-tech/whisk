@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/appsettings"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func TestSessionMenuEntriesAccelerateFirstTenOnly(t *testing.T) {
@@ -46,14 +47,15 @@ func TestControllerBuildIncludesNativeCommandAccelerators(t *testing.T) {
 	settings := appsettings.Settings{Keybindings: map[string]string{CommandOpenPalette: "Cmd+Shift+K"}}
 	menu := NewController(nil, settings).build(settings, nil)
 
+	effective := Resolve(settings)
 	cases := map[string]string{
-		"Open Command Palette":    "Cmd+Shift+K",
-		"Show/Hide Sidebar":       "Cmd+\\",
-		"Split Pane Vertically":   "Cmd+D",
-		"Split Pane Horizontally": "Cmd+Shift+D",
-		"Close Pane":              "Cmd+W",
-		"Close Session":           "Cmd+Shift+W",
-		"Jump to Bottom":          "Cmd+Option+DOWN",
+		"Open Command Palette":    nativeAccelerator(effective[CommandOpenPalette]),
+		"Show/Hide Sidebar":       nativeAccelerator(effective[CommandToggleSidebar]),
+		"Split Pane Vertically":   nativeAccelerator(effective[CommandSplitPaneVertical]),
+		"Split Pane Horizontally": nativeAccelerator(effective[CommandSplitPaneHorizontal]),
+		"Close Pane":              nativeAccelerator(effective[CommandClosePane]),
+		"Close Session":           nativeAccelerator(effective[CommandCloseSession]),
+		"Jump to Bottom":          nativeAccelerator(effective[CommandJumpToBottom]),
 	}
 	for label, want := range cases {
 		item := menu.FindByLabel(label)
@@ -71,6 +73,10 @@ func TestControllerBuildIncludesNativeCommandAccelerators(t *testing.T) {
 			t.Fatalf("menu still includes %q", label)
 		}
 	}
+}
+
+func nativeAccelerator(shortcut string) string {
+	return application.NewMenu().Add("accelerator probe").SetAccelerator(shortcut).GetAccelerator()
 }
 
 func TestControllerStateMutatorsAreNoOpWithoutApp(t *testing.T) {

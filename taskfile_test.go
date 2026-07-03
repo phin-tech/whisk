@@ -101,7 +101,7 @@ func TestSigningScriptRejectsUnexpectedMacOSExecutablesBeforeNotary(t *testing.T
 		}
 	}
 
-	out, err := runShellScript(t, map[string]string{
+	out, err := runBashScript(t, map[string]string{
 		"PATH":             bin + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"SIGN_IDENTITY":    "Developer ID Application: Test",
 		"KEYCHAIN_PROFILE": "notary-profile",
@@ -205,9 +205,9 @@ func requireTaskLineAbsent(t *testing.T, block string, unwanted string) {
 	}
 }
 
-func runShellScript(t *testing.T, env map[string]string, args ...string) (string, error) {
+func runBashScript(t *testing.T, env map[string]string, args ...string) (string, error) {
 	t.Helper()
-	cmd := exec.Command("sh", args...)
+	cmd := exec.Command("bash", args...)
 	cmd.Env = os.Environ()
 	for key, value := range env {
 		cmd.Env = append(cmd.Env, key+"="+value)

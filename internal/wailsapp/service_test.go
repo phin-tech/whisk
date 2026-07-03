@@ -46,6 +46,7 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 			Version: 1,
 		}},
 		promptTemplates: []protocol.PromptTemplate{{ID: "implement", Name: "Implement"}},
+		agentProfiles:   []protocol.AgentProfile{{ID: "claude", Label: "Claude"}},
 		workItems:       []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
 		workItemLinks: []protocol.WorkItemLink{{
 			ID:               "link_01",
@@ -59,6 +60,7 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		},
 		runs:              []protocol.WorkItemRun{{ID: "run_01", WorkItemID: "wi_01", Status: "queued", Preset: "writer"}},
 		httpForwards:      []protocol.HTTPForward{{ID: "fwd_01", TargetURL: "http://127.0.0.1:4966"}},
+		agentPrompts:      []protocol.AgentPrompt{{ID: "prompt_01", Status: "pending", Message: "Continue?"}},
 		agentIntegrations: []protocol.AgentHookIntegration{{Provider: "claude", Status: "current"}},
 		clearResponse:     protocol.ClearDaemonResponse{SessionsCleared: 1},
 	}
@@ -192,6 +194,10 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || project.Description != "Daemon owned" || fake.updateProjectID != "proj_01" {
 		t.Fatalf("update project = %#v, id = %q, err = %v", project, fake.updateProjectID, err)
 	}
+	deletedProject, err := service.DeleteProject(ctx, "proj_delete", protocol.DeleteProjectRequest{Actor: "human"})
+	if err != nil || deletedProject.ID != "proj_delete" || fake.deleteProjectID != "proj_delete" || fake.deleteProjectReq.Actor != "human" {
+		t.Fatalf("delete project = %#v, id = %q, req = %#v, err = %v", deletedProject, fake.deleteProjectID, fake.deleteProjectReq, err)
+	}
 	detail, err := service.ProjectDetail(ctx, "proj_01")
 	if err != nil || detail.Project.ID != "proj_01" || fake.projectDetailID != "proj_01" {
 		t.Fatalf("project detail = %#v, id = %q, err = %v", detail, fake.projectDetailID, err)
@@ -225,6 +231,10 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || !validation.Valid || fake.validateWorkflowDefinitionReq.Definition.ID != workitem.WorkflowPlanExecuteReview {
 		t.Fatalf("validate workflow definition = %#v, req = %#v, err = %v", validation, fake.validateWorkflowDefinitionReq, err)
 	}
+	imported, err := service.ImportWorkflowDefinition(ctx, protocol.ImportWorkflowDefinitionRequest{Definition: workitem.DefaultWorkflowDefinition(), Source: "test"})
+	if err != nil || imported.ID != workitem.WorkflowPlanExecuteReview || fake.importWorkflowDefinitionReq.Source != "test" {
+		t.Fatalf("import workflow definition = %#v, req = %#v, err = %v", imported, fake.importWorkflowDefinitionReq, err)
+	}
 	fileValidation, err := service.ValidateWorkflowDefinitionFile(ctx, protocol.ValidateWorkflowDefinitionFileRequest{Path: "/tmp/workflow.json"})
 	if err != nil || !fileValidation.Valid || fake.validateWorkflowFileReq.Path != "/tmp/workflow.json" {
 		t.Fatalf("validate workflow file = %#v, req = %#v, err = %v", fileValidation, fake.validateWorkflowFileReq, err)
@@ -254,6 +264,10 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	promptTemplates, err := service.ListPromptTemplates(ctx)
 	if err != nil || len(promptTemplates) != 1 || promptTemplates[0].ID != "implement" {
 		t.Fatalf("list prompt templates = %#v, err = %v", promptTemplates, err)
+	}
+	agentProfiles, err := service.ListAgentProfiles(ctx)
+	if err != nil || len(agentProfiles) != 1 || agentProfiles[0].ID != "claude" {
+		t.Fatalf("list agent profiles = %#v, err = %v", agentProfiles, err)
 	}
 	items, err := service.ListWorkItems(ctx, "proj_01")
 	if err != nil || len(items) != 1 || items[0].ID != "wi_01" || fake.listWorkItemsProjectID != "proj_01" {
@@ -405,6 +419,14 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	approval, err := service.ResolveAgentBridgeApproval(ctx, "approval_01", protocol.ResolveAgentBridgeApprovalRequest{Action: "allow"})
 	if err != nil || approval.ID != "approval_01" || fake.resolveAgentApprovalID != "approval_01" || fake.resolveAgentApprovalReq.Action != "allow" {
 		t.Fatalf("resolve agent approval = %#v, id = %q, req = %#v, err = %v", approval, fake.resolveAgentApprovalID, fake.resolveAgentApprovalReq, err)
+	}
+	agentPrompts, err := service.ListAgentPrompts(ctx, protocol.ListAgentPromptsRequest{Status: "pending"})
+	if err != nil || len(agentPrompts) != 1 || agentPrompts[0].ID != "prompt_01" || fake.listAgentPromptsReq.Status != "pending" {
+		t.Fatalf("agent prompts = %#v, req = %#v, err = %v", agentPrompts, fake.listAgentPromptsReq, err)
+	}
+	agentPrompt, err := service.ResolveAgentPrompt(ctx, "prompt_01", protocol.ResolveAgentPromptRequest{Answer: "yes"})
+	if err != nil || agentPrompt.ID != "prompt_01" || agentPrompt.Answer != "yes" || fake.resolveAgentPromptID != "prompt_01" {
+		t.Fatalf("resolve agent prompt = %#v, id = %q, req = %#v, err = %v", agentPrompt, fake.resolveAgentPromptID, fake.resolveAgentPromptReq, err)
 	}
 	agentEvent, err := service.MarkAgentBridgeEventRead(ctx, protocol.MarkAgentBridgeEventReadRequest{ID: "event_01"})
 	if err != nil || agentEvent.ID != "event_01" || fake.markAgentEventReadReq.ID != "event_01" {

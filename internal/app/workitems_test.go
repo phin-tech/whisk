@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1883,6 +1884,75 @@ func TestRuntimeWorkflowListsAndAuxiliaryActions(t *testing.T) {
 	if templates, err := runtime.ListPromptTemplates(ctx); err != nil || len(templates) == 0 {
 		t.Fatalf("prompt templates = %#v, err = %v", templates, err)
 	}
+	if profiles, err := runtime.ListAgentProfiles(ctx); err != nil || len(profiles) == 0 || profiles[0].ID == "" {
+		t.Fatalf("agent profiles = %#v, err = %v", profiles, err)
+	}
+	routeWorkflow := workitem.DefaultWorkflowDefinition()
+	routeWorkflow.ID = "runtime-workflow"
+	routeWorkflow.Version = 3
+	if report, err := runtime.ValidateWorkflowDefinition(ctx, app.ValidateWorkflowDefinitionRequest{Definition: routeWorkflow}); err != nil || !report.Valid {
+		t.Fatalf("validate workflow = %#v, err = %v", report, err)
+	}
+	imported, err := runtime.ImportWorkflowDefinition(ctx, app.ImportWorkflowDefinitionRequest{
+		Definition: routeWorkflow,
+		Source:     "test",
+	})
+	if err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	if definitions, err := runtime.ListWorkflowDefinitions(ctx); err != nil || len(definitions) < 2 {
+		t.Fatalf("workflow definitions = %#v, err = %v", definitions, err)
+	}
+	fileWorkflow := routeWorkflow
+	fileWorkflow.ID = "runtime-workflow-file"
+	fileWorkflow.Version = 1
+	workflowPath := filepath.Join(t.TempDir(), "workflow.json")
+	workflowPayload, err := json.Marshal(fileWorkflow)
+	if err != nil {
+		t.Fatalf("marshal workflow: %v", err)
+	}
+	if err := os.WriteFile(workflowPath, workflowPayload, 0o600); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
+	if report, err := runtime.ValidateWorkflowDefinitionFile(ctx, app.ValidateWorkflowDefinitionFileRequest{Path: workflowPath}); err != nil || !report.Valid {
+		t.Fatalf("validate workflow file = %#v, err = %v", report, err)
+	}
+	fileImported, err := runtime.ImportWorkflowDefinitionFile(ctx, app.ImportWorkflowDefinitionFileRequest{Path: workflowPath})
+	if err != nil {
+		t.Fatalf("import workflow file: %v", err)
+	}
+	exportPath := filepath.Join(t.TempDir(), "workflow-export.json")
+	if err := runtime.ExportWorkflowDefinitionFile(ctx, app.ExportWorkflowDefinitionFileRequest{ID: fileImported.ID, Version: fileImported.Version, Path: exportPath}); err != nil {
+		t.Fatalf("export workflow: %v", err)
+	}
+	if _, err := os.Stat(exportPath); err != nil {
+		t.Fatalf("exported workflow stat: %v", err)
+	}
+	migration, err := runtime.PlanProjectWorkflowMigration(ctx, app.PlanProjectWorkflowMigrationRequest{
+		ProjectID: project.ID,
+		ID:        imported.ID,
+		Version:   imported.Version,
+	})
+	if err != nil {
+		t.Fatalf("plan workflow migration: %v", err)
+	}
+	if migration.TargetID != imported.ID || migration.ProjectID != project.ID {
+		t.Fatalf("migration = %#v", migration)
+	}
+	project, err = runtime.SetProjectWorkflowDefinition(ctx, app.SetProjectWorkflowDefinitionRequest{
+		ProjectID: project.ID,
+		ID:        imported.ID,
+		Version:   imported.Version,
+	})
+	if err != nil {
+		t.Fatalf("set workflow definition: %v", err)
+	}
+	if project.Workflow.DefinitionID != imported.ID || project.Workflow.DefinitionVersion != imported.Version {
+		t.Fatalf("project workflow = %#v", project.Workflow)
+	}
+	if deletedWorkflow, err := runtime.DeleteWorkflowDefinition(ctx, app.DeleteWorkflowDefinitionRequest{ID: fileImported.ID, Version: fileImported.Version}); err != nil || deletedWorkflow.ID != fileImported.ID {
+		t.Fatalf("delete workflow = %#v, err = %v", deletedWorkflow, err)
+	}
 	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{
 		ProjectID:    project.ID,
 		Title:        "Auxiliary flow",
@@ -1891,6 +1961,13 @@ func TestRuntimeWorkflowListsAndAuxiliaryActions(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("create work item: %v", err)
+	}
+	actions, err := runtime.ListWorkItemWorkflowActions(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("list workflow actions: %v", err)
+	}
+	if len(actions) == 0 || actions[0].Action.ID == "" {
+		t.Fatalf("workflow actions = %#v", actions)
 	}
 	moved, err := runtime.MoveWorkItem(ctx, app.MoveWorkItemRequest{ID: item.ID, StageID: workitem.StagePlanning, Actor: "human"})
 	if err != nil {
@@ -1989,6 +2066,48 @@ func TestRuntimeWorkflowListsAndAuxiliaryActions(t *testing.T) {
 	if done.StageID != workitem.StageDone {
 		t.Fatalf("done = %#v", done)
 	}
+	blockedItem, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Blocked by dependency", Actor: "human"})
+	if err != nil {
+		t.Fatalf("create blocked item: %v", err)
+	}
+	blockedItem, err = runtime.MoveWorkItem(ctx, app.MoveWorkItemRequest{ID: blockedItem.ID, StageID: workitem.StageReady, Actor: "human"})
+	if err != nil {
+		t.Fatalf("ready blocked item: %v", err)
+	}
+	blockerItem, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Dependency", Actor: "human"})
+	if err != nil {
+		t.Fatalf("create blocker item: %v", err)
+	}
+	blockerItem, err = runtime.MoveWorkItem(ctx, app.MoveWorkItemRequest{ID: blockerItem.ID, StageID: workitem.StageReady, Actor: "human"})
+	if err != nil {
+		t.Fatalf("ready blocker item: %v", err)
+	}
+	link, err := runtime.AddWorkItemLink(ctx, app.AddWorkItemLinkRequest{
+		SourceWorkItemID: blockedItem.ID,
+		TargetWorkItemID: blockerItem.ID,
+		Type:             workitem.WorkItemLinkBlocks,
+		Actor:            "human",
+	})
+	if err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	if links, err := runtime.ListWorkItemLinks(ctx, blockedItem.ID); err != nil || len(links) != 1 || links[0].ID != link.ID {
+		t.Fatalf("links = %#v, err = %v", links, err)
+	}
+	readyWork, err := runtime.ReadyWork(ctx, app.ReadyWorkRequest{ProjectID: project.ID})
+	if err != nil {
+		t.Fatalf("ready work: %v", err)
+	}
+	foundBlocked := false
+	for _, blocked := range readyWork.Blocked {
+		if blocked.WorkItem.ID == blockedItem.ID {
+			foundBlocked = true
+			break
+		}
+	}
+	if !foundBlocked || readyWork.Summary.TotalBlocked == 0 {
+		t.Fatalf("ready work = %#v", readyWork)
+	}
 	if events, err := runtime.ListWorkflowEvents(ctx, item.ID); err != nil || len(events) == 0 {
 		t.Fatalf("workflow events = %#v, err = %v", events, err)
 	}
@@ -2015,6 +2134,16 @@ func TestRuntimeWorkflowListsAndAuxiliaryActions(t *testing.T) {
 	}
 	if len(store.saved.StatusEvents) != 1 || store.saved.StatusEvents[0].ReadAt == nil {
 		t.Fatalf("saved status events = %#v", store.saved.StatusEvents)
+	}
+	deletedProject, err := runtime.DeleteProject(ctx, app.DeleteProjectRequest{ID: project.ID, Actor: "human"})
+	if err != nil {
+		t.Fatalf("delete project: %v", err)
+	}
+	if deletedProject.ID != project.ID {
+		t.Fatalf("deleted project = %#v", deletedProject)
+	}
+	if projects, err := runtime.ListProjects(ctx); err != nil || len(projects) != 0 {
+		t.Fatalf("projects after delete = %#v, err = %v", projects, err)
 	}
 	if len(sink.events) == 0 {
 		t.Fatalf("events were not published")

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/server"
 )
 
@@ -27,6 +28,14 @@ func TestControlAuthRequiresBearerExceptHealth(t *testing.T) {
 	assertAuthStatus(t, handler, http.MethodGet, "/v1/compat", "Basic secret", http.StatusUnauthorized)
 	assertAuthStatus(t, handler, http.MethodGet, "/v1/compat", "Bearer secret", http.StatusNoContent)
 	assertAuthStatus(t, handler, http.MethodGet, "/v1/ptys/pty_01/attach?from=0&access_token=secret", "", http.StatusNoContent)
+}
+
+func TestNewHTTPAppliesControlTokenOption(t *testing.T) {
+	handler := server.NewHTTP(app.NewRuntime(app.RuntimeConfig{}), server.WithControlToken("secret"))
+
+	assertAuthStatus(t, handler, http.MethodGet, "/v1/health", "", http.StatusOK)
+	assertAuthStatus(t, handler, http.MethodGet, "/v1/compat", "", http.StatusUnauthorized)
+	assertAuthStatus(t, handler, http.MethodGet, "/v1/compat", "Bearer secret", http.StatusOK)
 }
 
 func assertAuthStatus(t *testing.T, handler http.Handler, method string, target string, auth string, want int) {

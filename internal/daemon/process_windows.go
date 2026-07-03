@@ -27,6 +27,10 @@ func signalProcessTerm(process *os.Process) error {
 	return process.Kill()
 }
 
+func processExitedByInterrupt(error) bool {
+	return false
+}
+
 func processStartTime(pid int) (string, error) {
 	if pid <= 0 {
 		return "", fmt.Errorf("pid must be positive")
