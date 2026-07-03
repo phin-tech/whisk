@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -47,7 +48,7 @@ func TestEnsureStartsDaemonWhenDown(t *testing.T) {
 	if !started {
 		t.Fatalf("expected Ensure to report it started the daemon")
 	}
-	statePath, err := daemon.StatePath("http://" + addr)
+	statePath, err := daemon.StatePathForTest("http://" + addr)
 	if err != nil {
 		t.Fatalf("state path: %v", err)
 	}
@@ -386,6 +387,36 @@ func TestEnsureLeavesDaemonRunningWhenCompatibilityUnknown(t *testing.T) {
 	}
 }
 
+func TestStatusReportsRunningManagedDaemon(t *testing.T) {
+	useSupervisorStateDir(t)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/health":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/compat":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"apiVersion":%d,"gitSha":"abc1234def","version":"dev","dirty":true}`, protocol.DaemonAPIVersion)
+		default:
+			t.Fatalf("unexpected request: %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+	writeSupervisorState(t, server.URL, os.Getpid())
+
+	status := daemon.Status(context.Background(), server.URL, daemon.Policy{})
+	if !status.Running || !status.Managed {
+		t.Fatalf("expected running managed daemon, status = %#v", status)
+	}
+	if status.Address != server.URL || status.Error != "" {
+		t.Fatalf("status = %#v", status)
+	}
+	if status.APIVersion != protocol.DaemonAPIVersion || status.GitSHA != "abc1234def" || status.Version != "dev" || !status.Dirty {
+		t.Fatalf("compat fields not populated: %#v", status)
+	}
+}
+
 func TestWhiskHelperProcess(t *testing.T) {
 	if os.Getenv("WHISK_HELPER_PROCESS") != "1" {
 		return
@@ -523,7 +554,7 @@ func TestStopAllowsSlowDrainWithoutKillingProcess(t *testing.T) {
 	if signals := readSupervisorSignals(t, signalPath); strings.TrimSpace(signals) != "" {
 		t.Fatalf("graceful HTTP shutdown should not signal helper, got %q", signals)
 	}
-	statePath, err := daemon.StatePath(baseURL)
+	statePath, err := daemon.StatePathForTest(baseURL)
 	if err != nil {
 		t.Fatalf("state path: %v", err)
 	}
@@ -532,7 +563,7 @@ func TestStopAllowsSlowDrainWithoutKillingProcess(t *testing.T) {
 	}
 }
 
-func TestStopWithPolicySendsSIGTERMAfterGrace(t *testing.T) {
+func TestStopSendsSIGTERMAfterGrace(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell helper is unix-only")
 	}
@@ -549,7 +580,7 @@ func TestStopWithPolicySendsSIGTERMAfterGrace(t *testing.T) {
 	baseURL := "http://127.0.0.1:19991"
 	writeSupervisorState(t, baseURL, cmd.Process.Pid)
 
-	policy := daemon.DefaultStopPolicy()
+	policy := daemon.Policy{}
 	policy.ProcessExitGrace = 50 * time.Millisecond
 	policy.SignalGrace = time.Second
 	policy.HealthDownGrace = 50 * time.Millisecond
@@ -557,7 +588,7 @@ func TestStopWithPolicySendsSIGTERMAfterGrace(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := daemon.StopWithPolicy(ctx, baseURL, policy); err != nil {
+	if err := daemon.Stop(ctx, baseURL, policy); err != nil {
 		t.Fatalf("stop state-backed daemon: %v", err)
 	}
 	if err := wait(); err != nil {
@@ -566,7 +597,7 @@ func TestStopWithPolicySendsSIGTERMAfterGrace(t *testing.T) {
 	if signals := readSupervisorSignals(t, signalPath); signals != "TERM" {
 		t.Fatalf("signals = %q, want TERM", signals)
 	}
-	statePath, err := daemon.StatePath(baseURL)
+	statePath, err := daemon.StatePathForTest(baseURL)
 	if err != nil {
 		t.Fatalf("state path: %v", err)
 	}
@@ -598,7 +629,7 @@ func TestStopIgnoresStateWithMismatchedProcessStartTime(t *testing.T) {
 		t.Fatalf("write stale state: %v", err)
 	}
 
-	policy := daemon.DefaultStopPolicy()
+	policy := daemon.Policy{}
 	policy.ProcessExitGrace = 50 * time.Millisecond
 	policy.SignalGrace = 50 * time.Millisecond
 	policy.HealthDownGrace = 50 * time.Millisecond
@@ -606,7 +637,7 @@ func TestStopIgnoresStateWithMismatchedProcessStartTime(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	if err := daemon.StopWithPolicy(ctx, baseURL, policy); err != nil {
+	if err := daemon.Stop(ctx, baseURL, policy); err != nil {
 		t.Fatalf("stop with stale state: %v", err)
 	}
 	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
@@ -615,7 +646,7 @@ func TestStopIgnoresStateWithMismatchedProcessStartTime(t *testing.T) {
 	if signals := readSupervisorSignals(t, signalPath); signals != "" {
 		t.Fatalf("stale state should not signal helper, got %q", signals)
 	}
-	statePath, err := daemon.StatePath(baseURL)
+	statePath, err := daemon.StatePathForTest(baseURL)
 	if err != nil {
 		t.Fatalf("state path: %v", err)
 	}
@@ -676,13 +707,11 @@ func TestEnsureConcurrentCallsSingleFlightThroughStateLock(t *testing.T) {
 	if got := strings.Count(readSupervisorSignals(t, startPath), "start\n"); got != 1 {
 		t.Fatalf("helper starts = %d, want 1", got)
 	}
-	if !daemon.IsManaged(baseURL) {
+	if !daemon.Status(context.Background(), baseURL).Managed {
 		t.Fatalf("expected state file to describe a live managed daemon")
 	}
 
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), daemon.DefaultControlTimeout())
-	defer stopCancel()
-	if err := daemon.Stop(stopCtx, baseURL); err != nil {
+	if err := daemon.Stop(context.Background(), baseURL); err != nil {
 		t.Fatalf("cleanup stop: %v", err)
 	}
 }
@@ -904,14 +933,14 @@ func appendSupervisorSignal(path string, name string) error {
 	return err
 }
 
-func TestIsManagedReflectsLiveStateFile(t *testing.T) {
+func TestStatusReflectsLiveStateFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("signal-based liveness check is unix-only")
 	}
 	useSupervisorStateDir(t)
 
 	baseURL := "http://127.0.0.1:19993"
-	if daemon.IsManaged(baseURL) {
+	if daemon.Status(context.Background(), baseURL).Managed {
 		t.Fatalf("expected not managed with no state file")
 	}
 
@@ -930,7 +959,7 @@ func TestIsManagedReflectsLiveStateFile(t *testing.T) {
 
 	writeSupervisorState(t, baseURL, cmd.Process.Pid)
 
-	if !daemon.IsManaged(baseURL) {
+	if !daemon.Status(context.Background(), baseURL).Managed {
 		t.Fatalf("expected managed while state file matches a live process")
 	}
 
@@ -938,7 +967,7 @@ func TestIsManagedReflectsLiveStateFile(t *testing.T) {
 		t.Fatalf("kill process: %v", err)
 	}
 	_, _ = cmd.Process.Wait()
-	if daemon.IsManaged(baseURL) {
+	if daemon.Status(context.Background(), baseURL).Managed {
 		t.Fatalf("expected not managed after process exits")
 	}
 }
@@ -953,13 +982,13 @@ func TestStopReturnsNilWhenDaemonAlreadyDown(t *testing.T) {
 	}
 }
 
-func TestStatePathUsesConfiguredStateDirNotSystemTemp(t *testing.T) {
+func TestStateFilePathUsesConfiguredStateDirNotSystemTemp(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "state")
 	tempDir := filepath.Join(t.TempDir(), "tmp")
 	t.Setenv("WHISK_STATE_DIR", stateDir)
 	t.Setenv("TMPDIR", tempDir)
 
-	path, err := daemon.StatePath("http://127.0.0.1:19995")
+	path, err := daemon.StatePathForTest("http://127.0.0.1:19995")
 	if err != nil {
 		t.Fatalf("state path: %v", err)
 	}
@@ -974,10 +1003,10 @@ func TestStatePathUsesConfiguredStateDirNotSystemTemp(t *testing.T) {
 func TestSupervisorRejectsInvalidDaemonURLAndStateFiles(t *testing.T) {
 	useSupervisorStateDir(t)
 
-	if _, err := daemon.StatePath("://bad-url"); err == nil {
+	if _, err := daemon.StatePathForTest("://bad-url"); err == nil {
 		t.Fatalf("expected invalid state path URL error")
 	}
-	if _, err := daemon.StatePath("http:///missing-host"); err == nil {
+	if _, err := daemon.StatePathForTest("http:///missing-host"); err == nil {
 		t.Fatalf("expected missing host error")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)

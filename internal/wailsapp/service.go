@@ -28,6 +28,7 @@ const (
 
 	defaultDaemonStatusInterval     = time.Second
 	defaultDaemonStatusTimeout      = 750 * time.Millisecond
+	defaultDaemonControlTimeout     = 16500 * time.Millisecond
 	defaultDaemonRestartMaxAttempts = 3
 )
 
@@ -46,7 +47,7 @@ type EventEmitter interface {
 type daemonSupervisor interface {
 	Ensure(context.Context, string) (bool, error)
 	Stop(context.Context, string) error
-	IsManaged(string) bool
+	Status(context.Context, string) daemon.StatusReport
 }
 
 type daemonSupervisorAdapter struct{}
@@ -59,8 +60,8 @@ func (daemonSupervisorAdapter) Stop(ctx context.Context, baseURL string) error {
 	return daemon.Stop(ctx, baseURL)
 }
 
-func (daemonSupervisorAdapter) IsManaged(baseURL string) bool {
-	return daemon.IsManaged(baseURL)
+func (daemonSupervisorAdapter) Status(ctx context.Context, baseURL string) daemon.StatusReport {
+	return daemon.Status(ctx, baseURL)
 }
 
 type Service struct {
@@ -93,7 +94,7 @@ func NewServiceWithSettings(runtimeClient client.RuntimeClient, settings AppSett
 		supervisor:               daemonSupervisorAdapter{},
 		daemonStatusInterval:     defaultDaemonStatusInterval,
 		daemonStatusTimeout:      defaultDaemonStatusTimeout,
-		daemonControlTimeout:     daemon.DefaultControlTimeout(),
+		daemonControlTimeout:     defaultDaemonControlTimeout,
 		daemonRestartMaxAttempts: defaultDaemonRestartMaxAttempts,
 	}
 	if httpClient, ok := runtimeClient.(*client.HTTPClient); ok {
@@ -245,25 +246,20 @@ func (s *Service) httpClient() (*client.HTTPClient, error) {
 }
 
 func (s *Service) daemonStatus(ctx context.Context, httpClient *client.HTTPClient) DaemonStatus {
-	baseURL := httpClient.BaseURL()
-	status := DaemonStatus{Address: baseURL, Managed: s.supervisor.IsManaged(baseURL)}
+	supervisorStatus := s.supervisor.Status(ctx, httpClient.BaseURL())
+	status := DaemonStatus{
+		Running:    supervisorStatus.Running,
+		Address:    supervisorStatus.Address,
+		Managed:    supervisorStatus.Managed,
+		APIVersion: supervisorStatus.APIVersion,
+		GitSHA:     supervisorStatus.GitSHA,
+		Version:    supervisorStatus.Version,
+		Dirty:      supervisorStatus.Dirty,
+		Error:      supervisorStatus.Error,
+	}
 	if token, err := httpClient.ControlToken(); err == nil {
 		status.ControlToken = token
 	}
-	if err := httpClient.Health(ctx); err != nil {
-		status.Error = err.Error()
-		return status
-	}
-	status.Running = true
-	compat, err := httpClient.Compatibility(ctx)
-	if err != nil {
-		status.Error = err.Error()
-		return status
-	}
-	status.APIVersion = compat.APIVersion
-	status.GitSHA = compat.GitSHA
-	status.Version = compat.Version
-	status.Dirty = compat.Dirty
 	return status
 }
 
@@ -497,7 +493,7 @@ func (s *Service) statusTimeout() time.Duration {
 
 func (s *Service) controlTimeout() time.Duration {
 	if s.daemonControlTimeout <= 0 {
-		return daemon.DefaultControlTimeout()
+		return defaultDaemonControlTimeout
 	}
 	return s.daemonControlTimeout
 }

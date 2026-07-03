@@ -25,13 +25,7 @@ var (
 	errProcessStillAlive  = errors.New("process still running")
 )
 
-const (
-	daemonStateVersion          = 1
-	compatibilityProbeTimeout   = 250 * time.Millisecond
-	compatibilityRetryWindow    = 2 * time.Second
-	compatibilityInitialBackoff = 50 * time.Millisecond
-	compatibilityMaxBackoff     = 250 * time.Millisecond
-)
+const daemonStateVersion = 1
 
 type daemonStateFile struct {
 	Version          int    `json:"version"`
@@ -42,6 +36,109 @@ type daemonStateFile struct {
 	BinaryPath       string `json:"binaryPath"`
 }
 
+// Policy holds every timing knob used by daemon supervision. The zero value uses documented
+// defaults chosen for normal desktop/CLI control paths.
+type Policy struct {
+	// ControlTimeout defaults to the sum of the stop ladder plus one second.
+	ControlTimeout time.Duration
+	// HealthCheckTimeout defaults to 250ms.
+	HealthCheckTimeout time.Duration
+	// CompatibilityProbeTimeout defaults to 250ms.
+	CompatibilityProbeTimeout time.Duration
+	// CompatibilityRetryWindow defaults to 2s.
+	CompatibilityRetryWindow time.Duration
+	// CompatibilityInitialBackoff defaults to 50ms.
+	CompatibilityInitialBackoff time.Duration
+	// CompatibilityMaxBackoff defaults to 250ms.
+	CompatibilityMaxBackoff time.Duration
+	// ShutdownRequestTimeout defaults to 500ms.
+	ShutdownRequestTimeout time.Duration
+	// HealthDownGrace defaults to 2s.
+	HealthDownGrace time.Duration
+	// ProcessExitGrace defaults to 10s.
+	ProcessExitGrace time.Duration
+	// SignalGrace defaults to 2s.
+	SignalGrace time.Duration
+	// KillGrace defaults to 1s.
+	KillGrace time.Duration
+	// SpawnCleanupTimeout defaults to 2s.
+	SpawnCleanupTimeout time.Duration
+	// SpawnInterruptGrace defaults to 500ms.
+	SpawnInterruptGrace time.Duration
+	// SpawnKillGrace defaults to 500ms.
+	SpawnKillGrace time.Duration
+	// PollInterval defaults to 50ms.
+	PollInterval time.Duration
+}
+
+func selectedPolicy(policies []Policy) Policy {
+	if len(policies) == 0 {
+		return Policy{}.normalized()
+	}
+	return policies[0].normalized()
+}
+
+func (policy Policy) normalized() Policy {
+	if policy.HealthCheckTimeout <= 0 {
+		policy.HealthCheckTimeout = 250 * time.Millisecond
+	}
+	if policy.CompatibilityProbeTimeout <= 0 {
+		policy.CompatibilityProbeTimeout = 250 * time.Millisecond
+	}
+	if policy.CompatibilityRetryWindow <= 0 {
+		policy.CompatibilityRetryWindow = 2 * time.Second
+	}
+	if policy.CompatibilityInitialBackoff <= 0 {
+		policy.CompatibilityInitialBackoff = 50 * time.Millisecond
+	}
+	if policy.CompatibilityMaxBackoff <= 0 {
+		policy.CompatibilityMaxBackoff = 250 * time.Millisecond
+	}
+	if policy.ShutdownRequestTimeout <= 0 {
+		policy.ShutdownRequestTimeout = 500 * time.Millisecond
+	}
+	if policy.HealthDownGrace <= 0 {
+		policy.HealthDownGrace = 2 * time.Second
+	}
+	if policy.ProcessExitGrace <= 0 {
+		policy.ProcessExitGrace = 10 * time.Second
+	}
+	if policy.SignalGrace <= 0 {
+		policy.SignalGrace = 2 * time.Second
+	}
+	if policy.KillGrace <= 0 {
+		policy.KillGrace = time.Second
+	}
+	if policy.SpawnCleanupTimeout <= 0 {
+		policy.SpawnCleanupTimeout = 2 * time.Second
+	}
+	if policy.SpawnInterruptGrace <= 0 {
+		policy.SpawnInterruptGrace = 500 * time.Millisecond
+	}
+	if policy.SpawnKillGrace <= 0 {
+		policy.SpawnKillGrace = 500 * time.Millisecond
+	}
+	if policy.PollInterval <= 0 {
+		policy.PollInterval = 50 * time.Millisecond
+	}
+	if policy.ControlTimeout <= 0 {
+		policy.ControlTimeout = policy.ShutdownRequestTimeout +
+			policy.HealthDownGrace +
+			policy.ProcessExitGrace +
+			policy.SignalGrace +
+			policy.KillGrace +
+			time.Second
+	}
+	return policy
+}
+
+func (policy Policy) withControlTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok || policy.ControlTimeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, policy.ControlTimeout)
+}
+
 type compatibilityDecision int
 
 const (
@@ -49,69 +146,6 @@ const (
 	compatibilityCompatible
 	compatibilityIncompatible
 )
-
-// StopPolicy holds every timing used by the daemon stop escalation ladder.
-type StopPolicy struct {
-	ShutdownRequestTimeout time.Duration
-	HealthCheckTimeout     time.Duration
-	HealthDownGrace        time.Duration
-	ProcessExitGrace       time.Duration
-	SignalGrace            time.Duration
-	KillGrace              time.Duration
-	PollInterval           time.Duration
-}
-
-// DefaultStopPolicy is intentionally generous enough for normal daemon drains: HTTP shutdown
-// should get the first chance to flush PTYs, transcripts, and sqlite before signals are used.
-func DefaultStopPolicy() StopPolicy {
-	return StopPolicy{
-		ShutdownRequestTimeout: 500 * time.Millisecond,
-		HealthCheckTimeout:     250 * time.Millisecond,
-		HealthDownGrace:        2 * time.Second,
-		ProcessExitGrace:       10 * time.Second,
-		SignalGrace:            2 * time.Second,
-		KillGrace:              time.Second,
-		PollInterval:           50 * time.Millisecond,
-	}
-}
-
-// DefaultControlTimeout gives UI/CLI callers a single timeout large enough to observe the default
-// stop policy before their parent context cancels the ladder.
-func DefaultControlTimeout() time.Duration {
-	policy := DefaultStopPolicy().normalized()
-	return policy.ShutdownRequestTimeout +
-		policy.HealthDownGrace +
-		policy.ProcessExitGrace +
-		policy.SignalGrace +
-		policy.KillGrace +
-		time.Second
-}
-
-func (policy StopPolicy) normalized() StopPolicy {
-	defaults := DefaultStopPolicy()
-	if policy.ShutdownRequestTimeout <= 0 {
-		policy.ShutdownRequestTimeout = defaults.ShutdownRequestTimeout
-	}
-	if policy.HealthCheckTimeout <= 0 {
-		policy.HealthCheckTimeout = defaults.HealthCheckTimeout
-	}
-	if policy.HealthDownGrace <= 0 {
-		policy.HealthDownGrace = defaults.HealthDownGrace
-	}
-	if policy.ProcessExitGrace <= 0 {
-		policy.ProcessExitGrace = defaults.ProcessExitGrace
-	}
-	if policy.SignalGrace <= 0 {
-		policy.SignalGrace = defaults.SignalGrace
-	}
-	if policy.KillGrace <= 0 {
-		policy.KillGrace = defaults.KillGrace
-	}
-	if policy.PollInterval <= 0 {
-		policy.PollInterval = defaults.PollInterval
-	}
-	return policy
-}
 
 type daemonStartOptions struct {
 	writeState bool
@@ -131,19 +165,22 @@ type spawnedDaemon struct {
 // already running (started == false). Callers use this to decide ownership: a daemon the app
 // started itself should be stopped when the app exits, while one started elsewhere (e.g. a
 // developer's `whisk daemon run`) must be left alone.
-func Ensure(ctx context.Context, baseURL string) (started bool, err error) {
+func Ensure(ctx context.Context, baseURL string, policies ...Policy) (started bool, err error) {
+	policy := selectedPolicy(policies)
+	ctx, cancel := policy.withControlTimeout(ctx)
+	defer cancel()
 	lock, err := lockDaemonState(ctx, baseURL)
 	if err != nil {
 		return false, err
 	}
 	defer lock.Close()
-	return ensureLocked(ctx, baseURL)
+	return ensureLocked(ctx, baseURL, policy)
 }
 
-func ensureLocked(ctx context.Context, baseURL string) (started bool, err error) {
+func ensureLocked(ctx context.Context, baseURL string, policy Policy) (started bool, err error) {
 	daemonClient := client.NewHTTP(baseURL, nil)
-	if healthCheck(ctx, daemonClient) == nil {
-		decision, compatibilityErr := compatibilityCheckWithRetry(ctx, daemonClient)
+	if healthCheck(ctx, daemonClient, policy) == nil {
+		decision, compatibilityErr := compatibilityCheckWithRetry(ctx, daemonClient, policy)
 		if decision == compatibilityCompatible {
 			return false, nil
 		}
@@ -154,11 +191,11 @@ func ensureLocked(ctx context.Context, baseURL string) (started bool, err error)
 		if err != nil {
 			return false, fmt.Errorf("find replacement whiskd: %w", err)
 		}
-		if err := verifyReplacementDaemon(ctx, path); err != nil {
+		if err := verifyReplacementDaemon(ctx, path, policy); err != nil {
 			return false, fmt.Errorf("replacement whiskd at %s failed compatibility verification; leaving existing daemon running: %w", path, err)
 		}
 		log.Printf("whiskd at %s is incompatible (%v); shutting it down", baseURL, compatibilityErr)
-		if err := stopWithPolicyLocked(ctx, baseURL, DefaultStopPolicy()); err != nil {
+		if err := stopLocked(ctx, baseURL, policy); err != nil {
 			return false, fmt.Errorf("stop incompatible whiskd: %w", err)
 		}
 	}
@@ -176,13 +213,13 @@ func ensureLocked(ctx context.Context, baseURL string) (started bool, err error)
 		binaryPath = abs
 	}
 
-	if _, err := startDaemonAndWait(ctx, baseURL, addr, binaryPath, daemonStartOptions{writeState: true, binaryPath: binaryPath}); err != nil {
+	if _, err := startDaemonAndWait(ctx, baseURL, addr, binaryPath, policy, daemonStartOptions{writeState: true, binaryPath: binaryPath}); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func verifyReplacementDaemon(ctx context.Context, path string) error {
+func verifyReplacementDaemon(ctx context.Context, path string, policy Policy) error {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return fmt.Errorf("reserve probe address: %w", err)
@@ -197,24 +234,24 @@ func verifyReplacementDaemon(ctx context.Context, path string) error {
 	}
 	defer func() { _ = os.RemoveAll(configDir) }()
 
-	probeCtx, cancel := context.WithTimeout(ctx, compatibilityRetryWindow)
+	probeCtx, cancel := context.WithTimeout(ctx, policy.CompatibilityRetryWindow)
 	defer cancel()
-	proc, err := startDaemonAndWait(probeCtx, "http://"+addr, addr, path, daemonStartOptions{
+	proc, err := startDaemonAndWait(probeCtx, "http://"+addr, addr, path, policy, daemonStartOptions{
 		env:   map[string]string{"XDG_CONFIG_HOME": configDir},
 		label: "replacement probe whisk daemon",
 	})
 	if err != nil {
 		return err
 	}
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), policy.SpawnCleanupTimeout)
 	defer stopCancel()
-	if err := stopSpawnedDaemon(stopCtx, "http://"+addr, proc, false); err != nil {
+	if err := stopSpawnedDaemon(stopCtx, "http://"+addr, proc, false, policy); err != nil {
 		return fmt.Errorf("stop replacement probe whiskd: %w", err)
 	}
 	return nil
 }
 
-func startDaemonAndWait(ctx context.Context, baseURL, addr, path string, opts daemonStartOptions) (*spawnedDaemon, error) {
+func startDaemonAndWait(ctx context.Context, baseURL, addr, path string, policy Policy, opts daemonStartOptions) (*spawnedDaemon, error) {
 	label := opts.label
 	if label == "" {
 		label = "whisk daemon"
@@ -226,10 +263,10 @@ func startDaemonAndWait(ctx context.Context, baseURL, addr, path string, opts da
 	}
 	daemonClient := client.NewHTTP(baseURL, nil)
 
-	ticker := time.NewTicker(50 * time.Millisecond)
+	ticker := time.NewTicker(policy.PollInterval)
 	defer ticker.Stop()
 	for {
-		decision, err := compatibilityProbe(ctx, daemonClient, compatibilityProbeTimeout)
+		decision, err := compatibilityProbe(ctx, daemonClient, policy, policy.CompatibilityProbeTimeout)
 		if decision == compatibilityCompatible {
 			if proc.stderr != nil {
 				proc.stderr.StopRecording()
@@ -238,8 +275,8 @@ func startDaemonAndWait(ctx context.Context, baseURL, addr, path string, opts da
 			return proc, nil
 		}
 		if decision == compatibilityIncompatible {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			_ = stopSpawnedDaemon(cleanupCtx, baseURL, proc, opts.writeState)
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), policy.SpawnCleanupTimeout)
+			_ = stopSpawnedDaemon(cleanupCtx, baseURL, proc, opts.writeState, policy)
 			cancel()
 			return nil, fmt.Errorf("started whiskd is incompatible: %w%s", err, proc.diagnostics(baseURL))
 		}
@@ -251,8 +288,8 @@ func startDaemonAndWait(ctx context.Context, baseURL, addr, path string, opts da
 			return nil, proc.exitBeforeReadyError(baseURL, waitErr)
 		case <-ticker.C:
 		case <-ctx.Done():
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			_ = stopSpawnedDaemon(cleanupCtx, baseURL, proc, opts.writeState)
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), policy.SpawnCleanupTimeout)
+			_ = stopSpawnedDaemon(cleanupCtx, baseURL, proc, opts.writeState, policy)
 			cancel()
 			return nil, fmt.Errorf("wait for whiskd: %w%s", ctx.Err(), proc.diagnostics(baseURL))
 		}
@@ -309,7 +346,7 @@ func startDaemonProcess(baseURL, addr, path string, opts daemonStartOptions) (*s
 	return proc, nil
 }
 
-func stopSpawnedDaemon(ctx context.Context, baseURL string, proc *spawnedDaemon, removeState bool) error {
+func stopSpawnedDaemon(ctx context.Context, baseURL string, proc *spawnedDaemon, removeState bool, policy Policy) error {
 	if proc == nil {
 		return nil
 	}
@@ -329,7 +366,7 @@ func stopSpawnedDaemon(ctx context.Context, baseURL string, proc *spawnedDaemon,
 			_ = proc.cmd.Process.Kill()
 		}
 	}
-	grace := time.NewTimer(500 * time.Millisecond)
+	grace := time.NewTimer(policy.SpawnInterruptGrace)
 	defer grace.Stop()
 	select {
 	case err := <-proc.waitCh:
@@ -348,7 +385,7 @@ func stopSpawnedDaemon(ctx context.Context, baseURL string, proc *spawnedDaemon,
 			_ = proc.cmd.Process.Kill()
 		}
 		return ctx.Err()
-	case <-time.After(500 * time.Millisecond):
+	case <-time.After(policy.SpawnKillGrace):
 		return ctx.Err()
 	}
 }
@@ -391,36 +428,75 @@ func (p *spawnedDaemon) diagnostics(baseURL string) string {
 }
 
 // Stop shuts down the daemon at baseURL whether or not this process started it.
-func Stop(ctx context.Context, baseURL string) error {
-	return StopWithPolicy(ctx, baseURL, DefaultStopPolicy())
-}
-
-// StopWithPolicy applies the single daemon stop ladder: request HTTP shutdown, wait for health to
-// go down, wait for the recorded process to exit, escalate to SIGTERM, and use SIGKILL only last.
-func StopWithPolicy(ctx context.Context, baseURL string, policy StopPolicy) error {
+func Stop(ctx context.Context, baseURL string, policies ...Policy) error {
+	policy := selectedPolicy(policies)
+	ctx, cancel := policy.withControlTimeout(ctx)
+	defer cancel()
 	lock, err := lockDaemonState(ctx, baseURL)
 	if err != nil {
 		return err
 	}
 	defer lock.Close()
-	return stopWithPolicyLocked(ctx, baseURL, policy)
+	return stopLocked(ctx, baseURL, policy)
 }
 
-func stopWithPolicyLocked(ctx context.Context, baseURL string, policy StopPolicy) error {
-	policy = policy.normalized()
+type StatusReport struct {
+	Running    bool   `json:"running"`
+	Address    string `json:"address"`
+	Managed    bool   `json:"managed"`
+	APIVersion int    `json:"apiVersion"`
+	GitSHA     string `json:"gitSha"`
+	Version    string `json:"version"`
+	Dirty      bool   `json:"dirty"`
+	Error      string `json:"error"`
+}
+
+// Status reports the daemon's current health, ownership, compatibility, and build metadata.
+func Status(ctx context.Context, baseURL string, policies ...Policy) StatusReport {
+	policy := selectedPolicy(policies)
+	status := StatusReport{Address: strings.TrimRight(baseURL, "/")}
+	if _, managed, err := verifiedStateFile(baseURL, false); err == nil && managed {
+		status.Managed = true
+	}
+
+	daemonClient := client.NewHTTP(baseURL, nil)
+	if err := healthCheck(ctx, daemonClient, policy); err != nil {
+		status.Error = err.Error()
+		return status
+	}
+	status.Running = true
+
+	checkCtx, cancel := context.WithTimeout(ctx, policy.CompatibilityProbeTimeout)
+	defer cancel()
+	compatibility, err := daemonClient.Compatibility(checkCtx)
+	if err != nil {
+		status.Error = err.Error()
+		return status
+	}
+	status.APIVersion = compatibility.APIVersion
+	status.GitSHA = compatibility.GitSHA
+	status.Version = compatibility.Version
+	status.Dirty = compatibility.Dirty
+	if compatibility.APIVersion != protocol.DaemonAPIVersion {
+		status.Error = fmt.Sprintf("daemon api version %d does not match required %d", compatibility.APIVersion, protocol.DaemonAPIVersion)
+	}
+	return status
+}
+
+func stopLocked(ctx context.Context, baseURL string, policy Policy) error {
 	daemonClient := client.NewHTTP(baseURL, nil)
 
 	state, stateVerified, stateErr := verifiedStateFile(baseURL, true)
 	pid := state.PID
 	pidKnown := stateVerified && pid > 0
 	if stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) {
-		if _, pathErr := StatePath(baseURL); pathErr != nil {
+		if _, pathErr := statePath(baseURL); pathErr != nil {
 			return pathErr
 		}
 		log.Printf("read whiskd state file for %s: %v", baseURL, stateErr)
 	}
 
-	healthy := healthCheckWithPolicy(ctx, daemonClient, policy) == nil
+	healthy := healthCheck(ctx, daemonClient, policy) == nil
 	waitForGracefulProcessExit := !healthy
 	var shutdownErr error
 	if healthy {
@@ -493,15 +569,7 @@ func stopWithPolicyLocked(ctx context.Context, baseURL string, policy StopPolicy
 	return nil
 }
 
-// IsManaged reports whether the daemon at baseURL was started by this machine's whisk app, i.e. a
-// state file exists and matches a live process. Used to distinguish a daemon the app owns from one
-// a developer started independently.
-func IsManaged(baseURL string) bool {
-	_, ok, _ := verifiedStateFile(baseURL, false)
-	return ok
-}
-
-func waitForProcessExitWithPolicy(ctx context.Context, pid int, grace time.Duration, policy StopPolicy) error {
+func waitForProcessExitWithPolicy(ctx context.Context, pid int, grace time.Duration, policy Policy) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -529,7 +597,7 @@ func waitForProcessExitWithPolicy(ctx context.Context, pid int, grace time.Durat
 	}
 }
 
-func StatePath(baseURL string) (string, error) {
+func statePath(baseURL string) (string, error) {
 	addr, err := addrFromURL(baseURL)
 	if err != nil {
 		return "", err
@@ -542,7 +610,7 @@ func StatePath(baseURL string) (string, error) {
 }
 
 func lockDaemonState(ctx context.Context, baseURL string) (*stateFileLock, error) {
-	statePath, err := StatePath(baseURL)
+	statePath, err := statePath(baseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -587,7 +655,7 @@ func sanitizeDaemonAddr(addr string) string {
 }
 
 func readStateFile(baseURL string) (daemonStateFile, error) {
-	statePath, err := StatePath(baseURL)
+	statePath, err := statePath(baseURL)
 	if err != nil {
 		return daemonStateFile{}, err
 	}
@@ -634,7 +702,7 @@ func verifiedStateFile(baseURL string, cleanupMismatch bool) (daemonStateFile, b
 }
 
 func writeStateFile(baseURL string, state daemonStateFile) error {
-	statePath, err := StatePath(baseURL)
+	statePath, err := statePath(baseURL)
 	if err != nil {
 		return err
 	}
@@ -675,24 +743,20 @@ func writeStateFile(baseURL string, state daemonStateFile) error {
 }
 
 func removeStateFile(baseURL string) {
-	statePath, err := StatePath(baseURL)
+	statePath, err := statePath(baseURL)
 	if err == nil {
 		_ = os.Remove(statePath)
 	}
 }
 
-func healthCheck(ctx context.Context, daemonClient *client.HTTPClient) error {
-	return healthCheckWithPolicy(ctx, daemonClient, DefaultStopPolicy())
-}
-
-func healthCheckWithPolicy(ctx context.Context, daemonClient *client.HTTPClient, policy StopPolicy) error {
+func healthCheck(ctx context.Context, daemonClient *client.HTTPClient, policy Policy) error {
 	checkCtx, cancel := context.WithTimeout(ctx, policy.HealthCheckTimeout)
 	defer cancel()
 	return daemonClient.Health(checkCtx)
 }
 
-func compatibilityProbe(ctx context.Context, daemonClient *client.HTTPClient, timeout time.Duration) (compatibilityDecision, error) {
-	if err := healthCheck(ctx, daemonClient); err != nil {
+func compatibilityProbe(ctx context.Context, daemonClient *client.HTTPClient, policy Policy, timeout time.Duration) (compatibilityDecision, error) {
+	if err := healthCheck(ctx, daemonClient, policy); err != nil {
 		return compatibilityUnknown, fmt.Errorf("daemon health check failed before compatibility probe: %w", err)
 	}
 	checkCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -707,15 +771,15 @@ func compatibilityProbe(ctx context.Context, daemonClient *client.HTTPClient, ti
 	return compatibilityCompatible, nil
 }
 
-func compatibilityCheckWithRetry(ctx context.Context, daemonClient *client.HTTPClient) (compatibilityDecision, error) {
-	retryCtx, cancel := context.WithTimeout(ctx, compatibilityRetryWindow)
+func compatibilityCheckWithRetry(ctx context.Context, daemonClient *client.HTTPClient, policy Policy) (compatibilityDecision, error) {
+	retryCtx, cancel := context.WithTimeout(ctx, policy.CompatibilityRetryWindow)
 	defer cancel()
 
-	probeTimeout := compatibilityProbeTimeout
-	backoff := compatibilityInitialBackoff
+	probeTimeout := policy.CompatibilityProbeTimeout
+	backoff := policy.CompatibilityInitialBackoff
 	var lastErr error
 	for {
-		decision, err := compatibilityProbe(retryCtx, daemonClient, probeTimeout)
+		decision, err := compatibilityProbe(retryCtx, daemonClient, policy, probeTimeout)
 		if decision == compatibilityCompatible || decision == compatibilityIncompatible {
 			return decision, err
 		}
@@ -737,15 +801,15 @@ func compatibilityCheckWithRetry(ctx context.Context, daemonClient *client.HTTPC
 			return compatibilityUnknown, fmt.Errorf("compatibility probe did not complete before deadline: %w", lastErr)
 		}
 
-		probeTimeout = compatibilityRetryWindow
+		probeTimeout = policy.CompatibilityRetryWindow
 		backoff *= 2
-		if backoff > compatibilityMaxBackoff {
-			backoff = compatibilityMaxBackoff
+		if backoff > policy.CompatibilityMaxBackoff {
+			backoff = policy.CompatibilityMaxBackoff
 		}
 	}
 }
 
-func shutdownExistingWithPolicy(ctx context.Context, baseURL string, policy StopPolicy) error {
+func shutdownExistingWithPolicy(ctx context.Context, baseURL string, policy Policy) error {
 	shutdownCtx, cancel := context.WithTimeout(ctx, policy.ShutdownRequestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(shutdownCtx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/v1/shutdown", nil)
@@ -766,7 +830,7 @@ func shutdownExistingWithPolicy(ctx context.Context, baseURL string, policy Stop
 	return nil
 }
 
-func waitUntilDownWithPolicy(ctx context.Context, daemonClient *client.HTTPClient, policy StopPolicy) error {
+func waitUntilDownWithPolicy(ctx context.Context, daemonClient *client.HTTPClient, policy Policy) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -778,13 +842,13 @@ func waitUntilDownWithPolicy(ctx context.Context, daemonClient *client.HTTPClien
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if healthCheckWithPolicy(ctx, daemonClient, policy) != nil {
+		if healthCheck(ctx, daemonClient, policy) != nil {
 			return nil
 		}
 		select {
 		case <-ticker.C:
 		case <-timer.C:
-			if healthCheckWithPolicy(ctx, daemonClient, policy) != nil {
+			if healthCheck(ctx, daemonClient, policy) != nil {
 				return nil
 			}
 			return errDaemonStillHealthy

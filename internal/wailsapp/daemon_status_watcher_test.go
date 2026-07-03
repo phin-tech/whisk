@@ -13,6 +13,7 @@ import (
 
 	"github.com/phin-tech/whisk/internal/appsettings"
 	"github.com/phin-tech/whisk/internal/client"
+	"github.com/phin-tech/whisk/internal/daemon"
 	"github.com/phin-tech/whisk/internal/protocol"
 )
 
@@ -228,8 +229,24 @@ type daemonSupervisorFake struct {
 	ensure      func(context.Context, string) (bool, error)
 }
 
-func (f *daemonSupervisorFake) IsManaged(string) bool {
-	return f.managed.Load()
+func (f *daemonSupervisorFake) Status(ctx context.Context, baseURL string) daemon.StatusReport {
+	status := daemon.StatusReport{Address: baseURL, Managed: f.managed.Load()}
+	daemonClient := client.NewHTTP(baseURL, nil)
+	if err := daemonClient.Health(ctx); err != nil {
+		status.Error = err.Error()
+		return status
+	}
+	status.Running = true
+	compat, err := daemonClient.Compatibility(ctx)
+	if err != nil {
+		status.Error = err.Error()
+		return status
+	}
+	status.APIVersion = compat.APIVersion
+	status.GitSHA = compat.GitSHA
+	status.Version = compat.Version
+	status.Dirty = compat.Dirty
+	return status
 }
 
 func (f *daemonSupervisorFake) Ensure(ctx context.Context, baseURL string) (bool, error) {
