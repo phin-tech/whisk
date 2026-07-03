@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/adapters/mailboxstore"
 	"github.com/phin-tech/whisk/internal/adapters/plugins"
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/adapters/sessionstore"
@@ -105,6 +106,10 @@ func serveDaemon(addr string) (err error) {
 	if err != nil {
 		return err
 	}
+	mailboxStore, err := mailboxstore.NewSQLiteStore("")
+	if err != nil {
+		return err
+	}
 	settingsStore, err := appsettings.NewDefaultStore()
 	if err != nil {
 		return err
@@ -121,6 +126,7 @@ func serveDaemon(addr string) (err error) {
 		SessionStore:     store,
 		TranscriptStore:  transcripts,
 		WorkItemStore:    workItems,
+		MailboxStore:     mailboxStore,
 		DaemonURL:        "http://" + addr,
 		CLIPath:          whiskCLIPath(),
 		DaemonAPIVersion: protocol.DaemonAPIVersion,

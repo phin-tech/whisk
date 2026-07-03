@@ -91,6 +91,69 @@ func TestWorkItemRoundTrip(t *testing.T) {
 	t.Fatalf("created item %s not listed: %#v", item.ID, items)
 }
 
+func TestMailboxRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	client := whiskd.New(startDaemon(t))
+
+	sent, err := client.SendMail(ctx, whiskd.SendMailRequest{
+		From:     whiskd.MailAddress{Kind: "pty", ID: "pty_go"},
+		To:       []whiskd.MailAddress{{Kind: "run", ID: "run_go"}},
+		Type:     "status",
+		Priority: "high",
+		Subject:  "Go SDK mailbox",
+		Body:     "hello from go",
+	})
+	if err != nil {
+		t.Fatalf("send mail: %v", err)
+	}
+	if sent.ID == "" || sent.Type != "status" || sent.Priority != "high" {
+		t.Fatalf("sent = %#v", sent)
+	}
+
+	listed, err := client.ListMail(ctx, whiskd.ListMailRequest{
+		To:         []whiskd.MailAddress{{Kind: "run", ID: "run_go"}},
+		UnreadOnly: true,
+		Types:      []string{"status"},
+	})
+	if err != nil {
+		t.Fatalf("list mail: %v", err)
+	}
+	if len(listed) != 1 || listed[0].ID != sent.ID {
+		t.Fatalf("listed = %#v", listed)
+	}
+
+	next, err := client.NextMail(ctx, whiskd.NextMailRequest{
+		To:        []whiskd.MailAddress{{Kind: "run", ID: "run_go"}},
+		Types:     []string{"status"},
+		TimeoutMs: 0,
+	})
+	if err != nil {
+		t.Fatalf("next mail: %v", err)
+	}
+	if next.Timeout || next.Message == nil || next.Message.ID != sent.ID {
+		t.Fatalf("next = %#v", next)
+	}
+
+	read, err := client.MarkMailRead(ctx, sent.ID, whiskd.MarkMailReadRequest{To: &whiskd.MailAddress{Kind: "run", ID: "run_go"}})
+	if err != nil {
+		t.Fatalf("mark read: %v", err)
+	}
+	if read.Recipients[0].ReadAt == nil {
+		t.Fatalf("read = %#v", read)
+	}
+
+	reply, err := client.ReplyMail(ctx, sent.ID, whiskd.ReplyMailRequest{
+		From: whiskd.MailAddress{Kind: "run", ID: "run_go"},
+		Body: "reply from go",
+	})
+	if err != nil {
+		t.Fatalf("reply mail: %v", err)
+	}
+	if reply.ReplyToID != sent.ID || reply.ThreadID != sent.ID {
+		t.Fatalf("reply = %#v", reply)
+	}
+}
+
 func startDaemon(t *testing.T) string {
 	t.Helper()
 	binary := os.Getenv("WHISKD_BIN")

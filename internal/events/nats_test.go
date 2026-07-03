@@ -16,6 +16,10 @@ func TestSubjectForRuntimeEvents(t *testing.T) {
 		{eventType: app.EventPTYOutput, want: "whisk.pty.output"},
 		{eventType: app.EventWorkItemsChanged, want: "whisk.workitems.changed"},
 		{eventType: app.EventStatusChanged, want: "whisk.status.changed"},
+		{eventType: app.EventMailboxChanged, want: "whisk.mailbox.changed"},
+		{eventType: app.EventAgentBridgeApprovalsChanged, want: "whisk.agent_bridge_approvals.changed"},
+		{eventType: app.EventAgentPromptsChanged, want: "whisk.agent_prompts.changed"},
+		{eventType: app.EventAgentHookEventsChanged, want: "whisk.agent_hook_events.changed"},
 	}
 
 	for _, test := range tests {

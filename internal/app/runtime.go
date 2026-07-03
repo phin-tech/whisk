@@ -14,6 +14,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/httpforward"
+	"github.com/phin-tech/whisk/internal/domain/mailbox"
 	"github.com/phin-tech/whisk/internal/domain/session"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
@@ -136,6 +137,7 @@ type RuntimeConfig struct {
 	SessionStore               SessionStore
 	TranscriptStore            TranscriptStore
 	WorkItemStore              WorkItemStore
+	MailboxStore               MailboxStore
 	DaemonURL                  string
 	CLIPath                    string
 	DaemonAPIVersion           int
@@ -157,6 +159,7 @@ type Runtime struct {
 	sessionStore               SessionStore
 	transcriptStore            TranscriptStore
 	workItemStore              WorkItemStore
+	mailboxStore               MailboxStore
 	daemonURL                  string
 	cliPath                    string
 	daemonAPIVersion           int
@@ -222,6 +225,7 @@ const (
 	EventPTYOutput                   RuntimeEventType = "pty.output"
 	EventWorkItemsChanged            RuntimeEventType = "workitems.changed"
 	EventStatusChanged               RuntimeEventType = "status.changed"
+	EventMailboxChanged              RuntimeEventType = "mailbox.changed"
 	EventAgentBridgeApprovalsChanged RuntimeEventType = "agent_bridge_approvals.changed"
 	EventAgentPromptsChanged         RuntimeEventType = "agent_prompts.changed"
 	EventAgentHookEventsChanged      RuntimeEventType = "agent_hook_events.changed"
@@ -263,6 +267,13 @@ type TranscriptStore interface {
 type WorkItemStore interface {
 	LoadWorkItems(ctx context.Context) (workitem.Snapshot, error)
 	SaveWorkItems(ctx context.Context, snapshot workitem.Snapshot) error
+}
+
+type MailboxStore interface {
+	SaveMessage(ctx context.Context, message mailbox.Message) error
+	ListMessages(ctx context.Context, filter mailbox.ListFilter) ([]mailbox.Message, error)
+	MarkMessageRead(ctx context.Context, req mailbox.MarkRead) (mailbox.Message, error)
+	DeleteAll(ctx context.Context) error
 }
 
 type PTYTranscriptMeta struct {
@@ -472,6 +483,7 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		sessionStore:               config.SessionStore,
 		transcriptStore:            config.TranscriptStore,
 		workItemStore:              config.WorkItemStore,
+		mailboxStore:               config.MailboxStore,
 		daemonURL:                  config.DaemonURL,
 		cliPath:                    config.CLIPath,
 		daemonAPIVersion:           config.DaemonAPIVersion,
@@ -1366,9 +1378,17 @@ func (r *Runtime) ClearDaemon(ctx context.Context) (ClearDaemonResult, error) {
 	if err := r.persistWorkItems(ctx); err != nil {
 		return ClearDaemonResult{}, err
 	}
+	if r.mailboxStore != nil {
+		if err := r.mailboxStore.DeleteAll(ctx); err != nil {
+			return ClearDaemonResult{}, err
+		}
+	}
 	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged})
+	if r.mailboxStore != nil {
+		r.publish(ctx, RuntimeEvent{Type: EventMailboxChanged})
+	}
 	return result, nil
 }
 
@@ -1391,6 +1411,12 @@ func (r *Runtime) publish(ctx context.Context, event RuntimeEvent) {
 	event.Seq = r.eventSeq
 
 	_ = sink.Publish(ctx, event)
+}
+
+func (r *Runtime) currentEventSeq() uint64 {
+	r.eventMu.Lock()
+	defer r.eventMu.Unlock()
+	return r.eventSeq
 }
 
 func validateExistingRootDir(rootDir string) (string, error) {

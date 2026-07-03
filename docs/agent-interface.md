@@ -6,6 +6,7 @@ There are two supported agent paths:
 
 - CLI callbacks: agents call `whisk question`, `whisk status`, `whisk workflow`, etc.
 - Provider hooks: Claude Code and Codex call `whisk agent-bridge hook` from their native hook systems.
+- Mailbox callbacks: agents exchange durable daemon-owned lifecycle mail with `whisk mail`.
 
 ## Runtime Contract
 
@@ -80,6 +81,20 @@ whisk question ask -prompt "Question?" -json
 ```
 
 This records a work-item question. It is separate from provider-native prompts shown by `whisk prompt list`.
+
+## Mailbox Path
+
+Agents can send and receive durable lifecycle messages through the daemon mailbox:
+
+```sh
+whisk mail send -to run:run_01 -type dispatch -subject "Implement task" -body "..."
+whisk mail check -wait -ack -json
+whisk mail reply mail_01 -body "Done" -json
+```
+
+Supported address forms are `pty:<id>`, `run:<id>`, `session:<id>`, `work-item:<id>`, and `project:<id>`. `mail send` and `mail reply` default `-from` to the current `WHISK_PTY_ID`, then `WHISK_RUN_ID`, then `WHISK_SESSION_ID`; `mail check` defaults `-to` to all current PTY, run, session, work-item, and project addresses from the environment.
+
+Supported message types are `status`, `dispatch`, `worker_done`, `escalation`, `handoff`, `decision_gate`, and `heartbeat`. The mailbox is only the durable communication/read model in this foundation slice; dispatch authority, group selectors such as `@idle`, prompt injection, and automatic run completion are layered on later slices.
 
 ## Profiles
 

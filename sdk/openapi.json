@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "24",
+    "version": "25",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -1189,6 +1189,337 @@
         "responses": {
           "204": {
             "description": "no content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/mail": {
+      "get": {
+        "operationId": "listMail",
+        "summary": "List daemon-owned mailbox messages",
+        "tags": [
+          "mail"
+        ],
+        "parameters": [
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workItemId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threadId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MailMessage"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "sendMail",
+        "summary": "Send a daemon-owned mailbox message",
+        "tags": [
+          "mail"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMailRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailMessage"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/mail/next": {
+      "get": {
+        "operationId": "nextMail",
+        "summary": "Get the next unread mailbox message, optionally waiting",
+        "tags": [
+          "mail"
+        ],
+        "parameters": [
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "timeoutMs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextMailResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/mail/{mailID}/read": {
+      "post": {
+        "operationId": "markMailRead",
+        "summary": "Mark a mailbox message read",
+        "tags": [
+          "mail"
+        ],
+        "parameters": [
+          {
+            "name": "mailID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkMailReadRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailMessage"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/mail/{mailID}/reply": {
+      "post": {
+        "operationId": "replyMail",
+        "summary": "Reply to a mailbox message",
+        "tags": [
+          "mail"
+        ],
+        "parameters": [
+          {
+            "name": "mailID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyMailRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailMessage"
+                }
+              }
+            },
+            "description": "success"
           },
           "default": {
             "content": {
@@ -6862,6 +7193,107 @@
         ],
         "type": "object"
       },
+      "MailAddress": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "type": "object"
+      },
+      "MailMessage": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dispatchId": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/MailAddress"
+          },
+          "id": {
+            "type": "string"
+          },
+          "payload": {
+            "format": "byte",
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/MailRecipient"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "replyToId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "threadId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "from",
+          "recipients",
+          "type",
+          "priority",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "MailRecipient": {
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/MailAddress"
+          },
+          "readAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "type": "object"
+      },
       "MarkAgentBridgeEventReadRequest": {
         "properties": {
           "id": {
@@ -6871,6 +7303,19 @@
         "required": [
           "id"
         ],
+        "type": "object"
+      },
+      "MarkMailReadRequest": {
+        "properties": {
+          "to": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MailAddress"
+              }
+            ],
+            "nullable": true
+          }
+        },
         "type": "object"
       },
       "MarkStatusEventReadRequest": {
@@ -6939,6 +7384,22 @@
           "event",
           "missed"
         ],
+        "type": "object"
+      },
+      "NextMailResponse": {
+        "properties": {
+          "message": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MailMessage"
+              }
+            ],
+            "nullable": true
+          },
+          "timeout": {
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "OnboardingApplyRequest": {
@@ -7827,6 +8288,33 @@
         ],
         "type": "object"
       },
+      "ReplyMailRequest": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/MailAddress"
+          },
+          "payload": {
+            "format": "byte",
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from"
+        ],
+        "type": "object"
+      },
       "ReportStatusRequest": {
         "properties": {
           "actor": {
@@ -8037,6 +8525,66 @@
         "required": [
           "type",
           "seq"
+        ],
+        "type": "object"
+      },
+      "SendMailRequest": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "dispatchId": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/MailAddress"
+          },
+          "payload": {
+            "format": "byte",
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "ptyId": {
+            "type": "string"
+          },
+          "replyToId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "threadId": {
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "$ref": "#/components/schemas/MailAddress"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "type": {
+            "type": "string"
+          },
+          "workItemId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "type"
         ],
         "type": "object"
       },

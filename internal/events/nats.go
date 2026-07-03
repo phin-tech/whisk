@@ -13,11 +13,15 @@ import (
 )
 
 const (
-	subjectSessionChanged   = "whisk.session.changed"
-	subjectPTYChanged       = "whisk.pty.changed"
-	subjectPTYOutput        = "whisk.pty.output"
-	subjectWorkItemsChanged = "whisk.workitems.changed"
-	subjectStatusChanged    = "whisk.status.changed"
+	subjectSessionChanged              = "whisk.session.changed"
+	subjectPTYChanged                  = "whisk.pty.changed"
+	subjectPTYOutput                   = "whisk.pty.output"
+	subjectWorkItemsChanged            = "whisk.workitems.changed"
+	subjectStatusChanged               = "whisk.status.changed"
+	subjectMailboxChanged              = "whisk.mailbox.changed"
+	subjectAgentBridgeApprovalsChanged = "whisk.agent_bridge_approvals.changed"
+	subjectAgentPromptsChanged         = "whisk.agent_prompts.changed"
+	subjectAgentHookEventsChanged      = "whisk.agent_hook_events.changed"
 
 	retainedRuntimeEventLimit = 256
 )
@@ -140,6 +144,14 @@ func subjectFor(eventType app.RuntimeEventType) string {
 		return subjectWorkItemsChanged
 	case app.EventStatusChanged:
 		return subjectStatusChanged
+	case app.EventMailboxChanged:
+		return subjectMailboxChanged
+	case app.EventAgentBridgeApprovalsChanged:
+		return subjectAgentBridgeApprovalsChanged
+	case app.EventAgentPromptsChanged:
+		return subjectAgentPromptsChanged
+	case app.EventAgentHookEventsChanged:
+		return subjectAgentHookEventsChanged
 	default:
 		return "whisk.unknown"
 	}

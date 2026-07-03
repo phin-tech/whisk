@@ -46,6 +46,52 @@ describe.skipIf(!baseUrl)("whiskd headless TS client", () => {
     expect(list.data).toEqual([]);
   });
 
+  it("mailbox round trip", async () => {
+    const sent = await client.POST("/v1/mail", {
+      body: {
+        from: { kind: "pty", id: "pty_ts" },
+        to: [{ kind: "run", id: "run_ts" }],
+        type: "status",
+        priority: "high",
+        subject: "TS SDK mailbox",
+        body: "hello from ts",
+      },
+    });
+    expect(sent.error).toBeUndefined();
+    expect(sent.data!.id).toBeTruthy();
+
+    const listed = await client.GET("/v1/mail", {
+      params: { query: { to: "run:run_ts", unread: true, types: "status" } },
+    });
+    expect(listed.error).toBeUndefined();
+    expect(listed.data).toHaveLength(1);
+    expect(listed.data![0].id).toEqual(sent.data!.id);
+
+    const next = await client.GET("/v1/mail/next", {
+      params: { query: { to: "run:run_ts", types: "status", timeoutMs: 0 } },
+    });
+    expect(next.error).toBeUndefined();
+    expect(next.data!.message!.id).toEqual(sent.data!.id);
+
+    const read = await client.POST("/v1/mail/{mailID}/read", {
+      params: { path: { mailID: sent.data!.id } },
+      body: { to: { kind: "run", id: "run_ts" } },
+    });
+    expect(read.error).toBeUndefined();
+    expect(read.data!.recipients![0].readAt).toBeTruthy();
+
+    const reply = await client.POST("/v1/mail/{mailID}/reply", {
+      params: { path: { mailID: sent.data!.id } },
+      body: {
+        from: { kind: "run", id: "run_ts" },
+        body: "reply from ts",
+      },
+    });
+    expect(reply.error).toBeUndefined();
+    expect(reply.data!.replyToId).toEqual(sent.data!.id);
+    expect(reply.data!.threadId).toEqual(sent.data!.id);
+  });
+
   it("work item round trip", async () => {
     const project = await client.POST("/v1/projects", {
       body: { name: "TS Integration", rootDir: process.cwd() },

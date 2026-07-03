@@ -877,6 +877,26 @@ func (f *runtimeClientFake) NextEvent(_ context.Context, req protocol.NextEventR
 	return f.event, nil
 }
 
+func (f *runtimeClientFake) SendMail(_ context.Context, req protocol.SendMailRequest) (protocol.MailMessage, error) {
+	return protocol.MailMessage{}, nil
+}
+
+func (f *runtimeClientFake) ListMail(_ context.Context, req protocol.ListMailRequest) ([]protocol.MailMessage, error) {
+	return nil, nil
+}
+
+func (f *runtimeClientFake) NextMail(_ context.Context, req protocol.NextMailRequest) (protocol.NextMailResponse, error) {
+	return protocol.NextMailResponse{}, nil
+}
+
+func (f *runtimeClientFake) MarkMailRead(_ context.Context, mailID string, req protocol.MarkMailReadRequest) (protocol.MailMessage, error) {
+	return protocol.MailMessage{}, nil
+}
+
+func (f *runtimeClientFake) ReplyMail(_ context.Context, mailID string, req protocol.ReplyMailRequest) (protocol.MailMessage, error) {
+	return protocol.MailMessage{}, nil
+}
+
 func (f *runtimeClientFake) DetectWorktrunk(_ context.Context, req protocol.DetectWorktrunkRequest) (protocol.WorktrunkStatus, error) {
 	f.detectWorktrunkReq = req
 	return f.worktrunk, nil

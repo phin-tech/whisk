@@ -96,6 +96,16 @@ Use `${WHISK_CLI:-whisk}` in examples. Most commands default `-url` from `WHISKD
 
 Use status commands inside Whisk sessions to leave daemon-visible progress instead of only printing local terminal output.
 
+## whisk mail
+
+- `whisk mail send -to addr[,addr] [-from addr] -type status|dispatch|worker_done|escalation|handoff|decision_gate|heartbeat [-priority low|normal|high|urgent] [-subject text] [-body text|-body-file path] [-payload-json json] [-thread id] [-reply-to id] [-project id] [-work-item id] [-run id] [-session id] [-pty id] [-dispatch id] [-json] [-url URL]`
+- `whisk mail list [-to addr[,addr]] [-unread] [-types csv] [-project id] [-work-item id] [-run id] [-thread id] [-limit n] [-json] [-url URL]`
+- `whisk mail check [-to addr[,addr]] [-types csv] [-wait] [-timeout 10m] [-ack] [-json] [-url URL]`
+- `whisk mail read <mail-id> [-to addr] [-json] [-url URL]`
+- `whisk mail reply <mail-id> [-from addr] [-type status] [-priority normal] [-subject text] [-body text|-body-file path] [-payload-json json] [-json] [-url URL]`
+
+Concrete addresses are `pty:<id>`, `run:<id>`, `session:<id>`, `work-item:<id>`, and `project:<id>`. `send` and `reply` default `-from` to `WHISK_PTY_ID`, then `WHISK_RUN_ID`, then `WHISK_SESSION_ID`; `check` defaults `-to` to every current address exposed in the Whisk environment.
+
 ## whisk agent-bridge
 
 - `whisk agent-bridge hook [-url URL] [-bridge id] [-token token] [-provider claude|codex] [-event name]`: provider hook callback. Usually invoked by generated hook scripts, not manually.
