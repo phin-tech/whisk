@@ -114,29 +114,34 @@ func ClassifyTitle(title string) (Status, bool) {
 
 func ClassifyOutputTail(tail string) (Status, bool) {
 	boundedTail := lastRunes(tail, MaxOutputTailChars)
-	normalized := NormalizeDisplayField(boundedTail, MaxOutputTailChars)
-	if normalized == "" {
-		return Status{}, false
+	lines := strings.Split(boundedTail, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := NormalizeDisplayField(lines[i], MaxOutputTailChars)
+		if line == "" {
+			continue
+		}
+
+		agent, label, ok := detectNamedAgent(line)
+		if !ok {
+			continue
+		}
+
+		state := detectState(line, agent)
+		if state == StateUnknown {
+			continue
+		}
+
+		return NormalizeStatus(Status{
+			Agent:      agent,
+			Label:      label,
+			State:      state,
+			Source:     SourceOutputTail,
+			Confidence: ConfidenceFallback,
+			Prompt:     line,
+		}), true
 	}
 
-	agent, label, ok := detectNamedAgent(normalized)
-	if !ok {
-		return Status{}, false
-	}
-
-	state := detectState(normalized, agent)
-	if state == StateUnknown {
-		return Status{}, false
-	}
-
-	return NormalizeStatus(Status{
-		Agent:      agent,
-		Label:      label,
-		State:      state,
-		Source:     SourceOutputTail,
-		Confidence: ConfidenceFallback,
-		Prompt:     lastNonEmptyLine(boundedTail),
-	}), true
+	return Status{}, false
 }
 
 func SelectStatus(candidates ...Status) (Status, bool) {
@@ -447,9 +452,6 @@ func defaultConfidence(source Source) Confidence {
 }
 
 func isUsefulStatus(status Status) bool {
-	if status.Source != SourceUnknown {
-		return true
-	}
 	if status.Agent != AgentUnknown || status.State != StateUnknown {
 		return true
 	}

@@ -198,6 +198,18 @@ func TestClassifyOutputTail(t *testing.T) {
 	}
 }
 
+func TestClassifyOutputTailRequiresAgentAndStateOnSameLine(t *testing.T) {
+	tail := strings.Join([]string{
+		"Claude Code transcript header",
+		"tool output complete",
+		"waiting for another process",
+	}, "\n")
+
+	if got, ok := ClassifyOutputTail(tail); ok {
+		t.Fatalf("ClassifyOutputTail classified unrelated cross-line tokens as %+v, want no classification", got)
+	}
+}
+
 func TestClassifyTitleRejectsTokenBoundaryFalsePositives(t *testing.T) {
 	titles := []string{
 		"~/codex/working",
@@ -319,6 +331,27 @@ func TestSelectStatusUsesSourcePrecedence(t *testing.T) {
 	}
 	if got.Advisory() {
 		t.Fatalf("bridge status should not be marked advisory by source")
+	}
+}
+
+func TestSelectStatusIgnoresEmptyHigherPriorityStatus(t *testing.T) {
+	tail := Status{
+		Agent:      AgentCodex,
+		State:      StateWaiting,
+		Source:     SourceOutputTail,
+		Confidence: ConfidenceFallback,
+		Prompt:     "Codex waiting for permission",
+	}
+	emptyBridge := Status{
+		Source: SourceBridge,
+	}
+
+	got, ok := SelectStatus(tail, emptyBridge)
+	if !ok {
+		t.Fatalf("SelectStatus returned no status")
+	}
+	if got.Source != SourceOutputTail || got.Agent != AgentCodex || got.State != StateWaiting {
+		t.Fatalf("empty higher-priority status should not suppress useful fallback, got %+v", got)
 	}
 }
 
