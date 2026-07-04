@@ -275,6 +275,7 @@ export function runtimeRefreshTargets(event: RuntimeEventLike) {
 		outputPtyId: outputPtyId ? idString(outputPtyId) : null,
 		work: event.type === "workitems.changed" || event.type === "status.changed",
 		statusEvents: event.type === "status.changed",
+		plugins: event.type === "plugins.changed",
 		agentBridgeApprovals: event.type === "agent_bridge_approvals.changed" || event.type === "agent_prompts.changed",
 		agentHookEvents: event.type === "agent_hook_events.changed",
 	};

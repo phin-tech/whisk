@@ -300,6 +300,7 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: null,
       work: false,
       statusEvents: false,
+      plugins: false,
       agentBridgeApprovals: false,
       agentHookEvents: false,
     });
@@ -309,6 +310,7 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: null,
       work: false,
       statusEvents: false,
+      plugins: false,
       agentBridgeApprovals: false,
       agentHookEvents: false,
     });
@@ -318,6 +320,7 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: "pty_01",
       work: false,
       statusEvents: false,
+      plugins: false,
       agentBridgeApprovals: false,
       agentHookEvents: false,
     });
@@ -327,6 +330,7 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: null,
       work: true,
       statusEvents: false,
+      plugins: false,
       agentBridgeApprovals: false,
       agentHookEvents: false,
     });
@@ -336,6 +340,17 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: null,
       work: true,
       statusEvents: true,
+      plugins: false,
+      agentBridgeApprovals: false,
+      agentHookEvents: false,
+    });
+    expect(runtimeRefreshTargets({ type: "plugins.changed" })).toEqual({
+      sessions: false,
+      ptys: false,
+      outputPtyId: null,
+      work: false,
+      statusEvents: false,
+      plugins: true,
       agentBridgeApprovals: false,
       agentHookEvents: false,
     });
@@ -345,6 +360,7 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: null,
       work: false,
       statusEvents: false,
+      plugins: false,
       agentBridgeApprovals: true,
       agentHookEvents: false,
     });
@@ -354,6 +370,7 @@ describe("runtimeRefreshTargets", () => {
       outputPtyId: null,
       work: false,
       statusEvents: false,
+      plugins: false,
       agentBridgeApprovals: false,
       agentHookEvents: true,
     });
