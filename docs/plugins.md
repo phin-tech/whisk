@@ -144,6 +144,19 @@ Agents can run the same template through the CLI:
 whisk plugin attach github github.issue.attach -project proj_01 -field url=https://github.com/owner/repo/issues/123
 ```
 
+## Command Execution
+
+Trusted resolver and attachment template commands run inside `whiskd` with the
+plugin directory as their working directory. Whisk invokes the command through
+the platform shell (`sh -lc` on Unix-like systems, `cmd /c` on Windows), sends a
+JSON request on stdin, and reads JSON from stdout.
+
+Commands are bounded to protect the daemon: the default timeout is 10 seconds,
+stdout is capped at 1 MiB, and stderr captured for error reporting is capped at
+64 KiB. A timeout, non-zero exit, or stdout cap violation fails the command; when
+a command exits non-zero, capped stderr is included in the error message.
+Malformed stdout is reported by the caller as a JSON parse error.
+
 ## Context Resolution
 
 External attachments are stored as `kind=external` with `provider` and `target`. If `includeInContext=true`, project context asks the trusted resolver for fresh content at context time.
