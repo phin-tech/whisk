@@ -29,4 +29,10 @@ describe("App notification refresh", () => {
     expect(source).not.toContain("bookmark.lastPrompt");
     expect(source).toContain("terminal.bottom");
   });
+
+  it("keeps PTY output snapshots out of the steady polling path", () => {
+    expect(source).not.toContain("outputReconcileTimer");
+    expect(source).toContain("hasActivePTYStream(targets.outputPtyId)");
+    expect(source).toContain("reconnectBackoffDelayMs");
+  });
 });

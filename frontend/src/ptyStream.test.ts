@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   consumeOptimisticEcho,
+  base64DecodedByteLength,
   nextPTYStreamOffset,
+  outputSnapshotStartOffset,
   ptyInputFrame,
   ptyInputTraceLine,
   optimisticTerminalEcho,
@@ -31,6 +33,14 @@ describe("ptyStream", () => {
     expect(
       nextPTYStreamOffset(12, { type: "output", ptyId: "pty_01", offset: 10, outputBase64: "aGk=" }),
     ).toBe(12);
+  });
+
+  it("infers output snapshot starts from decoded byte length", () => {
+    expect(base64DecodedByteLength("aGk=")).toBe(2);
+    expect(outputSnapshotStartOffset({ offset: 12, outputBase64: "aGk=" })).toBe(10);
+    expect(outputSnapshotStartOffset({ offset: 12, output: "é" })).toBe(10);
+    expect(outputSnapshotStartOffset({ offset: 2, outputBase64: "aGVsbG8=" })).toBe(0);
+    expect(outputSnapshotStartOffset({ offset: 12 })).toBe(12);
   });
 
   it("builds websocket input frames", () => {
