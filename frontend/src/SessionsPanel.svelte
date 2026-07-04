@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import Check from "@lucide/svelte/icons/check";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import Plus from "@lucide/svelte/icons/plus";
@@ -6,12 +7,20 @@
   import X from "@lucide/svelte/icons/x";
   import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import type { Project } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
-  import { sessionGroups, type SessionGroupMode } from "./sessionView";
+  import {
+    deriveSessionsPanelRows,
+    SESSION_ROW_HEIGHT,
+    sessionRowHeight,
+  } from "./sessions-panel-state";
+  import type { SessionGroupMode } from "./sessionView";
   import SidebarPanelHeader from "./SidebarPanelHeader.svelte";
   import Button from "./ui/Button.svelte";
   import IconButton from "./ui/IconButton.svelte";
   import ModalShell from "./ui/ModalShell.svelte";
   import TextField from "./ui/TextField.svelte";
+  import { deriveVirtualIndexWindow, deriveVirtualRows } from "./ui/virtual-list";
+
+  const SESSION_ROW_OVERSCAN = 4;
 
   export let sessions: Session[] = [];
   export let projects: Project[] = [];
@@ -31,11 +40,36 @@
   let contextX = 0;
   let contextY = 0;
   let projectPickerSessionId = "";
+  let viewport: HTMLDivElement;
+  let viewportHeight = SESSION_ROW_HEIGHT * 8;
+  let scrollOffset = 0;
+  let lastQuery = query;
 
-  $: groups = sessionGroups(sessions, projects, groupMode, query);
+  $: rows = deriveSessionsPanelRows({
+    sessions,
+    projects,
+    groupMode,
+    query,
+    collapsedGroupIds,
+    activeSessionId,
+    confirmingSessionId,
+  });
+  $: rowHeights = rows.map(sessionRowHeight);
+  $: virtualWindow = deriveVirtualIndexWindow({
+    count: rows.length,
+    heights: rowHeights,
+    viewportHeight,
+    scrollOffset,
+    overscan: SESSION_ROW_OVERSCAN,
+  });
+  $: virtualRows = deriveVirtualRows(rows, rowHeights, virtualWindow);
   $: contextSession = sessions.find((session) => session.id === contextSessionId) ?? null;
   $: projectPickerSession =
     sessions.find((session) => session.id === projectPickerSessionId) ?? null;
+  $: if (query !== lastQuery) {
+    lastQuery = query;
+    resetVirtualScroll();
+  }
 
   function requestClose(session: Session) {
     if (confirmingSessionId === session.id) {
@@ -64,6 +98,7 @@
   function setGroupMode(mode: SessionGroupMode) {
     groupMode = mode;
     collapsedGroupIds = new Set<string>();
+    resetVirtualScroll();
   }
 
   function openContextMenu(event: MouseEvent, session: Session) {
@@ -101,6 +136,24 @@
   function handleProjectPickerOpenChange(open: boolean) {
     if (!open && projectPickerSession) closeProjectPicker();
   }
+
+  function measureViewport() {
+    if (!viewport) return;
+    viewportHeight = viewport.clientHeight;
+    scrollOffset = viewport.scrollTop;
+  }
+
+  function resetVirtualScroll() {
+    scrollOffset = 0;
+    if (viewport) viewport.scrollTop = 0;
+  }
+
+  onMount(() => {
+    measureViewport();
+    const resizeObserver = new ResizeObserver(measureViewport);
+    resizeObserver.observe(viewport);
+    return () => resizeObserver.disconnect();
+  });
 </script>
 
 <svelte:window onclick={closeContextMenu} onkeydown={handleKey} />
@@ -118,112 +171,120 @@
     </IconButton>
   </SidebarPanelHeader>
 
-  <div class="app-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
-    {#if sessions.length === 0}
-      <div class="flex h-full items-center justify-center px-4 text-center text-[13px] text-text-muted">
-        No sessions yet.
+  {#if sessions.length === 0}
+    <div class="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-[13px] text-text-muted">
+      No sessions yet.
+    </div>
+  {:else}
+    <div class="grid gap-2 p-2 pb-0">
+      <div class="grid grid-cols-3 rounded border border-border-subtle bg-bg-surface/35 p-0.5">
+        {#each [{ id: "recent", label: "Recent" }, { id: "project", label: "Project" }, { id: "folder", label: "Folder" }] as mode (mode.id)}
+          <Button
+            variant={groupMode === mode.id ? "primary" : "ghost"}
+            size="sm"
+            class="h-7 w-full border-transparent text-[11px] {groupMode === mode.id ? '' : 'bg-transparent'}"
+            onclick={() => setGroupMode(mode.id as SessionGroupMode)}
+          >
+            {mode.label}
+          </Button>
+        {/each}
       </div>
-    {:else}
-      <div class="grid gap-2">
-        <div class="grid grid-cols-3 rounded border border-border-subtle bg-bg-surface/35 p-0.5">
-          {#each [{ id: "recent", label: "Recent" }, { id: "project", label: "Project" }, { id: "folder", label: "Folder" }] as mode (mode.id)}
-            <Button
-              variant={groupMode === mode.id ? "primary" : "ghost"}
-              size="sm"
-              class="h-7 w-full border-transparent text-[11px] {groupMode === mode.id ? '' : 'bg-transparent'}"
-              onclick={() => setGroupMode(mode.id as SessionGroupMode)}
+
+      <label class="grid h-8 grid-cols-[14px_minmax(0,1fr)] items-center gap-2 rounded border border-border-subtle bg-bg-surface/35 px-2 text-text-muted focus-within:border-accent-dim">
+        <Search size={14} />
+        <TextField
+          variant="seamless"
+          class="min-w-0 border-transparent bg-transparent px-0 py-0 hover:border-transparent focus:border-transparent focus:bg-transparent"
+          bind:value={query}
+          placeholder="Search sessions"
+          aria-label="Search sessions"
+        />
+      </label>
+    </div>
+  {/if}
+
+  <div
+    bind:this={viewport}
+    class="app-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2 {sessions.length === 0 ? 'hidden' : ''}"
+    aria-label="Sessions"
+    data-sessions-virtual-list
+    onscroll={measureViewport}
+  >
+    {#if sessions.length > 0}
+      {#if rows.length === 0}
+        <div class="px-2 py-3 text-[12px] text-text-muted">No matching sessions.</div>
+      {:else}
+        <div class="relative min-w-0" style={`height: ${virtualWindow.totalHeight}px;`}>
+          {#each virtualRows as virtualRow (virtualRow.key)}
+            {@const row = virtualRow.row}
+            <div
+              class="absolute left-0 right-0 overflow-hidden bg-bg-deep"
+              style={`transform: translateY(${virtualRow.offsetTop}px); height: ${virtualRow.height}px;`}
+              data-session-virtual-row
+              data-session-row-key={virtualRow.key}
+              data-session-row-index={virtualRow.index}
             >
-              {mode.label}
-            </Button>
-          {/each}
-        </div>
-
-        <label class="grid h-8 grid-cols-[14px_minmax(0,1fr)] items-center gap-2 rounded border border-border-subtle bg-bg-surface/35 px-2 text-text-muted focus-within:border-accent-dim">
-          <Search size={14} />
-          <TextField
-            variant="seamless"
-            class="min-w-0 border-transparent bg-transparent px-0 py-0 hover:border-transparent focus:border-transparent focus:bg-transparent"
-            bind:value={query}
-            placeholder="Search sessions"
-            aria-label="Search sessions"
-          />
-        </label>
-
-        {#if groups.length === 0}
-          <div class="px-2 py-3 text-[12px] text-text-muted">No matching sessions.</div>
-        {:else}
-          {#each groups as group (group.id)}
-            {@const collapsed = collapsedGroupIds.has(group.id)}
-            <section class="grid gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                align="start"
-                class="h-7 min-w-0 border-transparent bg-transparent px-1 text-text-muted"
-                onclick={() => toggleGroup(group.id)}
-              >
-                <ChevronRight
-                  size={13}
-                  class="shrink-0 transition-transform {collapsed ? '' : 'rotate-90'}"
-                />
-                <span class="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-widest">
-                  {group.title}
-                </span>
-                <span class="font-mono text-[10px]">{group.sessions.length}</span>
-              </Button>
-
-              {#if !collapsed}
-                <div class="space-y-1">
-                  {#each group.sessions as session (session.id)}
-                    <div
-                      class="w-full rounded-lg border px-2.5 py-2 text-left transition-colors {session.id ===
-                      activeSessionId
-                        ? 'border-accent-dim/50 bg-bg-active text-text-primary'
-                        : 'border-border-subtle/60 bg-bg-surface/25 text-text-secondary hover:border-border hover:bg-bg-surface/50'}"
+              {#if row.kind === "group"}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  align="start"
+                  class="h-7 min-w-0 border-transparent bg-transparent px-1 text-text-muted"
+                  onclick={() => toggleGroup(row.groupId)}
+                >
+                  <ChevronRight
+                    size={13}
+                    class="shrink-0 transition-transform {row.collapsed ? '' : 'rotate-90'}"
+                  />
+                  <span class="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-widest">
+                    {row.title}
+                  </span>
+                  <span class="font-mono text-[10px]">{row.count}</span>
+                </Button>
+              {:else}
+                <div
+                  class="h-12 w-full rounded-lg border px-2.5 py-2 text-left transition-colors {row.active
+                    ? 'border-accent-dim/50 bg-bg-active text-text-primary'
+                    : 'border-border-subtle/60 bg-bg-surface/25 text-text-secondary hover:border-border hover:bg-bg-surface/50'}"
+                >
+                  <div class="flex min-w-0 items-start gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      align="start"
+                      class="!h-auto min-w-0 flex-1 flex-col !items-start gap-0 !border-transparent !bg-transparent !px-0 !py-0 text-left hover:!bg-transparent hover:!text-inherit"
+                      onclick={() => onSelectSession(row.session)}
+                      oncontextmenu={(event: MouseEvent) => openContextMenu(event, row.session)}
                     >
-                      <div class="flex min-w-0 items-start gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          align="start"
-                          class="!h-auto min-w-0 flex-1 flex-col !items-start gap-0 !border-transparent !bg-transparent !px-0 !py-0 text-left hover:!bg-transparent hover:!text-inherit"
-                          onclick={() => onSelectSession(session)}
-                          oncontextmenu={(event: MouseEvent) => openContextMenu(event, session)}
-                        >
-                          <div class="truncate text-[13px] font-medium">{session.name}</div>
-                          <div class="mt-0.5 truncate font-mono text-[10px] text-text-muted">
-                            {session.rootDir || "."}
-                          </div>
-                        </Button>
-                        <IconButton
-                          label={confirmingSessionId === session.id
-                            ? "Confirm close session"
-                            : "Close session"}
-                          title={confirmingSessionId === session.id ? "Confirm close session" : "Close session"}
-                          tone={confirmingSessionId === session.id ? "danger" : "default"}
-                          size="sm"
-                          class="shrink-0 {confirmingSessionId ===
-                          session.id
-                            ? '!border-red/40 !bg-red/10 !text-red hover:!bg-red/15'
-                            : ''}"
-                          disabled={loading}
-                          onclick={(event) => requestCloseFromRow(event, session)}
-                        >
-                          {#if confirmingSessionId === session.id}
-                            <Check size={13} />
-                          {:else}
-                            <X size={13} />
-                          {/if}
-                        </IconButton>
+                      <div class="truncate text-[13px] font-medium">{row.session.name}</div>
+                      <div class="mt-0.5 truncate font-mono text-[10px] text-text-muted">
+                        {row.session.rootDir || "."}
                       </div>
-                    </div>
-                  {/each}
+                    </Button>
+                    <IconButton
+                      label={row.confirmingClose ? "Confirm close session" : "Close session"}
+                      title={row.confirmingClose ? "Confirm close session" : "Close session"}
+                      tone={row.confirmingClose ? "danger" : "default"}
+                      size="sm"
+                      class="shrink-0 {row.confirmingClose
+                        ? '!border-red/40 !bg-red/10 !text-red hover:!bg-red/15'
+                        : ''}"
+                      disabled={loading}
+                      onclick={(event) => requestCloseFromRow(event, row.session)}
+                    >
+                      {#if row.confirmingClose}
+                        <Check size={13} />
+                      {:else}
+                        <X size={13} />
+                      {/if}
+                    </IconButton>
+                  </div>
                 </div>
               {/if}
-            </section>
+            </div>
           {/each}
-        {/if}
-      </div>
+        </div>
+      {/if}
     {/if}
   </div>
 </div>
