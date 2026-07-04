@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/phin-tech/whisk/internal/adapters/agents"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
@@ -14,6 +15,7 @@ type PluginRegistry interface {
 	UntrustPlugin(context.Context, string) (PluginStatus, error)
 	ListRegistryPlugins(context.Context) ([]RegistryPlugin, error)
 	InstallPlugin(ctx context.Context, registry, id string) (PluginStatus, error)
+	ListAgentProfiles(context.Context) ([]agents.ProfileInfo, error)
 	RunProjectAttachmentTemplate(context.Context, RunPluginProjectAttachmentTemplateRequest) (AddProjectAttachmentRequest, error)
 	ResolveProjectAttachmentProvider(string) ProjectContextResolver
 }

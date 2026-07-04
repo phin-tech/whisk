@@ -51,9 +51,9 @@ func runAgentProfiles(args []string) error {
 
 func printAgentProfiles(profiles []protocol.AgentProfile) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tPROVIDER\tLABEL\tDESCRIPTION")
+	fmt.Fprintln(w, "ID\tPROVIDER\tSOURCE\tPLUGIN\tLAUNCHABLE\tLABEL\tDESCRIPTION")
 	for _, profile := range profiles {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", profile.ID, profile.Provider, profile.Label, profile.Description)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%t\t%s\t%s\n", profile.ID, profile.Provider, profile.Source, profile.PluginID, profile.Launchable, profile.Label, profile.Description)
 	}
 	_ = w.Flush()
 }

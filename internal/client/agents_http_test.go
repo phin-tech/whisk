@@ -43,6 +43,8 @@ func TestHTTPClientListsAgentProfiles(t *testing.T) {
 	if !ok ||
 		claude.Label == "" ||
 		claude.Provider != "claude" ||
+		claude.Source != "builtin" ||
+		!claude.Launchable ||
 		claude.DetectCmd != "claude" ||
 		claude.ExpectedProcess != "claude" ||
 		claude.PromptInjectionMode != "argv" ||
@@ -52,6 +54,8 @@ func TestHTTPClientListsAgentProfiles(t *testing.T) {
 	codex, ok := byID["codex"]
 	if !ok ||
 		codex.DetectCmd != "codex" ||
+		codex.Source != "builtin" ||
+		!codex.Launchable ||
 		codex.PromptInjectionMode != "argv" ||
 		codex.PreflightTrust != "codex" ||
 		codex.ReadySignal != "codex-composer-prompt" {

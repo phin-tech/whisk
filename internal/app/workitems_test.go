@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/adapters/agents"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
@@ -2645,14 +2646,51 @@ func TestRuntimePluginRegistryMethods(t *testing.T) {
 	}
 }
 
+func TestRuntimeListAgentProfilesMergesPluginProfiles(t *testing.T) {
+	ctx := context.Background()
+	plugins := &memoryPluginRegistry{
+		agentProfiles: []agents.ProfileInfo{{
+			ID:                  "plugin:phin-tech/gemini/gemini-cli",
+			Provider:            "gemini",
+			Label:               "Gemini CLI",
+			Source:              agents.ProfileSourcePlugin,
+			PluginID:            "phin-tech/gemini",
+			Launchable:          false,
+			LaunchBlockedReason: "plugin phin-tech/gemini is not trusted",
+			PromptInjectionMode: agents.PromptInjectionArgv,
+		}},
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: plugins})
+
+	profiles, err := runtime.ListAgentProfiles(ctx)
+	if err != nil {
+		t.Fatalf("list agent profiles: %v", err)
+	}
+	byID := map[string]agents.ProfileInfo{}
+	for _, profile := range profiles {
+		byID[profile.ID] = profile
+	}
+	if builtin := byID["codex"]; builtin.Source != agents.ProfileSourceBuiltin || !builtin.Launchable {
+		t.Fatalf("builtin profile = %#v", builtin)
+	}
+	plugin := byID["plugin:phin-tech/gemini/gemini-cli"]
+	if plugin.Source != agents.ProfileSourcePlugin ||
+		plugin.PluginID != "phin-tech/gemini" ||
+		plugin.Launchable ||
+		plugin.LaunchBlockedReason == "" {
+		t.Fatalf("plugin profile = %#v", plugin)
+	}
+}
+
 type memoryPluginRegistry struct {
-	status      app.PluginStatus
-	registry    app.RegistryPlugin
-	resolver    app.ProjectContextResolver
-	rescanned   bool
-	trustedID   string
-	untrustedID string
-	installedID string
+	status        app.PluginStatus
+	registry      app.RegistryPlugin
+	agentProfiles []agents.ProfileInfo
+	resolver      app.ProjectContextResolver
+	rescanned     bool
+	trustedID     string
+	untrustedID   string
+	installedID   string
 }
 
 func (r *memoryPluginRegistry) ListPlugins(context.Context) ([]app.PluginStatus, error) {
@@ -2690,6 +2728,10 @@ func (r *memoryPluginRegistry) InstallPlugin(_ context.Context, registry, id str
 	status.ID = id
 	status.Registry = registry
 	return status, nil
+}
+
+func (r *memoryPluginRegistry) ListAgentProfiles(context.Context) ([]agents.ProfileInfo, error) {
+	return append([]agents.ProfileInfo(nil), r.agentProfiles...), nil
 }
 
 func (r *memoryPluginRegistry) RunProjectAttachmentTemplate(_ context.Context, req app.RunPluginProjectAttachmentTemplateRequest) (app.AddProjectAttachmentRequest, error) {

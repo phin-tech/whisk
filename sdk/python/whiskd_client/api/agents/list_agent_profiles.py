@@ -52,7 +52,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient,
 ) -> Response[ErrorResponse | list[AgentProfile]]:
-    """List selectable builtin agent profiles
+    """List daemon agent profiles
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -75,7 +75,7 @@ def sync(
     *,
     client: AuthenticatedClient,
 ) -> ErrorResponse | list[AgentProfile] | None:
-    """List selectable builtin agent profiles
+    """List daemon agent profiles
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -94,7 +94,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
 ) -> Response[ErrorResponse | list[AgentProfile]]:
-    """List selectable builtin agent profiles
+    """List daemon agent profiles
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -115,7 +115,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient,
 ) -> ErrorResponse | list[AgentProfile] | None:
-    """List selectable builtin agent profiles
+    """List daemon agent profiles
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

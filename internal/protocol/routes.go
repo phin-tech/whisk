@@ -154,7 +154,7 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/workflow-definitions/{workflowID}/{version}/delete", OperationID: "deleteWorkflowDefinition", Tag: "workitems", Response: WorkflowDefinitionRecord{}},
 	{Method: "GET", Path: "/v1/workflow-templates", OperationID: "listWorkflowTemplates", Tag: "workitems", Response: apiWorkflowTemplateList},
 	{Method: "GET", Path: "/v1/prompt-templates", OperationID: "listPromptTemplates", Tag: "workitems", Response: apiPromptList},
-	{Method: "GET", Path: "/v1/agent-profiles", OperationID: "listAgentProfiles", Tag: "agents", Summary: "List selectable builtin agent profiles", Response: apiAgentProfileList},
+	{Method: "GET", Path: "/v1/agent-profiles", OperationID: "listAgentProfiles", Tag: "agents", Summary: "List daemon agent profiles", Response: apiAgentProfileList},
 	{Method: "GET", Path: "/v1/agents/detected", OperationID: "listDetectedAgents", Tag: "agents", Summary: "List builtin agent profiles detected on PATH", Response: apiDetectedAgentList},
 	{Method: "GET", Path: "/v1/work-items", OperationID: "listWorkItems", Tag: "workitems", Response: apiWorkItemList, Query: []APIQueryParam{{Name: "projectId", Type: "string"}}},
 	{Method: "POST", Path: "/v1/work-items", OperationID: "createWorkItem", Tag: "workitems", Request: CreateWorkItemRequest{}, Response: WorkItem{}, Status: 201},

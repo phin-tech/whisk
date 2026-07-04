@@ -17,8 +17,8 @@ func TestRunAgentProfilesUsesDaemonAPI(t *testing.T) {
 		}
 		requested = r.URL.Path
 		_ = json.NewEncoder(w).Encode([]protocol.AgentProfile{
-			{ID: "claude", Provider: "claude", Label: "Claude Code", Description: "Claude Code with default permissions."},
-			{ID: "codex", Provider: "codex", Label: "Codex"},
+			{ID: "claude", Provider: "claude", Label: "Claude Code", Description: "Claude Code with default permissions.", Source: "builtin", Launchable: true},
+			{ID: "codex", Provider: "codex", Label: "Codex", Source: "builtin", Launchable: true},
 		})
 	}))
 	defer server.Close()

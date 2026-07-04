@@ -732,8 +732,22 @@ function dispatch(methodName: string, args: unknown[]) {
       return { localDaemon: true, items: [] };
     case "ListAgentProfiles":
       return [
-        { id: "agent_codex", name: "Codex", provider: "codex", command: "codex" },
-        { id: "agent_claude", name: "Claude", provider: "claude", command: "claude" },
+        {
+          id: "codex",
+          provider: "codex",
+          label: "Codex",
+          source: "builtin",
+          launchable: true,
+          promptInjectionMode: "argv",
+        },
+        {
+          id: "claude",
+          provider: "claude",
+          label: "Claude Code",
+          source: "builtin",
+          launchable: true,
+          promptInjectionMode: "argv",
+        },
       ];
     case "ListProjects":
       return clone(state.projects);
