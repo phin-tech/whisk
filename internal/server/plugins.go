@@ -159,5 +159,102 @@ func protocolPluginStatus(status app.PluginStatus) protocol.PluginStatus {
 		Resolvers:                  resolvers,
 		UsageResolvers:             usageResolvers,
 		ProjectAttachmentTemplates: templates,
+		UIPanels:                   protocolPluginUIPanels(status.UIPanels),
+		UICommands:                 protocolPluginUICommands(status.UICommands),
+		ReviewActions:              protocolPluginReviewActions(status.ReviewActions),
+		Permissions:                protocolPluginPermissions(status.Permissions),
+	}
+}
+
+func protocolPluginUIPanels(panels []app.PluginUIPanel) []protocol.PluginUIPanel {
+	out := make([]protocol.PluginUIPanel, 0, len(panels))
+	for _, panel := range panels {
+		out = append(out, protocol.PluginUIPanel{
+			ID:      panel.ID,
+			Title:   panel.Title,
+			Scope:   protocol.PluginUIScope(panel.Scope),
+			Kind:    panel.Kind,
+			Read:    protocolPluginUICommandRef(panel.Read),
+			Entry:   protocolPluginUIPanelEntry(panel.Entry),
+			Actions: protocolPluginUICommandRefs(panel.Actions),
+		})
+	}
+	return out
+}
+
+func protocolPluginUICommands(commands []app.PluginUICommand) []protocol.PluginUICommand {
+	out := make([]protocol.PluginUICommand, 0, len(commands))
+	for _, command := range commands {
+		out = append(out, protocol.PluginUICommand{
+			ID:             command.ID,
+			Label:          command.Label,
+			Scope:          protocol.PluginUIScope(command.Scope),
+			TimeoutMs:      command.TimeoutMs,
+			OutputCapBytes: command.OutputCapBytes,
+		})
+	}
+	return out
+}
+
+func protocolPluginReviewActions(actions []app.PluginReviewAction) []protocol.PluginReviewAction {
+	out := make([]protocol.PluginReviewAction, 0, len(actions))
+	for _, action := range actions {
+		out = append(out, protocol.PluginReviewAction{
+			ID:             action.ID,
+			Label:          action.Label,
+			Scope:          protocol.PluginUIScope(action.Scope),
+			URLTemplate:    action.URLTemplate,
+			HasSubmit:      action.HasSubmit,
+			Blocking:       action.Blocking,
+			TimeoutMs:      action.TimeoutMs,
+			OutputCapBytes: action.OutputCapBytes,
+		})
+	}
+	return out
+}
+
+func protocolPluginUICommandRefs(refs []app.PluginUICommandRef) []protocol.PluginUICommandRef {
+	out := make([]protocol.PluginUICommandRef, 0, len(refs))
+	for _, ref := range refs {
+		out = append(out, protocol.PluginUICommandRef{
+			ID:             ref.ID,
+			Label:          ref.Label,
+			TimeoutMs:      ref.TimeoutMs,
+			OutputCapBytes: ref.OutputCapBytes,
+		})
+	}
+	return out
+}
+
+func protocolPluginUICommandRef(ref *app.PluginUICommandRef) *protocol.PluginUICommandRef {
+	if ref == nil {
+		return nil
+	}
+	return &protocol.PluginUICommandRef{
+		ID:             ref.ID,
+		Label:          ref.Label,
+		TimeoutMs:      ref.TimeoutMs,
+		OutputCapBytes: ref.OutputCapBytes,
+	}
+}
+
+func protocolPluginUIPanelEntry(entry *app.PluginUIPanelEntry) *protocol.PluginUIPanelEntry {
+	if entry == nil {
+		return nil
+	}
+	return &protocol.PluginUIPanelEntry{
+		Path:    entry.Path,
+		Forward: entry.Forward,
+	}
+}
+
+func protocolPluginPermissions(permissions *app.PluginPermissions) *protocol.PluginPermissions {
+	if permissions == nil {
+		return nil
+	}
+	return &protocol.PluginPermissions{
+		PTYOutput:   permissions.PTYOutput,
+		EnvPrefixes: append([]string(nil), permissions.EnvPrefixes...),
+		Network:     append([]string(nil), permissions.Network...),
 	}
 }

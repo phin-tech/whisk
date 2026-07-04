@@ -47,6 +47,14 @@ func TestReadManifestDefaultsV1AndAllowsAdHocFields(t *testing.T) {
 	if len(manifest.UI.ReviewActions) != 1 || !manifest.UI.ReviewActions[0].Blocking {
 		t.Fatalf("review actions = %#v", manifest.UI.ReviewActions)
 	}
+	status := statusFromManifest("", dir, manifest, false)
+	if len(status.ReviewActions) != 1 ||
+		status.ReviewActions[0].ID != "legacy.review" ||
+		status.ReviewActions[0].Scope != app.PluginUIScope(pluginUIScopeWorkItem) ||
+		!status.ReviewActions[0].HasSubmit ||
+		!status.ReviewActions[0].Blocking {
+		t.Fatalf("legacy review action status = %#v", status.ReviewActions)
+	}
 	if len(manifest.AgentProfiles) != 0 {
 		t.Fatalf("v1 agent profiles should be ignored, got %#v", manifest.AgentProfiles)
 	}
@@ -181,6 +189,98 @@ func TestReadManifestParsesAndNormalizesManifestV2(t *testing.T) {
 		profile.PromptInjectionMode != agents.PromptInjectionArgv ||
 		profile.HookProvider != "codex" {
 		t.Fatalf("agent profile = %#v", profile)
+	}
+}
+
+func TestReadManifestParsesAndNormalizesV2UIContributions(t *testing.T) {
+	dir := t.TempDir()
+	writeManifestOnly(t, dir, `{
+		"manifestVersion": 2,
+		"id": "linear",
+		"name": "Linear",
+		"version": "0.2.0",
+		"ui": {
+			"projectAttachments": [{
+				"id": "linear.issue.attach",
+				"label": "Attach Linear issue",
+				"provider": "linear",
+				"kind": "external",
+				"command": "node ./attach.mjs",
+				"fields": [{"id": "issue", "label": "Issue", "type": "text", "options": ["LIN-1"]}]
+			}],
+			"reviewActions": [{
+				"id": "linear.review",
+				"label": "Linear review",
+				"scope": "workItem",
+				"urlTemplate": "https://linear.app/acme/issue/{{work_item.id.url}}",
+				"submitCommand": "node ./fetch-review.mjs",
+				"blocking": true,
+				"timeoutMs": 999999,
+				"outputCapBytes": 999999999
+			}],
+			"panels": [
+				{
+					"id": "linear.issue.panel",
+					"title": "Linear issue",
+					"scope": "workItem",
+					"read": {
+						"command": "node ./render-issue.mjs",
+						"timeoutMs": 999999,
+						"outputCapBytes": 999999999
+					},
+					"actions": [{
+						"id": "sync",
+						"label": "Sync",
+						"command": "node ./sync.mjs",
+						"timeoutMs": 1,
+						"outputCapBytes": 2
+					}]
+				},
+				{
+					"id": "linear.board.panel",
+					"title": "Linear board",
+					"scope": "project",
+					"kind": "html",
+					"entry": "./panel/"
+				}
+			],
+			"commands": [{
+				"id": "linear.open-triage",
+				"label": "Linear: Open triage",
+				"scope": "global",
+				"command": "node ./triage.mjs"
+			}]
+		}
+	}`)
+
+	manifest, err := ReadManifest(dir)
+	if err != nil {
+		t.Fatalf("ReadManifest: %v", err)
+	}
+	if got := manifest.UI.ProjectAttachments[0].Fields[0].Options[0]; got != "LIN-1" {
+		t.Fatalf("project attachment field option = %q", got)
+	}
+	reviewAction := manifest.UI.ReviewActions[0]
+	if reviewAction.TimeoutMs != manifestUICommandMaxTimeoutMs ||
+		reviewAction.OutputCapBytes != manifestCommandMaxOutputCapBytes {
+		t.Fatalf("review action limits = %#v", reviewAction)
+	}
+	viewPanel := manifest.UI.Panels[0]
+	if viewPanel.Kind != pluginUIPanelKindView ||
+		viewPanel.Read.TimeoutMs != manifestUICommandMaxTimeoutMs ||
+		viewPanel.Read.OutputCapBytes != manifestCommandMaxOutputCapBytes ||
+		viewPanel.Actions[0].TimeoutMs != 1 ||
+		viewPanel.Actions[0].OutputCapBytes != 2 {
+		t.Fatalf("view panel = %#v", viewPanel)
+	}
+	htmlPanel := manifest.UI.Panels[1]
+	if htmlPanel.Entry.Path != "./panel/" || htmlPanel.Entry.Forward != "" {
+		t.Fatalf("html panel entry = %#v", htmlPanel.Entry)
+	}
+	command := manifest.UI.Commands[0]
+	if command.TimeoutMs != manifestUICommandDefaultTimeoutMs ||
+		command.OutputCapBytes != manifestCommandDefaultOutputCapBytes {
+		t.Fatalf("ui command = %#v", command)
 	}
 }
 
@@ -406,6 +506,118 @@ func TestReadManifestRejectsInvalidV2Contributions(t *testing.T) {
 			}`,
 			want: `permissions.envPrefixes contains duplicate value "LINEAR_"`,
 		},
+		{
+			name: "project attachment label required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"ui": {"projectAttachments": [{"id": "attach", "provider": "github", "kind": "external", "command": "true"}]}
+			}`,
+			want: "ui.projectAttachments[attach].label required",
+		},
+		{
+			name: "project attachment duplicate field id",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"ui": {"projectAttachments": [{
+					"id": "attach",
+					"label": "Attach",
+					"provider": "github",
+					"kind": "external",
+					"command": "true",
+					"fields": [
+						{"id": "url", "label": "URL", "type": "text"},
+						{"id": " url ", "label": "URL", "type": "text"}
+					]
+				}]}
+			}`,
+			want: `ui.projectAttachments[attach].fields contains duplicate id "url"`,
+		},
+		{
+			name: "review action url or submit required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"ui": {"reviewActions": [{"id": "review", "label": "Review", "scope": "workItem"}]}
+			}`,
+			want: "ui.reviewActions[review].urlTemplate or submitCommand required",
+		},
+		{
+			name: "review action scope required to be known",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"ui": {"reviewActions": [{"id": "review", "label": "Review", "scope": "planet", "urlTemplate": "https://example.test"}]}
+			}`,
+			want: `ui.reviewActions[review].scope "planet" is unsupported`,
+		},
+		{
+			name: "ui panel read command required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"ui": {"panels": [{"id": "panel", "title": "Panel", "scope": "workItem"}]}
+			}`,
+			want: "ui.panels[panel].read.command required",
+		},
+		{
+			name: "ui panel unsupported kind",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"ui": {"panels": [{"id": "panel", "title": "Panel", "scope": "workItem", "kind": "native", "read": {"command": "true"}}]}
+			}`,
+			want: `ui.panels[panel].kind "native" is unsupported`,
+		},
+		{
+			name: "ui html panel entry required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"ui": {"panels": [{"id": "panel", "title": "Panel", "scope": "workItem", "kind": "html"}]}
+			}`,
+			want: "ui.panels[panel].entry.path or entry.forward required",
+		},
+		{
+			name: "ui panel action duplicate id",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"ui": {"panels": [{
+					"id": "panel",
+					"title": "Panel",
+					"scope": "workItem",
+					"read": {"command": "true"},
+					"actions": [
+						{"id": "sync", "label": "Sync", "command": "true"},
+						{"id": " sync ", "label": "Sync", "command": "true"}
+					]
+				}]}
+			}`,
+			want: `ui.panels[panel].actions contains duplicate id "sync"`,
+		},
+		{
+			name: "ui command scope required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"ui": {"commands": [{"id": "cmd", "label": "Command", "command": "true"}]}
+			}`,
+			want: "ui.commands[cmd].scope required",
+		},
+		{
+			name: "duplicate ui contribution id",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"ui": {
+					"panels": [{"id": "dup", "title": "Panel", "scope": "workItem", "read": {"command": "true"}}],
+					"commands": [{"id": "dup", "label": "Command", "scope": "global", "command": "true"}]
+				}
+			}`,
+			want: `duplicate manifest contribution id "dup"`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -522,14 +734,37 @@ func TestManagerScansEnvAndConfigPluginsAndTrustsLive(t *testing.T) {
 		"version": "0.1.0",
 		"resolvers": [{"provider": "github", "kinds": ["external"], "command": "printf '{\"delivery\":\"inline\",\"content\":\"ok\"}'"}],
 		"usageResolvers": [{"id": "github.usage", "provider": "github", "label": "GitHub", "profiles": ["codex"], "command": "printf '{}'"}],
-		"ui": {"projectAttachments": [{
-			"id": "github.issue",
-			"label": "GitHub Issue",
-			"provider": "github",
-			"kind": "external",
-			"command": "printf '{\"kind\":\"external\",\"provider\":\"github\",\"target\":\"owner/repo#1\",\"url\":\"https://github.com/owner/repo/issues/1\",\"title\":\"Issue\",\"includeInContext\":true}'",
-			"fields": [{"id":"url","label":"Issue URL","type":"text","required":true}]
-		}]}
+		"permissions": {"network": ["api.github.com"]},
+		"ui": {
+			"projectAttachments": [{
+				"id": "github.issue",
+				"label": "GitHub Issue",
+				"provider": "github",
+				"kind": "external",
+				"command": "printf '{\"kind\":\"external\",\"provider\":\"github\",\"target\":\"owner/repo#1\",\"url\":\"https://github.com/owner/repo/issues/1\",\"title\":\"Issue\",\"includeInContext\":true}'",
+				"fields": [{"id":"url","label":"Issue URL","type":"text","required":true}]
+			}],
+			"reviewActions": [{
+				"id": "github.review",
+				"label": "GitHub Review",
+				"scope": "workItem",
+				"urlTemplate": "https://github.com/{{project.id.url}}",
+				"submitCommand": "node ./fetch-review.mjs",
+				"blocking": true
+			}],
+			"panels": [{
+				"id": "github.issue.panel",
+				"title": "GitHub Issue",
+				"scope": "workItem",
+				"read": {"command": "node ./render.mjs"}
+			}],
+			"commands": [{
+				"id": "github.open",
+				"label": "GitHub: Open",
+				"scope": "global",
+				"command": "node ./open.mjs"
+			}]
+		}
 	}`)
 	envPlugin := filepath.Join(t.TempDir(), "docs")
 	writePlugin(t, envPlugin, `{"id":"docs","name":"Docs","version":"0.1.0"}`)
@@ -564,6 +799,27 @@ func TestManagerScansEnvAndConfigPluginsAndTrustsLive(t *testing.T) {
 	}
 	if resolver := manager.ResolveProjectAttachmentProvider("github"); resolver != nil {
 		t.Fatalf("untrusted resolver registered")
+	}
+	if githubStatus.Trusted {
+		t.Fatalf("github plugin should start untrusted")
+	}
+	if len(githubStatus.ProjectAttachmentTemplates) != 1 ||
+		len(githubStatus.UIPanels) != 1 ||
+		len(githubStatus.UICommands) != 1 ||
+		len(githubStatus.ReviewActions) != 1 {
+		t.Fatalf("untrusted catalog contributions = templates:%#v panels:%#v commands:%#v reviews:%#v",
+			githubStatus.ProjectAttachmentTemplates, githubStatus.UIPanels, githubStatus.UICommands, githubStatus.ReviewActions)
+	}
+	if githubStatus.UIPanels[0].ID != "github.issue.panel" ||
+		githubStatus.UIPanels[0].Kind != pluginUIPanelKindView ||
+		githubStatus.UIPanels[0].Read == nil ||
+		githubStatus.UICommands[0].ID != "github.open" ||
+		!githubStatus.ReviewActions[0].HasSubmit ||
+		!githubStatus.ReviewActions[0].Blocking ||
+		githubStatus.Permissions == nil ||
+		len(githubStatus.Permissions.Network) != 1 ||
+		githubStatus.Permissions.Network[0] != "api.github.com" {
+		t.Fatalf("untrusted github status = %#v", githubStatus)
 	}
 	if _, err := manager.TrustPlugin(context.Background(), "github"); err != nil {
 		t.Fatalf("trust: %v", err)

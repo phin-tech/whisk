@@ -82,9 +82,15 @@ from .onboarding_status import OnboardingStatus
 from .output_snapshot import OutputSnapshot
 from .pane import Pane
 from .plan_project_workflow_migration_request import PlanProjectWorkflowMigrationRequest
+from .plugin_permissions import PluginPermissions
 from .plugin_resolver import PluginResolver
+from .plugin_review_action import PluginReviewAction
 from .plugin_status import PluginStatus
 from .plugin_template_field import PluginTemplateField
+from .plugin_ui_command import PluginUICommand
+from .plugin_ui_command_ref import PluginUICommandRef
+from .plugin_ui_panel import PluginUIPanel
+from .plugin_ui_panel_entry import PluginUIPanelEntry
 from .plugin_usage_resolver import PluginUsageResolver
 from .project import Project
 from .project_attachment_template import ProjectAttachmentTemplate
@@ -270,9 +276,15 @@ __all__ = (
     "OutputSnapshot",
     "Pane",
     "PlanProjectWorkflowMigrationRequest",
+    "PluginPermissions",
     "PluginResolver",
+    "PluginReviewAction",
     "PluginStatus",
     "PluginTemplateField",
+    "PluginUICommand",
+    "PluginUICommandRef",
+    "PluginUIPanel",
+    "PluginUIPanelEntry",
     "PluginUsageResolver",
     "Project",
     "ProjectAttachmentTemplate",

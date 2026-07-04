@@ -45,6 +45,10 @@ type PluginStatus struct {
 	Resolvers                  []PluginResolver            `json:"resolvers,omitempty"`
 	UsageResolvers             []PluginUsageResolver       `json:"usageResolvers,omitempty"`
 	ProjectAttachmentTemplates []ProjectAttachmentTemplate `json:"projectAttachmentTemplates,omitempty"`
+	UIPanels                   []PluginUIPanel             `json:"uiPanels,omitempty"`
+	UICommands                 []PluginUICommand           `json:"uiCommands,omitempty"`
+	ReviewActions              []PluginReviewAction        `json:"reviewActions,omitempty"`
+	Permissions                *PluginPermissions          `json:"permissions,omitempty"`
 }
 
 type PluginResolver struct {
@@ -69,6 +73,55 @@ type ProjectAttachmentTemplate struct {
 	Provider string                `json:"provider"`
 	Kind     string                `json:"kind"`
 	Fields   []PluginTemplateField `json:"fields,omitempty"`
+}
+
+type PluginUIScope string
+
+type PluginUIPanel struct {
+	ID      string               `json:"id"`
+	Title   string               `json:"title"`
+	Scope   PluginUIScope        `json:"scope"`
+	Kind    string               `json:"kind"`
+	Read    *PluginUICommandRef  `json:"read,omitempty"`
+	Entry   *PluginUIPanelEntry  `json:"entry,omitempty"`
+	Actions []PluginUICommandRef `json:"actions,omitempty"`
+}
+
+type PluginUIPanelEntry struct {
+	Path    string `json:"path,omitempty"`
+	Forward string `json:"forward,omitempty"`
+}
+
+type PluginUICommand struct {
+	ID             string        `json:"id"`
+	Label          string        `json:"label"`
+	Scope          PluginUIScope `json:"scope"`
+	TimeoutMs      int           `json:"timeoutMs,omitempty"`
+	OutputCapBytes int           `json:"outputCapBytes,omitempty"`
+}
+
+type PluginUICommandRef struct {
+	ID             string `json:"id,omitempty"`
+	Label          string `json:"label,omitempty"`
+	TimeoutMs      int    `json:"timeoutMs,omitempty"`
+	OutputCapBytes int    `json:"outputCapBytes,omitempty"`
+}
+
+type PluginReviewAction struct {
+	ID             string        `json:"id"`
+	Label          string        `json:"label"`
+	Scope          PluginUIScope `json:"scope,omitempty"`
+	URLTemplate    string        `json:"urlTemplate,omitempty"`
+	HasSubmit      bool          `json:"hasSubmit,omitempty"`
+	Blocking       bool          `json:"blocking,omitempty"`
+	TimeoutMs      int           `json:"timeoutMs,omitempty"`
+	OutputCapBytes int           `json:"outputCapBytes,omitempty"`
+}
+
+type PluginPermissions struct {
+	PTYOutput   bool     `json:"ptyOutput,omitempty"`
+	EnvPrefixes []string `json:"envPrefixes,omitempty"`
+	Network     []string `json:"network,omitempty"`
 }
 
 type PluginTemplateField struct {

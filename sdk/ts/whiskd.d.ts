@@ -2367,9 +2367,26 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        PluginPermissions: {
+            envPrefixes?: string[];
+            network?: string[];
+            ptyOutput?: boolean;
+        };
         PluginResolver: {
             kinds?: string[];
             provider: string;
+        };
+        PluginReviewAction: {
+            blocking?: boolean;
+            hasSubmit?: boolean;
+            id: string;
+            label: string;
+            /** Format: int64 */
+            outputCapBytes?: number;
+            scope?: string;
+            /** Format: int64 */
+            timeoutMs?: number;
+            urlTemplate?: string;
         };
         PluginStatus: {
             dir: string;
@@ -2377,10 +2394,14 @@ export interface components {
             id: string;
             manifestPath: string;
             name: string;
+            permissions?: components["schemas"]["PluginPermissions"] | null;
             projectAttachmentTemplates?: components["schemas"]["ProjectAttachmentTemplate"][];
             registry?: string;
             resolvers?: components["schemas"]["PluginResolver"][];
+            reviewActions?: components["schemas"]["PluginReviewAction"][];
             trusted: boolean;
+            uiCommands?: components["schemas"]["PluginUICommand"][];
+            uiPanels?: components["schemas"]["PluginUIPanel"][];
             usageResolvers?: components["schemas"]["PluginUsageResolver"][];
             valid: boolean;
             version: string;
@@ -2392,6 +2413,36 @@ export interface components {
             placeholder?: string;
             required?: boolean;
             type: string;
+        };
+        PluginUICommand: {
+            id: string;
+            label: string;
+            /** Format: int64 */
+            outputCapBytes?: number;
+            scope: string;
+            /** Format: int64 */
+            timeoutMs?: number;
+        };
+        PluginUICommandRef: {
+            id?: string;
+            label?: string;
+            /** Format: int64 */
+            outputCapBytes?: number;
+            /** Format: int64 */
+            timeoutMs?: number;
+        };
+        PluginUIPanel: {
+            actions?: components["schemas"]["PluginUICommandRef"][];
+            entry?: components["schemas"]["PluginUIPanelEntry"] | null;
+            id: string;
+            kind: string;
+            read?: components["schemas"]["PluginUICommandRef"] | null;
+            scope: string;
+            title: string;
+        };
+        PluginUIPanelEntry: {
+            forward?: string;
+            path?: string;
         };
         PluginUsageResolver: {
             id: string;

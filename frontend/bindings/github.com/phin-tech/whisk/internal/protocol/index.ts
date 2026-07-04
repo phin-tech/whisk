@@ -69,9 +69,15 @@ export {
     PTYHistorySummary,
     PTYInfo,
     PlanProjectWorkflowMigrationRequest,
+    PluginPermissions,
     PluginResolver,
+    PluginReviewAction,
     PluginStatus,
     PluginTemplateField,
+    PluginUICommand,
+    PluginUICommandRef,
+    PluginUIPanel,
+    PluginUIPanelEntry,
     PluginUsageResolver,
     Project,
     ProjectAttachmentTemplate,
@@ -133,4 +139,8 @@ export {
     WorktrunkBinary,
     WorktrunkStatus,
     WritePTYRequest
+} from "./models.js";
+
+export type {
+    PluginUIScope
 } from "./models.js";

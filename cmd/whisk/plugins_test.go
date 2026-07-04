@@ -34,6 +34,71 @@ func TestRunPluginRegistryListsAvailable(t *testing.T) {
 	}
 }
 
+func TestRunPluginListJSONIncludesUICatalog(t *testing.T) {
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.Method + " " + r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `[{
+			"id":"github",
+			"name":"GitHub",
+			"version":"0.1.0",
+			"valid":true,
+			"trusted":false,
+			"uiPanels":[{"id":"github.issue.panel","title":"GitHub Issue","scope":"workItem","kind":"view","read":{"timeoutMs":10000}}],
+			"uiCommands":[{"id":"github.open","label":"GitHub: Open","scope":"global","timeoutMs":10000}],
+			"reviewActions":[{"id":"github.review","label":"GitHub Review","scope":"workItem","urlTemplate":"https://github.com/{{project.id.url}}","hasSubmit":true,"blocking":true}],
+			"permissions":{"network":["api.github.com"]}
+		}]`)
+	}))
+	defer server.Close()
+
+	out, err := captureStdout(func() error {
+		return runPluginList([]string{"-json", "-url", server.URL})
+	})
+	if err != nil {
+		t.Fatalf("runPluginList: %v", err)
+	}
+	if gotPath != "GET /v1/plugins" {
+		t.Fatalf("request = %q", gotPath)
+	}
+	for _, want := range []string{`"uiPanels"`, `"uiCommands"`, `"reviewActions"`, `"permissions"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %s: %q", want, out)
+		}
+	}
+}
+
+func TestRunPluginListTableRemainsSummaryOnly(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `[{
+			"id":"github",
+			"name":"GitHub",
+			"version":"0.1.0",
+			"valid":true,
+			"trusted":false,
+			"uiPanels":[{"id":"github.issue.panel","title":"GitHub Issue","scope":"workItem","kind":"view"}],
+			"uiCommands":[{"id":"github.open","label":"GitHub: Open","scope":"global"}],
+			"reviewActions":[{"id":"github.review","label":"GitHub Review","scope":"workItem"}]
+		}]`)
+	}))
+	defer server.Close()
+
+	out, err := captureStdout(func() error {
+		return runPluginList([]string{"-url", server.URL})
+	})
+	if err != nil {
+		t.Fatalf("runPluginList: %v", err)
+	}
+	if !strings.Contains(out, "ID") || !strings.Contains(out, "TRUSTED") || !strings.Contains(out, "VERSION") {
+		t.Fatalf("output missing stable columns: %q", out)
+	}
+	if strings.Contains(out, "github.issue.panel") || strings.Contains(out, "GitHub: Open") || strings.Contains(out, "github.review") {
+		t.Fatalf("table output included catalog details: %q", out)
+	}
+}
+
 func TestRunPluginInstallPostsRegistryAndID(t *testing.T) {
 	var gotPath string
 	var gotReq protocol.InstallRegistryPluginRequest

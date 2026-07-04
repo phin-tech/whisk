@@ -1899,6 +1899,34 @@ export class PlanProjectWorkflowMigrationRequest {
     }
 }
 
+export class PluginPermissions {
+    "ptyOutput"?: boolean;
+    "envPrefixes"?: string[];
+    "network"?: string[];
+
+    /** Creates a new PluginPermissions instance. */
+    constructor($$source: Partial<PluginPermissions> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PluginPermissions instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PluginPermissions {
+        const $$createField1_0 = $$createType6;
+        const $$createField2_0 = $$createType6;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("envPrefixes" in $$parsedSource) {
+            $$parsedSource["envPrefixes"] = $$createField1_0($$parsedSource["envPrefixes"]);
+        }
+        if ("network" in $$parsedSource) {
+            $$parsedSource["network"] = $$createField2_0($$parsedSource["network"]);
+        }
+        return new PluginPermissions($$parsedSource as Partial<PluginPermissions>);
+    }
+}
+
 export class PluginResolver {
     "provider": string;
     "kinds"?: string[];
@@ -1925,6 +1953,37 @@ export class PluginResolver {
     }
 }
 
+export class PluginReviewAction {
+    "id": string;
+    "label": string;
+    "scope"?: PluginUIScope;
+    "urlTemplate"?: string;
+    "hasSubmit"?: boolean;
+    "blocking"?: boolean;
+    "timeoutMs"?: number;
+    "outputCapBytes"?: number;
+
+    /** Creates a new PluginReviewAction instance. */
+    constructor($$source: Partial<PluginReviewAction> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PluginReviewAction instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PluginReviewAction {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PluginReviewAction($$parsedSource as Partial<PluginReviewAction>);
+    }
+}
+
 export class PluginStatus {
     "id": string;
     "registry"?: string;
@@ -1938,6 +1997,10 @@ export class PluginStatus {
     "resolvers"?: PluginResolver[];
     "usageResolvers"?: PluginUsageResolver[];
     "projectAttachmentTemplates"?: ProjectAttachmentTemplate[];
+    "uiPanels"?: PluginUIPanel[];
+    "uiCommands"?: PluginUICommand[];
+    "reviewActions"?: PluginReviewAction[];
+    "permissions"?: PluginPermissions | null;
 
     /** Creates a new PluginStatus instance. */
     constructor($$source: Partial<PluginStatus> = {}) {
@@ -1973,6 +2036,10 @@ export class PluginStatus {
         const $$createField9_0 = $$createType16;
         const $$createField10_0 = $$createType18;
         const $$createField11_0 = $$createType20;
+        const $$createField12_0 = $$createType22;
+        const $$createField13_0 = $$createType24;
+        const $$createField14_0 = $$createType26;
+        const $$createField15_0 = $$createType28;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("resolvers" in $$parsedSource) {
             $$parsedSource["resolvers"] = $$createField9_0($$parsedSource["resolvers"]);
@@ -1982,6 +2049,18 @@ export class PluginStatus {
         }
         if ("projectAttachmentTemplates" in $$parsedSource) {
             $$parsedSource["projectAttachmentTemplates"] = $$createField11_0($$parsedSource["projectAttachmentTemplates"]);
+        }
+        if ("uiPanels" in $$parsedSource) {
+            $$parsedSource["uiPanels"] = $$createField12_0($$parsedSource["uiPanels"]);
+        }
+        if ("uiCommands" in $$parsedSource) {
+            $$parsedSource["uiCommands"] = $$createField13_0($$parsedSource["uiCommands"]);
+        }
+        if ("reviewActions" in $$parsedSource) {
+            $$parsedSource["reviewActions"] = $$createField14_0($$parsedSource["reviewActions"]);
+        }
+        if ("permissions" in $$parsedSource) {
+            $$parsedSource["permissions"] = $$createField15_0($$parsedSource["permissions"]);
         }
         return new PluginStatus($$parsedSource as Partial<PluginStatus>);
     }
@@ -2022,6 +2101,127 @@ export class PluginTemplateField {
         return new PluginTemplateField($$parsedSource as Partial<PluginTemplateField>);
     }
 }
+
+export class PluginUICommand {
+    "id": string;
+    "label": string;
+    "scope": PluginUIScope;
+    "timeoutMs"?: number;
+    "outputCapBytes"?: number;
+
+    /** Creates a new PluginUICommand instance. */
+    constructor($$source: Partial<PluginUICommand> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("scope" in $$source)) {
+            this["scope"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PluginUICommand instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PluginUICommand {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PluginUICommand($$parsedSource as Partial<PluginUICommand>);
+    }
+}
+
+export class PluginUICommandRef {
+    "id"?: string;
+    "label"?: string;
+    "timeoutMs"?: number;
+    "outputCapBytes"?: number;
+
+    /** Creates a new PluginUICommandRef instance. */
+    constructor($$source: Partial<PluginUICommandRef> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PluginUICommandRef instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PluginUICommandRef {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PluginUICommandRef($$parsedSource as Partial<PluginUICommandRef>);
+    }
+}
+
+export class PluginUIPanel {
+    "id": string;
+    "title": string;
+    "scope": PluginUIScope;
+    "kind": string;
+    "read"?: PluginUICommandRef | null;
+    "entry"?: PluginUIPanelEntry | null;
+    "actions"?: PluginUICommandRef[];
+
+    /** Creates a new PluginUIPanel instance. */
+    constructor($$source: Partial<PluginUIPanel> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("scope" in $$source)) {
+            this["scope"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PluginUIPanel instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PluginUIPanel {
+        const $$createField4_0 = $$createType30;
+        const $$createField5_0 = $$createType32;
+        const $$createField6_0 = $$createType33;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("read" in $$parsedSource) {
+            $$parsedSource["read"] = $$createField4_0($$parsedSource["read"]);
+        }
+        if ("entry" in $$parsedSource) {
+            $$parsedSource["entry"] = $$createField5_0($$parsedSource["entry"]);
+        }
+        if ("actions" in $$parsedSource) {
+            $$parsedSource["actions"] = $$createField6_0($$parsedSource["actions"]);
+        }
+        return new PluginUIPanel($$parsedSource as Partial<PluginUIPanel>);
+    }
+}
+
+export class PluginUIPanelEntry {
+    "path"?: string;
+    "forward"?: string;
+
+    /** Creates a new PluginUIPanelEntry instance. */
+    constructor($$source: Partial<PluginUIPanelEntry> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PluginUIPanelEntry instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PluginUIPanelEntry {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PluginUIPanelEntry($$parsedSource as Partial<PluginUIPanelEntry>);
+    }
+}
+
+export type PluginUIScope = string;
 
 export class PluginUsageResolver {
     "id": string;
@@ -2093,7 +2293,7 @@ export class ProjectAttachmentTemplate {
      * Creates a new ProjectAttachmentTemplate instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectAttachmentTemplate {
-        const $$createField4_0 = $$createType22;
+        const $$createField4_0 = $$createType35;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("fields" in $$parsedSource) {
             $$parsedSource["fields"] = $$createField4_0($$parsedSource["fields"]);
@@ -2122,7 +2322,7 @@ export class ProjectContext {
      * Creates a new ProjectContext instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectContext {
-        const $$createField1_0 = $$createType24;
+        const $$createField1_0 = $$createType37;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField1_0($$parsedSource["items"]);
@@ -2195,10 +2395,10 @@ export class ProjectDetail {
      * Creates a new ProjectDetail instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectDetail {
-        const $$createField0_0 = $$createType25;
-        const $$createField1_0 = $$createType27;
-        const $$createField2_0 = $$createType28;
-        const $$createField3_0 = $$createType30;
+        const $$createField0_0 = $$createType38;
+        const $$createField1_0 = $$createType40;
+        const $$createField2_0 = $$createType41;
+        const $$createField3_0 = $$createType43;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("project" in $$parsedSource) {
             $$parsedSource["project"] = $$createField0_0($$parsedSource["project"]);
@@ -2395,9 +2595,9 @@ export class ReportStatusResponse {
      * Creates a new ReportStatusResponse instance from a string or object.
      */
     static createFrom($$source: any = {}): ReportStatusResponse {
-        const $$createField0_0 = $$createType31;
-        const $$createField1_0 = $$createType32;
-        const $$createField2_0 = $$createType33;
+        const $$createField0_0 = $$createType44;
+        const $$createField1_0 = $$createType45;
+        const $$createField2_0 = $$createType46;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("event" in $$parsedSource) {
             $$parsedSource["event"] = $$createField0_0($$parsedSource["event"]);
@@ -2567,7 +2767,7 @@ export class RunPluginProjectAttachmentTemplateRequest {
      * Creates a new RunPluginProjectAttachmentTemplateRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): RunPluginProjectAttachmentTemplateRequest {
-        const $$createField1_0 = $$createType34;
+        const $$createField1_0 = $$createType47;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("values" in $$parsedSource) {
             $$parsedSource["values"] = $$createField1_0($$parsedSource["values"]);
@@ -2896,9 +3096,9 @@ export class StartPTYOptions {
      * Creates a new StartPTYOptions instance from a string or object.
      */
     static createFrom($$source: any = {}): StartPTYOptions {
-        const $$createField3_0 = $$createType34;
+        const $$createField3_0 = $$createType47;
         const $$createField4_0 = $$createType6;
-        const $$createField6_0 = $$createType36;
+        const $$createField6_0 = $$createType49;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("env" in $$parsedSource) {
             $$parsedSource["env"] = $$createField3_0($$parsedSource["env"]);
@@ -3026,7 +3226,7 @@ export class StartedHTTPForward {
      * Creates a new StartedHTTPForward instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedHTTPForward {
-        const $$createField2_0 = $$createType37;
+        const $$createField2_0 = $$createType50;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("forward" in $$parsedSource) {
             $$parsedSource["forward"] = $$createField2_0($$parsedSource["forward"]);
@@ -3178,7 +3378,7 @@ export class UpdateProjectRequest {
      * Creates a new UpdateProjectRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): UpdateProjectRequest {
-        const $$createField4_0 = $$createType34;
+        const $$createField4_0 = $$createType47;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("defaultPhaseAgents" in $$parsedSource) {
             $$parsedSource["defaultPhaseAgents"] = $$createField4_0($$parsedSource["defaultPhaseAgents"]);
@@ -3381,7 +3581,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType38;
+        const $$createField2_0 = $$createType51;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -3437,21 +3637,34 @@ const $$createType17 = PluginUsageResolver.createFrom;
 const $$createType18 = $Create.Array($$createType17);
 const $$createType19 = ProjectAttachmentTemplate.createFrom;
 const $$createType20 = $Create.Array($$createType19);
-const $$createType21 = PluginTemplateField.createFrom;
+const $$createType21 = PluginUIPanel.createFrom;
 const $$createType22 = $Create.Array($$createType21);
-const $$createType23 = ProjectContextItem.createFrom;
+const $$createType23 = PluginUICommand.createFrom;
 const $$createType24 = $Create.Array($$createType23);
-const $$createType25 = workitem$0.Project.createFrom;
-const $$createType26 = workitem$0.WorkItem.createFrom;
-const $$createType27 = $Create.Array($$createType26);
-const $$createType28 = $Create.Array($$createType10);
-const $$createType29 = workitem$0.WorkItemRun.createFrom;
-const $$createType30 = $Create.Array($$createType29);
-const $$createType31 = workitem$0.StatusEvent.createFrom;
-const $$createType32 = $Create.Nullable($$createType29);
-const $$createType33 = $Create.Nullable($$createType26);
-const $$createType34 = $Create.Map($Create.Any, $Create.Any);
-const $$createType35 = StartPTYAgentBridgeOptions.createFrom;
-const $$createType36 = $Create.Nullable($$createType35);
-const $$createType37 = HTTPForward.createFrom;
-const $$createType38 = WorktrunkBinary.createFrom;
+const $$createType25 = PluginReviewAction.createFrom;
+const $$createType26 = $Create.Array($$createType25);
+const $$createType27 = PluginPermissions.createFrom;
+const $$createType28 = $Create.Nullable($$createType27);
+const $$createType29 = PluginUICommandRef.createFrom;
+const $$createType30 = $Create.Nullable($$createType29);
+const $$createType31 = PluginUIPanelEntry.createFrom;
+const $$createType32 = $Create.Nullable($$createType31);
+const $$createType33 = $Create.Array($$createType29);
+const $$createType34 = PluginTemplateField.createFrom;
+const $$createType35 = $Create.Array($$createType34);
+const $$createType36 = ProjectContextItem.createFrom;
+const $$createType37 = $Create.Array($$createType36);
+const $$createType38 = workitem$0.Project.createFrom;
+const $$createType39 = workitem$0.WorkItem.createFrom;
+const $$createType40 = $Create.Array($$createType39);
+const $$createType41 = $Create.Array($$createType10);
+const $$createType42 = workitem$0.WorkItemRun.createFrom;
+const $$createType43 = $Create.Array($$createType42);
+const $$createType44 = workitem$0.StatusEvent.createFrom;
+const $$createType45 = $Create.Nullable($$createType42);
+const $$createType46 = $Create.Nullable($$createType39);
+const $$createType47 = $Create.Map($Create.Any, $Create.Any);
+const $$createType48 = StartPTYAgentBridgeOptions.createFrom;
+const $$createType49 = $Create.Nullable($$createType48);
+const $$createType50 = HTTPForward.createFrom;
+const $$createType51 = WorktrunkBinary.createFrom;

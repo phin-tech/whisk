@@ -475,6 +475,14 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || len(plugins) != 1 || plugins[0].ID != "github" {
 		t.Fatalf("list plugins = %#v, err = %v", plugins, err)
 	}
+	if len(plugins[0].UIPanels) != 1 ||
+		plugins[0].UIPanels[0].Read == nil ||
+		len(plugins[0].UICommands) != 1 ||
+		len(plugins[0].ReviewActions) != 1 ||
+		plugins[0].Permissions == nil ||
+		len(plugins[0].Permissions.Network) != 1 {
+		t.Fatalf("plugin ui catalog = %#v", plugins[0])
+	}
 	plugins, err = service.RescanPlugins(ctx)
 	if err != nil || len(plugins) != 1 || !fake.rescanPluginsCalled {
 		t.Fatalf("rescan plugins = %#v, called = %v, err = %v", plugins, fake.rescanPluginsCalled, err)
@@ -1315,12 +1323,12 @@ func (f *runtimeClientFake) OpenAgentHookLog(context.Context) (protocol.AgentHoo
 }
 
 func (f *runtimeClientFake) ListPlugins(context.Context) ([]protocol.PluginStatus, error) {
-	return []protocol.PluginStatus{{ID: "github", Name: "GitHub", Trusted: true, Valid: true}}, nil
+	return []protocol.PluginStatus{fakePluginStatus()}, nil
 }
 
 func (f *runtimeClientFake) RescanPlugins(context.Context) ([]protocol.PluginStatus, error) {
 	f.rescanPluginsCalled = true
-	return []protocol.PluginStatus{{ID: "github", Name: "GitHub", Trusted: true, Valid: true}}, nil
+	return []protocol.PluginStatus{fakePluginStatus()}, nil
 }
 
 func (f *runtimeClientFake) TrustPlugin(_ context.Context, id string) (protocol.PluginStatus, error) {
@@ -1346,6 +1354,38 @@ func (f *runtimeClientFake) InstallPlugin(_ context.Context, registry, id string
 func (f *runtimeClientFake) RunPluginProjectAttachmentTemplate(_ context.Context, _ string, templateID string, _ protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error) {
 	f.runPluginTemplateID = templateID
 	return protocol.Project{ID: "proj_01", Attachments: []protocol.Attachment{{ID: "att_01", Kind: "external", Provider: "github"}}}, nil
+}
+
+func fakePluginStatus() protocol.PluginStatus {
+	return protocol.PluginStatus{
+		ID:      "github",
+		Name:    "GitHub",
+		Trusted: true,
+		Valid:   true,
+		UIPanels: []protocol.PluginUIPanel{{
+			ID:    "github.issue.panel",
+			Title: "GitHub Issue",
+			Scope: protocol.PluginUIScope("workItem"),
+			Kind:  "view",
+			Read:  &protocol.PluginUICommandRef{TimeoutMs: 10000, OutputCapBytes: 262144},
+		}},
+		UICommands: []protocol.PluginUICommand{{
+			ID:             "github.open",
+			Label:          "GitHub: Open",
+			Scope:          protocol.PluginUIScope("global"),
+			TimeoutMs:      10000,
+			OutputCapBytes: 262144,
+		}},
+		ReviewActions: []protocol.PluginReviewAction{{
+			ID:          "github.review",
+			Label:       "GitHub Review",
+			Scope:       protocol.PluginUIScope("workItem"),
+			URLTemplate: "https://github.com/{{project.id.url}}",
+			HasSubmit:   true,
+			Blocking:    true,
+		}},
+		Permissions: &protocol.PluginPermissions{Network: []string{"api.github.com"}},
+	}
 }
 
 func (f *runtimeClientFake) CreateHTTPForward(_ context.Context, req protocol.CreateHTTPForwardRequest) (protocol.HTTPForward, error) {
