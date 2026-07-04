@@ -203,13 +203,39 @@ func TestHTTPServerListsDetectedAgents(t *testing.T) {
 }
 
 func TestHTTPServerPluginRoutes(t *testing.T) {
-	plugins := &pluginRegistryFake{statuses: []app.PluginStatus{{ID: "github", Name: "GitHub", Valid: true}}}
+	plugins := &pluginRegistryFake{statuses: []app.PluginStatus{{
+		ID:    "github",
+		Name:  "GitHub",
+		Valid: true,
+		UsageResolvers: []app.PluginUsageResolver{{
+			ID:             "github.usage",
+			Provider:       "github",
+			Label:          "GitHub",
+			Profiles:       []string{"codex"},
+			TimeoutMs:      10000,
+			OutputCapBytes: 262144,
+			MinRefreshMs:   300000,
+			StaleAfterMs:   1800000,
+		}},
+	}}}
 	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: plugins})
 	handler := server.NewHTTP(runtime)
 
 	listed := getJSON[[]protocol.PluginStatus](t, handler, "/v1/plugins", http.StatusOK)
 	if len(listed) != 1 || listed[0].ID != "github" {
 		t.Fatalf("plugins = %#v", listed)
+	}
+	if len(listed[0].UsageResolvers) != 1 ||
+		listed[0].UsageResolvers[0].ID != "github.usage" ||
+		listed[0].UsageResolvers[0].Provider != "github" ||
+		listed[0].UsageResolvers[0].Label != "GitHub" ||
+		len(listed[0].UsageResolvers[0].Profiles) != 1 ||
+		listed[0].UsageResolvers[0].Profiles[0] != "codex" ||
+		listed[0].UsageResolvers[0].TimeoutMs != 10000 ||
+		listed[0].UsageResolvers[0].OutputCapBytes != 262144 ||
+		listed[0].UsageResolvers[0].MinRefreshMs != 300000 ||
+		listed[0].UsageResolvers[0].StaleAfterMs != 1800000 {
+		t.Fatalf("usage resolvers = %#v", listed[0].UsageResolvers)
 	}
 	registry := getJSON[[]protocol.RegistryPlugin](t, handler, "/v1/plugin-registry", http.StatusOK)
 	if len(registry) != 1 || registry[0].ID != "github" || registry[0].Registry != "phin-tech" || registry[0].SourceType != "path" {

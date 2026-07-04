@@ -43,12 +43,24 @@ type PluginStatus struct {
 	Valid                      bool                        `json:"valid"`
 	Error                      string                      `json:"error,omitempty"`
 	Resolvers                  []PluginResolver            `json:"resolvers,omitempty"`
+	UsageResolvers             []PluginUsageResolver       `json:"usageResolvers,omitempty"`
 	ProjectAttachmentTemplates []ProjectAttachmentTemplate `json:"projectAttachmentTemplates,omitempty"`
 }
 
 type PluginResolver struct {
 	Provider string   `json:"provider"`
 	Kinds    []string `json:"kinds,omitempty"`
+}
+
+type PluginUsageResolver struct {
+	ID             string   `json:"id"`
+	Provider       string   `json:"provider"`
+	Label          string   `json:"label"`
+	Profiles       []string `json:"profiles,omitempty"`
+	TimeoutMs      int      `json:"timeoutMs,omitempty"`
+	OutputCapBytes int      `json:"outputCapBytes,omitempty"`
+	MinRefreshMs   int      `json:"minRefreshMs,omitempty"`
+	StaleAfterMs   int      `json:"staleAfterMs,omitempty"`
 }
 
 type ProjectAttachmentTemplate struct {

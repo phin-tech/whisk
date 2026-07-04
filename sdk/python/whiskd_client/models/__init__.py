@@ -85,6 +85,7 @@ from .plan_project_workflow_migration_request import PlanProjectWorkflowMigratio
 from .plugin_resolver import PluginResolver
 from .plugin_status import PluginStatus
 from .plugin_template_field import PluginTemplateField
+from .plugin_usage_resolver import PluginUsageResolver
 from .project import Project
 from .project_attachment_template import ProjectAttachmentTemplate
 from .project_context import ProjectContext
@@ -272,6 +273,7 @@ __all__ = (
     "PluginResolver",
     "PluginStatus",
     "PluginTemplateField",
+    "PluginUsageResolver",
     "Project",
     "ProjectAttachmentTemplate",
     "ProjectContext",

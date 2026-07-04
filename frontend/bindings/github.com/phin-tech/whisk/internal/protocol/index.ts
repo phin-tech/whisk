@@ -72,6 +72,7 @@ export {
     PluginResolver,
     PluginStatus,
     PluginTemplateField,
+    PluginUsageResolver,
     Project,
     ProjectAttachmentTemplate,
     ProjectContext,

@@ -71,7 +71,8 @@ contribution kinds do not get silently ignored.
 ```
 
 Manifest version 2 also parses daemon-owned foundations for future plugin
-events, hooks, workflow gates/actions, and permission disclosures:
+events, hooks, usage resolvers, workflow gates/actions, and permission
+disclosures:
 
 ```json
 {
@@ -95,6 +96,19 @@ events, hooks, workflow gates/actions, and permission disclosures:
       "timeoutMs": 3000
     }
   ],
+  "usageResolvers": [
+    {
+      "id": "linear.usage",
+      "provider": "linear",
+      "label": "Linear",
+      "profiles": ["linear-agent"],
+      "command": "node ./usage.mjs",
+      "timeoutMs": 10000,
+      "outputCapBytes": 262144,
+      "minRefreshMs": 300000,
+      "staleAfterMs": 1800000
+    }
+  ],
   "permissions": {
     "ptyOutput": false,
     "envPrefixes": ["LINEAR_"],
@@ -104,8 +118,11 @@ events, hooks, workflow gates/actions, and permission disclosures:
 ```
 
 These version 2 sections are catalog foundations only in this release. Whisk
-does not dispatch plugin events, invoke blocking hooks, or run workflow
-gate/action commands yet.
+does not dispatch plugin events, invoke blocking hooks, run usage resolver
+commands, or run workflow gate/action commands yet. Usage resolvers are exposed
+as plugin catalog metadata so clients can see which providers a plugin will
+support in a later daemon-owned usage read model; they are not executed and do
+not create a usage cache in this slice.
 
 Attachment templates are declarative UI hints. Whisk renders the form and sends the values to the daemon. The plugin command receives JSON on stdin:
 

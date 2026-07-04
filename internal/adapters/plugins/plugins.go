@@ -21,6 +21,7 @@ type Manifest struct {
 	Name            string           `json:"name"`
 	Version         string           `json:"version"`
 	Resolvers       []Resolver       `json:"resolvers"`
+	UsageResolvers  []UsageResolver  `json:"usageResolvers,omitempty"`
 	AgentProfiles   []agents.Profile `json:"agentProfiles,omitempty"`
 	Events          []EventHandler   `json:"events,omitempty"`
 	Hooks           []HookHandler    `json:"hooks,omitempty"`
@@ -34,6 +35,18 @@ type Resolver struct {
 	Provider string   `json:"provider"`
 	Kinds    []string `json:"kinds"`
 	Command  string   `json:"command"`
+}
+
+type UsageResolver struct {
+	ID             string   `json:"id"`
+	Provider       string   `json:"provider"`
+	Label          string   `json:"label"`
+	Profiles       []string `json:"profiles,omitempty"`
+	Command        string   `json:"command"`
+	TimeoutMs      int      `json:"timeoutMs,omitempty"`
+	OutputCapBytes int      `json:"outputCapBytes,omitempty"`
+	MinRefreshMs   int      `json:"minRefreshMs,omitempty"`
+	StaleAfterMs   int      `json:"staleAfterMs,omitempty"`
 }
 
 type UI struct {
@@ -134,6 +147,8 @@ const (
 	manifestWorkflowActionMaxTimeoutMs     = 30000
 	manifestGateDefaultTimeoutMs           = 10000
 	manifestGateMaxTimeoutMs               = 30000
+	manifestUsageResolverDefaultTimeoutMs  = 10000
+	manifestUsageResolverMaxTimeoutMs      = 30000
 
 	manifestCommandDefaultOutputCapBytes = 1 << 20
 	manifestCommandMaxOutputCapBytes     = 4 << 20
@@ -481,6 +496,22 @@ func statusFromManifest(registry, dir string, manifest Manifest, trusted bool) a
 		}
 		resolvers = append(resolvers, app.PluginResolver{Provider: strings.TrimSpace(resolver.Provider), Kinds: resolver.Kinds})
 	}
+	usageResolvers := make([]app.PluginUsageResolver, 0, len(manifest.UsageResolvers))
+	for _, resolver := range manifest.UsageResolvers {
+		if strings.TrimSpace(resolver.ID) == "" || strings.TrimSpace(resolver.Provider) == "" {
+			continue
+		}
+		usageResolvers = append(usageResolvers, app.PluginUsageResolver{
+			ID:             resolver.ID,
+			Provider:       resolver.Provider,
+			Label:          resolver.Label,
+			Profiles:       resolver.Profiles,
+			TimeoutMs:      resolver.TimeoutMs,
+			OutputCapBytes: resolver.OutputCapBytes,
+			MinRefreshMs:   resolver.MinRefreshMs,
+			StaleAfterMs:   resolver.StaleAfterMs,
+		})
+	}
 	templates := make([]app.ProjectAttachmentTemplate, 0, len(manifest.UI.ProjectAttachments))
 	for _, action := range manifest.UI.ProjectAttachments {
 		if strings.TrimSpace(action.ID) == "" {
@@ -504,6 +535,7 @@ func statusFromManifest(registry, dir string, manifest Manifest, trusted bool) a
 		Trusted:                    trusted,
 		Valid:                      true,
 		Resolvers:                  resolvers,
+		UsageResolvers:             usageResolvers,
 		ProjectAttachmentTemplates: templates,
 	}
 }
@@ -664,6 +696,7 @@ func unknownManifestV2Fields(raw map[string]json.RawMessage) []string {
 		"name":            true,
 		"version":         true,
 		"resolvers":       true,
+		"usageResolvers":  true,
 		"agentProfiles":   true,
 		"events":          true,
 		"hooks":           true,
@@ -688,6 +721,7 @@ func validateManifest(manifest *Manifest) error {
 	}
 	if manifest.ManifestVersion == defaultManifestVersion {
 		manifest.AgentProfiles = nil
+		manifest.UsageResolvers = nil
 		return nil
 	}
 	return validateManifestV2(manifest)
@@ -771,6 +805,53 @@ func validateManifestV2(manifest *Manifest) error {
 		}
 		event.TimeoutMs = limits.TimeoutMs
 		event.OutputCapBytes = limits.OutputCapBytes
+	}
+	for i := range manifest.UsageResolvers {
+		resolver := &manifest.UsageResolvers[i]
+		id := strings.TrimSpace(resolver.ID)
+		if id == "" {
+			return fmt.Errorf("usageResolvers[%d].id required", i)
+		}
+		if err := recordManifestContributionID(seenContributionIDs, id, "usageResolvers"); err != nil {
+			return err
+		}
+		resolver.ID = id
+		resolver.Provider = strings.TrimSpace(resolver.Provider)
+		if resolver.Provider == "" {
+			return fmt.Errorf("usageResolvers[%s].provider required", id)
+		}
+		resolver.Label = strings.TrimSpace(resolver.Label)
+		if resolver.Label == "" {
+			return fmt.Errorf("usageResolvers[%s].label required", id)
+		}
+		resolver.Command = strings.TrimSpace(resolver.Command)
+		if resolver.Command == "" {
+			return fmt.Errorf("usageResolvers[%s].command required", id)
+		}
+		seenProfiles := map[string]bool{}
+		for j, profile := range resolver.Profiles {
+			profile = strings.TrimSpace(profile)
+			if profile == "" {
+				return fmt.Errorf("usageResolvers[%s].profiles[%d] required", id, j)
+			}
+			if seenProfiles[profile] {
+				return fmt.Errorf("usageResolvers[%s].profiles contains duplicate value %q", id, profile)
+			}
+			seenProfiles[profile] = true
+			resolver.Profiles[j] = profile
+		}
+		if resolver.MinRefreshMs < 0 {
+			return fmt.Errorf("usageResolvers[%s].minRefreshMs must be non-negative", id)
+		}
+		if resolver.StaleAfterMs < 0 {
+			return fmt.Errorf("usageResolvers[%s].staleAfterMs must be non-negative", id)
+		}
+		limits, err := normalizeManifestCommandLimits("usageResolver", resolver.TimeoutMs, resolver.OutputCapBytes)
+		if err != nil {
+			return fmt.Errorf("usageResolvers[%s]: %w", id, err)
+		}
+		resolver.TimeoutMs = limits.TimeoutMs
+		resolver.OutputCapBytes = limits.OutputCapBytes
 	}
 	for i := range manifest.Hooks {
 		hook := &manifest.Hooks[i]
@@ -948,6 +1029,8 @@ func manifestCommandTimeoutBounds(kind string) (int, int, bool) {
 		return manifestGateDefaultTimeoutMs, manifestGateMaxTimeoutMs, true
 	case "workflowAction":
 		return manifestWorkflowActionDefaultTimeoutMs, manifestWorkflowActionMaxTimeoutMs, true
+	case "usageResolver":
+		return manifestUsageResolverDefaultTimeoutMs, manifestUsageResolverMaxTimeoutMs, true
 	default:
 		return 0, 0, false
 	}

@@ -10,6 +10,7 @@ from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
     from ..models.plugin_resolver import PluginResolver
+    from ..models.plugin_usage_resolver import PluginUsageResolver
     from ..models.project_attachment_template import ProjectAttachmentTemplate
 
 
@@ -31,6 +32,7 @@ class PluginStatus:
         project_attachment_templates (list[ProjectAttachmentTemplate] | Unset):
         registry (str | Unset):
         resolvers (list[PluginResolver] | Unset):
+        usage_resolvers (list[PluginUsageResolver] | Unset):
     """
 
     dir_: str
@@ -44,6 +46,7 @@ class PluginStatus:
     project_attachment_templates: list[ProjectAttachmentTemplate] | Unset = UNSET
     registry: str | Unset = UNSET
     resolvers: list[PluginResolver] | Unset = UNSET
+    usage_resolvers: list[PluginUsageResolver] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -83,6 +86,13 @@ class PluginStatus:
                 resolvers_item = resolvers_item_data.to_dict()
                 resolvers.append(resolvers_item)
 
+        usage_resolvers: list[dict[str, Any]] | Unset = UNSET
+        if not isinstance(self.usage_resolvers, Unset):
+            usage_resolvers = []
+            for usage_resolvers_item_data in self.usage_resolvers:
+                usage_resolvers_item = usage_resolvers_item_data.to_dict()
+                usage_resolvers.append(usage_resolvers_item)
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -104,12 +114,15 @@ class PluginStatus:
             field_dict["registry"] = registry
         if resolvers is not UNSET:
             field_dict["resolvers"] = resolvers
+        if usage_resolvers is not UNSET:
+            field_dict["usageResolvers"] = usage_resolvers
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.plugin_resolver import PluginResolver
+        from ..models.plugin_usage_resolver import PluginUsageResolver
         from ..models.project_attachment_template import ProjectAttachmentTemplate
 
         d = dict(src_dict)
@@ -151,6 +164,17 @@ class PluginStatus:
 
                 resolvers.append(resolvers_item)
 
+        _usage_resolvers = d.pop("usageResolvers", UNSET)
+        usage_resolvers: list[PluginUsageResolver] | Unset = UNSET
+        if _usage_resolvers is not UNSET:
+            usage_resolvers = []
+            for usage_resolvers_item_data in _usage_resolvers:
+                usage_resolvers_item = PluginUsageResolver.from_dict(
+                    usage_resolvers_item_data
+                )
+
+                usage_resolvers.append(usage_resolvers_item)
+
         plugin_status = cls(
             dir_=dir_,
             id=id,
@@ -163,6 +187,7 @@ class PluginStatus:
             project_attachment_templates=project_attachment_templates,
             registry=registry,
             resolvers=resolvers,
+            usage_resolvers=usage_resolvers,
         )
 
         plugin_status.additional_properties = d
