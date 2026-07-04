@@ -49,6 +49,33 @@ func TestListUIContributionsRouteIncludesEntityScopeQuery(t *testing.T) {
 	}
 }
 
+func TestUsageResolverRoutesUsePluginTagAndReadModels(t *testing.T) {
+	list, ok := routeByOperationID("listUsageResolvers")
+	if !ok {
+		t.Fatalf("listUsageResolvers route missing")
+	}
+	if list.Method != "GET" || list.Path != "/v1/usage-resolvers" || list.Tag != "plugins" {
+		t.Fatalf("list route = %#v", list)
+	}
+	if _, ok := list.Response.([]UsageResolverReadModel); !ok {
+		t.Fatalf("listUsageResolvers response = %T, want []UsageResolverReadModel", list.Response)
+	}
+
+	refresh, ok := routeByOperationID("refreshUsageResolver")
+	if !ok {
+		t.Fatalf("refreshUsageResolver route missing")
+	}
+	if refresh.Method != "POST" || refresh.Path != "/v1/plugins/{pluginID}/usage-resolvers/{resolverID}/refresh" || refresh.Tag != "plugins" {
+		t.Fatalf("refresh route = %#v", refresh)
+	}
+	if _, ok := refresh.Request.(RefreshUsageResolverRequest); !ok {
+		t.Fatalf("refreshUsageResolver request = %T, want RefreshUsageResolverRequest", refresh.Request)
+	}
+	if _, ok := refresh.Response.(UsageResolverReadModel); !ok {
+		t.Fatalf("refreshUsageResolver response = %T, want UsageResolverReadModel", refresh.Response)
+	}
+}
+
 func TestAPIRoutesDoNotExposePTYBookmarks(t *testing.T) {
 	for _, route := range APIRoutes {
 		if route.OperationID == "addPTYBookmark" || route.OperationID == "listPTYBookmarks" || route.OperationID == "removePTYBookmark" {

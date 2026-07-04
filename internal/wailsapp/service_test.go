@@ -1330,6 +1330,14 @@ func (f *runtimeClientFake) ListPlugins(context.Context) ([]protocol.PluginStatu
 	return []protocol.PluginStatus{fakePluginStatus()}, nil
 }
 
+func (f *runtimeClientFake) ListUsageResolvers(context.Context) ([]protocol.UsageResolverReadModel, error) {
+	return nil, nil
+}
+
+func (f *runtimeClientFake) RefreshUsageResolver(context.Context, string, string, protocol.RefreshUsageResolverRequest) (protocol.UsageResolverReadModel, error) {
+	return protocol.UsageResolverReadModel{}, nil
+}
+
 func (f *runtimeClientFake) ListUIContributions(_ context.Context, scope protocol.UIContributionScope) (protocol.UIContributionsResponse, error) {
 	return protocol.UIContributionsResponse{Scope: scope, Plugins: []protocol.UIContributionPlugin{{
 		PluginID: "github",

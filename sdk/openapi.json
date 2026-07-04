@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "27",
+    "version": "28",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -1956,6 +1956,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PluginStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/plugins/{pluginID}/usage-resolvers/{resolverID}/refresh": {
+      "post": {
+        "operationId": "refreshUsageResolver",
+        "summary": "Refresh one trusted plugin usage resolver",
+        "tags": [
+          "plugins"
+        ],
+        "parameters": [
+          {
+            "name": "pluginID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resolverID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshUsageResolverRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResolverReadModel"
                 }
               }
             },
@@ -4013,6 +4077,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UIContributionsResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/usage-resolvers": {
+      "get": {
+        "operationId": "listUsageResolvers",
+        "summary": "List daemon-owned usage resolver results",
+        "tags": [
+          "plugins"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UsageResolverReadModel"
+                  },
+                  "type": "array"
                 }
               }
             },
@@ -8683,6 +8786,14 @@
         ],
         "type": "object"
       },
+      "RefreshUsageResolverRequest": {
+        "properties": {
+          "profile": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "RegistryPlugin": {
         "properties": {
           "description": {
@@ -9752,6 +9863,138 @@
         },
         "required": [
           "id"
+        ],
+        "type": "object"
+      },
+      "UsageResolverMetric": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "limit": {
+            "nullable": true,
+            "type": "number"
+          },
+          "remaining": {
+            "nullable": true,
+            "type": "number"
+          },
+          "resetAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "used": {
+            "nullable": true,
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "UsageResolverReadModel": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "minRefreshMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pluginId": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "refreshedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "resolverId": {
+            "type": "string"
+          },
+          "result": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsageResolverResult"
+              }
+            ],
+            "nullable": true
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "staleAfterMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "trusted": {
+            "type": "boolean"
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pluginId",
+          "resolverId",
+          "provider",
+          "label",
+          "trusted",
+          "valid",
+          "status"
+        ],
+        "type": "object"
+      },
+      "UsageResolverResult": {
+        "properties": {
+          "fetchedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "meta": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/UsageResolverMetric"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "metrics"
         ],
         "type": "object"
       },

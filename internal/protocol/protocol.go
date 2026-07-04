@@ -11,7 +11,7 @@ import (
 
 const (
 	// ProtocolVersion is the canonical daemon/client wire protocol version.
-	ProtocolVersion = 27
+	ProtocolVersion = 28
 	// DaemonAPIVersion is the legacy name kept for old clients and tooling.
 	DaemonAPIVersion = ProtocolVersion
 )
@@ -534,6 +534,45 @@ type PluginUsageResolver struct {
 	OutputCapBytes int      `json:"outputCapBytes,omitempty"`
 	MinRefreshMs   int      `json:"minRefreshMs,omitempty"`
 	StaleAfterMs   int      `json:"staleAfterMs,omitempty"`
+}
+
+type RefreshUsageResolverRequest struct {
+	Profile string `json:"profile,omitempty"`
+}
+
+type UsageResolverReadModel struct {
+	PluginID     string               `json:"pluginId"`
+	ResolverID   string               `json:"resolverId"`
+	Provider     string               `json:"provider"`
+	Label        string               `json:"label"`
+	Profile      string               `json:"profile,omitempty"`
+	Trusted      bool                 `json:"trusted"`
+	Valid        bool                 `json:"valid"`
+	Status       string               `json:"status"`
+	Error        string               `json:"error,omitempty"`
+	RefreshedAt  *time.Time           `json:"refreshedAt,omitempty"`
+	Stale        bool                 `json:"stale,omitempty"`
+	MinRefreshMs int                  `json:"minRefreshMs,omitempty"`
+	StaleAfterMs int                  `json:"staleAfterMs,omitempty"`
+	Result       *UsageResolverResult `json:"result,omitempty"`
+}
+
+type UsageResolverResult struct {
+	Summary   string                `json:"summary,omitempty"`
+	Metrics   []UsageResolverMetric `json:"metrics"`
+	FetchedAt *time.Time            `json:"fetchedAt,omitempty"`
+	Meta      map[string]string     `json:"meta,omitempty"`
+}
+
+type UsageResolverMetric struct {
+	ID        string     `json:"id"`
+	Kind      string     `json:"kind"`
+	Label     string     `json:"label,omitempty"`
+	Unit      string     `json:"unit,omitempty"`
+	Used      *float64   `json:"used,omitempty"`
+	Limit     *float64   `json:"limit,omitempty"`
+	Remaining *float64   `json:"remaining,omitempty"`
+	ResetAt   *time.Time `json:"resetAt,omitempty"`
 }
 
 type ProjectAttachmentTemplate struct {

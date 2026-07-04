@@ -134,6 +134,8 @@ func NewHTTP(runtime *app.Runtime, optionFns ...HTTPOption) http.Handler {
 	mux.HandleFunc("POST /v1/plugins/{pluginID}/trust", server.trustPlugin)
 	mux.HandleFunc("POST /v1/plugins/{pluginID}/untrust", server.untrustPlugin)
 	mux.HandleFunc("POST /v1/plugins/{pluginID}/project-attachment-templates/{templateID}", server.runPluginProjectAttachmentTemplate)
+	mux.HandleFunc("GET /v1/usage-resolvers", server.listUsageResolvers)
+	mux.HandleFunc("POST /v1/plugins/{pluginID}/usage-resolvers/{resolverID}/refresh", server.refreshUsageResolver)
 	mux.HandleFunc("GET /v1/ui-contributions", server.listUIContributions)
 	mux.HandleFunc("GET /v1/sessions", server.listSessions)
 	mux.HandleFunc("POST /v1/sessions", server.createSession)

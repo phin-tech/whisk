@@ -113,6 +113,7 @@ from .ready_blocker_info import ReadyBlockerInfo
 from .ready_work_explanation import ReadyWorkExplanation
 from .ready_work_item import ReadyWorkItem
 from .ready_work_summary import ReadyWorkSummary
+from .refresh_usage_resolver_request import RefreshUsageResolverRequest
 from .registry_plugin import RegistryPlugin
 from .remove_worktree_request import RemoveWorktreeRequest
 from .reply_mail_request import ReplyMailRequest
@@ -165,6 +166,10 @@ from .update_project_request_default_phase_agents import (
     UpdateProjectRequestDefaultPhaseAgents,
 )
 from .update_work_item_request import UpdateWorkItemRequest
+from .usage_resolver_metric import UsageResolverMetric
+from .usage_resolver_read_model import UsageResolverReadModel
+from .usage_resolver_result import UsageResolverResult
+from .usage_resolver_result_meta import UsageResolverResultMeta
 from .validate_workflow_definition_file_request import (
     ValidateWorkflowDefinitionFileRequest,
 )
@@ -308,6 +313,7 @@ __all__ = (
     "ReadyWorkExplanation",
     "ReadyWorkItem",
     "ReadyWorkSummary",
+    "RefreshUsageResolverRequest",
     "RegistryPlugin",
     "RemoveWorktreeRequest",
     "ReplyMailRequest",
@@ -354,6 +360,10 @@ __all__ = (
     "UpdateProjectRequest",
     "UpdateProjectRequestDefaultPhaseAgents",
     "UpdateWorkItemRequest",
+    "UsageResolverMetric",
+    "UsageResolverReadModel",
+    "UsageResolverResult",
+    "UsageResolverResultMeta",
     "ValidateWorkflowDefinitionFileRequest",
     "ValidateWorkflowDefinitionRequest",
     "WorkflowActionAvailability",

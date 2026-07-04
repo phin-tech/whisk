@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/phin-tech/whisk/internal/adapters/agents"
 	"github.com/phin-tech/whisk/internal/app"
@@ -420,6 +421,60 @@ func (m *Manager) RunProjectAttachmentTemplate(ctx context.Context, req app.RunP
 		IncludeInContext: out.IncludeInContext,
 		Meta:             out.Meta,
 	}, nil
+}
+
+func (m *Manager) RunUsageResolver(ctx context.Context, req app.RunUsageResolverRequest) (app.UsageResolverResult, error) {
+	m.mu.RLock()
+	manifest, ok := m.manifests[req.PluginID]
+	dir := m.dirs[req.PluginID]
+	trusted := m.trusted[req.PluginID]
+	m.mu.RUnlock()
+	if !ok {
+		return app.UsageResolverResult{}, fmt.Errorf("plugin %s not found", req.PluginID)
+	}
+	if manifest.ManifestVersion != supportedManifestVersion {
+		return app.UsageResolverResult{}, fmt.Errorf("plugin %s does not declare manifestVersion 2 usage resolvers", req.PluginID)
+	}
+	if !trusted {
+		return app.UsageResolverResult{}, fmt.Errorf("plugin %s is not trusted", req.PluginID)
+	}
+	var resolver UsageResolver
+	for _, candidate := range manifest.UsageResolvers {
+		if candidate.ID == req.ResolverID {
+			resolver = candidate
+			break
+		}
+	}
+	if resolver.ID == "" {
+		return app.UsageResolverResult{}, fmt.Errorf("usage resolver %s not found", req.ResolverID)
+	}
+	input := struct {
+		PluginID   string `json:"pluginId"`
+		ResolverID string `json:"resolverId"`
+		Provider   string `json:"provider"`
+		Profile    string `json:"profile,omitempty"`
+	}{
+		PluginID:   req.PluginID,
+		ResolverID: req.ResolverID,
+		Provider:   resolver.Provider,
+		Profile:    req.Profile,
+	}
+	result, err := runPluginCommand(ctx, PluginCommandRequest{
+		PluginID:       req.PluginID,
+		Dir:            dir,
+		Command:        resolver.Command,
+		Input:          input,
+		Timeout:        time.Duration(resolver.TimeoutMs) * time.Millisecond,
+		StdoutCapBytes: resolver.OutputCapBytes,
+	})
+	if err != nil {
+		return app.UsageResolverResult{}, err
+	}
+	var out app.UsageResolverResult
+	if err := json.Unmarshal(result.Stdout, &out); err != nil {
+		return app.UsageResolverResult{}, fmt.Errorf("decode usage resolver %s output: %w", req.ResolverID, err)
+	}
+	return app.NormalizeUsageResolverResult(out)
 }
 
 func (m *Manager) ResolveProjectAttachmentProvider(provider string) app.ProjectContextResolver {

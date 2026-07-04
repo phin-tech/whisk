@@ -50,6 +50,7 @@ var (
 	apiAgentPromptList          = []AgentPrompt(nil)
 	apiAgentHookIntegrationList = []AgentHookIntegration(nil)
 	apiPluginList               = []PluginStatus(nil)
+	apiUsageResolverList        = []UsageResolverReadModel(nil)
 	apiRegistryPluginList       = []RegistryPlugin(nil)
 	apiUIContributionsResponse  = UIContributionsResponse{}
 )
@@ -82,6 +83,8 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/plugins/{pluginID}/trust", OperationID: "trustPlugin", Tag: "plugins", Summary: "Trust a discovered plugin", Response: PluginStatus{}},
 	{Method: "POST", Path: "/v1/plugins/{pluginID}/untrust", OperationID: "untrustPlugin", Tag: "plugins", Summary: "Untrust a discovered plugin", Response: PluginStatus{}},
 	{Method: "POST", Path: "/v1/plugins/{pluginID}/project-attachment-templates/{templateID}", OperationID: "runPluginProjectAttachmentTemplate", Tag: "plugins", Summary: "Run a trusted plugin project attachment template", Request: RunPluginProjectAttachmentTemplateRequest{}, Response: Project{}, Status: 201},
+	{Method: "GET", Path: "/v1/usage-resolvers", OperationID: "listUsageResolvers", Tag: "plugins", Summary: "List daemon-owned usage resolver results", Response: apiUsageResolverList},
+	{Method: "POST", Path: "/v1/plugins/{pluginID}/usage-resolvers/{resolverID}/refresh", OperationID: "refreshUsageResolver", Tag: "plugins", Summary: "Refresh one trusted plugin usage resolver", Request: RefreshUsageResolverRequest{}, Response: UsageResolverReadModel{}},
 	{Method: "GET", Path: "/v1/ui-contributions", OperationID: "listUIContributions", Tag: "plugins", Summary: "Get aggregated UI contributions scoped to an entity", Response: apiUIContributionsResponse, Query: []APIQueryParam{
 		{Name: "projectId", Type: "string"},
 		{Name: "workItemId", Type: "string"},
