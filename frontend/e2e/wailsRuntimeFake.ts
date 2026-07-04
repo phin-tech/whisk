@@ -36,6 +36,8 @@ const seedActivePTY =
   seedLongPTY || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2ePty"));
 const seedLargeWorkBoard =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eLargeWorkBoard");
+const seedStaleRun =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eStaleRun");
 const longPTYOutput = Array.from(
   { length: 90 },
   (_, index) => `scrollback line ${String(index).padStart(2, "0")}\n`,
@@ -326,6 +328,24 @@ function seedState() {
         updatedAt: now,
         history: [],
       },
+      ...(seedStaleRun
+        ? [
+            {
+              id: "run_stale",
+              workItemId: "wi_dependency",
+              projectId: "proj_01",
+              preset: "writer",
+              promptTemplateId: "execution",
+              promptSnapshot: "Run with stale terminal references",
+              sessionId: "sess_missing",
+              ptyId: "pty_missing",
+              status: "running",
+              createdAt: now,
+              updatedAt: now,
+              history: [],
+            },
+          ]
+        : []),
     ],
     artifacts: [
       {

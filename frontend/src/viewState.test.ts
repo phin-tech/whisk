@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLIENT_VIEW_STATE_KEY,
   LEGACY_UI_SETTINGS_KEY,
+  MAX_RECENT_JUMP_TARGETS,
   MAX_TERMINAL_FONT_SIZE,
   MIN_TERMINAL_FONT_SIZE,
   defaultClientViewState,
@@ -61,6 +62,15 @@ describe("client view state parsing", () => {
         commandPalette: {
           recentCommandIds: ["work.refresh", "session.new", "work.refresh", " ", "preferences.open"],
         },
+        jumpPalette: {
+          recentTargetIds: [
+            "session:sess_1",
+            "work-item:item_2",
+            "session:sess_1",
+            "",
+            "project:proj_3",
+          ],
+        },
       }),
     );
 
@@ -90,6 +100,11 @@ describe("client view state parsing", () => {
       "work.refresh",
       "session.new",
       "preferences.open",
+    ]);
+    expect(state.jumpPalette.recentTargetIds).toEqual([
+      "session:sess_1",
+      "work-item:item_2",
+      "project:proj_3",
     ]);
   });
 
@@ -382,6 +397,23 @@ describe("storage helpers", () => {
       version: 1,
       commandPalette: { recentCommandIds: ["b", "a"] },
     });
+  });
+
+  it("returns fresh jump palette defaults when no stored data exists", () => {
+    expect(defaultClientViewState().jumpPalette).toEqual({ recentTargetIds: [] });
+  });
+
+  it("sanitizes jump palette recent target ids, dedupes, and clamps to max", () => {
+    const many = Array.from({ length: MAX_RECENT_JUMP_TARGETS + 5 }, (_, i) => `target:${i}`);
+    const state = parseClientViewState(
+      JSON.stringify({
+        version: 1,
+        jumpPalette: { recentTargetIds: many },
+      }),
+    );
+
+    expect(state.jumpPalette.recentTargetIds).toHaveLength(MAX_RECENT_JUMP_TARGETS);
+    expect(state.jumpPalette.recentTargetIds).toEqual(many.slice(0, MAX_RECENT_JUMP_TARGETS));
   });
 });
 
