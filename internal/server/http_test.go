@@ -485,6 +485,48 @@ func TestHTTPServerAttachesPTYWebSocketOutputStream(t *testing.T) {
 	}
 }
 
+func TestHTTPServerAttachesPTYWebSocketBinaryOutputStream(t *testing.T) {
+	backend := newFakePTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
+	handler := server.NewHTTP(runtime)
+	httpServer := httptest.NewServer(handler)
+	defer httpServer.Close()
+
+	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    t.TempDir(),
+		InitialPTY: &protocol.StartPTYOptions{Cols: 80, Rows: 24},
+	}, http.StatusCreated)
+	postNoContent(t, handler, "/v1/ptys/"+created.MainPtyID+"/write", protocol.WritePTYRequest{Data: "hello"})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, strings.Replace(httpServer.URL, "http", "ws", 1)+"/v1/ptys/"+created.MainPtyID+"/attach?from=1&binary=1", nil)
+	if err != nil {
+		t.Fatalf("dial attach: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	replayOffset, replay := readPTYBinaryOutputFrame(t, ctx, conn)
+	if replayOffset != 1 || string(replay) != "ello" {
+		t.Fatalf("replay frame offset=%d output=%q", replayOffset, replay)
+	}
+
+	postNoContent(t, handler, "/v1/ptys/"+created.MainPtyID+"/write", protocol.WritePTYRequest{Data: "!"})
+	liveOffset, live := readPTYBinaryOutputFrame(t, ctx, conn)
+	if liveOffset != 5 || string(live) != "!" {
+		t.Fatalf("live frame offset=%d output=%q", liveOffset, live)
+	}
+
+	if err := conn.Write(ctx, websocket.MessageText, []byte(`{"type":"input","ptyId":"`+created.MainPtyID+`","data":"?"}`)); err != nil {
+		t.Fatalf("write websocket input: %v", err)
+	}
+	inputOffset, inputEcho := readPTYBinaryOutputFrame(t, ctx, conn)
+	if inputOffset != 6 || string(inputEcho) != "?" {
+		t.Fatalf("input echo frame offset=%d output=%q", inputOffset, inputEcho)
+	}
+}
+
 func TestHTTPServerAttachPTYWebSocketResynchronizesOutputGap(t *testing.T) {
 	backend := newFakePTYBackend()
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
@@ -525,6 +567,43 @@ func TestHTTPServerAttachPTYWebSocketResynchronizesOutputGap(t *testing.T) {
 	}
 }
 
+func TestHTTPServerAttachPTYWebSocketBinaryResynchronizesOutputGap(t *testing.T) {
+	backend := newFakePTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
+	handler := server.NewHTTP(runtime)
+	httpServer := httptest.NewServer(handler)
+	defer httpServer.Close()
+
+	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    t.TempDir(),
+		InitialPTY: &protocol.StartPTYOptions{Cols: 80, Rows: 24},
+	}, http.StatusCreated)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, strings.Replace(httpServer.URL, "http", "ws", 1)+"/v1/ptys/"+created.MainPtyID+"/attach?from=0&binary=1", nil)
+	if err != nil {
+		t.Fatalf("dial attach: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	payload := []byte("0123456789ABCDE")
+	backend.mu.Lock()
+	backend.outputs[created.MainPtyID] = append([]byte(nil), payload...)
+	events := backend.events
+	backend.mu.Unlock()
+	if events == nil {
+		t.Fatalf("attach did not register event stream")
+	}
+	events <- app.PTYEvent{Kind: app.PTYOutput, Offset: 10, Bytes: payload[10:]}
+
+	recoveredOffset, recovered := readPTYBinaryOutputFrame(t, ctx, conn)
+	if recoveredOffset != 0 || !bytes.Equal(recovered, payload) {
+		t.Fatalf("recovered frame offset=%d output=%q", recoveredOffset, recovered)
+	}
+}
+
 func TestHTTPServerAttachPTYWebSocketBatchesBackgroundOutput(t *testing.T) {
 	backend := newFakePTYBackend()
 	_, err := backend.Spawn(context.Background(), app.SpawnPTYRequest{
@@ -558,6 +637,39 @@ func TestHTTPServerAttachPTYWebSocketBatchesBackgroundOutput(t *testing.T) {
 		batched.Offset != 0 ||
 		batched.OutputBase64 != base64.StdEncoding.EncodeToString([]byte("ab")) {
 		t.Fatalf("batched frame = %#v", batched)
+	}
+}
+
+func TestHTTPServerAttachPTYWebSocketBinaryBatchesBackgroundOutput(t *testing.T) {
+	backend := newFakePTYBackend()
+	_, err := backend.Spawn(context.Background(), app.SpawnPTYRequest{
+		ID:         "pty_binary_background",
+		WorkingDir: t.TempDir(),
+		Cols:       80,
+		Rows:       24,
+	})
+	if err != nil {
+		t.Fatalf("spawn fake pty: %v", err)
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
+	httpServer := httptest.NewServer(server.NewHTTP(runtime, server.WithPTYOutputBatchInterval(200*time.Millisecond)))
+	defer httpServer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, strings.Replace(httpServer.URL, "http", "ws", 1)+"/v1/ptys/pty_binary_background/attach?from=0&binary=1", nil)
+	if err != nil {
+		t.Fatalf("dial attach: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+	backend.waitForSubscriber(t)
+
+	backend.emitOutput(t, "pty_binary_background", []byte("a"))
+	backend.emitOutput(t, "pty_binary_background", []byte("b"))
+
+	batchedOffset, batched := readPTYBinaryOutputFrame(t, ctx, conn)
+	if batchedOffset != 0 || string(batched) != "ab" {
+		t.Fatalf("batched frame offset=%d output=%q", batchedOffset, batched)
 	}
 }
 
@@ -601,6 +713,43 @@ func TestHTTPServerAttachPTYWebSocketFlushesPendingOutputBeforeExit(t *testing.T
 	}
 }
 
+func TestHTTPServerAttachPTYWebSocketBinaryFlushesPendingOutputBeforeExit(t *testing.T) {
+	backend := newFakePTYBackend()
+	_, err := backend.Spawn(context.Background(), app.SpawnPTYRequest{
+		ID:         "pty_binary_exit",
+		WorkingDir: t.TempDir(),
+		Cols:       80,
+		Rows:       24,
+	})
+	if err != nil {
+		t.Fatalf("spawn fake pty: %v", err)
+	}
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	defer httpServer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, strings.Replace(httpServer.URL, "http", "ws", 1)+"/v1/ptys/pty_binary_exit/attach?from=0&binary=1", nil)
+	if err != nil {
+		t.Fatalf("dial attach: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+	backend.waitForSubscriber(t)
+
+	backend.emitOutput(t, "pty_binary_exit", []byte("done"))
+	backend.emitExit(t, "pty_binary_exit", 7)
+
+	outputOffset, output := readPTYBinaryOutputFrame(t, ctx, conn)
+	if outputOffset != 0 || string(output) != "done" {
+		t.Fatalf("output frame offset=%d output=%q", outputOffset, output)
+	}
+	exit := readPTYStreamFrame(t, ctx, conn)
+	if exit.Type != "exit" || exit.PtyID != "pty_binary_exit" || exit.Code == nil || *exit.Code != 7 {
+		t.Fatalf("exit frame = %#v", exit)
+	}
+}
+
 func readPTYStreamFrame(t *testing.T, ctx context.Context, conn *websocket.Conn) protocol.PTYStreamFrame {
 	t.Helper()
 	typ, data, err := conn.Read(ctx)
@@ -615,6 +764,22 @@ func readPTYStreamFrame(t *testing.T, ctx context.Context, conn *websocket.Conn)
 		t.Fatalf("decode websocket frame: %v", err)
 	}
 	return frame
+}
+
+func readPTYBinaryOutputFrame(t *testing.T, ctx context.Context, conn *websocket.Conn) (uint64, []byte) {
+	t.Helper()
+	typ, data, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatalf("read websocket frame: %v", err)
+	}
+	if typ != websocket.MessageBinary {
+		t.Fatalf("websocket message type = %v", typ)
+	}
+	offset, output, err := protocol.DecodePTYBinaryOutputFrame(data)
+	if err != nil {
+		t.Fatalf("decode binary output frame: %v", err)
+	}
+	return offset, output
 }
 
 func TestHTTPServerNextEventTimeoutReturnsNoop(t *testing.T) {

@@ -208,6 +208,8 @@ type WorkflowStage = workitem.WorkflowStage
 
 const (
 	DaemonAPIVersion                     = protocol.DaemonAPIVersion
+	PTYBinaryOutputFrameHeaderBytes      = protocol.PTYBinaryOutputFrameHeaderBytes
+	PTYBinaryOutputFrameKind             = protocol.PTYBinaryOutputFrameKind
 	ProtocolVersion                      = protocol.ProtocolVersion
 	RuntimeEventNone                     = protocol.RuntimeEventNone
 	LayoutLeaf                           = session.LayoutLeaf
