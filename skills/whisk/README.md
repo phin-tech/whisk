@@ -104,7 +104,7 @@ Use status commands inside Whisk sessions to leave daemon-visible progress inste
 - `whisk mail read <mail-id> [-to addr] [-json] [-url URL]`
 - `whisk mail reply <mail-id> [-from addr] [-type status] [-priority normal] [-subject text] [-body text|-body-file path] [-payload-json json] [-json] [-url URL]`
 
-Concrete addresses are `pty:<id>`, `run:<id>`, `session:<id>`, `work-item:<id>`, and `project:<id>`. `send` and `reply` default `-from` to `WHISK_PTY_ID`, then `WHISK_RUN_ID`, then `WHISK_SESSION_ID`; `check` defaults `-to` to every current address exposed in the Whisk environment.
+Concrete addresses are `pty:<id>`, `run:<id>`, `session:<id>`, `work-item:<id>`, and `project:<id>`. `send` also accepts `@project:<id>` and `@work-item:<id>` selectors, which the daemon expands to one concrete recipient per current worker before storage; `@idle` is deferred until agent status exists. `send` and `reply` default `-from` to `WHISK_PTY_ID`, then `WHISK_RUN_ID`, then `WHISK_SESSION_ID`; `check` defaults `-to` to every current address exposed in the Whisk environment.
 
 ## whisk agent-bridge
 
