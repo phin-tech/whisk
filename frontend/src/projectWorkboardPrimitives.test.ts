@@ -20,6 +20,7 @@ const projectFeaturePaths = [
 
 const workBoardFeaturePaths = [
   "./workboard/WorkBoardColumn.svelte",
+  "./workboard/VirtualWorkItemList.svelte",
   "./workboard/WorkItemCard.svelte",
 ];
 
@@ -105,7 +106,7 @@ describe("ProjectsView and WorkBoard primitive adoption", () => {
       "./ui/TextArea.svelte",
       "./ui/TextField.svelte",
       "./workboard/WorkBoardColumn.svelte",
-      "./workboard/WorkItemCard.svelte",
+      "./workboard/VirtualWorkItemList.svelte",
     ]);
 
     expect(workBoardSource).not.toContain("<article");
@@ -125,6 +126,8 @@ describe("ProjectsView and WorkBoard primitive adoption", () => {
 
     expect(sourceFor("./workboard/WorkBoardColumn.svelte")).toContain('from "../ui/List.svelte"');
     expect(sourceFor("./workboard/WorkBoardColumn.svelte")).toContain('from "../ui/ListRow.svelte"');
+    expect(sourceFor("./workboard/VirtualWorkItemList.svelte")).toContain('from "../ui/List.svelte"');
+    expect(sourceFor("./workboard/VirtualWorkItemList.svelte")).toContain('from "./WorkItemCard.svelte"');
     expect(sourceFor("./workboard/WorkItemCard.svelte")).toContain('from "../ui/IconButton.svelte"');
   });
 });

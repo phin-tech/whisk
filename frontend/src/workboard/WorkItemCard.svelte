@@ -56,7 +56,7 @@
   }
 </script>
 
-<article class="group relative min-h-[76px] overflow-hidden bg-bg-base transition-colors hover:bg-bg-surface/60 focus-within:bg-bg-surface/60">
+<article class="group relative h-full min-h-[76px] overflow-hidden bg-bg-base transition-colors hover:bg-bg-surface/60 focus-within:bg-bg-surface/60">
   <div class="absolute inset-y-3 left-0 w-1 rounded-r {cardRailClass(attention.severity)}"></div>
   <div class="grid gap-2 px-3 py-3 pl-4">
     <div class="flex min-w-0 items-start gap-2">

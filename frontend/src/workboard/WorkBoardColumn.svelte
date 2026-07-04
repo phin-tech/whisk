@@ -36,7 +36,7 @@
     </span>
   </Button>
 {:else}
-  <section class="flex min-h-[420px] w-[320px] shrink-0 flex-col overflow-hidden rounded-md border border-border-subtle bg-bg-base">
+  <section class="flex h-full min-h-[420px] w-[320px] shrink-0 flex-col overflow-hidden rounded-md border border-border-subtle bg-bg-base">
     <div class="flex h-12 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-hairline px-3">
       <div class="flex min-w-0 items-center gap-2">
         {#if hasAttention}
@@ -62,14 +62,14 @@
       </IconButton>
     </div>
 
-    <List class="min-w-0 flex-1">
-      {#if count === 0}
+    {#if count === 0}
+      <List class="min-h-0 min-w-0 flex-1">
         <ListRow class="flex min-h-24 items-center justify-center py-7 text-center">
           <EmptyState message="Empty" class="py-0 text-[13px]" />
         </ListRow>
-      {:else}
-        {@render children?.()}
-      {/if}
-    </List>
+      </List>
+    {:else}
+      {@render children?.()}
+    {/if}
   </section>
 {/if}

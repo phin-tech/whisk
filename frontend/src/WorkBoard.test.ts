@@ -4,6 +4,7 @@ import mainRouterSource from "./MainRouter.svelte?raw";
 import boardSource from "./WorkBoard.svelte?raw";
 import boardStateSource from "./workboard/work-board-state.ts?raw";
 import boardVirtualizationSource from "./workboard/work-board-virtualization.ts?raw";
+import virtualWorkItemListSource from "./workboard/VirtualWorkItemList.svelte?raw";
 import detailSource from "./WorkItemDetail.svelte?raw";
 import projectSource from "./ProjectsView.svelte?raw";
 import projectAttachmentsSource from "./projects/ProjectAttachments.svelte?raw";
@@ -206,7 +207,7 @@ describe("WorkBoard", () => {
     expect(boardSource).toContain('from "./workboard/work-board-state"');
     expect(boardSource).toContain("deriveWorkBoardView");
     expect(boardSource).toContain("stageViews");
-    expect(boardSource).toContain("{#each stageView.cards as card (card.key)}");
+    expect(boardSource).toContain("cards={stageView.cards}");
     expect(boardStateSource).toContain("export function deriveWorkBoardView");
     expect(boardStateSource).toContain("export type WorkBoardStageView");
     expect(boardStateSource).toContain("export type WorkBoardCardView");
@@ -221,6 +222,22 @@ describe("WorkBoard", () => {
     expect(boardVirtualizationSource).toContain("visibleStartIndex");
     expect(boardVirtualizationSource).not.toContain("@tanstack");
     expect(boardVirtualizationSource).not.toContain("localStorage");
+  });
+
+  it("wires WorkBoard columns through the local virtualized card list", () => {
+    expect(boardSource).toContain('from "./workboard/VirtualWorkItemList.svelte"');
+    expect(boardSource).toContain("<VirtualWorkItemList");
+    expect(boardSource).toContain("cards={stageView.cards}");
+    expect(virtualWorkItemListSource).toContain("deriveWorkBoardCardWindow");
+    expect(virtualWorkItemListSource).toContain("const ROW_HEIGHT = 128");
+    expect(virtualWorkItemListSource).toContain("data-work-board-virtual-list");
+    expect(virtualWorkItemListSource).toContain("data-work-card-virtual-row");
+    expect(virtualWorkItemListSource).toContain("overflow-hidden bg-bg-base");
+    expect(virtualWorkItemListSource).toContain("{#each virtualWindow.cards as virtualCard (virtualCard.key)}");
+    expect(virtualWorkItemListSource).toContain("data-work-card-key={virtualCard.key}");
+    expect(itemCardSource).toContain("relative h-full min-h-[76px] overflow-hidden");
+    expect(virtualWorkItemListSource).not.toContain("@tanstack");
+    expect(virtualWorkItemListSource).not.toContain("localStorage");
   });
 
   it("uses hairline-separated rows instead of bordered item cards", () => {
