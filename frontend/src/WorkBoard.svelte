@@ -9,7 +9,6 @@
   import IconButton from "./ui/IconButton.svelte";
   import TextArea from "./ui/TextArea.svelte";
   import TextField from "./ui/TextField.svelte";
-  import type { WorkflowStage } from "../bindings/github.com/phin-tech/whisk/internal/domain/workitem/models";
   import type {
     AgentProfile,
     Artifact,
@@ -25,11 +24,15 @@
     WorkflowEvent,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import {
+    attentionDotClass,
+    canOpenRunTerminal,
+    cardRailClass,
+    defaultWorktreeBranch,
+    deriveWorkBoardView,
+  } from "./workboard/work-board-state";
+  import {
     adjacentStageTargets,
     collapsedStageStorageKey,
-    deriveWorkItemCardIndicators,
-    deriveWorkItemAttention,
-    groupWorkItemsByStage,
     parseCollapsedStages,
     serializeCollapsedStages,
   } from "./workView";
@@ -118,13 +121,28 @@
   let collapsedStageIds = new Set<string>();
   let collapsedProjectId = "";
 
-  $: activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
-  $: stages = activeProject?.workflow?.stages ?? [];
-  $: filteredWorkItems = filterWorkItems(workItems);
-  $: boardStages = filterStageId ? stages.filter((stage) => stage.id === filterStageId) : stages;
-  $: itemsByStage = groupWorkItemsByStage(filteredWorkItems, stages);
-  $: detailItem = workItems.find((item) => item.id === detailItemId) ?? null;
-  $: runsByItem = groupRunsByItem(workItemRuns);
+  $: workBoardView = deriveWorkBoardView({
+    projects,
+    activeProjectId,
+    workItems,
+    workItemRuns,
+    artifacts,
+    questions,
+    gateReports,
+    workflowDefinitions,
+    filters: {
+      query: filterQuery,
+      stageId: filterStageId,
+      runState: filterRunState,
+    },
+    collapsedStageIds,
+    detailItemId,
+  });
+  $: activeProject = workBoardView.activeProject;
+  $: workflowLabel = workBoardView.workflowLabel;
+  $: stages = workBoardView.stages;
+  $: stageViews = workBoardView.stageViews;
+  $: detailItem = workBoardView.detailItem;
   $: if (activeProjectId !== collapsedProjectId) {
     collapsedProjectId = activeProjectId;
     collapsedStageIds =
@@ -133,134 +151,9 @@
         : parseCollapsedStages(localStorage.getItem(collapsedStageStorageKey(activeProjectId)));
   }
 
-  function slugify(value: string) {
-    return value
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  }
-
-  function defaultWorktreeBranch(item: WorkItem) {
-    const projectSlug = activeProject?.slug || "work";
-    const itemSlug = slugify(item.title) || "item";
-    return `whisk/${projectSlug}-${item.number}-${itemSlug}`;
-  }
-
-  function workflowDefinitionLabel() {
-    if (!activeProject) return "";
-    const id = activeProject.workflow.definitionId || activeProject.workflow.templateId || activeProject.workflow.id;
-    const version = activeProject.workflow.definitionVersion ?? 0;
-    const definition = workflowDefinitions.find(
-      (candidate) =>
-        candidate.id === activeProject.workflow.definitionId &&
-        candidate.version === activeProject.workflow.definitionVersion,
-    );
-    if (!id) return "workflow";
-    const identityId = definition?.id || id;
-    return version > 0 ? `${identityId}@${version}` : identityId;
-  }
-
-  function groupRunsByItem(runs: WorkItemRun[]) {
-    const result: Record<string, WorkItemRun[]> = {};
-    for (const run of runs) {
-      if (!result[run.workItemId]) result[run.workItemId] = [];
-      result[run.workItemId].push(run);
-    }
-    for (const itemRuns of Object.values(result)) {
-      itemRuns.sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt));
-    }
-    return result;
-  }
-
-  function filterWorkItems(items: WorkItem[]) {
-    const query = filterQuery.trim().toLowerCase();
-    return items.filter((item) => {
-      if (filterStageId && item.stageId !== filterStageId) return false;
-      if (filterRunState && (item.runState || "idle") !== filterRunState) return false;
-      if (!query) return true;
-      return `#${item.number} ${item.title} ${item.bodyMarkdown} ${item.stageId} ${item.runState}`
-        .toLowerCase()
-        .includes(query);
-    });
-  }
-
-  function timestamp(value: unknown) {
-    if (!value) return 0;
-    if (value instanceof Date) return value.getTime();
-    return new Date(String(value)).getTime() || 0;
-  }
-
-  function canOpenRunTerminal(run: WorkItemRun | null) {
-    return Boolean(run?.sessionId || run?.ptyId);
-  }
-
-  function hasApprovedPlan(itemId: string) {
-    return artifacts.some(
-      (artifact) =>
-        artifact.workItemId === itemId && artifact.kind === "plan" && artifact.status === "approved",
-    );
-  }
-
-  function hasActiveRun(run: WorkItemRun | null) {
-    return run?.status === "queued" || run?.status === "running" || run?.status === "awaiting_input";
-  }
-
-  function canQueueOrLaunchExecution(item: WorkItem, latestRun: WorkItemRun | null) {
-    return item.stageId === "ready" && hasApprovedPlan(item.id) && !hasActiveRun(latestRun);
-  }
-
   function openRunTerminal(run: WorkItemRun) {
     if (!canOpenRunTerminal(run)) return;
     onOpenRunTerminal(run);
-  }
-
-  function stageRequiresPlan(stage: WorkflowStage) {
-    const value = `${stage.id} ${stage.name}`.toLowerCase();
-    return value.includes("execution") || value.includes("review");
-  }
-
-  function attentionFor(item: WorkItem, stage: WorkflowStage) {
-    return deriveWorkItemAttention(item, {
-      runs: runsByItem[item.id] ?? [],
-      questions: detailRecordsForItem(questions, item.id),
-      gates: detailRecordsForItem(gateReports, item.id),
-      artifacts: detailRecordsForItem(artifacts, item.id),
-      stageRequiresWorktree: Boolean(stage.provisionWorktree),
-      stageRequiresPlan: stageRequiresPlan(stage),
-    });
-  }
-
-  function detailRecordsForItem<T extends { workItemId: string }>(records: T[], itemId: string) {
-    return records.filter((record) => record.workItemId === itemId);
-  }
-
-  function attentionDotClass(tone: string) {
-    if (tone === "danger") return "text-red";
-    if (tone === "warning") return "text-amber";
-    if (tone === "success") return "text-green";
-    return "text-blue";
-  }
-
-  function cardRailClass(severity: string) {
-    if (severity === "danger") return "bg-red";
-    if (severity === "warning") return "bg-amber";
-    if (severity === "info") return "bg-blue";
-    return "bg-border";
-  }
-
-  function hasStageAttention(stage: WorkflowStage) {
-    return (itemsByStage[stage.id] ?? []).some(
-      (item) => attentionFor(item, stage).severity !== "none",
-    );
-  }
-
-  function stageAttentionClass(stage: WorkflowStage) {
-    const severities = (itemsByStage[stage.id] ?? []).map((item) => attentionFor(item, stage).severity);
-    if (severities.includes("danger")) return "bg-red";
-    if (severities.includes("warning")) return "bg-amber";
-    if (severities.includes("info")) return "bg-blue";
-    return "bg-border";
   }
 
   function toggleStageCollapsed(stageId: string) {
@@ -277,7 +170,7 @@
   }
 
   function setAllColumnsCollapsed(collapsed: boolean) {
-    const next = collapsed ? new Set(boardStages.map((stage) => stage.id)) : new Set<string>();
+    const next = collapsed ? new Set(stageViews.map((stageView) => stageView.stage.id)) : new Set<string>();
     collapsedStageIds = next;
     if (typeof localStorage !== "undefined" && activeProjectId) {
       localStorage.setItem(collapsedStageStorageKey(activeProjectId), serializeCollapsedStages(next));
@@ -296,7 +189,7 @@
   }
 
   function generateWorktree(item: WorkItem) {
-    const branch = (worktreeBranches[item.id] || defaultWorktreeBranch(item)).trim();
+    const branch = (worktreeBranches[item.id] || defaultWorktreeBranch(item, activeProject)).trim();
     if (!branch || loading) return;
     onGenerateWorktree({ workItemId: item.id, branch });
   }
@@ -329,7 +222,7 @@
           <div class="truncate text-[13px] font-semibold text-text-primary">{activeProject.name}</div>
           <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-text-secondary">
             <span class="truncate">{activeProject.rootDir}</span>
-            <span class="shrink-0 text-text-muted">{workflowDefinitionLabel()}</span>
+            <span class="shrink-0 text-text-muted">{workflowLabel}</span>
           </div>
         </div>
       {:else}
@@ -368,10 +261,10 @@
       <IconButton label="Refresh work board" disabled={loading} class="h-9 w-9" onclick={onRefresh}>
         <RefreshCw size={15} class={loading ? "animate-spin" : ""} />
       </IconButton>
-      <Button size="lg" class="hidden sm:inline-flex" disabled={loading || boardStages.length === 0} onclick={() => setAllColumnsCollapsed(false)}>
+      <Button size="lg" class="hidden sm:inline-flex" disabled={loading || stageViews.length === 0} onclick={() => setAllColumnsCollapsed(false)}>
         Expand
       </Button>
-      <Button size="lg" class="hidden sm:inline-flex" disabled={loading || boardStages.length === 0} onclick={() => setAllColumnsCollapsed(true)}>
+      <Button size="lg" class="hidden sm:inline-flex" disabled={loading || stageViews.length === 0} onclick={() => setAllColumnsCollapsed(true)}>
         Collapse
       </Button>
     </div>
@@ -391,39 +284,24 @@
 
     <div class="app-scrollbar min-h-0 flex-1 overflow-auto p-3">
       <div class="flex min-h-full min-w-max items-stretch gap-3">
-        {#each boardStages as stage (stage.id)}
-          {@const stageItems = itemsByStage[stage.id] ?? []}
-          {@const collapsed = collapsedStageIds.has(stage.id)}
-          {@const stageHasAttention = hasStageAttention(stage)}
+        {#each stageViews as stageView (stageView.key)}
           <WorkBoardColumn
-            {stage}
-            count={stageItems.length}
-            {collapsed}
-            hasAttention={stageHasAttention}
-            attentionClass={stageAttentionClass(stage)}
+            stage={stageView.stage}
+            count={stageView.count}
+            collapsed={stageView.collapsed}
+            hasAttention={stageView.hasAttention}
+            attentionClass={stageView.attentionClass}
             onToggle={toggleStageCollapsed}
           >
-            {#each stageItems as item (item.id)}
-              {@const targets = adjacentStageTargets(item, stages)}
-              {@const latestRun = (runsByItem[item.id] ?? [])[0] ?? null}
-              {@const canExecute = canQueueOrLaunchExecution(item, latestRun)}
-              {@const attention = attentionFor(item, stage)}
-              {@const indicators = deriveWorkItemCardIndicators(item, {
-                runs: runsByItem[item.id] ?? [],
-                artifacts: detailRecordsForItem(artifacts, item.id),
-                gates: detailRecordsForItem(gateReports, item.id),
-              })}
-              {@const terminalRun = attention.terminalRunId
-                ? (runsByItem[item.id] ?? []).find((run) => run.id === attention.terminalRunId) ?? null
-                : null}
+            {#each stageView.cards as card (card.key)}
               <WorkItemCard
-                {item}
-                {targets}
-                {latestRun}
-                {terminalRun}
-                {attention}
-                {indicators}
-                {canExecute}
+                item={card.item}
+                targets={card.targets}
+                latestRun={card.latestRun}
+                terminalRun={card.terminalRun}
+                attention={card.attention}
+                indicators={card.indicators}
+                canExecute={card.canExecute}
                 {loading}
                 {cardRailClass}
                 {attentionDotClass}
