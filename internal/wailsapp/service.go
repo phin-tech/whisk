@@ -827,6 +827,10 @@ func (s *Service) ListAgentProfiles(ctx context.Context) ([]protocol.AgentProfil
 	return s.client.ListAgentProfiles(ctx)
 }
 
+func (s *Service) ListDetectedAgents(ctx context.Context) ([]protocol.DetectedAgent, error) {
+	return s.client.ListDetectedAgents(ctx)
+}
+
 func (s *Service) ListWorkItems(ctx context.Context, projectID string) ([]protocol.WorkItem, error) {
 	return s.client.ListWorkItems(ctx, projectID)
 }

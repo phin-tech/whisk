@@ -1148,6 +1148,43 @@ export class DetectWorktrunkRequest {
     }
 }
 
+export class DetectedAgent {
+    "profileId": string;
+    "provider": string;
+    "label": string;
+    "detectCommand": string;
+    "path": string;
+
+    /** Creates a new DetectedAgent instance. */
+    constructor($$source: Partial<DetectedAgent> = {}) {
+        if (!("profileId" in $$source)) {
+            this["profileId"] = "";
+        }
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("detectCommand" in $$source)) {
+            this["detectCommand"] = "";
+        }
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DetectedAgent instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DetectedAgent {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DetectedAgent($$parsedSource as Partial<DetectedAgent>);
+    }
+}
+
 export class ExportWorkflowDefinitionFileRequest {
     "id": string;
     "version": number;
