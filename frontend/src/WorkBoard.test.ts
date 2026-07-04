@@ -3,6 +3,7 @@ import appSource from "./App.svelte?raw";
 import mainRouterSource from "./MainRouter.svelte?raw";
 import boardSource from "./WorkBoard.svelte?raw";
 import boardStateSource from "./workboard/work-board-state.ts?raw";
+import boardVirtualizationSource from "./workboard/work-board-virtualization.ts?raw";
 import detailSource from "./WorkItemDetail.svelte?raw";
 import projectSource from "./ProjectsView.svelte?raw";
 import projectAttachmentsSource from "./projects/ProjectAttachments.svelte?raw";
@@ -212,6 +213,14 @@ describe("WorkBoard", () => {
     expect(boardSource).not.toContain("function filterWorkItems");
     expect(boardSource).not.toContain("function groupRunsByItem");
     expect(boardSource).not.toContain("function attentionFor");
+  });
+
+  it("keeps WorkBoard virtual window math in a focused helper", () => {
+    expect(boardVirtualizationSource).toContain("export function deriveWorkBoardCardWindow");
+    expect(boardVirtualizationSource).toContain("WorkBoardCardView");
+    expect(boardVirtualizationSource).toContain("visibleStartIndex");
+    expect(boardVirtualizationSource).not.toContain("@tanstack");
+    expect(boardVirtualizationSource).not.toContain("localStorage");
   });
 
   it("uses hairline-separated rows instead of bordered item cards", () => {
