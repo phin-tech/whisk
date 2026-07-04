@@ -49,6 +49,7 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 		t.Fatalf("append transcript: %v", err)
 	}
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: eventBus, TranscriptStore: transcripts})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 	handler := server.NewHTTP(runtime)
 
 	health := getJSON[map[string]bool](t, handler, "/v1/health", http.StatusOK)
