@@ -177,11 +177,11 @@ func NormalizeTargetType(raw string) TargetType {
 
 func NormalizeTargetStatus(raw string) TargetStatus {
 	switch normalizeTargetToken(raw) {
-	case string(TargetStatusAvailable), "active", "open", "ready":
+	case string(TargetStatusAvailable), "active", "detached", "open", "ready":
 		return TargetStatusAvailable
 	case string(TargetStatusAttached), "selected", "current":
 		return TargetStatusAttached
-	case string(TargetStatusClosed), "detached", "crashed", "unavailable":
+	case string(TargetStatusClosed), "crashed", "unavailable":
 		return TargetStatusClosed
 	default:
 		return TargetStatusUnknown
@@ -225,7 +225,7 @@ func ApplyCaptureCaps(payload CapturedPayload, options CaptureOptions) (Captured
 		out.CSS, out.Truncated = truncateCaptureField(out.Truncated, CaptureFieldCSS, payload.CSS, options.MaxCSSBytes)
 	}
 	if options.IncludeScreenshot {
-		out.ScreenshotBase64, out.Truncated = truncateCaptureField(out.Truncated, CaptureFieldScreenshot, payload.ScreenshotBase64, options.MaxScreenshotBytes)
+		out.ScreenshotBase64, out.Truncated = capScreenshotBase64(out.Truncated, payload.ScreenshotBase64, options.MaxScreenshotBytes)
 	} else {
 		out.ScreenshotContentType = ""
 	}
@@ -257,9 +257,9 @@ func RenderCapturePromptBlock(block CapturePromptBlock) string {
 		b.WriteByte('\n')
 	}
 
-	writePromptSection(&b, "Text", block.Payload.Text)
-	writePromptSection(&b, "HTML excerpt", block.Payload.HTML)
-	writePromptSection(&b, "CSS excerpt", block.Payload.CSS)
+	writePromptDataSection(&b, "Text", "text", block.Payload.Text, MaximumCaptureTextBytes)
+	writePromptDataSection(&b, "HTML excerpt", "html", block.Payload.HTML, MaximumCaptureHTMLBytes)
+	writePromptDataSection(&b, "CSS excerpt", "css", block.Payload.CSS, MaximumCaptureCSSBytes)
 
 	if block.Payload.ScreenshotBase64 != "" {
 		contentType := cleanPromptLine(block.Payload.ScreenshotContentType)
@@ -346,6 +346,17 @@ func truncateCaptureField(truncations []Truncation, field string, value string, 
 	})
 }
 
+func capScreenshotBase64(truncations []Truncation, value string, maxBytes int) (string, []Truncation) {
+	if len(value) <= maxBytes {
+		return value, truncations
+	}
+	return "", append(truncations, Truncation{
+		Field:         CaptureFieldScreenshot,
+		OriginalBytes: len(value),
+		KeptBytes:     0,
+	})
+}
+
 func truncateStringBytes(value string, maxBytes int) (string, bool) {
 	if maxBytes < 0 {
 		maxBytes = 0
@@ -360,16 +371,53 @@ func truncateStringBytes(value string, maxBytes int) (string, bool) {
 	return value[:cut], true
 }
 
-func writePromptSection(b *strings.Builder, title string, body string) {
+func writePromptDataSection(b *strings.Builder, title string, language string, body string, maxBytes int) {
 	body = cleanPromptBody(body)
 	if body == "" {
 		return
 	}
+	originalBytes := len(body)
+	var didTruncate bool
+	body, didTruncate = truncateStringBytes(body, maxBytes)
+	fence := promptDataFence(body)
+
 	ensurePromptBlankLine(b)
 	b.WriteString(title)
-	b.WriteString(":\n")
+	b.WriteString(" (data-only, untrusted captured data, ")
+	if didTruncate {
+		b.WriteString(fmt.Sprintf("%d of %d bytes", len(body), originalBytes))
+	} else {
+		b.WriteString(fmt.Sprintf("%d bytes", originalBytes))
+	}
+	b.WriteString("):\n")
+	b.WriteString(fence)
+	if language != "" {
+		b.WriteString(language)
+	}
+	b.WriteByte('\n')
 	b.WriteString(body)
 	b.WriteByte('\n')
+	b.WriteString(fence)
+	b.WriteByte('\n')
+	if didTruncate {
+		b.WriteString(fmt.Sprintf("[capture data capped in prompt renderer: omitted %d bytes]\n", originalBytes-len(body)))
+	}
+}
+
+func promptDataFence(body string) string {
+	longestRun := 2
+	currentRun := 0
+	for _, r := range body {
+		if r == '`' {
+			currentRun++
+			if currentRun > longestRun {
+				longestRun = currentRun
+			}
+			continue
+		}
+		currentRun = 0
+	}
+	return strings.Repeat("`", longestRun+1)
 }
 
 func ensurePromptBlankLine(b *strings.Builder) {
