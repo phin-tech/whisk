@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	adapterbrowser "github.com/phin-tech/whisk/internal/adapters/browser"
 	"github.com/phin-tech/whisk/internal/adapters/mailboxstore"
 	"github.com/phin-tech/whisk/internal/adapters/plugins"
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
@@ -121,6 +122,7 @@ func serveDaemon(addr string) (err error) {
 	}
 	runtime, err := app.NewRuntimeWithError(app.RuntimeConfig{
 		PTYBackend:       native.NewBackend(),
+		BrowserProbe:     adapterbrowser.NewCDPProbe(nil),
 		Worktrees:        worktrunk.NewBackendWithOptions(nil, worktrunk.BackendOptions{OverridePath: envOrDefault("WHISK_WORKTRUNK_PATH", "/opt/homebrew/bin/wt")}),
 		Plugins:          pluginManager,
 		EventSink:        eventBus,
