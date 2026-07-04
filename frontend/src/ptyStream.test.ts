@@ -2,28 +2,46 @@ import { describe, expect, it } from "vitest";
 import {
   consumeOptimisticEcho,
   base64DecodedByteLength,
+  decodePTYBinaryOutputFrame,
   nextPTYStreamOffset,
   outputSnapshotChunkAfterOffset,
   outputSnapshotStartOffset,
+  ptyOutputChunkAfterOffset,
+  ptyOutputChunkFromTextFrame,
   ptyInputFrame,
   ptyInputTraceLine,
   optimisticTerminalEcho,
   ptyAttachWebSocketURL,
+  PTY_BINARY_OUTPUT_FRAME_KIND,
   terminalInputRefreshDelays,
   terminalInputShouldRefreshOutput,
   writePTYInputOverSocket,
 } from "./ptyStream";
 
 describe("ptyStream", () => {
+  function expectChunk(
+    chunk: ReturnType<typeof outputSnapshotChunkAfterOffset>,
+    expected: { startOffset: number; nextOffset: number; text: string },
+  ) {
+    expect(chunk && { ...chunk, bytes: new TextDecoder().decode(chunk.bytes) }).toEqual({
+      startOffset: expected.startOffset,
+      nextOffset: expected.nextOffset,
+      bytes: expected.text,
+    });
+  }
+
   it("builds websocket attach URLs from daemon HTTP URLs", () => {
     expect(ptyAttachWebSocketURL("http://127.0.0.1:8787", "pty_01", 7)).toBe(
-      "ws://127.0.0.1:8787/v1/ptys/pty_01/attach?from=7",
+      "ws://127.0.0.1:8787/v1/ptys/pty_01/attach?from=7&binary=1",
     );
     expect(ptyAttachWebSocketURL("http://127.0.0.1:8787", "pty_01", 7, "secret token")).toBe(
-      "ws://127.0.0.1:8787/v1/ptys/pty_01/attach?from=7&access_token=secret+token",
+      "ws://127.0.0.1:8787/v1/ptys/pty_01/attach?from=7&binary=1&access_token=secret+token",
     );
     expect(ptyAttachWebSocketURL("https://daemon.local", "pty/a", -1)).toBe(
-      "wss://daemon.local/v1/ptys/pty%2Fa/attach?from=0",
+      "wss://daemon.local/v1/ptys/pty%2Fa/attach?from=0&binary=1",
+    );
+    expect(ptyAttachWebSocketURL("http://127.0.0.1:8787", "pty_01", 7, "", false)).toBe(
+      "ws://127.0.0.1:8787/v1/ptys/pty_01/attach?from=7",
     );
   });
 
@@ -45,29 +63,158 @@ describe("ptyStream", () => {
   });
 
   it("trims output snapshots that overlap already rendered bytes", () => {
-    expect(outputSnapshotChunkAfterOffset({ offset: 16, outputBase64: "YWJjZGVm" }, 13)).toEqual({
+    expectChunk(outputSnapshotChunkAfterOffset({ offset: 16, outputBase64: "YWJjZGVm" }, 13), {
       startOffset: 13,
       nextOffset: 16,
-      outputBase64: "ZGVm",
+      text: "def",
     });
     expect(outputSnapshotChunkAfterOffset({ offset: 16, outputBase64: "YWJjZGVm" }, 16)).toBeNull();
     expect(outputSnapshotChunkAfterOffset({ offset: 16, outputBase64: "YWJjZGVm" }, 20)).toBeNull();
   });
 
   it("keeps clamped output snapshots at the inferred daemon start", () => {
-    expect(outputSnapshotChunkAfterOffset({ offset: 16, outputBase64: "YWJjZGVm" }, 4)).toEqual({
+    expectChunk(outputSnapshotChunkAfterOffset({ offset: 16, outputBase64: "YWJjZGVm" }, 4), {
       startOffset: 10,
       nextOffset: 16,
-      outputBase64: "YWJjZGVm",
+      text: "abcdef",
     });
   });
 
   it("trims text output snapshots by encoded byte offsets", () => {
-    expect(outputSnapshotChunkAfterOffset({ offset: 5, output: "éabc" }, 2)).toEqual({
+    expectChunk(outputSnapshotChunkAfterOffset({ offset: 5, output: "éabc" }, 2), {
       startOffset: 2,
       nextOffset: 5,
-      outputBase64: "YWJj",
+      text: "abc",
     });
+  });
+
+  it("decodes legacy JSON output frames into byte chunks", () => {
+    const chunk = ptyOutputChunkFromTextFrame({
+      type: "output",
+      ptyId: "pty_01",
+      offset: 7,
+      outputBase64: "aGk=",
+    });
+    expect(chunk && { ...chunk, bytes: new TextDecoder().decode(chunk.bytes) }).toEqual({
+      ptyId: "pty_01",
+      startOffset: 7,
+      nextOffset: 9,
+      bytes: "hi",
+    });
+  });
+
+  it("keeps output chunk offset propagation behavior", () => {
+    const chunk = { startOffset: 10, nextOffset: 12, bytes: new Uint8Array([1, 2]) };
+    expect(ptyOutputChunkAfterOffset(chunk, 10)).toBe(chunk);
+    expect(ptyOutputChunkAfterOffset(chunk, 12)).toBeNull();
+    expect(ptyOutputChunkAfterOffset(chunk, 11)).toEqual({
+      startOffset: 11,
+      nextOffset: 12,
+      bytes: new Uint8Array([2]),
+    });
+  });
+
+  it("trims overlapping legacy JSON output frames to the new suffix", () => {
+    const chunk = ptyOutputChunkFromTextFrame({
+      type: "output",
+      ptyId: "pty_01",
+      offset: 10,
+      outputBase64: "YWJjZGVm",
+    });
+    const trimmed = chunk && ptyOutputChunkAfterOffset(chunk, 13);
+
+    expect(trimmed && { ...trimmed, bytes: new TextDecoder().decode(trimmed.bytes) }).toEqual({
+      startOffset: 13,
+      nextOffset: 16,
+      bytes: "def",
+    });
+    expect(
+      nextPTYStreamOffset(13, {
+        type: "output",
+        ptyId: "pty_01",
+        offset: 10,
+        outputBase64: "YWJjZGVm",
+      }),
+    ).toBe(16);
+  });
+
+  it("decodes binary output frames with a 1-byte kind and 8-byte big-endian offset header", () => {
+    const frame = new Uint8Array([
+      PTY_BINARY_OUTPUT_FRAME_KIND,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      7,
+      104,
+      105,
+    ]);
+
+    const chunk = decodePTYBinaryOutputFrame(frame);
+
+    expect(chunk.startOffset).toBe(7);
+    expect(chunk.nextOffset).toBe(9);
+    expect(new TextDecoder().decode(chunk.bytes)).toBe("hi");
+  });
+
+  it("trims overlapping binary output frames to the new suffix", () => {
+    const frame = new Uint8Array([
+      PTY_BINARY_OUTPUT_FRAME_KIND,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      10,
+      97,
+      98,
+      99,
+      100,
+      101,
+      102,
+    ]);
+
+    const trimmed = ptyOutputChunkAfterOffset(decodePTYBinaryOutputFrame(frame), 13);
+
+    expect(trimmed && { ...trimmed, bytes: new TextDecoder().decode(trimmed.bytes) }).toEqual({
+      startOffset: 13,
+      nextOffset: 16,
+      bytes: "def",
+    });
+  });
+
+  it("rejects malformed binary output frames", () => {
+    expect(() => decodePTYBinaryOutputFrame(new Uint8Array([PTY_BINARY_OUTPUT_FRAME_KIND, 0]))).toThrow(
+      "malformed PTY binary frame",
+    );
+    expect(() => decodePTYBinaryOutputFrame(new Uint8Array([0xff, 0, 0, 0, 0, 0, 0, 0, 0]))).toThrow(
+      "unknown PTY binary frame kind 0xff",
+    );
+  });
+
+  it("copies binary output bytes out of the websocket frame buffer", () => {
+    const frame = new Uint8Array([
+      PTY_BINARY_OUTPUT_FRAME_KIND,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      65,
+    ]);
+    const chunk = decodePTYBinaryOutputFrame(frame);
+
+    frame[9] = 66;
+
+    expect(new TextDecoder().decode(chunk.bytes)).toBe("A");
   });
 
   it("builds websocket input frames", () => {
