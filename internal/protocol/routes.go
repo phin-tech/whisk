@@ -51,6 +51,7 @@ var (
 	apiAgentHookIntegrationList = []AgentHookIntegration(nil)
 	apiPluginList               = []PluginStatus(nil)
 	apiRegistryPluginList       = []RegistryPlugin(nil)
+	apiUIContributionsResponse  = UIContributionsResponse{}
 )
 
 var APIRoutes = []APIRoute{
@@ -81,6 +82,16 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/plugins/{pluginID}/trust", OperationID: "trustPlugin", Tag: "plugins", Summary: "Trust a discovered plugin", Response: PluginStatus{}},
 	{Method: "POST", Path: "/v1/plugins/{pluginID}/untrust", OperationID: "untrustPlugin", Tag: "plugins", Summary: "Untrust a discovered plugin", Response: PluginStatus{}},
 	{Method: "POST", Path: "/v1/plugins/{pluginID}/project-attachment-templates/{templateID}", OperationID: "runPluginProjectAttachmentTemplate", Tag: "plugins", Summary: "Run a trusted plugin project attachment template", Request: RunPluginProjectAttachmentTemplateRequest{}, Response: Project{}, Status: 201},
+	{Method: "GET", Path: "/v1/ui-contributions", OperationID: "listUIContributions", Tag: "plugins", Summary: "Get aggregated UI contributions scoped to an entity", Response: apiUIContributionsResponse, Query: []APIQueryParam{
+		{Name: "projectId", Type: "string"},
+		{Name: "workItemId", Type: "string"},
+		{Name: "runId", Type: "string"},
+		{Name: "sessionId", Type: "string"},
+		{Name: "paneId", Type: "string"},
+		{Name: "ptyId", Type: "string"},
+		{Name: "gateReportId", Type: "string"},
+		{Name: "phase", Type: "string"},
+	}},
 
 	{Method: "GET", Path: "/v1/sessions", OperationID: "listSessions", Tag: "sessions", Response: apiSessionList},
 	{Method: "POST", Path: "/v1/sessions", OperationID: "createSession", Tag: "sessions", Request: CreateSessionRequest{}, Response: CreatedSession{}, Status: 201},

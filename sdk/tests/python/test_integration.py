@@ -8,6 +8,7 @@ import datetime as dt
 
 from whiskd_client.api.sessions import list_sessions
 from whiskd_client.api.system import clear_daemon, get_compatibility
+from whiskd_client.api.plugins import list_ui_contributions
 from whiskd_client.api.mail import (
     list_mail,
     mark_mail_read,
@@ -37,6 +38,7 @@ from whiskd_client.api.workitems import (
     submit_review_feedback,
 )
 from whiskd_client.local import local_client
+from whiskd_client.types import UNSET
 from whiskd_client.models import (
     AnswerQuestionRequest,
     ApproveDoneRequest,
@@ -64,6 +66,7 @@ from whiskd_client.models import (
     StartPlanningRequest,
     SubmitDraftPlanRequest,
     SubmitReviewFeedbackRequest,
+    UIContributionsResponse,
     WorkItem,
     WorkItemRun,
     WorkflowEvent,
@@ -82,6 +85,19 @@ def test_sessions_start_empty(base_url):
     client = local_client(base_url=base_url)
     sessions = list_sessions.sync(client=client)
     assert sessions == []
+
+
+def test_ui_contributions_scoped_route(base_url):
+    client = local_client(base_url=base_url)
+    contributions = list_ui_contributions.sync(
+        client=client,
+        work_item_id="wi_py",
+        phase="review",
+    )
+    assert isinstance(contributions, UIContributionsResponse), f"unexpected: {contributions!r}"
+    assert contributions.scope.work_item_id == "wi_py"
+    assert contributions.scope.phase == "review"
+    assert contributions.plugins is UNSET or contributions.plugins == []
 
 
 def test_daemon_clear_resets_work_item_state(base_url, tmp_path):

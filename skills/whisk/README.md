@@ -117,3 +117,4 @@ Concrete addresses are `pty:<id>`, `run:<id>`, `session:<id>`, `work-item:<id>`,
 - `whisk plugin trust <plugin-id> [-json] [-url URL]`: trust plugin.
 - `whisk plugin untrust <plugin-id> [-json] [-url URL]`: untrust plugin.
 - `whisk plugin attach <plugin-id> <template-id> -project <project-id> [-field key=value ...] [-json] [-url URL]`: run trusted project attachment template.
+- `whisk plugin contributions [-project id] [-work-item id] [-run id] [-session id] [-pane id] [-pty id] [-gate-report id] [-phase phase] [-json] [-url URL]`: list scoped UI contributions.

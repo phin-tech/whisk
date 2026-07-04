@@ -15,7 +15,7 @@ import (
 
 func runPlugin(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk plugin <list|registry|install|rescan|trust|untrust|attach>")
+		return fmt.Errorf("usage: whisk plugin <list|registry|install|rescan|trust|untrust|attach|contributions>")
 	}
 	switch args[0] {
 	case "list":
@@ -32,8 +32,10 @@ func runPlugin(args []string) error {
 		return runPluginUntrust(args[1:])
 	case "attach":
 		return runPluginAttach(args[1:])
+	case "contributions":
+		return runPluginContributions(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk plugin <list|registry|install|rescan|trust|untrust|attach>")
+		return fmt.Errorf("usage: whisk plugin <list|registry|install|rescan|trust|untrust|attach|contributions>")
 	}
 }
 
@@ -186,6 +188,46 @@ func runPluginAttach(args []string) error {
 	return nil
 }
 
+func runPluginContributions(args []string) error {
+	flags := flag.NewFlagSet("plugin contributions", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	projectID := flags.String("project", "", "project id")
+	workItemID := flags.String("work-item", "", "work item id")
+	runID := flags.String("run", "", "run id")
+	sessionID := flags.String("session", "", "session id")
+	paneID := flags.String("pane", "", "pane id")
+	ptyID := flags.String("pty", "", "pty id")
+	gateReportID := flags.String("gate-report", "", "gate report id")
+	phase := flags.String("phase", "", "workflow phase")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: whisk plugin contributions [-project id] [-work-item id] [-run id] [-session id] [-pane id] [-pty id] [-gate-report id] [-phase phase] [-json] [-url http://127.0.0.1:8787]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	contributions, err := client.NewHTTP(*baseURL, nil).ListUIContributions(ctx, protocol.UIContributionScope{
+		ProjectID:    *projectID,
+		WorkItemID:   *workItemID,
+		RunID:        *runID,
+		SessionID:    *sessionID,
+		PaneID:       *paneID,
+		PTYID:        *ptyID,
+		GateReportID: *gateReportID,
+		Phase:        *phase,
+	})
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(contributions)
+	}
+	return printUIContributions(contributions)
+}
+
 func runPluginTrustCommand(command string, args []string) error {
 	flags := flag.NewFlagSet("plugin "+command, flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
@@ -226,6 +268,24 @@ func printPlugins(plugins []protocol.PluginStatus, outputJSON bool) error {
 	fmt.Fprintln(writer, "ID\tTRUSTED\tVALID\tVERSION\tNAME")
 	for _, plugin := range plugins {
 		fmt.Fprintf(writer, "%s\t%v\t%v\t%s\t%s\n", plugin.ID, plugin.Trusted, plugin.Valid, plugin.Version, plugin.Name)
+	}
+	return nil
+}
+
+func printUIContributions(contributions protocol.UIContributionsResponse) error {
+	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	defer writer.Flush()
+	fmt.Fprintln(writer, "PLUGIN\tTYPE\tSCOPE\tID\tLABEL")
+	for _, plugin := range contributions.Plugins {
+		for _, panel := range plugin.Panels {
+			fmt.Fprintf(writer, "%s\tpanel\t%s\t%s\t%s\n", plugin.PluginID, panel.Scope, panel.ID, panel.Title)
+		}
+		for _, command := range plugin.Commands {
+			fmt.Fprintf(writer, "%s\tcommand\t%s\t%s\t%s\n", plugin.PluginID, command.Scope, command.ID, command.Label)
+		}
+		for _, action := range plugin.ReviewActions {
+			fmt.Fprintf(writer, "%s\treviewAction\t%s\t%s\t%s\n", plugin.PluginID, action.Scope, action.ID, action.Label)
+		}
 	}
 	return nil
 }

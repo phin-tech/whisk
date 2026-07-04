@@ -248,6 +248,67 @@ func protocolPluginUIPanelEntry(entry *app.PluginUIPanelEntry) *protocol.PluginU
 	}
 }
 
+func (s *HTTPServer) listUIContributions(w http.ResponseWriter, r *http.Request) {
+	scope := app.UIContributionScope{
+		ProjectID:    r.URL.Query().Get("projectId"),
+		WorkItemID:   r.URL.Query().Get("workItemId"),
+		RunID:        r.URL.Query().Get("runId"),
+		SessionID:    r.URL.Query().Get("sessionId"),
+		PaneID:       r.URL.Query().Get("paneId"),
+		PTYID:        r.URL.Query().Get("ptyId"),
+		GateReportID: r.URL.Query().Get("gateReportId"),
+		Phase:        r.URL.Query().Get("phase"),
+	}
+	contributions, err := s.runtime.ListUIContributions(r.Context(), scope)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	resp := protocol.UIContributionsResponse{
+		Scope: protocol.UIContributionScope{
+			ProjectID:    contributions.Scope.ProjectID,
+			WorkItemID:   contributions.Scope.WorkItemID,
+			RunID:        contributions.Scope.RunID,
+			SessionID:    contributions.Scope.SessionID,
+			PaneID:       contributions.Scope.PaneID,
+			PTYID:        contributions.Scope.PTYID,
+			GateReportID: contributions.Scope.GateReportID,
+			Phase:        contributions.Scope.Phase,
+		},
+		Plugins: protocolUIContributionPlugins(contributions.Plugins),
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func protocolUIContributionPlugins(plugins []app.UIContributionPlugin) []protocol.UIContributionPlugin {
+	out := make([]protocol.UIContributionPlugin, 0, len(plugins))
+	for _, p := range plugins {
+		plugin := protocol.UIContributionPlugin{
+			PluginID:       p.PluginID,
+			Name:           p.Name,
+			Version:        p.Version,
+			Trusted:        p.Trusted,
+			Enabled:        p.Enabled,
+			DisabledReason: p.DisabledReason,
+			Resolvers:      protocolPluginResolvers(p.Resolvers),
+			Permissions:    protocolPluginPermissions(p.Permissions),
+			Panels:         protocolPluginUIPanels(p.Panels),
+			Commands:       protocolPluginUICommands(p.Commands),
+			ReviewActions:  protocolPluginReviewActions(p.ReviewActions),
+		}
+		out = append(out, plugin)
+	}
+	return out
+}
+
+func protocolPluginResolvers(resolvers []app.PluginResolver) []protocol.PluginResolver {
+	out := make([]protocol.PluginResolver, 0, len(resolvers))
+	for _, r := range resolvers {
+		out = append(out, protocol.PluginResolver{Provider: r.Provider, Kinds: r.Kinds})
+	}
+	return out
+}
+
 func protocolPluginPermissions(permissions *app.PluginPermissions) *protocol.PluginPermissions {
 	if permissions == nil {
 		return nil

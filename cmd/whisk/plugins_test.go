@@ -99,6 +99,80 @@ func TestRunPluginListTableRemainsSummaryOnly(t *testing.T) {
 	}
 }
 
+func TestRunPluginContributionsJSONQueriesScope(t *testing.T) {
+	var gotPath string
+	var gotWorkItem string
+	var gotPhase string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.Method + " " + r.URL.Path
+		gotWorkItem = r.URL.Query().Get("workItemId")
+		gotPhase = r.URL.Query().Get("phase")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"scope":{"workItemId":"wi_01","phase":"review"},
+			"plugins":[{
+				"pluginId":"github",
+				"name":"GitHub",
+				"version":"0.1.0",
+				"trusted":true,
+				"enabled":true,
+				"commands":[{"id":"github.open","label":"GitHub: Open","scope":"global"}]
+			}]
+		}`)
+	}))
+	defer server.Close()
+
+	out, err := captureStdout(func() error {
+		return runPluginContributions([]string{"-json", "-url", server.URL, "-work-item", "wi_01", "-phase", "review"})
+	})
+	if err != nil {
+		t.Fatalf("runPluginContributions: %v", err)
+	}
+	if gotPath != "GET /v1/ui-contributions" || gotWorkItem != "wi_01" || gotPhase != "review" {
+		t.Fatalf("request = %q workItem=%q phase=%q", gotPath, gotWorkItem, gotPhase)
+	}
+	for _, want := range []string{`"workItemId": "wi_01"`, `"phase": "review"`, `"pluginId": "github"`, `"commands"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %s: %q", want, out)
+		}
+	}
+}
+
+func TestRunPluginContributionsTablePrintsRenderableRows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/ui-contributions" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"scope":{},
+			"plugins":[{
+				"pluginId":"github",
+				"name":"GitHub",
+				"version":"0.1.0",
+				"trusted":true,
+				"enabled":true,
+				"panels":[{"id":"github.panel","title":"GitHub Panel","scope":"workItem","kind":"view"}],
+				"commands":[{"id":"github.open","label":"GitHub: Open","scope":"global"}],
+				"reviewActions":[{"id":"github.review","label":"GitHub Review","scope":"workItem"}]
+			}]
+		}`)
+	}))
+	defer server.Close()
+
+	out, err := captureStdout(func() error {
+		return runPluginContributions([]string{"-url", server.URL})
+	})
+	if err != nil {
+		t.Fatalf("runPluginContributions: %v", err)
+	}
+	for _, want := range []string{"PLUGIN", "TYPE", "github", "panel", "command", "reviewAction", "GitHub: Open"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q: %q", want, out)
+		}
+	}
+}
+
 func TestRunPluginInstallPostsRegistryAndID(t *testing.T) {
 	var gotPath string
 	var gotReq protocol.InstallRegistryPluginRequest
