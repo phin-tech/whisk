@@ -6,6 +6,7 @@
   import ProjectsPanel from "./ProjectsPanel.svelte";
   import PtysPanel from "./PtysPanel.svelte";
   import SessionsPanel from "./SessionsPanel.svelte";
+  import { SIDEBAR_DEFAULT_WIDTH_PX, sidebarWidthFromDrag } from "./sidebarState";
   import ResizeHandle from "./ui/ResizeHandle.svelte";
   import WorkItemsPanel from "./WorkItemsPanel.svelte";
 
@@ -56,15 +57,9 @@
     bodyMarkdown: string;
   }) => void;
 
-  const minWidth = 240;
-  const maxWidth = 800;
-  let width = 320;
+  let width = SIDEBAR_DEFAULT_WIDTH_PX;
   let dragging = false;
   let teardown: (() => void) | null = null;
-
-  function clamp(value: number) {
-    return Math.max(minWidth, Math.min(maxWidth, value));
-  }
 
   function endDrag() {
     teardown?.();
@@ -78,9 +73,13 @@
     dragging = true;
     const startX = event.clientX;
     const startWidth = width;
-    const sign = railSide === "left" ? 1 : -1;
     const onMove = (moveEvent: MouseEvent) => {
-      width = clamp(startWidth + sign * (moveEvent.clientX - startX));
+      width = sidebarWidthFromDrag({
+        startWidthPx: startWidth,
+        startClientX: startX,
+        currentClientX: moveEvent.clientX,
+        railSide,
+      });
     };
     const onKey = (keyEvent: KeyboardEvent) => {
       if (keyEvent.key === "Escape") endDrag();
