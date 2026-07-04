@@ -6535,6 +6535,17 @@
           "gitSha": {
             "type": "string"
           },
+          "protocolVersion": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "supportedPreviousProtocolVersions": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
           "version": {
             "type": "string"
           }

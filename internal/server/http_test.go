@@ -59,6 +59,9 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	if compatibility.APIVersion != protocol.DaemonAPIVersion {
 		t.Fatalf("compatibility = %#v", compatibility)
 	}
+	if compatibility.ProtocolVersion != protocol.ProtocolVersion {
+		t.Fatalf("compatibility missing protocol version: %#v", compatibility)
+	}
 	if compatibility.GitSHA == "" {
 		t.Fatalf("compatibility missing git sha: %#v", compatibility)
 	}

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -18,12 +18,16 @@ class CompatibilityResponse:
         api_version (int):
         git_sha (str):
         dirty (bool | Unset):
+        protocol_version (int | Unset):
+        supported_previous_protocol_versions (list[int] | Unset):
         version (str | Unset):
     """
 
     api_version: int
     git_sha: str
     dirty: bool | Unset = UNSET
+    protocol_version: int | Unset = UNSET
+    supported_previous_protocol_versions: list[int] | Unset = UNSET
     version: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -33,6 +37,14 @@ class CompatibilityResponse:
         git_sha = self.git_sha
 
         dirty = self.dirty
+
+        protocol_version = self.protocol_version
+
+        supported_previous_protocol_versions: list[int] | Unset = UNSET
+        if not isinstance(self.supported_previous_protocol_versions, Unset):
+            supported_previous_protocol_versions = (
+                self.supported_previous_protocol_versions
+            )
 
         version = self.version
 
@@ -46,6 +58,12 @@ class CompatibilityResponse:
         )
         if dirty is not UNSET:
             field_dict["dirty"] = dirty
+        if protocol_version is not UNSET:
+            field_dict["protocolVersion"] = protocol_version
+        if supported_previous_protocol_versions is not UNSET:
+            field_dict["supportedPreviousProtocolVersions"] = (
+                supported_previous_protocol_versions
+            )
         if version is not UNSET:
             field_dict["version"] = version
 
@@ -60,12 +78,20 @@ class CompatibilityResponse:
 
         dirty = d.pop("dirty", UNSET)
 
+        protocol_version = d.pop("protocolVersion", UNSET)
+
+        supported_previous_protocol_versions = cast(
+            list[int], d.pop("supportedPreviousProtocolVersions", UNSET)
+        )
+
         version = d.pop("version", UNSET)
 
         compatibility_response = cls(
             api_version=api_version,
             git_sha=git_sha,
             dirty=dirty,
+            protocol_version=protocol_version,
+            supported_previous_protocol_versions=supported_previous_protocol_versions,
             version=version,
         )
 

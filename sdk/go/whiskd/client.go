@@ -54,6 +54,9 @@ type ClearDaemonRequest = protocol.ClearDaemonRequest
 type ClearDaemonResponse = protocol.ClearDaemonResponse
 type ClosePaneRequest = protocol.ClosePaneRequest
 type CloseSessionRequest = protocol.CloseSessionRequest
+type CompatibilityDecision = protocol.CompatibilityDecision
+type CompatibilityError = protocol.CompatibilityError
+type CompatibilityPolicy = protocol.CompatibilityPolicy
 type CompatibilityResponse = protocol.CompatibilityResponse
 type CompleteExecutionRequest = protocol.CompleteExecutionRequest
 type CompleteGateRequest = protocol.CompleteGateRequest
@@ -203,6 +206,7 @@ type WorkflowStage = workitem.WorkflowStage
 
 const (
 	DaemonAPIVersion                     = protocol.DaemonAPIVersion
+	ProtocolVersion                      = protocol.ProtocolVersion
 	RuntimeEventNone                     = protocol.RuntimeEventNone
 	LayoutLeaf                           = session.LayoutLeaf
 	LayoutSplit                          = session.LayoutSplit

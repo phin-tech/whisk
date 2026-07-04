@@ -2,6 +2,7 @@ package client_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -62,6 +63,9 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	}
 	if compatibility.APIVersion != protocol.DaemonAPIVersion || compatibility.GitSHA == "" {
 		t.Fatalf("compatibility = %#v", compatibility)
+	}
+	if compatibility.ProtocolVersion != protocol.ProtocolVersion {
+		t.Fatalf("compatibility missing protocol version: %#v", compatibility)
 	}
 	if compatibility.Version == "" {
 		t.Fatalf("compatibility missing version: %#v", compatibility)
@@ -852,6 +856,46 @@ func (f *pluginRegistryFake) RunProjectAttachmentTemplate(_ context.Context, req
 
 func (f *pluginRegistryFake) ResolveProjectAttachmentProvider(string) app.ProjectContextResolver {
 	return nil
+}
+
+func TestHTTPClientEnsureCompatibleAcceptsLegacyAPIVersion(t *testing.T) {
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"apiVersion":%d,"gitSha":"abc"}`, protocol.ProtocolVersion)
+	}))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	compatibility, err := daemon.EnsureCompatible(context.Background())
+	if err != nil {
+		t.Fatalf("ensure compatible: %v", err)
+	}
+	if compatibility.DaemonProtocolVersion() != protocol.ProtocolVersion {
+		t.Fatalf("compatibility = %#v", compatibility)
+	}
+}
+
+func TestHTTPClientEnsureCompatibleReturnsTypedError(t *testing.T) {
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(
+			w,
+			`{"apiVersion":%d,"protocolVersion":%d,"gitSha":"abc"}`,
+			protocol.ProtocolVersion+1,
+			protocol.ProtocolVersion+1,
+		)
+	}))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	_, err := daemon.EnsureCompatible(context.Background())
+	if err == nil {
+		t.Fatalf("expected compatibility error")
+	}
+	var compatibilityErr *protocol.CompatibilityError
+	if !errors.As(err, &compatibilityErr) {
+		t.Fatalf("expected CompatibilityError, got %T", err)
+	}
 }
 
 func TestHTTPClientReportsDaemonErrors(t *testing.T) {

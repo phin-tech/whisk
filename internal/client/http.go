@@ -88,6 +88,17 @@ func (c *HTTPClient) Compatibility(ctx context.Context) (protocol.CompatibilityR
 	return response, err
 }
 
+func (c *HTTPClient) EnsureCompatible(ctx context.Context) (protocol.CompatibilityResponse, error) {
+	response, err := c.Compatibility(ctx)
+	if err != nil {
+		return response, err
+	}
+	if err := protocol.EnsureCompatible(response); err != nil {
+		return response, err
+	}
+	return response, nil
+}
+
 func (c *HTTPClient) ClearDaemon(ctx context.Context, req protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error) {
 	var response protocol.ClearDaemonResponse
 	err := c.post(ctx, "/v1/daemon/clear", req, &response)

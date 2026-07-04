@@ -216,7 +216,13 @@ func newDaemonStatusServer(t *testing.T) *daemonStatusServer {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"apiVersion":%d,"gitSha":"abc123","version":%q,"dirty":false}`, protocol.DaemonAPIVersion, status.version.Load().(string))
+		_, _ = fmt.Fprintf(
+			w,
+			`{"apiVersion":%d,"protocolVersion":%d,"gitSha":"abc123","version":%q,"dirty":false}`,
+			protocol.DaemonAPIVersion,
+			protocol.ProtocolVersion,
+			status.version.Load().(string),
+		)
 	})
 	status.Server = httptest.NewServer(mux)
 	t.Cleanup(status.Close)
@@ -243,6 +249,8 @@ func (f *daemonSupervisorFake) Status(ctx context.Context, baseURL string) daemo
 		return status
 	}
 	status.APIVersion = compat.APIVersion
+	status.ProtocolVersion = compat.DaemonProtocolVersion()
+	status.SupportedPreviousProtocolVersions = append([]int(nil), compat.SupportedPreviousProtocolVersions...)
 	status.GitSHA = compat.GitSHA
 	status.Version = compat.Version
 	status.Dirty = compat.Dirty
