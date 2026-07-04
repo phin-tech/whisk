@@ -18,6 +18,19 @@ func TestNextEventRouteIncludesCursorAndResponseEnvelope(t *testing.T) {
 	}
 }
 
+func TestDetectedAgentsRouteUsesAgentsTagAndReadModel(t *testing.T) {
+	route, ok := routeByOperationID("listDetectedAgents")
+	if !ok {
+		t.Fatalf("listDetectedAgents route missing")
+	}
+	if route.Method != "GET" || route.Path != "/v1/agents/detected" || route.Tag != "agents" {
+		t.Fatalf("route = %#v", route)
+	}
+	if _, ok := route.Response.([]DetectedAgent); !ok {
+		t.Fatalf("listDetectedAgents response = %T, want []DetectedAgent", route.Response)
+	}
+}
+
 func TestAPIRoutesDoNotExposePTYBookmarks(t *testing.T) {
 	for _, route := range APIRoutes {
 		if route.OperationID == "addPTYBookmark" || route.OperationID == "listPTYBookmarks" || route.OperationID == "removePTYBookmark" {

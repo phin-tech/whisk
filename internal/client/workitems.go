@@ -142,6 +142,12 @@ func (c *HTTPClient) ListAgentProfiles(ctx context.Context) ([]protocol.AgentPro
 	return profiles, err
 }
 
+func (c *HTTPClient) ListDetectedAgents(ctx context.Context) ([]protocol.DetectedAgent, error) {
+	var detected []protocol.DetectedAgent
+	err := c.get(ctx, "/v1/agents/detected", nil, &detected)
+	return detected, err
+}
+
 func (c *HTTPClient) ListWorkItems(ctx context.Context, projectID string) ([]protocol.WorkItem, error) {
 	query := url.Values{}
 	if projectID != "" {

@@ -1045,6 +1045,10 @@ func (f *runtimeClientFake) ListAgentProfiles(context.Context) ([]protocol.Agent
 	return f.agentProfiles, nil
 }
 
+func (f *runtimeClientFake) ListDetectedAgents(context.Context) ([]protocol.DetectedAgent, error) {
+	return nil, nil
+}
+
 func (f *runtimeClientFake) ListPromptTemplates(context.Context) ([]protocol.PromptTemplate, error) {
 	return f.promptTemplates, nil
 }

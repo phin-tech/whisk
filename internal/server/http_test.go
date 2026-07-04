@@ -170,6 +170,36 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 
 }
 
+func TestHTTPServerListsDetectedAgents(t *testing.T) {
+	binDir := t.TempDir()
+	writeExecutable(t, filepath.Join(binDir, "claude"))
+	t.Setenv("PATH", binDir)
+
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: newFakePTYBackend()})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	handler := server.NewHTTP(runtime)
+
+	detected := getJSON[[]protocol.DetectedAgent](t, handler, "/v1/agents/detected", http.StatusOK)
+	byID := map[string]protocol.DetectedAgent{}
+	for _, agent := range detected {
+		byID[agent.ProfileID] = agent
+	}
+	claude, ok := byID["claude"]
+	if !ok ||
+		claude.Provider != "claude" ||
+		claude.Label != "Claude Code" ||
+		claude.DetectCommand != "claude" ||
+		claude.Path != filepath.Join(binDir, "claude") {
+		t.Fatalf("claude detection = %#v (ok=%v), all = %#v", claude, ok, detected)
+	}
+	if _, ok := byID["claude-plan"]; !ok {
+		t.Fatalf("expected claude-plan detection, got %#v", detected)
+	}
+	if _, ok := byID["codex"]; ok {
+		t.Fatalf("unexpected codex detection = %#v", detected)
+	}
+}
+
 func TestHTTPServerPluginRoutes(t *testing.T) {
 	plugins := &pluginRegistryFake{statuses: []app.PluginStatus{{ID: "github", Name: "GitHub", Valid: true}}}
 	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: plugins})
@@ -961,7 +991,7 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	if prompts := getJSON[[]protocol.PromptTemplate](t, handler, "/v1/prompt-templates", http.StatusOK); len(prompts) == 0 {
 		t.Fatalf("prompt templates = %#v", prompts)
 	}
-	if profiles := getJSON[[]protocol.AgentProfile](t, handler, "/v1/agent-profiles", http.StatusOK); len(profiles) == 0 || profiles[0].ID == "" {
+	if profiles := getJSON[[]protocol.AgentProfile](t, handler, "/v1/agent-profiles", http.StatusOK); len(profiles) == 0 || profiles[0].ID == "" || profiles[0].PromptInjectionMode == "" {
 		t.Fatalf("agent profiles = %#v", profiles)
 	}
 
@@ -1907,6 +1937,13 @@ func assertStatus(t *testing.T, handler http.Handler, method string, path string
 	handler.ServeHTTP(recorder, httptest.NewRequest(method, path, strings.NewReader(body)))
 	if recorder.Code != wantStatus {
 		t.Fatalf("%s %s status = %d body = %s", method, path, recorder.Code, recorder.Body.String())
+	}
+}
+
+func writeExecutable(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write executable %s: %v", path, err)
 	}
 }
 

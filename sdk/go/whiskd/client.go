@@ -74,6 +74,7 @@ type DeleteWorkItemRequest = protocol.DeleteWorkItemRequest
 type DetachPanePTYRequest = protocol.DetachPanePTYRequest
 type DetachedPanePTY = protocol.DetachedPanePTY
 type DetectWorktrunkRequest = protocol.DetectWorktrunkRequest
+type DetectedAgent = protocol.DetectedAgent
 type ErrorResponse = protocol.ErrorResponse
 type ExportWorkflowDefinitionFileRequest = protocol.ExportWorkflowDefinitionFileRequest
 type GateReport = protocol.GateReport

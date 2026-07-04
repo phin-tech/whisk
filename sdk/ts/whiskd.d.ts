@@ -293,6 +293,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/detected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List builtin agent profiles detected on PATH */
+        get: operations["listDetectedAgents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/artifacts": {
         parameters: {
             query?: never;
@@ -1889,9 +1906,17 @@ export interface components {
         };
         AgentProfile: {
             description?: string;
+            detectAliases?: string[];
+            detectCmd?: string;
+            draftPromptEnvVar?: string;
+            draftPromptFlag?: string;
+            expectedProcess?: string;
             id: string;
             label: string;
+            preflightTrust?: string;
+            promptInjectionMode: string;
             provider: string;
+            readySignal?: string;
         };
         AgentPrompt: {
             answer?: string;
@@ -2096,6 +2121,13 @@ export interface components {
         DetectWorktrunkRequest: {
             overridePath: string;
             repoPath: string;
+        };
+        DetectedAgent: {
+            detectCommand: string;
+            label: string;
+            path: string;
+            profileId: string;
+            provider: string;
         };
         ErrorResponse: {
             error: string;
@@ -3540,6 +3572,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentPrompt"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listDetectedAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetectedAgent"][];
                 };
             };
             /** @description error */

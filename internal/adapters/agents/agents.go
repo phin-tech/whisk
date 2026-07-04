@@ -15,42 +15,87 @@ const (
 	ProviderCodex  Provider = "codex"
 )
 
+type PromptInjectionMode string
+
+const (
+	PromptInjectionArgv                  PromptInjectionMode = "argv"
+	PromptInjectionFlagPrompt            PromptInjectionMode = "flag-prompt"
+	PromptInjectionFlagPromptInteractive PromptInjectionMode = "flag-prompt-interactive"
+	PromptInjectionFlagInteractive       PromptInjectionMode = "flag-interactive"
+	PromptInjectionStdinAfterStart       PromptInjectionMode = "stdin-after-start"
+)
+
+type PreflightTrust string
+
+const (
+	PreflightTrustCursor  PreflightTrust = "cursor"
+	PreflightTrustCopilot PreflightTrust = "copilot"
+	PreflightTrustCodex   PreflightTrust = "codex"
+)
+
+type ReadySignal string
+
+const (
+	ReadySignalRenderQuietAfterBracketedPaste  ReadySignal = "render-quiet-after-bracketed-paste"
+	ReadySignalCodexComposerPrompt             ReadySignal = "codex-composer-prompt"
+	ReadySignalRenderCursorAfterBracketedPaste ReadySignal = "render-cursor-after-bracketed-paste"
+)
+
 // ProfileInfo is the selectable, human-facing view of a builtin agent profile.
 // It deliberately omits launch internals (command/args/env) so it can be surfaced
 // to clients as a read model.
 type ProfileInfo struct {
-	ID          string
-	Provider    Provider
-	Label       string
-	Description string
+	ID                  string
+	Provider            Provider
+	Label               string
+	Description         string
+	DetectCmd           string
+	DetectAliases       []string
+	ExpectedProcess     string
+	PromptInjectionMode PromptInjectionMode
+	DraftPromptFlag     string
+	DraftPromptEnvVar   string
+	PreflightTrust      PreflightTrust
+	ReadySignal         ReadySignal
 }
 
 // profileCatalog lists the builtin profiles in display order with human labels.
 // This is the source of truth for what clients may pick; keep it in sync with
 // BuiltinProfiles.
 var profileCatalog = []ProfileInfo{
-	{ID: "claude", Provider: ProviderClaude, Label: "Claude Code", Description: "Claude Code with default permissions."},
-	{ID: "claude-plan", Provider: ProviderClaude, Label: "Claude Code (plan mode)", Description: "Claude Code restricted to plan mode."},
-	{ID: "claude-openrouter", Provider: ProviderClaude, Label: "Claude Code (OpenRouter)", Description: "Claude Code routed through OpenRouter with a budget cap."},
-	{ID: "codex", Provider: ProviderCodex, Label: "Codex", Description: "OpenAI Codex CLI."},
-	{ID: "codex-plan", Provider: ProviderCodex, Label: "Codex (plan mode)", Description: "Codex CLI in read-only planning mode."},
-	{ID: "plain-shell", Provider: ProviderShell, Label: "Shell", Description: "Plain interactive shell, no agent."},
-	{ID: "prompt-capture", Provider: ProviderShell, Label: "Prompt capture", Description: "Echoes the prompt via cat for smoke tests."},
+	{ID: "claude", Provider: ProviderClaude, Label: "Claude Code", Description: "Claude Code with default permissions.", DetectCmd: "claude", ExpectedProcess: "claude", PromptInjectionMode: PromptInjectionArgv, DraftPromptFlag: "--prefill"},
+	{ID: "claude-plan", Provider: ProviderClaude, Label: "Claude Code (plan mode)", Description: "Claude Code restricted to plan mode.", DetectCmd: "claude", ExpectedProcess: "claude", PromptInjectionMode: PromptInjectionArgv, DraftPromptFlag: "--prefill"},
+	{ID: "claude-openrouter", Provider: ProviderClaude, Label: "Claude Code (OpenRouter)", Description: "Claude Code routed through OpenRouter with a budget cap.", DetectCmd: "claude", ExpectedProcess: "claude", PromptInjectionMode: PromptInjectionArgv, DraftPromptFlag: "--prefill"},
+	{ID: "codex", Provider: ProviderCodex, Label: "Codex", Description: "OpenAI Codex CLI.", DetectCmd: "codex", ExpectedProcess: "codex", PromptInjectionMode: PromptInjectionArgv, PreflightTrust: PreflightTrustCodex, ReadySignal: ReadySignalCodexComposerPrompt},
+	{ID: "codex-plan", Provider: ProviderCodex, Label: "Codex (plan mode)", Description: "Codex CLI in read-only planning mode.", DetectCmd: "codex", ExpectedProcess: "codex", PromptInjectionMode: PromptInjectionArgv, PreflightTrust: PreflightTrustCodex, ReadySignal: ReadySignalCodexComposerPrompt},
+	{ID: "plain-shell", Provider: ProviderShell, Label: "Shell", Description: "Plain interactive shell, no agent.", PromptInjectionMode: PromptInjectionStdinAfterStart},
+	{ID: "prompt-capture", Provider: ProviderShell, Label: "Prompt capture", Description: "Echoes the prompt via cat for smoke tests.", PromptInjectionMode: PromptInjectionStdinAfterStart},
 }
 
 // ProfileList returns the selectable builtin agent profiles in display order.
 func ProfileList() []ProfileInfo {
 	out := make([]ProfileInfo, len(profileCatalog))
 	copy(out, profileCatalog)
+	for i := range out {
+		out[i].DetectAliases = append([]string(nil), out[i].DetectAliases...)
+	}
 	return out
 }
 
 type Profile struct {
-	ID       string
-	Provider Provider
-	Command  string
-	Args     []string
-	Env      map[string]string
+	ID                  string
+	Provider            Provider
+	Command             string
+	Args                []string
+	Env                 map[string]string
+	DetectCmd           string
+	DetectAliases       []string
+	ExpectedProcess     string
+	PromptInjectionMode PromptInjectionMode
+	DraftPromptFlag     string
+	DraftPromptEnvVar   string
+	PreflightTrust      PreflightTrust
+	ReadySignal         ReadySignal
 }
 
 type LaunchRequest struct {
@@ -143,6 +188,7 @@ func resolveProfile(req LaunchRequest) (Profile, error) {
 	if req.Profile != nil {
 		profile := *req.Profile
 		profile.Args = append([]string(nil), req.Profile.Args...)
+		profile.DetectAliases = append([]string(nil), req.Profile.DetectAliases...)
 		profile.Env = mergeEnv(req.Profile.Env, nil)
 		if profile.Command == "" {
 			return Profile{}, fmt.Errorf("profile command required")
@@ -166,63 +212,58 @@ func BuiltinProfiles() map[string]Profile {
 		shell = "sh"
 	}
 	agentEnv := map[string]string{"PATH": commonAgentPath()}
-	return map[string]Profile{
-		"plain-shell": {
-			ID:       "plain-shell",
-			Provider: ProviderShell,
-			Command:  shell,
-		},
-		"prompt-capture": {
-			ID:       "prompt-capture",
-			Provider: ProviderShell,
-			Command:  "cat",
-		},
-		"claude": {
-			ID:       "claude",
-			Provider: ProviderClaude,
-			Command:  "claude",
-			Env:      agentEnv,
-		},
-		"claude-plan": {
-			ID:       "claude-plan",
-			Provider: ProviderClaude,
-			Command:  "claude",
-			Args:     []string{"--permission-mode", "plan"},
-			Env:      agentEnv,
-		},
-		"claude-openrouter": {
-			ID:       "claude-openrouter",
-			Provider: ProviderClaude,
-			Command:  "claude",
-			Args: []string{
-				"--print",
-				"--max-budget-usd", "0.05",
-				"--allowedTools", "Bash(whisk question ask*)",
-			},
-			Env: mergeEnv(agentEnv, map[string]string{
-				"ANTHROPIC_BASE_URL":             "https://openrouter.ai/api",
-				"ANTHROPIC_AUTH_TOKEN":           os.Getenv("OPENROUTER_API_KEY"),
-				"ANTHROPIC_API_KEY":              "",
-				"ANTHROPIC_DEFAULT_OPUS_MODEL":   envOrDefault("ANTHROPIC_DEFAULT_OPUS_MODEL", "~anthropic/claude-haiku-latest"),
-				"ANTHROPIC_DEFAULT_SONNET_MODEL": envOrDefault("ANTHROPIC_DEFAULT_SONNET_MODEL", "~anthropic/claude-haiku-latest"),
-				"ANTHROPIC_DEFAULT_HAIKU_MODEL":  envOrDefault("ANTHROPIC_DEFAULT_HAIKU_MODEL", "~anthropic/claude-haiku-latest"),
-				"CLAUDE_CODE_SUBAGENT_MODEL":     envOrDefault("CLAUDE_CODE_SUBAGENT_MODEL", "~anthropic/claude-haiku-latest"),
-			}),
-		},
-		"codex": {
-			ID:       "codex",
-			Provider: ProviderCodex,
-			Command:  "codex",
-			Env:      agentEnv,
-		},
-		"codex-plan": {
-			ID:       "codex-plan",
-			Provider: ProviderCodex,
-			Command:  "codex",
-			Args:     []string{"--sandbox", "read-only"},
-			Env:      agentEnv,
-		},
+	profile := func(id string, command string, args []string, env map[string]string) Profile {
+		info, ok := profileInfoByID(id)
+		if !ok {
+			panic("builtin profile missing catalog metadata: " + id)
+		}
+		return Profile{
+			ID:                  info.ID,
+			Provider:            info.Provider,
+			Command:             command,
+			Args:                append([]string(nil), args...),
+			Env:                 env,
+			DetectCmd:           info.DetectCmd,
+			DetectAliases:       append([]string(nil), info.DetectAliases...),
+			ExpectedProcess:     info.ExpectedProcess,
+			PromptInjectionMode: info.PromptInjectionMode,
+			DraftPromptFlag:     info.DraftPromptFlag,
+			DraftPromptEnvVar:   info.DraftPromptEnvVar,
+			PreflightTrust:      info.PreflightTrust,
+			ReadySignal:         info.ReadySignal,
+		}
 	}
+	return map[string]Profile{
+		"plain-shell":    profile("plain-shell", shell, nil, nil),
+		"prompt-capture": profile("prompt-capture", "cat", nil, nil),
+		"claude":         profile("claude", "claude", nil, agentEnv),
+		"claude-plan":    profile("claude-plan", "claude", []string{"--permission-mode", "plan"}, agentEnv),
+		"claude-openrouter": profile("claude-openrouter", "claude", []string{
+			"--print",
+			"--max-budget-usd", "0.05",
+			"--allowedTools", "Bash(whisk question ask*)",
+		}, mergeEnv(agentEnv, map[string]string{
+			"ANTHROPIC_BASE_URL":             "https://openrouter.ai/api",
+			"ANTHROPIC_AUTH_TOKEN":           os.Getenv("OPENROUTER_API_KEY"),
+			"ANTHROPIC_API_KEY":              "",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL":   envOrDefault("ANTHROPIC_DEFAULT_OPUS_MODEL", "~anthropic/claude-haiku-latest"),
+			"ANTHROPIC_DEFAULT_SONNET_MODEL": envOrDefault("ANTHROPIC_DEFAULT_SONNET_MODEL", "~anthropic/claude-haiku-latest"),
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL":  envOrDefault("ANTHROPIC_DEFAULT_HAIKU_MODEL", "~anthropic/claude-haiku-latest"),
+			"CLAUDE_CODE_SUBAGENT_MODEL":     envOrDefault("CLAUDE_CODE_SUBAGENT_MODEL", "~anthropic/claude-haiku-latest"),
+		})),
+		"codex":      profile("codex", "codex", nil, agentEnv),
+		"codex-plan": profile("codex-plan", "codex", []string{"--sandbox", "read-only"}, agentEnv),
+	}
+}
+
+func profileInfoByID(id string) (ProfileInfo, bool) {
+	for _, profile := range profileCatalog {
+		if profile.ID == id {
+			profile.DetectAliases = append([]string(nil), profile.DetectAliases...)
+			return profile, true
+		}
+	}
+	return ProfileInfo{}, false
 }
 
 func commonAgentPath() string {

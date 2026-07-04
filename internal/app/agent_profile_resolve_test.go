@@ -1,6 +1,9 @@
 package app
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/domain/workitem"
@@ -31,5 +34,39 @@ func TestResolveAgentProfileID(t *testing.T) {
 				t.Fatalf("resolveAgentProfileID(%q, %#v, %q) = %q, want %q", tc.explicit, tc.phaseAgents, tc.preset, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestRuntimeListDetectedAgentsUsesProfileCatalog(t *testing.T) {
+	binDir := t.TempDir()
+	writeExecutable(t, filepath.Join(binDir, "codex"))
+	t.Setenv("PATH", binDir)
+
+	runtime := NewRuntime(RuntimeConfig{})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	detected, err := runtime.ListDetectedAgents(context.Background())
+	if err != nil {
+		t.Fatalf("ListDetectedAgents error: %v", err)
+	}
+	byID := map[string]string{}
+	for _, agent := range detected {
+		byID[agent.ProfileID] = agent.Path
+	}
+	if byID["codex"] != filepath.Join(binDir, "codex") {
+		t.Fatalf("detected agents = %#v", detected)
+	}
+	if byID["codex-plan"] != filepath.Join(binDir, "codex") {
+		t.Fatalf("codex-plan detection = %#v", detected)
+	}
+	if _, ok := byID["claude"]; ok {
+		t.Fatalf("unexpected claude detection = %#v", detected)
+	}
+}
+
+func writeExecutable(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write executable %s: %v", path, err)
 	}
 }

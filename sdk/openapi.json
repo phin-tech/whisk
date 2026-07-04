@@ -798,6 +798,45 @@
         }
       }
     },
+    "/v1/agents/detected": {
+      "get": {
+        "operationId": "listDetectedAgents",
+        "summary": "List builtin agent profiles detected on PATH",
+        "tags": [
+          "agents"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DetectedAgent"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/artifacts": {
       "get": {
         "operationId": "listArtifacts",
@@ -6131,20 +6170,48 @@
           "description": {
             "type": "string"
           },
+          "detectAliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "detectCmd": {
+            "type": "string"
+          },
+          "draftPromptEnvVar": {
+            "type": "string"
+          },
+          "draftPromptFlag": {
+            "type": "string"
+          },
+          "expectedProcess": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
           "label": {
             "type": "string"
           },
+          "preflightTrust": {
+            "type": "string"
+          },
+          "promptInjectionMode": {
+            "type": "string"
+          },
           "provider": {
+            "type": "string"
+          },
+          "readySignal": {
             "type": "string"
           }
         },
         "required": [
           "id",
           "provider",
-          "label"
+          "label",
+          "promptInjectionMode"
         ],
         "type": "object"
       },
@@ -6833,6 +6900,33 @@
         "required": [
           "repoPath",
           "overridePath"
+        ],
+        "type": "object"
+      },
+      "DetectedAgent": {
+        "properties": {
+          "detectCommand": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "profileId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "profileId",
+          "provider",
+          "label",
+          "detectCommand",
+          "path"
         ],
         "type": "object"
       },

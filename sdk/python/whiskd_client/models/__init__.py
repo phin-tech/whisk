@@ -51,6 +51,7 @@ from .delete_work_item_request import DeleteWorkItemRequest
 from .detach_pane_pty_request import DetachPanePTYRequest
 from .detached_pane_pty import DetachedPanePTY
 from .detect_worktrunk_request import DetectWorktrunkRequest
+from .detected_agent import DetectedAgent
 from .error_response import ErrorResponse
 from .export_workflow_definition_file_request import ExportWorkflowDefinitionFileRequest
 from .gate_config import GateConfig
@@ -236,6 +237,7 @@ __all__ = (
     "DeleteWorkItemRequest",
     "DetachedPanePTY",
     "DetachPanePTYRequest",
+    "DetectedAgent",
     "DetectWorktrunkRequest",
     "ErrorResponse",
     "ExportWorkflowDefinitionFileRequest",

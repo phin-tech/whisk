@@ -574,10 +574,26 @@ type ReadyWorkSummary = workitem.ReadyWorkSummary
 // AgentProfile is the selectable, human-facing view of a builtin agent profile
 // exposed to clients so they can choose which agent runs an execution.
 type AgentProfile struct {
-	ID          string `json:"id"`
-	Provider    string `json:"provider"`
-	Label       string `json:"label"`
-	Description string `json:"description,omitempty"`
+	ID                  string   `json:"id"`
+	Provider            string   `json:"provider"`
+	Label               string   `json:"label"`
+	Description         string   `json:"description,omitempty"`
+	DetectCmd           string   `json:"detectCmd,omitempty"`
+	DetectAliases       []string `json:"detectAliases,omitempty"`
+	ExpectedProcess     string   `json:"expectedProcess,omitempty"`
+	PromptInjectionMode string   `json:"promptInjectionMode"`
+	DraftPromptFlag     string   `json:"draftPromptFlag,omitempty"`
+	DraftPromptEnvVar   string   `json:"draftPromptEnvVar,omitempty"`
+	PreflightTrust      string   `json:"preflightTrust,omitempty"`
+	ReadySignal         string   `json:"readySignal,omitempty"`
+}
+
+type DetectedAgent struct {
+	ProfileID     string `json:"profileId"`
+	Provider      string `json:"provider"`
+	Label         string `json:"label"`
+	DetectCommand string `json:"detectCommand"`
+	Path          string `json:"path"`
 }
 
 type ProjectDetail struct {

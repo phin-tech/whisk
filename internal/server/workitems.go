@@ -612,12 +612,7 @@ func (s *HTTPServer) listAgentProfiles(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]protocol.AgentProfile, len(profiles))
 	for i, profile := range profiles {
-		out[i] = protocol.AgentProfile{
-			ID:          profile.ID,
-			Provider:    string(profile.Provider),
-			Label:       profile.Label,
-			Description: profile.Description,
-		}
+		out[i] = agentProfileToProtocol(profile)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
