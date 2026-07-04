@@ -19,6 +19,38 @@ export type TerminalStreamPtyReadModel = {
   id?: string | null;
 };
 
+export type TerminalStreamCleanup<Stream = unknown> = {
+  removedPtyIds: string[];
+  streamsToClose: Stream[];
+  reconnectTimersToClear: number[];
+  nextState: TerminalStreamState<Stream>;
+};
+
+export function terminalStreamHasLivePty(ptyId: string, livePtyIds: Iterable<string>) {
+  const normalized = normalizedPtyId(ptyId);
+  return Boolean(normalized) && normalizedPtyIdSet(livePtyIds).has(normalized);
+}
+
+export function terminalStreamCleanupForLivePtys<Stream>(
+  state: TerminalStreamState<Stream>,
+  livePtyIds: Iterable<string>,
+): TerminalStreamCleanup<Stream> {
+  const live = normalizedPtyIdSet(livePtyIds);
+  const removedPtyIds = terminalStreamRemovedPtyIds(state, live);
+  return {
+    removedPtyIds,
+    streamsToClose: removedPtyIds.flatMap((ptyId) => {
+      const stream = state.ptyStreams[ptyId];
+      return stream === undefined ? [] : [stream];
+    }),
+    reconnectTimersToClear: removedPtyIds.flatMap((ptyId) => {
+      const timer = state.ptyReconnectTimers[ptyId];
+      return timer === undefined ? [] : [timer];
+    }),
+    nextState: retainPtyState(state, live),
+  };
+}
+
 export function retainPtyState<Stream>(
   state: TerminalStreamState<Stream>,
   livePtyIds: Iterable<string>,

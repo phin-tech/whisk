@@ -172,8 +172,8 @@
     writePTYInputOverSocket,
   } from "./ptyStream";
   import {
-    retainPtyState,
-    terminalStreamRemovedPtyIds,
+    terminalStreamCleanupForLivePtys,
+    terminalStreamHasLivePty,
     type TerminalStreamState,
   } from "./terminalStreams";
   import {
@@ -324,6 +324,7 @@
   let loadingSession = false;
   let loadingPtys = false;
   let loadingPTYHistory = false;
+  let ptyInventoryLoaded = false;
   let loadingWork = false;
   let loadingStatusEvents = false;
   let outputChunks: Record<string, Uint8Array[]> = {};
@@ -613,6 +614,7 @@
     try {
       const [nextPtys, nextHistory] = await Promise.all([ListPTYs(), ListPTYHistory()]);
       ptys = nextPtys;
+      ptyInventoryLoaded = true;
       ptyHistory = nextHistory;
       pruneTerminalStreamsForLivePtys(nextPtys.map((pty) => pty.id));
       if (selectedPTYHistory && !nextHistory.some((item) => item.ptyId === selectedPTYHistory?.ptyId)) {
@@ -827,9 +829,11 @@
   }
 
   async function refreshOutput(ptyId: string) {
+    if (!canRefreshPTYOutput(ptyId)) return;
     const generation = daemonLink.generation;
     const inFlightGeneration = outputFetchInFlight.get(ptyId);
     if (inFlightGeneration === generation) {
+      if (!canRefreshPTYOutput(ptyId)) return;
       outputFetchAgain.add(ptyId);
       return;
     }
@@ -842,7 +846,7 @@
           ptyId,
           fromOffset,
         });
-        if (!isCurrentDaemonGeneration(daemonLink, generation)) return;
+        if (!isCurrentDaemonGeneration(daemonLink, generation) || !canRefreshPTYOutput(ptyId)) return;
         const currentOffset = offsets[ptyId] ?? 0;
         const snapshotChunk = outputSnapshotChunkAfterOffset(snapshot, currentOffset);
         if (snapshotChunk) {
@@ -856,7 +860,7 @@
           };
         }
         offsets = { ...offsets, [ptyId]: Math.max(currentOffset, snapshot.offset) };
-      } while (outputFetchAgain.has(ptyId));
+      } while (canRefreshPTYOutput(ptyId) && outputFetchAgain.has(ptyId));
     } finally {
       if (outputFetchInFlight.get(ptyId) === generation) outputFetchInFlight.delete(ptyId);
     }
@@ -873,6 +877,26 @@
   function hasActivePTYStream(ptyId: string) {
     const socket = ptyStreams[ptyId];
     return Boolean(socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING);
+  }
+
+  function canRefreshPTYOutput(ptyId: string) {
+    return isVisiblePty(ptyId) && isLivePty(ptyId);
+  }
+
+  function canOpenPTYStream(ptyId: string) {
+    return daemonLink.canUseDaemon && isVisiblePty(ptyId);
+  }
+
+  function canContinuePTYStream(ptyId: string) {
+    return canOpenPTYStream(ptyId) && (!ptyInventoryLoaded || loadingPtys || isLivePty(ptyId));
+  }
+
+  function isVisiblePty(ptyId: string) {
+    return terminalStreamHasLivePty(ptyId, visiblePTYIds);
+  }
+
+  function isLivePty(ptyId: string) {
+    return terminalStreamHasLivePty(ptyId, ptys.map((pty) => pty.id));
   }
 
   function currentTerminalStreamState(): TerminalStreamState<WebSocket> {
@@ -904,19 +928,10 @@
   }
 
   function pruneTerminalStreamsForLivePtys(livePtyIds: string[]) {
-    const currentState = currentTerminalStreamState();
-    const removedPtyIds = terminalStreamRemovedPtyIds(currentState, livePtyIds);
-    const socketsToClose = removedPtyIds.flatMap((ptyId) => {
-      const socket = ptyStreams[ptyId];
-      return socket ? [socket] : [];
-    });
-    const timersToClear = removedPtyIds.flatMap((ptyId) => {
-      const timer = ptyReconnectTimers[ptyId];
-      return timer === undefined ? [] : [timer];
-    });
-    applyTerminalStreamState(retainPtyState(currentState, livePtyIds));
-    for (const timer of timersToClear) window.clearTimeout(timer);
-    for (const socket of socketsToClose) socket.close();
+    const cleanup = terminalStreamCleanupForLivePtys(currentTerminalStreamState(), livePtyIds);
+    applyTerminalStreamState(cleanup.nextState);
+    for (const timer of cleanup.reconnectTimersToClear) window.clearTimeout(timer);
+    for (const socket of cleanup.streamsToClose) socket.close();
   }
 
   function replaceMap<K, V>(target: Map<K, V>, source: ReadonlyMap<K, V>) {
@@ -958,7 +973,7 @@
     const timer = window.setTimeout(() => {
       const { [ptyId]: _, ...remaining } = ptyReconnectTimers;
       ptyReconnectTimers = remaining;
-      if (stopped || !isCurrentDaemonGeneration(daemonLink, generation) || !visiblePTYIds.includes(ptyId)) return;
+      if (stopped || !isCurrentDaemonGeneration(daemonLink, generation) || !canContinuePTYStream(ptyId)) return;
       void openPTYStream(ptyId).catch((err) => {
         if (!isStalePTYError(err)) error = backendError(err);
       });
@@ -1011,8 +1026,7 @@
   }
 
   async function openPTYStream(ptyId: string) {
-    if (!visiblePTYIds.includes(ptyId)) return;
-    if (!daemonLink.canUseDaemon) return;
+    if (!canOpenPTYStream(ptyId)) return;
     const generation = daemonLink.generation;
     const dialClaimKey = `${generation}:${ptyId}`;
     if (!claimSingleFlight(ptyDialInFlight, dialClaimKey)) return;
@@ -1020,16 +1034,16 @@
       const existing = ptyStreams[ptyId];
       if (existing && existing.readyState !== WebSocket.CLOSED && existing.readyState !== WebSocket.CLOSING) return;
       const address = await loadDaemonAddress();
-      if (!address || !isCurrentDaemonGeneration(daemonLink, generation) || !daemonLink.canUseDaemon) return;
+      if (!address || !isCurrentDaemonGeneration(daemonLink, generation) || !canContinuePTYStream(ptyId)) return;
       const socket = new WebSocket(ptyAttachWebSocketURL(address, ptyId, offsets[ptyId] ?? 0, daemonControlToken));
       socket.binaryType = "arraybuffer";
       ptyStreams = { ...ptyStreams, [ptyId]: socket };
       socket.onopen = () => {
-        if (ptyStreams[ptyId] !== socket || !isCurrentDaemonGeneration(daemonLink, generation)) return;
+        if (ptyStreams[ptyId] !== socket || !isCurrentDaemonGeneration(daemonLink, generation) || !canContinuePTYStream(ptyId)) return;
         ptyReconnectAttempts = { ...ptyReconnectAttempts, [ptyId]: 0 };
       };
       socket.onmessage = (event) => {
-        if (ptyStreams[ptyId] !== socket || !isCurrentDaemonGeneration(daemonLink, generation)) return;
+        if (ptyStreams[ptyId] !== socket || !isCurrentDaemonGeneration(daemonLink, generation) || !canContinuePTYStream(ptyId)) return;
         try {
           const appended = typeof event.data === "string"
             ? handlePTYStreamTextFrame(JSON.parse(event.data) as PTYStreamFrame)
@@ -1048,8 +1062,7 @@
           ptyStreams = remaining;
         }
         if (!isCurrentDaemonGeneration(daemonLink, generation)) return;
-        if (!ptys.some((pty) => pty.id === ptyId)) return;
-        if (!stopped && daemonLink.canUseDaemon && visiblePTYIds.includes(ptyId)) {
+        if (!stopped && canContinuePTYStream(ptyId)) {
           refreshOutput(ptyId).catch((err) => {
             if (!isStalePTYError(err)) error = backendError(err);
           });
