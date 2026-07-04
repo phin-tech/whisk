@@ -61,6 +61,38 @@ func TestRunMailSendUsesEnvDefaultsAndPrintsJSON(t *testing.T) {
 	}
 }
 
+func TestRunMailSendEncodesGroupSelectors(t *testing.T) {
+	t.Setenv("WHISK_PTY_ID", "pty_env")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/mail" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req protocol.SendMailRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if len(req.To) != 2 ||
+			req.To[0].Kind != mailbox.AddressKindProjectGroup || req.To[0].ID != "proj_01" ||
+			req.To[1].Kind != mailbox.AddressKindWorkItemGroup || req.To[1].ID != "wi_01" {
+			t.Fatalf("request = %#v", req)
+		}
+		_ = json.NewEncoder(w).Encode(protocol.MailMessage{
+			ID:       "mail_01",
+			From:     req.From,
+			Type:     req.Type,
+			Priority: req.Priority,
+			Subject:  req.Subject,
+		})
+	}))
+	defer server.Close()
+
+	if _, err := captureStdout(func() error {
+		return run([]string{"mail", "send", "-url", server.URL, "-to", "@project:proj_01,@workitem:wi_01", "-type", "status", "-subject", "Heads up", "-json"})
+	}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+}
+
 func TestRunMailListEncodesFilters(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/v1/mail" {

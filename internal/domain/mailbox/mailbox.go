@@ -10,11 +10,14 @@ import (
 )
 
 const (
-	AddressKindPTY      = "pty"
-	AddressKindRun      = "run"
-	AddressKindSession  = "session"
-	AddressKindWorkItem = "work-item"
-	AddressKindProject  = "project"
+	AddressKindPTY           = "pty"
+	AddressKindRun           = "run"
+	AddressKindSession       = "session"
+	AddressKindWorkItem      = "work-item"
+	AddressKindProject       = "project"
+	AddressKindProjectGroup  = "@project"
+	AddressKindWorkItemGroup = "@work-item"
+	AddressKindIdleGroup     = "@idle"
 
 	TypeStatus       = "status"
 	TypeDispatch     = "dispatch"
@@ -61,11 +64,11 @@ func ParseAddress(raw string) (Address, error) {
 	if value == "" {
 		return Address{}, fmt.Errorf("mail address required")
 	}
-	if strings.HasPrefix(value, "@") {
-		return Address{}, fmt.Errorf("mail group selectors are not supported yet")
-	}
 	kind, id, ok := strings.Cut(value, ":")
 	if !ok {
+		if selectorKind := normalizeAddressKind(value); selectorKind == AddressKindIdleGroup {
+			return Address{}, Address{Kind: selectorKind}.Validate()
+		}
 		return Address{}, fmt.Errorf("mail address must be kind:id")
 	}
 	address := Address{Kind: normalizeAddressKind(kind), ID: strings.TrimSpace(id)}
@@ -105,6 +108,9 @@ func (a Address) Validate() error {
 	if normalizeAddressKind(a.Kind) != a.Kind {
 		return fmt.Errorf("unsupported mail address kind %q", a.Kind)
 	}
+	if a.Kind == AddressKindIdleGroup {
+		return fmt.Errorf("mail group selector @idle is deferred until agent status exists")
+	}
 	if a.ID == "" {
 		return fmt.Errorf("mail address id required")
 	}
@@ -114,6 +120,20 @@ func (a Address) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (a Address) ValidateConcrete() error {
+	if err := a.Validate(); err != nil {
+		return err
+	}
+	if a.IsGroupSelector() {
+		return fmt.Errorf("mail group selector %s must be expanded before storage", a.Kind)
+	}
+	return nil
+}
+
+func (a Address) IsGroupSelector() bool {
+	return strings.HasPrefix(a.Kind, "@")
 }
 
 func DeduplicateAddresses(addresses []Address) []Address {
@@ -221,7 +241,7 @@ func NewMessage(req Send) (Message, error) {
 	if err != nil {
 		return Message{}, err
 	}
-	if err := req.From.Validate(); err != nil {
+	if err := req.From.ValidateConcrete(); err != nil {
 		return Message{}, fmt.Errorf("from: %w", err)
 	}
 	to := DeduplicateAddresses(req.To)
@@ -230,7 +250,7 @@ func NewMessage(req Send) (Message, error) {
 	}
 	recipients := make([]Recipient, 0, len(to))
 	for _, address := range to {
-		if err := address.Validate(); err != nil {
+		if err := address.ValidateConcrete(); err != nil {
 			return Message{}, fmt.Errorf("recipient: %w", err)
 		}
 		recipients = append(recipients, Recipient{Address: address})
@@ -364,7 +384,7 @@ func NormalizeListFilter(filter ListFilter) (ListFilter, error) {
 	out := filter
 	out.To = DeduplicateAddresses(out.To)
 	for _, address := range out.To {
-		if err := address.Validate(); err != nil {
+		if err := address.ValidateConcrete(); err != nil {
 			return ListFilter{}, err
 		}
 	}
@@ -429,6 +449,12 @@ func normalizeAddressKind(kind string) string {
 		return AddressKindProject
 	case AddressKindWorkItem, "workitem", "work_item":
 		return AddressKindWorkItem
+	case AddressKindProjectGroup:
+		return AddressKindProjectGroup
+	case AddressKindWorkItemGroup, "@workitem", "@work_item":
+		return AddressKindWorkItemGroup
+	case AddressKindIdleGroup:
+		return AddressKindIdleGroup
 	default:
 		return ""
 	}

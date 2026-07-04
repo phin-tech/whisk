@@ -92,9 +92,9 @@ whisk mail check -wait -ack -json
 whisk mail reply mail_01 -body "Done" -json
 ```
 
-Supported address forms are `pty:<id>`, `run:<id>`, `session:<id>`, `work-item:<id>`, and `project:<id>`. `mail send` and `mail reply` default `-from` to the current `WHISK_PTY_ID`, then `WHISK_RUN_ID`, then `WHISK_SESSION_ID`; `mail check` defaults `-to` to all current PTY, run, session, work-item, and project addresses from the environment.
+Supported concrete address forms are `pty:<id>`, `run:<id>`, `session:<id>`, `work-item:<id>`, and `project:<id>`. `mail send` also accepts `@project:<id>` and `@work-item:<id>` selectors, which the daemon expands to current concrete session, PTY, and run recipients from its read models before storing the message. `mail send` and `mail reply` default `-from` to the current `WHISK_PTY_ID`, then `WHISK_RUN_ID`, then `WHISK_SESSION_ID`; `mail check` defaults `-to` to all current PTY, run, session, work-item, and project addresses from the environment.
 
-Supported message types are `status`, `dispatch`, `worker_done`, `escalation`, `handoff`, `decision_gate`, and `heartbeat`. The mailbox is only the durable communication/read model in this foundation slice; dispatch authority, group selectors such as `@idle`, prompt injection, and automatic run completion are layered on later slices.
+Supported message types are `status`, `dispatch`, `worker_done`, `escalation`, `handoff`, `decision_gate`, and `heartbeat`. The mailbox is only the durable communication/read model in this foundation slice; dispatch authority, `@idle` selector routing, prompt injection, and automatic run completion are layered on later slices.
 
 ## Profiles
 

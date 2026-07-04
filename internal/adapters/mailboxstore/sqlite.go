@@ -127,7 +127,7 @@ func (s *SQLiteStore) MarkMessageRead(ctx context.Context, req mailbox.MarkRead)
 		return mailbox.Message{}, fmt.Errorf("mail id required")
 	}
 	if req.Recipient != nil {
-		if err := req.Recipient.Validate(); err != nil {
+		if err := req.Recipient.ValidateConcrete(); err != nil {
 			return mailbox.Message{}, err
 		}
 	}
@@ -468,14 +468,14 @@ func validateMessage(message mailbox.Message) error {
 	if _, err := mailbox.NormalizePriority(message.Priority); err != nil {
 		return err
 	}
-	if err := message.From.Validate(); err != nil {
+	if err := message.From.ValidateConcrete(); err != nil {
 		return fmt.Errorf("from: %w", err)
 	}
 	if len(message.Recipients) == 0 {
 		return fmt.Errorf("mail recipient required")
 	}
 	for _, recipient := range message.Recipients {
-		if err := recipient.Address.Validate(); err != nil {
+		if err := recipient.Address.ValidateConcrete(); err != nil {
 			return fmt.Errorf("recipient: %w", err)
 		}
 	}

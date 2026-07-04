@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/phin-tech/whisk/internal/domain/mailbox"
+	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
 type SendMailRequest struct {
@@ -71,12 +72,16 @@ func (r *Runtime) SendMail(ctx context.Context, req SendMailRequest) (mailbox.Me
 	if r.mailboxStore == nil {
 		return mailbox.Message{}, fmt.Errorf("mailbox store unavailable")
 	}
+	recipients, err := r.expandMailRecipients(req.Recipients)
+	if err != nil {
+		return mailbox.Message{}, err
+	}
 	message, err := mailbox.NewMessage(mailbox.Send{
 		ID:         r.ids(),
 		ThreadID:   req.ThreadID,
 		ReplyToID:  req.ReplyToID,
 		From:       req.From,
-		To:         req.Recipients,
+		To:         recipients,
 		Type:       req.Type,
 		Priority:   req.Priority,
 		Subject:    req.Subject,
@@ -233,4 +238,104 @@ func (r *Runtime) nextUnreadMail(ctx context.Context, filter mailbox.ListFilter)
 		return nil, nil
 	}
 	return &messages[0], nil
+}
+
+func (r *Runtime) expandMailRecipients(recipients []mailbox.Address) ([]mailbox.Address, error) {
+	if len(recipients) == 0 {
+		return nil, nil
+	}
+	out := make([]mailbox.Address, 0, len(recipients))
+	for _, recipient := range recipients {
+		if err := recipient.Validate(); err != nil {
+			return nil, err
+		}
+		if !recipient.IsGroupSelector() {
+			out = append(out, recipient)
+			continue
+		}
+		expanded, err := r.expandMailGroupSelector(recipient)
+		if err != nil {
+			return nil, err
+		}
+		if len(expanded) == 0 {
+			return nil, fmt.Errorf("mail selector %s resolved to no recipients", recipient.String())
+		}
+		out = append(out, expanded...)
+	}
+	return mailbox.DeduplicateAddresses(out), nil
+}
+
+func (r *Runtime) expandMailGroupSelector(selector mailbox.Address) ([]mailbox.Address, error) {
+	switch selector.Kind {
+	case mailbox.AddressKindProjectGroup:
+		return r.projectMailRecipients(selector.ID)
+	case mailbox.AddressKindWorkItemGroup:
+		return r.workItemMailRecipients(selector.ID)
+	case mailbox.AddressKindIdleGroup:
+		return nil, selector.Validate()
+	default:
+		return nil, fmt.Errorf("unsupported mail group selector %s", selector.Kind)
+	}
+}
+
+func (r *Runtime) projectMailRecipients(projectID string) ([]mailbox.Address, error) {
+	if _, ok := r.workItems.GetProject(projectID); !ok {
+		return nil, fmt.Errorf("project %s not found", projectID)
+	}
+	recipients := []mailbox.Address{}
+	for _, current := range r.state.List() {
+		if current.ProjectID != projectID {
+			continue
+		}
+		recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindSession, ID: current.ID})
+		for _, pane := range current.Panes {
+			if pane.CurrentPTYID == nil {
+				continue
+			}
+			recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindPTY, ID: *pane.CurrentPTYID})
+		}
+	}
+	for _, run := range r.workItems.ListRuns("") {
+		if run.ProjectID != projectID || !mailRunAddressable(run) {
+			continue
+		}
+		recipients = appendRunMailRecipients(recipients, run)
+	}
+	return mailbox.DeduplicateAddresses(recipients), nil
+}
+
+func (r *Runtime) workItemMailRecipients(workItemID string) ([]mailbox.Address, error) {
+	if _, ok := r.workItems.GetWorkItem(workItemID); !ok {
+		return nil, fmt.Errorf("work item %s not found", workItemID)
+	}
+	recipients := []mailbox.Address{}
+	for _, run := range r.workItems.ListRuns(workItemID) {
+		if !mailRunAddressable(run) {
+			continue
+		}
+		recipients = appendRunMailRecipients(recipients, run)
+	}
+	return mailbox.DeduplicateAddresses(recipients), nil
+}
+
+func appendRunMailRecipients(recipients []mailbox.Address, run workitem.WorkItemRun) []mailbox.Address {
+	if run.ID != "" {
+		recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindRun, ID: run.ID})
+	}
+	if run.SessionID != "" {
+		recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindSession, ID: run.SessionID})
+	}
+	if run.PTYID != "" {
+		recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindPTY, ID: run.PTYID})
+	}
+	return recipients
+}
+
+func mailRunAddressable(run workitem.WorkItemRun) bool {
+	switch run.Status {
+	case workitem.RunStateCompleted, workitem.RunStateCancelled, workitem.RunStateFailed:
+		return false
+	default:
+		return true
+	}
 }

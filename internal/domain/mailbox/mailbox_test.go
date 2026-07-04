@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func TestParseAddressNormalizesConcreteRuntimeAddresses(t *testing.T) {
+func TestParseAddressNormalizesConcreteRuntimeAddressesAndGroupSelectors(t *testing.T) {
 	address, err := ParseAddress(" workitem:wi_01 ")
 	if err != nil {
 		t.Fatalf("parse address: %v", err)
@@ -16,8 +16,26 @@ func TestParseAddressNormalizesConcreteRuntimeAddresses(t *testing.T) {
 		t.Fatalf("address = %#v", address)
 	}
 
-	if _, err := ParseAddress("@idle"); err == nil || !strings.Contains(err.Error(), "group selectors") {
-		t.Fatalf("expected unsupported group selector error, got %v", err)
+	group, err := ParseAddress(" @workitem:wi_01 ")
+	if err != nil {
+		t.Fatalf("parse group: %v", err)
+	}
+	if group.Kind != AddressKindWorkItemGroup || group.ID != "wi_01" || group.String() != "@work-item:wi_01" || !group.IsGroupSelector() {
+		t.Fatalf("group = %#v", group)
+	}
+	projectGroup, err := ParseAddress("@project:proj_01")
+	if err != nil {
+		t.Fatalf("parse project group: %v", err)
+	}
+	if projectGroup.Kind != AddressKindProjectGroup || projectGroup.ID != "proj_01" {
+		t.Fatalf("project group = %#v", projectGroup)
+	}
+
+	if _, err := ParseAddress("@idle"); err == nil || !strings.Contains(err.Error(), "agent status") {
+		t.Fatalf("expected deferred idle selector error, got %v", err)
+	}
+	if _, err := ParseAddress("@all"); err == nil || !strings.Contains(err.Error(), "kind:id") {
+		t.Fatalf("expected unsupported selector error, got %v", err)
 	}
 	if _, err := ParseAddress("pty:bad id"); err == nil {
 		t.Fatalf("expected invalid id error")
@@ -52,6 +70,9 @@ func TestNewMessageValidatesLifecycleMail(t *testing.T) {
 	}
 	if _, err := NewMessage(Send{ID: "mail_04", From: message.From, To: []Address{message.From}, Type: TypeStatus, Subject: "x", Payload: json.RawMessage(`{`)}); err == nil {
 		t.Fatalf("expected invalid payload error")
+	}
+	if _, err := NewMessage(Send{ID: "mail_05", From: message.From, To: []Address{{Kind: AddressKindProjectGroup, ID: "proj_01"}}, Type: TypeStatus, Subject: "x"}); err == nil || !strings.Contains(err.Error(), "expanded before storage") {
+		t.Fatalf("expected unexpanded group selector error, got %v", err)
 	}
 }
 

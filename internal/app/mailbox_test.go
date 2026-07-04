@@ -3,12 +3,14 @@ package app_test
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/phin-tech/whisk/internal/adapters/mailboxstore"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/domain/mailbox"
+	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/events"
 )
 
@@ -185,6 +187,108 @@ func TestRuntimeNextMailWakesMultipleWaitersForMailboxChanged(t *testing.T) {
 	}
 }
 
+func TestRuntimeSendMailExpandsGroupSelectorsAgainstDaemonReadModels(t *testing.T) {
+	ctx := context.Background()
+	store := newMailboxStore(t)
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		MailboxStore: store,
+		EventSink:    newRecordingEventSink(),
+	})
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Wire mailbox"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	run, err := runtime.StartWorkItemRun(ctx, app.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		SessionID:        "sess_run",
+		PTYID:            "pty_run",
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	projectSession, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:      "Project session",
+		RootDir:   t.TempDir(),
+		ProjectID: project.ID,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	message, err := runtime.SendMail(ctx, app.SendMailRequest{
+		From: mailbox.Address{Kind: mailbox.AddressKindPTY, ID: "coordinator"},
+		Recipients: []mailbox.Address{
+			{Kind: mailbox.AddressKindProjectGroup, ID: project.ID},
+			{Kind: mailbox.AddressKindWorkItemGroup, ID: item.ID},
+			{Kind: mailbox.AddressKindPTY, ID: "pty_run"},
+		},
+		Type:    mailbox.TypeDispatch,
+		Subject: "Fan out",
+	})
+	if err != nil {
+		t.Fatalf("send mail: %v", err)
+	}
+	assertMailRecipients(t, message.Recipients, []mailbox.Address{
+		{Kind: mailbox.AddressKindSession, ID: projectSession.Session.ID},
+		{Kind: mailbox.AddressKindRun, ID: run.ID},
+		{Kind: mailbox.AddressKindSession, ID: "sess_run"},
+		{Kind: mailbox.AddressKindPTY, ID: "pty_run"},
+	})
+}
+
+func TestRuntimeSendMailRejectsInvalidGroupSelectors(t *testing.T) {
+	ctx := context.Background()
+	store := newMailboxStore(t)
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		MailboxStore: store,
+		EventSink:    newRecordingEventSink(),
+	})
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	from := mailbox.Address{Kind: mailbox.AddressKindPTY, ID: "coordinator"}
+	for _, tc := range []struct {
+		name       string
+		recipients []mailbox.Address
+		want       string
+	}{
+		{
+			name:       "idle deferred",
+			recipients: []mailbox.Address{{Kind: mailbox.AddressKindIdleGroup}},
+			want:       "agent status",
+		},
+		{
+			name:       "missing project",
+			recipients: []mailbox.Address{{Kind: mailbox.AddressKindProjectGroup, ID: "missing"}},
+			want:       "project missing not found",
+		},
+		{
+			name:       "no current project recipients",
+			recipients: []mailbox.Address{{Kind: mailbox.AddressKindProjectGroup, ID: project.ID}},
+			want:       "resolved to no recipients",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := runtime.SendMail(ctx, app.SendMailRequest{
+				From:       from,
+				Recipients: tc.recipients,
+				Type:       mailbox.TypeStatus,
+				Subject:    "Fan out",
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %q error, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
 func TestRuntimeClearDaemonClearsMailboxStore(t *testing.T) {
 	ctx := context.Background()
 	store := newMailboxStore(t)
@@ -240,5 +344,26 @@ func sequentialIDs(ids ...string) func() string {
 		id := ids[index]
 		index++
 		return id
+	}
+}
+
+func assertMailRecipients(t *testing.T, recipients []mailbox.Recipient, want []mailbox.Address) {
+	t.Helper()
+	got := map[string]int{}
+	for _, recipient := range recipients {
+		got[recipient.Address.String()]++
+	}
+	for address, count := range got {
+		if count != 1 {
+			t.Fatalf("recipient %s appeared %d times in %#v", address, count, recipients)
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("recipients = %#v, want %#v", recipients, want)
+	}
+	for _, address := range want {
+		if got[address.String()] != 1 {
+			t.Fatalf("missing recipient %s in %#v", address, recipients)
+		}
 	}
 }
