@@ -43,6 +43,7 @@
   let viewport: HTMLDivElement;
   let viewportHeight = SESSION_ROW_HEIGHT * 8;
   let scrollOffset = 0;
+  let lastQuery = query;
 
   $: rows = deriveSessionsPanelRows({
     sessions,
@@ -65,6 +66,10 @@
   $: contextSession = sessions.find((session) => session.id === contextSessionId) ?? null;
   $: projectPickerSession =
     sessions.find((session) => session.id === projectPickerSessionId) ?? null;
+  $: if (query !== lastQuery) {
+    lastQuery = query;
+    resetVirtualScroll();
+  }
 
   function requestClose(session: Session) {
     if (confirmingSessionId === session.id) {
@@ -93,6 +98,7 @@
   function setGroupMode(mode: SessionGroupMode) {
     groupMode = mode;
     collapsedGroupIds = new Set<string>();
+    resetVirtualScroll();
   }
 
   function openContextMenu(event: MouseEvent, session: Session) {
@@ -135,6 +141,11 @@
     if (!viewport) return;
     viewportHeight = viewport.clientHeight;
     scrollOffset = viewport.scrollTop;
+  }
+
+  function resetVirtualScroll() {
+    scrollOffset = 0;
+    if (viewport) viewport.scrollTop = 0;
   }
 
   onMount(() => {

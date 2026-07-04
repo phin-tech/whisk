@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
 import type { Project } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
+import sessionsPanelSource from "./SessionsPanel.svelte?raw";
 import {
   deriveSessionsPanelRows,
   sessionRowHeight,
@@ -205,5 +206,16 @@ describe("sessionRowHeight", () => {
       confirmingClose: false,
     };
     expect(sessionRowHeight(row)).toBe(SESSION_ROW_HEIGHT);
+  });
+});
+
+describe("SessionsPanel virtualization wiring", () => {
+  it("resets virtual scroll when filter controls change", () => {
+    expect(sessionsPanelSource).toContain("let lastQuery = query;");
+    expect(sessionsPanelSource).toContain("$: if (query !== lastQuery)");
+    expect(sessionsPanelSource).toContain("resetVirtualScroll();");
+    expect(sessionsPanelSource).toContain("function resetVirtualScroll()");
+    expect(sessionsPanelSource).toContain("scrollOffset = 0;");
+    expect(sessionsPanelSource).toContain("viewport.scrollTop = 0;");
   });
 });
