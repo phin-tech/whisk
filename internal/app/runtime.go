@@ -227,6 +227,7 @@ const (
 	EventPTYOutput                   RuntimeEventType = "pty.output"
 	EventWorkItemsChanged            RuntimeEventType = "workitems.changed"
 	EventStatusChanged               RuntimeEventType = "status.changed"
+	EventPluginsChanged              RuntimeEventType = "plugins.changed"
 	EventMailboxChanged              RuntimeEventType = "mailbox.changed"
 	EventAgentBridgeApprovalsChanged RuntimeEventType = "agent_bridge_approvals.changed"
 	EventAgentPromptsChanged         RuntimeEventType = "agent_prompts.changed"

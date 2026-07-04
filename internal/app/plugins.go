@@ -164,21 +164,36 @@ func (r *Runtime) RescanPlugins(ctx context.Context) ([]PluginStatus, error) {
 	if r.plugins == nil {
 		return nil, nil
 	}
-	return r.plugins.RescanPlugins(ctx)
+	plugins, err := r.plugins.RescanPlugins(ctx)
+	if err != nil {
+		return nil, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventPluginsChanged})
+	return plugins, nil
 }
 
 func (r *Runtime) TrustPlugin(ctx context.Context, id string) (PluginStatus, error) {
 	if r.plugins == nil {
 		return PluginStatus{}, nil
 	}
-	return r.plugins.TrustPlugin(ctx, id)
+	status, err := r.plugins.TrustPlugin(ctx, id)
+	if err != nil {
+		return PluginStatus{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventPluginsChanged})
+	return status, nil
 }
 
 func (r *Runtime) UntrustPlugin(ctx context.Context, id string) (PluginStatus, error) {
 	if r.plugins == nil {
 		return PluginStatus{}, nil
 	}
-	return r.plugins.UntrustPlugin(ctx, id)
+	status, err := r.plugins.UntrustPlugin(ctx, id)
+	if err != nil {
+		return PluginStatus{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventPluginsChanged})
+	return status, nil
 }
 
 func (r *Runtime) ListRegistryPlugins(ctx context.Context) ([]RegistryPlugin, error) {
@@ -192,7 +207,12 @@ func (r *Runtime) InstallPlugin(ctx context.Context, registry, id string) (Plugi
 	if r.plugins == nil {
 		return PluginStatus{}, fmt.Errorf("plugins are not configured")
 	}
-	return r.plugins.InstallPlugin(ctx, registry, id)
+	status, err := r.plugins.InstallPlugin(ctx, registry, id)
+	if err != nil {
+		return PluginStatus{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventPluginsChanged})
+	return status, nil
 }
 
 func (r *Runtime) RunPluginProjectAttachmentTemplate(ctx context.Context, req RunPluginProjectAttachmentTemplateRequest) (workitem.Project, error) {

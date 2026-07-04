@@ -1349,6 +1349,7 @@
       !hasActivePTYStream(targets.outputPtyId)
     ) await refreshOutput(targets.outputPtyId);
     if (targets.statusEvents) await refreshStatusEvents();
+    if (targets.plugins) await Promise.all([refreshPlugins(), refreshRegistryPlugins()]);
     if (targets.agentBridgeApprovals) await refreshStatusEvents();
     if (targets.agentHookEvents) await refreshStatusEvents();
     if (targets.work) {

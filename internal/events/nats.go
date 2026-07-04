@@ -18,6 +18,7 @@ const (
 	subjectPTYOutput                   = "whisk.pty.output"
 	subjectWorkItemsChanged            = "whisk.workitems.changed"
 	subjectStatusChanged               = "whisk.status.changed"
+	subjectPluginsChanged              = "whisk.plugins.changed"
 	subjectMailboxChanged              = "whisk.mailbox.changed"
 	subjectAgentBridgeApprovalsChanged = "whisk.agent_bridge_approvals.changed"
 	subjectAgentPromptsChanged         = "whisk.agent_prompts.changed"
@@ -143,6 +144,8 @@ func subjectFor(eventType app.RuntimeEventType) string {
 		return subjectWorkItemsChanged
 	case app.EventStatusChanged:
 		return subjectStatusChanged
+	case app.EventPluginsChanged:
+		return subjectPluginsChanged
 	case app.EventMailboxChanged:
 		return subjectMailboxChanged
 	case app.EventAgentBridgeApprovalsChanged:

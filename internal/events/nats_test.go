@@ -16,6 +16,7 @@ func TestSubjectForRuntimeEvents(t *testing.T) {
 		{eventType: app.EventPTYOutput, want: "whisk.pty.output"},
 		{eventType: app.EventWorkItemsChanged, want: "whisk.workitems.changed"},
 		{eventType: app.EventStatusChanged, want: "whisk.status.changed"},
+		{eventType: app.EventPluginsChanged, want: "whisk.plugins.changed"},
 		{eventType: app.EventMailboxChanged, want: "whisk.mailbox.changed"},
 		{eventType: app.EventAgentBridgeApprovalsChanged, want: "whisk.agent_bridge_approvals.changed"},
 		{eventType: app.EventAgentPromptsChanged, want: "whisk.agent_prompts.changed"},
