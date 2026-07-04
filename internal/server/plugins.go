@@ -112,6 +112,19 @@ func protocolPluginStatus(status app.PluginStatus) protocol.PluginStatus {
 	for _, resolver := range status.Resolvers {
 		resolvers = append(resolvers, protocol.PluginResolver{Provider: resolver.Provider, Kinds: resolver.Kinds})
 	}
+	usageResolvers := make([]protocol.PluginUsageResolver, 0, len(status.UsageResolvers))
+	for _, resolver := range status.UsageResolvers {
+		usageResolvers = append(usageResolvers, protocol.PluginUsageResolver{
+			ID:             resolver.ID,
+			Provider:       resolver.Provider,
+			Label:          resolver.Label,
+			Profiles:       resolver.Profiles,
+			TimeoutMs:      resolver.TimeoutMs,
+			OutputCapBytes: resolver.OutputCapBytes,
+			MinRefreshMs:   resolver.MinRefreshMs,
+			StaleAfterMs:   resolver.StaleAfterMs,
+		})
+	}
 	templates := make([]protocol.ProjectAttachmentTemplate, 0, len(status.ProjectAttachmentTemplates))
 	for _, template := range status.ProjectAttachmentTemplates {
 		fields := make([]protocol.PluginTemplateField, 0, len(template.Fields))
@@ -144,6 +157,7 @@ func protocolPluginStatus(status app.PluginStatus) protocol.PluginStatus {
 		Valid:                      status.Valid,
 		Error:                      status.Error,
 		Resolvers:                  resolvers,
+		UsageResolvers:             usageResolvers,
 		ProjectAttachmentTemplates: templates,
 	}
 }

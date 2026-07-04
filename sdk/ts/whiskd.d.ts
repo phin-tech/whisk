@@ -2381,6 +2381,7 @@ export interface components {
             registry?: string;
             resolvers?: components["schemas"]["PluginResolver"][];
             trusted: boolean;
+            usageResolvers?: components["schemas"]["PluginUsageResolver"][];
             valid: boolean;
             version: string;
         };
@@ -2391,6 +2392,20 @@ export interface components {
             placeholder?: string;
             required?: boolean;
             type: string;
+        };
+        PluginUsageResolver: {
+            id: string;
+            label: string;
+            /** Format: int64 */
+            minRefreshMs?: number;
+            /** Format: int64 */
+            outputCapBytes?: number;
+            profiles?: string[];
+            provider: string;
+            /** Format: int64 */
+            staleAfterMs?: number;
+            /** Format: int64 */
+            timeoutMs?: number;
         };
         Project: {
             attachments: components["schemas"]["Attachment"][] | null;

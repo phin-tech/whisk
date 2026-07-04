@@ -116,6 +116,7 @@ type PlanProjectWorkflowMigrationRequest = protocol.PlanProjectWorkflowMigration
 type PluginResolver = protocol.PluginResolver
 type PluginStatus = protocol.PluginStatus
 type PluginTemplateField = protocol.PluginTemplateField
+type PluginUsageResolver = protocol.PluginUsageResolver
 type Project = protocol.Project
 type ProjectAttachmentTemplate = protocol.ProjectAttachmentTemplate
 type ProjectContext = protocol.ProjectContext

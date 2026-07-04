@@ -21,6 +21,7 @@ func TestReadManifestDefaultsV1AndAllowsAdHocFields(t *testing.T) {
 		"version": "0.1.0",
 		"panels": [{"id": "legacy.panel"}],
 		"agentProfiles": [{"id": "codex"}],
+		"usageResolvers": [{"id": "legacy.usage", "provider": "legacy", "label": "Legacy", "command": "legacy"}],
 		"events": [{"id": "legacy.event"}],
 		"ui": {
 			"reviewActions": [{
@@ -48,6 +49,9 @@ func TestReadManifestDefaultsV1AndAllowsAdHocFields(t *testing.T) {
 	}
 	if len(manifest.AgentProfiles) != 0 {
 		t.Fatalf("v1 agent profiles should be ignored, got %#v", manifest.AgentProfiles)
+	}
+	if len(manifest.UsageResolvers) != 0 {
+		t.Fatalf("v1 usage resolvers should be ignored, got %#v", manifest.UsageResolvers)
 	}
 }
 
@@ -102,6 +106,17 @@ func TestReadManifestParsesAndNormalizesManifestV2(t *testing.T) {
 			"timeoutMs": 1,
 			"outputCapBytes": 2
 		}],
+		"usageResolvers": [{
+			"id": "linear.usage",
+			"provider": "linear",
+			"label": "Linear",
+			"profiles": ["linear-agent", " linear-plan "],
+			"command": "node ./usage.mjs",
+			"timeoutMs": 999999,
+			"outputCapBytes": 999999999,
+			"minRefreshMs": 300000,
+			"staleAfterMs": 1800000
+		}],
 		"permissions": {
 			"ptyOutput": true,
 			"envPrefixes": ["LINEAR_", "ACME_"],
@@ -133,6 +148,22 @@ func TestReadManifestParsesAndNormalizesManifestV2(t *testing.T) {
 	}
 	if got := manifest.WorkflowActions[0].OutputCapBytes; got != 2 {
 		t.Fatalf("workflow action output cap = %d, want 2", got)
+	}
+	if len(manifest.UsageResolvers) != 1 {
+		t.Fatalf("usage resolvers = %#v", manifest.UsageResolvers)
+	}
+	usageResolver := manifest.UsageResolvers[0]
+	if usageResolver.ID != "linear.usage" ||
+		usageResolver.Provider != "linear" ||
+		usageResolver.Label != "Linear" ||
+		usageResolver.Command != "node ./usage.mjs" ||
+		len(usageResolver.Profiles) != 2 ||
+		usageResolver.Profiles[1] != "linear-plan" ||
+		usageResolver.TimeoutMs != manifestUsageResolverMaxTimeoutMs ||
+		usageResolver.OutputCapBytes != manifestCommandMaxOutputCapBytes ||
+		usageResolver.MinRefreshMs != 300000 ||
+		usageResolver.StaleAfterMs != 1800000 {
+		t.Fatalf("usage resolver = %#v", usageResolver)
 	}
 	if !manifest.Permissions.PTYOutput || len(manifest.Permissions.EnvPrefixes) != 2 || len(manifest.Permissions.Network) != 1 {
 		t.Fatalf("permissions = %#v", manifest.Permissions)
@@ -283,6 +314,81 @@ func TestReadManifestRejectsInvalidV2Contributions(t *testing.T) {
 			want: `duplicate manifest contribution id "dup"`,
 		},
 		{
+			name: "usage resolver duplicate id",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"usageResolvers": [
+					{"id": "usage", "provider": "codex", "label": "Codex", "command": "true"},
+					{"id": "usage", "provider": "claude", "label": "Claude", "command": "true"}
+				]
+			}`,
+			want: `duplicate manifest contribution id "usage"`,
+		},
+		{
+			name: "usage resolver provider required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"usageResolvers": [{"id": "usage", "label": "Codex", "command": "true"}]
+			}`,
+			want: "usageResolvers[usage].provider required",
+		},
+		{
+			name: "usage resolver label required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"usageResolvers": [{"id": "usage", "provider": "codex", "label": " ", "command": "true"}]
+			}`,
+			want: "usageResolvers[usage].label required",
+		},
+		{
+			name: "usage resolver command required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"usageResolvers": [{"id": "usage", "provider": "codex", "label": "Codex"}]
+			}`,
+			want: "usageResolvers[usage].command required",
+		},
+		{
+			name: "usage resolver profile cannot be empty",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"usageResolvers": [{"id": "usage", "provider": "codex", "label": "Codex", "command": "true", "profiles": ["codex", " "]}]
+			}`,
+			want: "usageResolvers[usage].profiles[1] required",
+		},
+		{
+			name: "usage resolver profile cannot duplicate",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"usageResolvers": [{"id": "usage", "provider": "codex", "label": "Codex", "command": "true", "profiles": ["codex", " codex "]}]
+			}`,
+			want: `usageResolvers[usage].profiles contains duplicate value "codex"`,
+		},
+		{
+			name: "usage resolver negative output cap",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"usageResolvers": [{"id": "usage", "provider": "codex", "label": "Codex", "command": "true", "outputCapBytes": -1}]
+			}`,
+			want: "outputCapBytes must be non-negative",
+		},
+		{
+			name: "usage resolver negative refresh",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"usageResolvers": [{"id": "usage", "provider": "codex", "label": "Codex", "command": "true", "minRefreshMs": -1}]
+			}`,
+			want: "usageResolvers[usage].minRefreshMs must be non-negative",
+		},
+		{
 			name: "negative timeout",
 			manifest: `{
 				"manifestVersion": 2,
@@ -410,10 +516,12 @@ func TestManagerScansEnvAndConfigPluginsAndTrustsLive(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	configPlugin := filepath.Join(configHome, "whisk", "plugins", "github")
 	writePlugin(t, configPlugin, `{
+		"manifestVersion": 2,
 		"id": "github",
 		"name": "GitHub Issues",
 		"version": "0.1.0",
 		"resolvers": [{"provider": "github", "kinds": ["external"], "command": "printf '{\"delivery\":\"inline\",\"content\":\"ok\"}'"}],
+		"usageResolvers": [{"id": "github.usage", "provider": "github", "label": "GitHub", "profiles": ["codex"], "command": "printf '{}'"}],
 		"ui": {"projectAttachments": [{
 			"id": "github.issue",
 			"label": "GitHub Issue",
@@ -437,6 +545,22 @@ func TestManagerScansEnvAndConfigPluginsAndTrustsLive(t *testing.T) {
 	}
 	if len(statuses) != 2 {
 		t.Fatalf("statuses = %#v", statuses)
+	}
+	var githubStatus app.PluginStatus
+	for _, status := range statuses {
+		if status.ID == "github" {
+			githubStatus = status
+		}
+	}
+	if len(githubStatus.UsageResolvers) != 1 ||
+		githubStatus.UsageResolvers[0].ID != "github.usage" ||
+		githubStatus.UsageResolvers[0].Provider != "github" ||
+		githubStatus.UsageResolvers[0].Label != "GitHub" ||
+		len(githubStatus.UsageResolvers[0].Profiles) != 1 ||
+		githubStatus.UsageResolvers[0].Profiles[0] != "codex" ||
+		githubStatus.UsageResolvers[0].TimeoutMs != manifestUsageResolverDefaultTimeoutMs ||
+		githubStatus.UsageResolvers[0].OutputCapBytes != manifestCommandDefaultOutputCapBytes {
+		t.Fatalf("github usage resolvers = %#v", githubStatus.UsageResolvers)
 	}
 	if resolver := manager.ResolveProjectAttachmentProvider("github"); resolver != nil {
 		t.Fatalf("untrusted resolver registered")

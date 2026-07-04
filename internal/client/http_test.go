@@ -348,7 +348,21 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 }
 
 func TestHTTPClientDrivesPluginAPI(t *testing.T) {
-	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: &pluginRegistryFake{statuses: []app.PluginStatus{{ID: "github", Name: "GitHub", Valid: true}}}})
+	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: &pluginRegistryFake{statuses: []app.PluginStatus{{
+		ID:    "github",
+		Name:  "GitHub",
+		Valid: true,
+		UsageResolvers: []app.PluginUsageResolver{{
+			ID:             "github.usage",
+			Provider:       "github",
+			Label:          "GitHub",
+			Profiles:       []string{"codex"},
+			TimeoutMs:      10000,
+			OutputCapBytes: 262144,
+			MinRefreshMs:   300000,
+			StaleAfterMs:   1800000,
+		}},
+	}}}})
 	httpServer := httptest.NewServer(server.NewHTTP(runtime))
 	t.Cleanup(httpServer.Close)
 
@@ -359,6 +373,18 @@ func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 	plugins, err := daemon.ListPlugins(ctx)
 	if err != nil || len(plugins) != 1 || plugins[0].ID != "github" {
 		t.Fatalf("plugins = %#v, err = %v", plugins, err)
+	}
+	if len(plugins[0].UsageResolvers) != 1 ||
+		plugins[0].UsageResolvers[0].ID != "github.usage" ||
+		plugins[0].UsageResolvers[0].Provider != "github" ||
+		plugins[0].UsageResolvers[0].Label != "GitHub" ||
+		len(plugins[0].UsageResolvers[0].Profiles) != 1 ||
+		plugins[0].UsageResolvers[0].Profiles[0] != "codex" ||
+		plugins[0].UsageResolvers[0].TimeoutMs != 10000 ||
+		plugins[0].UsageResolvers[0].OutputCapBytes != 262144 ||
+		plugins[0].UsageResolvers[0].MinRefreshMs != 300000 ||
+		plugins[0].UsageResolvers[0].StaleAfterMs != 1800000 {
+		t.Fatalf("usage resolvers = %#v", plugins[0].UsageResolvers)
 	}
 	registry, err := daemon.ListRegistryPlugins(ctx)
 	if err != nil || len(registry) != 1 || registry[0].Registry != "phin-tech" || registry[0].SourceType != "path" {
