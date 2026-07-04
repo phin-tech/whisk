@@ -1027,6 +1027,10 @@ func (s *Service) ListPlugins(ctx context.Context) ([]protocol.PluginStatus, err
 	return s.client.ListPlugins(ctx)
 }
 
+func (s *Service) ListUIContributions(ctx context.Context, scope protocol.UIContributionScope) (protocol.UIContributionsResponse, error) {
+	return s.client.ListUIContributions(ctx, scope)
+}
+
 func (s *Service) RescanPlugins(ctx context.Context) ([]protocol.PluginStatus, error) {
 	return s.client.RescanPlugins(ctx)
 }

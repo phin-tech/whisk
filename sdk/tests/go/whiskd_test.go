@@ -31,6 +31,24 @@ func TestCompatibilityHandshake(t *testing.T) {
 	}
 }
 
+func TestUIContributionsScopedRoute(t *testing.T) {
+	client := whiskd.New(startDaemon(t))
+
+	contributions, err := client.ListUIContributions(context.Background(), whiskd.UIContributionScope{
+		WorkItemID: "wi_go",
+		Phase:      "review",
+	})
+	if err != nil {
+		t.Fatalf("list ui contributions: %v", err)
+	}
+	if contributions.Scope.WorkItemID != "wi_go" || contributions.Scope.Phase != "review" {
+		t.Fatalf("scope = %#v", contributions.Scope)
+	}
+	if len(contributions.Plugins) != 0 {
+		t.Fatalf("plugins = %#v", contributions.Plugins)
+	}
+}
+
 func TestWorkItemRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	client := whiskd.New(startDaemon(t))

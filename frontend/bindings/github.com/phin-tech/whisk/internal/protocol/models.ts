@@ -3322,6 +3322,124 @@ export class SubmitReviewFeedbackRequest {
     }
 }
 
+export class UIContributionPlugin {
+    "pluginId": string;
+    "name": string;
+    "version": string;
+    "trusted": boolean;
+    "enabled": boolean;
+    "disabledReason"?: string;
+    "resolvers"?: PluginResolver[];
+    "permissions"?: PluginPermissions | null;
+    "panels"?: PluginUIPanel[];
+    "commands"?: PluginUICommand[];
+    "reviewActions"?: PluginReviewAction[];
+
+    /** Creates a new UIContributionPlugin instance. */
+    constructor($$source: Partial<UIContributionPlugin> = {}) {
+        if (!("pluginId" in $$source)) {
+            this["pluginId"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("version" in $$source)) {
+            this["version"] = "";
+        }
+        if (!("trusted" in $$source)) {
+            this["trusted"] = false;
+        }
+        if (!("enabled" in $$source)) {
+            this["enabled"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UIContributionPlugin instance from a string or object.
+     */
+    static createFrom($$source: any = {}): UIContributionPlugin {
+        const $$createField6_0 = $$createType16;
+        const $$createField7_0 = $$createType28;
+        const $$createField8_0 = $$createType22;
+        const $$createField9_0 = $$createType24;
+        const $$createField10_0 = $$createType26;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("resolvers" in $$parsedSource) {
+            $$parsedSource["resolvers"] = $$createField6_0($$parsedSource["resolvers"]);
+        }
+        if ("permissions" in $$parsedSource) {
+            $$parsedSource["permissions"] = $$createField7_0($$parsedSource["permissions"]);
+        }
+        if ("panels" in $$parsedSource) {
+            $$parsedSource["panels"] = $$createField8_0($$parsedSource["panels"]);
+        }
+        if ("commands" in $$parsedSource) {
+            $$parsedSource["commands"] = $$createField9_0($$parsedSource["commands"]);
+        }
+        if ("reviewActions" in $$parsedSource) {
+            $$parsedSource["reviewActions"] = $$createField10_0($$parsedSource["reviewActions"]);
+        }
+        return new UIContributionPlugin($$parsedSource as Partial<UIContributionPlugin>);
+    }
+}
+
+export class UIContributionScope {
+    "projectId"?: string;
+    "workItemId"?: string;
+    "runId"?: string;
+    "sessionId"?: string;
+    "paneId"?: string;
+    "ptyId"?: string;
+    "gateReportId"?: string;
+    "phase"?: string;
+
+    /** Creates a new UIContributionScope instance. */
+    constructor($$source: Partial<UIContributionScope> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UIContributionScope instance from a string or object.
+     */
+    static createFrom($$source: any = {}): UIContributionScope {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new UIContributionScope($$parsedSource as Partial<UIContributionScope>);
+    }
+}
+
+export class UIContributionsResponse {
+    "scope": UIContributionScope;
+    "plugins"?: UIContributionPlugin[];
+
+    /** Creates a new UIContributionsResponse instance. */
+    constructor($$source: Partial<UIContributionsResponse> = {}) {
+        if (!("scope" in $$source)) {
+            this["scope"] = (new UIContributionScope());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UIContributionsResponse instance from a string or object.
+     */
+    static createFrom($$source: any = {}): UIContributionsResponse {
+        const $$createField0_0 = $$createType51;
+        const $$createField1_0 = $$createType53;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("scope" in $$parsedSource) {
+            $$parsedSource["scope"] = $$createField0_0($$parsedSource["scope"]);
+        }
+        if ("plugins" in $$parsedSource) {
+            $$parsedSource["plugins"] = $$createField1_0($$parsedSource["plugins"]);
+        }
+        return new UIContributionsResponse($$parsedSource as Partial<UIContributionsResponse>);
+    }
+}
+
 export class UpdateProjectAttachmentRequest {
     "projectId": string;
     "title"?: string | null;
@@ -3581,7 +3699,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType51;
+        const $$createField2_0 = $$createType54;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -3667,4 +3785,7 @@ const $$createType47 = $Create.Map($Create.Any, $Create.Any);
 const $$createType48 = StartPTYAgentBridgeOptions.createFrom;
 const $$createType49 = $Create.Nullable($$createType48);
 const $$createType50 = HTTPForward.createFrom;
-const $$createType51 = WorktrunkBinary.createFrom;
+const $$createType51 = UIContributionScope.createFrom;
+const $$createType52 = UIContributionPlugin.createFrom;
+const $$createType53 = $Create.Array($$createType52);
+const $$createType54 = WorktrunkBinary.createFrom;

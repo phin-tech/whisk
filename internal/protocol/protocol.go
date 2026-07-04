@@ -11,7 +11,7 @@ import (
 
 const (
 	// ProtocolVersion is the canonical daemon/client wire protocol version.
-	ProtocolVersion = 26
+	ProtocolVersion = 27
 	// DaemonAPIVersion is the legacy name kept for old clients and tooling.
 	DaemonAPIVersion = ProtocolVersion
 )
@@ -236,6 +236,36 @@ type PTYHistory struct {
 type NextEventRequest struct {
 	TimeoutMs int    `json:"timeoutMs"`
 	AfterSeq  uint64 `json:"afterSeq,omitempty"`
+}
+
+type UIContributionScope struct {
+	ProjectID    string `json:"projectId,omitempty"`
+	WorkItemID   string `json:"workItemId,omitempty"`
+	RunID        string `json:"runId,omitempty"`
+	SessionID    string `json:"sessionId,omitempty"`
+	PaneID       string `json:"paneId,omitempty"`
+	PTYID        string `json:"ptyId,omitempty"`
+	GateReportID string `json:"gateReportId,omitempty"`
+	Phase        string `json:"phase,omitempty"`
+}
+
+type UIContributionsResponse struct {
+	Scope   UIContributionScope    `json:"scope"`
+	Plugins []UIContributionPlugin `json:"plugins,omitempty"`
+}
+
+type UIContributionPlugin struct {
+	PluginID       string               `json:"pluginId"`
+	Name           string               `json:"name"`
+	Version        string               `json:"version"`
+	Trusted        bool                 `json:"trusted"`
+	Enabled        bool                 `json:"enabled"`
+	DisabledReason string               `json:"disabledReason,omitempty"`
+	Resolvers      []PluginResolver     `json:"resolvers,omitempty"`
+	Permissions    *PluginPermissions   `json:"permissions,omitempty"`
+	Panels         []PluginUIPanel      `json:"panels,omitempty"`
+	Commands       []PluginUICommand    `json:"commands,omitempty"`
+	ReviewActions  []PluginReviewAction `json:"reviewActions,omitempty"`
 }
 
 const RuntimeEventNone = "none"

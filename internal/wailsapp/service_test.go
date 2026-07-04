@@ -483,6 +483,10 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		len(plugins[0].Permissions.Network) != 1 {
 		t.Fatalf("plugin ui catalog = %#v", plugins[0])
 	}
+	uiContribs, err := service.ListUIContributions(ctx, protocol.UIContributionScope{WorkItemID: "wi_01"})
+	if err != nil || len(uiContribs.Plugins) != 1 || uiContribs.Plugins[0].PluginID != "github" || !uiContribs.Plugins[0].Enabled {
+		t.Fatalf("list ui contributions = %#v, err = %v", uiContribs, err)
+	}
 	plugins, err = service.RescanPlugins(ctx)
 	if err != nil || len(plugins) != 1 || !fake.rescanPluginsCalled {
 		t.Fatalf("rescan plugins = %#v, called = %v, err = %v", plugins, fake.rescanPluginsCalled, err)
@@ -1324,6 +1328,17 @@ func (f *runtimeClientFake) OpenAgentHookLog(context.Context) (protocol.AgentHoo
 
 func (f *runtimeClientFake) ListPlugins(context.Context) ([]protocol.PluginStatus, error) {
 	return []protocol.PluginStatus{fakePluginStatus()}, nil
+}
+
+func (f *runtimeClientFake) ListUIContributions(_ context.Context, scope protocol.UIContributionScope) (protocol.UIContributionsResponse, error) {
+	return protocol.UIContributionsResponse{Scope: scope, Plugins: []protocol.UIContributionPlugin{{
+		PluginID: "github",
+		Name:     "GitHub",
+		Version:  "1.0.0",
+		Trusted:  true,
+		Enabled:  true,
+		Commands: []protocol.PluginUICommand{{ID: "review", Label: "Review", Scope: protocol.PluginUIScope("workItem")}},
+	}}}, nil
 }
 
 func (f *runtimeClientFake) RescanPlugins(context.Context) ([]protocol.PluginStatus, error) {

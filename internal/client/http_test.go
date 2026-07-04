@@ -349,9 +349,10 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 
 func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: &pluginRegistryFake{statuses: []app.PluginStatus{{
-		ID:    "github",
-		Name:  "GitHub",
-		Valid: true,
+		ID:      "github",
+		Name:    "GitHub",
+		Trusted: true,
+		Valid:   true,
 		UsageResolvers: []app.PluginUsageResolver{{
 			ID:             "github.usage",
 			Provider:       "github",
@@ -428,6 +429,36 @@ func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 		len(plugins[0].Permissions.Network) != 1 ||
 		plugins[0].Permissions.Network[0] != "api.github.com" {
 		t.Fatalf("plugin ui catalog = %#v", plugins[0])
+	}
+	uiContribs, err := daemon.ListUIContributions(ctx, protocol.UIContributionScope{WorkItemID: " wi_01 "})
+	if err != nil {
+		t.Fatalf("list ui contributions: %v", err)
+	}
+	if uiContribs.Scope.WorkItemID != "wi_01" {
+		t.Fatalf("ui contribution scope = %#v", uiContribs.Scope)
+	}
+	if len(uiContribs.Plugins) != 1 ||
+		uiContribs.Plugins[0].PluginID != "github" ||
+		!uiContribs.Plugins[0].Enabled ||
+		uiContribs.Plugins[0].DisabledReason != "" ||
+		len(uiContribs.Plugins[0].Panels) != 1 ||
+		len(uiContribs.Plugins[0].Commands) != 1 ||
+		len(uiContribs.Plugins[0].ReviewActions) != 1 {
+		t.Fatalf("ui contributions = %#v", uiContribs)
+	}
+	phaseOnly, err := daemon.ListUIContributions(ctx, protocol.UIContributionScope{WorkItemID: " ", Phase: " review "})
+	if err != nil {
+		t.Fatalf("list phase-only ui contributions: %v", err)
+	}
+	if phaseOnly.Scope.WorkItemID != "" || phaseOnly.Scope.Phase != "review" {
+		t.Fatalf("phase-only scope = %#v", phaseOnly.Scope)
+	}
+	if len(phaseOnly.Plugins) != 1 ||
+		len(phaseOnly.Plugins[0].Commands) != 1 ||
+		phaseOnly.Plugins[0].Commands[0].ID != "github.open" ||
+		len(phaseOnly.Plugins[0].Panels) != 0 ||
+		len(phaseOnly.Plugins[0].ReviewActions) != 0 {
+		t.Fatalf("phase-only ui contributions = %#v", phaseOnly)
 	}
 	registry, err := daemon.ListRegistryPlugins(ctx)
 	if err != nil || len(registry) != 1 || registry[0].Registry != "phin-tech" || registry[0].SourceType != "path" {

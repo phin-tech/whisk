@@ -235,6 +235,37 @@ func (c *HTTPClient) ListPlugins(ctx context.Context) ([]protocol.PluginStatus, 
 	return plugins, err
 }
 
+func (c *HTTPClient) ListUIContributions(ctx context.Context, scope protocol.UIContributionScope) (protocol.UIContributionsResponse, error) {
+	query := url.Values{}
+	if scope.ProjectID != "" {
+		query.Set("projectId", scope.ProjectID)
+	}
+	if scope.WorkItemID != "" {
+		query.Set("workItemId", scope.WorkItemID)
+	}
+	if scope.RunID != "" {
+		query.Set("runId", scope.RunID)
+	}
+	if scope.SessionID != "" {
+		query.Set("sessionId", scope.SessionID)
+	}
+	if scope.PaneID != "" {
+		query.Set("paneId", scope.PaneID)
+	}
+	if scope.PTYID != "" {
+		query.Set("ptyId", scope.PTYID)
+	}
+	if scope.GateReportID != "" {
+		query.Set("gateReportId", scope.GateReportID)
+	}
+	if scope.Phase != "" {
+		query.Set("phase", scope.Phase)
+	}
+	var resp protocol.UIContributionsResponse
+	err := c.get(ctx, "/v1/ui-contributions", query, &resp)
+	return resp, err
+}
+
 func (c *HTTPClient) RescanPlugins(ctx context.Context) ([]protocol.PluginStatus, error) {
 	var plugins []protocol.PluginStatus
 	err := c.post(ctx, "/v1/plugins/rescan", struct{}{}, &plugins)

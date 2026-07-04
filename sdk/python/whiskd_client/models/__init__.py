@@ -155,6 +155,9 @@ from .status_event import StatusEvent
 from .submit_draft_plan_request import SubmitDraftPlanRequest
 from .submit_review_feedback_request import SubmitReviewFeedbackRequest
 from .transition_rule import TransitionRule
+from .ui_contribution_plugin import UIContributionPlugin
+from .ui_contribution_scope import UIContributionScope
+from .ui_contributions_response import UIContributionsResponse
 from .update_project_attachment_request import UpdateProjectAttachmentRequest
 from .update_project_attachment_request_meta import UpdateProjectAttachmentRequestMeta
 from .update_project_request import UpdateProjectRequest
@@ -343,6 +346,9 @@ __all__ = (
     "SubmitDraftPlanRequest",
     "SubmitReviewFeedbackRequest",
     "TransitionRule",
+    "UIContributionPlugin",
+    "UIContributionScope",
+    "UIContributionsResponse",
     "UpdateProjectAttachmentRequest",
     "UpdateProjectAttachmentRequestMeta",
     "UpdateProjectRequest",

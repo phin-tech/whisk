@@ -1224,6 +1224,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ui-contributions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get aggregated UI contributions scoped to an entity */
+        get: operations["listUIContributions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/work-item-links": {
         parameters: {
             query?: never;
@@ -2844,6 +2861,33 @@ export interface components {
             requiresChecks?: boolean;
             requiresNoRunningRuns?: boolean;
             toStageId: string;
+        };
+        UIContributionPlugin: {
+            commands?: components["schemas"]["PluginUICommand"][];
+            disabledReason?: string;
+            enabled: boolean;
+            name: string;
+            panels?: components["schemas"]["PluginUIPanel"][];
+            permissions?: components["schemas"]["PluginPermissions"] | null;
+            pluginId: string;
+            resolvers?: components["schemas"]["PluginResolver"][];
+            reviewActions?: components["schemas"]["PluginReviewAction"][];
+            trusted: boolean;
+            version: string;
+        };
+        UIContributionScope: {
+            gateReportId?: string;
+            paneId?: string;
+            phase?: string;
+            projectId?: string;
+            ptyId?: string;
+            runId?: string;
+            sessionId?: string;
+            workItemId?: string;
+        };
+        UIContributionsResponse: {
+            plugins?: components["schemas"]["UIContributionPlugin"][];
+            scope: components["schemas"]["UIContributionScope"];
         };
         UpdateProjectAttachmentRequest: {
             includeInContext?: boolean | null;
@@ -5672,6 +5716,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusEvent"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listUIContributions: {
+        parameters: {
+            query?: {
+                projectId?: string;
+                workItemId?: string;
+                runId?: string;
+                sessionId?: string;
+                paneId?: string;
+                ptyId?: string;
+                gateReportId?: string;
+                phase?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UIContributionsResponse"];
                 };
             };
             /** @description error */

@@ -28,6 +28,7 @@ type RuntimeClient interface {
 	ClearAgentHookLog(ctx context.Context) (protocol.AgentHookLogStatus, error)
 	OpenAgentHookLog(ctx context.Context) (protocol.AgentHookLogStatus, error)
 	ListPlugins(ctx context.Context) ([]protocol.PluginStatus, error)
+	ListUIContributions(ctx context.Context, scope protocol.UIContributionScope) (protocol.UIContributionsResponse, error)
 	RescanPlugins(ctx context.Context) ([]protocol.PluginStatus, error)
 	TrustPlugin(ctx context.Context, id string) (protocol.PluginStatus, error)
 	UntrustPlugin(ctx context.Context, id string) (protocol.PluginStatus, error)

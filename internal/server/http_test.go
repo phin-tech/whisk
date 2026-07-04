@@ -204,9 +204,10 @@ func TestHTTPServerListsDetectedAgents(t *testing.T) {
 
 func TestHTTPServerPluginRoutes(t *testing.T) {
 	plugins := &pluginRegistryFake{statuses: []app.PluginStatus{{
-		ID:    "github",
-		Name:  "GitHub",
-		Valid: true,
+		ID:      "github",
+		Name:    "GitHub",
+		Trusted: true,
+		Valid:   true,
 		UsageResolvers: []app.PluginUsageResolver{{
 			ID:             "github.usage",
 			Provider:       "github",
@@ -279,6 +280,45 @@ func TestHTTPServerPluginRoutes(t *testing.T) {
 		len(listed[0].Permissions.Network) != 1 ||
 		listed[0].Permissions.Network[0] != "api.github.com" {
 		t.Fatalf("plugin ui catalog = %#v", listed[0])
+	}
+	uiContribs := getJSON[protocol.UIContributionsResponse](t, handler, "/v1/ui-contributions?workItemId=wi_01", http.StatusOK)
+	if len(uiContribs.Plugins) != 1 || uiContribs.Plugins[0].PluginID != "github" {
+		t.Fatalf("ui contributions = %#v", uiContribs)
+	}
+	if uiContribs.Scope.WorkItemID != "wi_01" {
+		t.Fatalf("ui contributions scope workItemId = %q, want wi_01", uiContribs.Scope.WorkItemID)
+	}
+	if len(uiContribs.Plugins[0].Panels) != 1 ||
+		uiContribs.Plugins[0].Panels[0].ID != "github.issue.panel" ||
+		!uiContribs.Plugins[0].Enabled ||
+		uiContribs.Plugins[0].DisabledReason != "" ||
+		len(uiContribs.Plugins[0].Commands) != 1 ||
+		uiContribs.Plugins[0].Commands[0].ID != "github.open" ||
+		len(uiContribs.Plugins[0].ReviewActions) != 1 ||
+		uiContribs.Plugins[0].ReviewActions[0].ID != "github.review" {
+		t.Fatalf("ui contributions plugin = %#v", uiContribs.Plugins[0])
+	}
+	if uiContribs.Plugins[0].Permissions == nil || len(uiContribs.Plugins[0].Permissions.Network) != 1 {
+		t.Fatalf("ui contributions permissions = %#v", uiContribs.Plugins[0].Permissions)
+	}
+	globalOnly := getJSON[protocol.UIContributionsResponse](t, handler, "/v1/ui-contributions", http.StatusOK)
+	if len(globalOnly.Plugins) != 1 ||
+		len(globalOnly.Plugins[0].Commands) != 1 ||
+		globalOnly.Plugins[0].Commands[0].ID != "github.open" ||
+		len(globalOnly.Plugins[0].Panels) != 0 ||
+		len(globalOnly.Plugins[0].ReviewActions) != 0 {
+		t.Fatalf("global ui contributions = %#v", globalOnly)
+	}
+	phaseOnly := getJSON[protocol.UIContributionsResponse](t, handler, "/v1/ui-contributions?workItemId=&phase=review", http.StatusOK)
+	if phaseOnly.Scope.WorkItemID != "" || phaseOnly.Scope.Phase != "review" {
+		t.Fatalf("phase-only scope = %#v", phaseOnly.Scope)
+	}
+	if len(phaseOnly.Plugins) != 1 ||
+		len(phaseOnly.Plugins[0].Commands) != 1 ||
+		phaseOnly.Plugins[0].Commands[0].ID != "github.open" ||
+		len(phaseOnly.Plugins[0].Panels) != 0 ||
+		len(phaseOnly.Plugins[0].ReviewActions) != 0 {
+		t.Fatalf("phase-only ui contributions = %#v", phaseOnly)
 	}
 	registry := getJSON[[]protocol.RegistryPlugin](t, handler, "/v1/plugin-registry", http.StatusOK)
 	if len(registry) != 1 || registry[0].ID != "github" || registry[0].Registry != "phin-tech" || registry[0].SourceType != "path" {

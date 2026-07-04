@@ -21,6 +21,7 @@ CLI:
 ```sh
 whisk plugin list
 whisk plugin list -json
+whisk plugin contributions -work-item wi_01 -phase review -json
 whisk plugin rescan
 whisk plugin trust github
 whisk plugin untrust github
@@ -228,6 +229,82 @@ Agents can run the same template through the CLI:
 
 ```sh
 whisk plugin attach github github.issue.attach -project proj_01 -field url=https://github.com/owner/repo/issues/123
+```
+
+## Aggregated UI Contributions Read Model
+
+`GET /v1/ui-contributions` returns a scope-filtered aggregation of trusted,
+valid plugin UI contributions. The frontend uses this active render model to
+determine what panels, commands, and review actions are available for the
+currently viewed entity. Use `GET /v1/plugins` for catalog previews of
+untrusted or invalid plugins.
+
+Query parameters:
+
+| Parameter      | Value                             |
+|----------------|-----------------------------------|
+| `projectId`    | Include project-scoped items      |
+| `workItemId`   | Include work-item-scoped items    |
+| `runId`        | Include run-scoped items          |
+| `sessionId`    | Identify the current session      |
+| `paneId`       | Identify the current pane         |
+| `ptyId`        | Identify the current PTY          |
+| `gateReportId` | Include gate-scoped items         |
+| `phase`        | Identify the current workflow phase |
+
+Global-scoped contributions are always included. When no entity query
+parameters are provided, only global contributions are returned; an empty entity
+value such as `workItemId=` is treated the same as an omitted entity. `phase`
+is accepted and echoed as contextual metadata, but a phase-only request still
+uses the global-only scope until phase-scoped contribution kinds exist. Current
+manifest UI contributions match `global`, `project`, `workItem`, `run`, and
+`gate`; the broader entity IDs are accepted and echoed so clients can make one
+stable call from any surface as later contribution kinds are added.
+
+Response shape:
+
+```json
+{
+  "scope": { "workItemId": "wi_01" },
+  "plugins": [
+    {
+      "pluginId": "linear",
+      "name": "Linear",
+      "version": "0.2.0",
+      "trusted": true,
+      "enabled": true,
+      "resolvers": [{"provider": "linear", "kinds": ["external"]}],
+      "permissions": {"network": ["api.linear.app"]},
+      "panels": [
+        {
+          "id": "linear.issue",
+          "title": "Linear issue",
+          "scope": "workItem",
+          "kind": "view",
+          "read": {"timeoutMs": 10000, "outputCapBytes": 262144},
+          "actions": [{"id": "sync", "label": "Sync", "timeoutMs": 10000, "outputCapBytes": 262144}]
+        }
+      ],
+      "commands": [
+        {"id": "linear.open-triage", "label": "Linear: Open triage", "scope": "global", "timeoutMs": 10000}
+      ],
+      "reviewActions": [
+        {"id": "linear.review", "label": "Linear review", "scope": "workItem", "urlTemplate": "https://...", "hasSubmit": true, "blocking": true}
+      ]
+    }
+  ]
+}
+```
+
+Each plugin entry mirrors the UI catalog fields from `PluginStatus` but is
+grouped by plugin with the scope applied per-contribution. Only trusted, valid
+plugins are included in this active render model, and plugins that have no
+matching contributions after filtering are omitted.
+
+Agents can query the same read model through the CLI:
+
+```sh
+whisk plugin contributions -work-item wi_01 -phase review -json
 ```
 
 ## Command Execution

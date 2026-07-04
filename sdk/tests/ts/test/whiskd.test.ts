@@ -25,6 +25,16 @@ describe.skipIf(!baseUrl)("whiskd headless TS client", () => {
     expect(data).toEqual([]);
   });
 
+  it("ui contributions scoped route", async () => {
+    const { data, error } = await client.GET("/v1/ui-contributions", {
+      params: { query: { workItemId: "wi_ts", phase: "review" } },
+    });
+    expect(error).toBeUndefined();
+    expect(data!.scope.workItemId).toEqual("wi_ts");
+    expect(data!.scope.phase).toEqual("review");
+    expect(data!.plugins ?? []).toEqual([]);
+  });
+
   it("daemon clear resets work item state", async () => {
     const project = await client.POST("/v1/projects", {
       body: { name: "TS Clear", rootDir: process.cwd() },

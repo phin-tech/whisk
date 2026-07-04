@@ -31,6 +31,24 @@ func TestDetectedAgentsRouteUsesAgentsTagAndReadModel(t *testing.T) {
 	}
 }
 
+func TestListUIContributionsRouteIncludesEntityScopeQuery(t *testing.T) {
+	route, ok := routeByOperationID("listUIContributions")
+	if !ok {
+		t.Fatalf("listUIContributions route missing")
+	}
+	if route.Method != "GET" || route.Path != "/v1/ui-contributions" || route.Tag != "plugins" {
+		t.Fatalf("route = %#v", route)
+	}
+	if _, ok := route.Response.(UIContributionsResponse); !ok {
+		t.Fatalf("listUIContributions response = %T, want UIContributionsResponse", route.Response)
+	}
+	for _, name := range []string{"projectId", "workItemId", "runId", "sessionId", "paneId", "ptyId", "gateReportId", "phase"} {
+		if !hasQueryParam(route, name, "string") {
+			t.Fatalf("listUIContributions route missing %s query: %#v", name, route.Query)
+		}
+	}
+}
+
 func TestAPIRoutesDoNotExposePTYBookmarks(t *testing.T) {
 	for _, route := range APIRoutes {
 		if route.OperationID == "addPTYBookmark" || route.OperationID == "listPTYBookmarks" || route.OperationID == "removePTYBookmark" {
