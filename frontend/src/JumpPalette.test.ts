@@ -4,7 +4,11 @@ import source from "./JumpPalette.svelte?raw";
 describe("JumpPalette", () => {
   it("uses the jump ranking foundation and local UI layer", () => {
     expect(source).toContain('from "./jumpFilter"');
-    expect(source).toContain("prepareJumpTargets(targets)");
+    expect(source).toContain('from "./jumpRecents"');
+    expect(source).toContain("reconcileJumpRecents(");
+    expect(source).toContain("applyRecentJumpTargets(targets, validRecentTargetIds)");
+    expect(source).toContain("query.trim() ? targets : emptyQueryTargets");
+    expect(source).toContain("prepareJumpTargets(rankedTargets)");
     expect(source).toContain("rankJumpTargets(query, preparedTargets)");
     expect(source).toContain('from "./ui/ModalShell.svelte"');
     expect(source).toContain('from "./ui/Button.svelte"');

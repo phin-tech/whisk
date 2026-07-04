@@ -2,6 +2,7 @@
   import Search from "@lucide/svelte/icons/search";
   import type { JumpTarget } from "./jumpFilter";
   import { prepareJumpTargets, rankJumpTargets } from "./jumpFilter";
+  import { applyRecentJumpTargets, reconcileJumpRecents } from "./jumpRecents";
   import Badge from "./ui/Badge.svelte";
   import Button from "./ui/Button.svelte";
   import ModalShell from "./ui/ModalShell.svelte";
@@ -10,18 +11,27 @@
   type Props = {
     visible?: boolean;
     targets?: JumpTarget[];
+    recentTargetIds?: string[];
     onclose: () => void;
     onjump: (target: JumpTarget) => void;
   };
 
-  let { visible = false, targets = [], onclose, onjump }: Props = $props();
+  let { visible = false, targets = [], recentTargetIds = [], onclose, onjump }: Props = $props();
 
   let query = $state("");
   let selected = $state(0);
   let input = $state<HTMLInputElement | null>(null);
   let previousVisible = $state(false);
 
-  const preparedTargets = $derived(prepareJumpTargets(targets));
+  const validRecentTargetIds = $derived(
+    reconcileJumpRecents(
+      recentTargetIds,
+      targets.map((target) => target.id),
+    ),
+  );
+  const emptyQueryTargets = $derived(applyRecentJumpTargets(targets, validRecentTargetIds));
+  const rankedTargets = $derived(query.trim() ? targets : emptyQueryTargets);
+  const preparedTargets = $derived(prepareJumpTargets(rankedTargets));
   const items = $derived(rankJumpTargets(query, preparedTargets));
 
   function runSelected() {

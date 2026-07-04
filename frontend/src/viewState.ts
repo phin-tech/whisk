@@ -18,6 +18,7 @@ export const MAX_SIDEBAR_WIDTH_PX = 800;
 export const MIN_TERMINAL_FONT_SIZE = 10;
 export const MAX_TERMINAL_FONT_SIZE = 20;
 export const MAX_RECENT_COMMANDS = 20;
+export const MAX_RECENT_JUMP_TARGETS = 20;
 
 export type RailSide = "left" | "right";
 
@@ -48,6 +49,9 @@ export type ClientViewStateV1 = {
   commandPalette: {
     recentCommandIds: string[];
   };
+  jumpPalette: {
+    recentTargetIds: string[];
+  };
 };
 
 export type PartialClientViewStateV1 = {
@@ -55,6 +59,7 @@ export type PartialClientViewStateV1 = {
   selection?: Partial<ClientViewStateV1["selection"]>;
   work?: Partial<ClientViewStateV1["work"]>;
   commandPalette?: Partial<ClientViewStateV1["commandPalette"]>;
+  jumpPalette?: Partial<ClientViewStateV1["jumpPalette"]>;
 };
 
 export type ViewStateStorageReader = Pick<Storage, "getItem">;
@@ -120,6 +125,9 @@ export function defaultClientViewState(): ClientViewStateV1 {
     },
     commandPalette: {
       recentCommandIds: [],
+    },
+    jumpPalette: {
+      recentTargetIds: [],
     },
   };
 }
@@ -292,6 +300,7 @@ function sanitizeClientViewState(value: unknown): ClientViewStateV1 {
     selection: sanitizeSelection(record.selection, defaults.selection),
     work: sanitizeWork(record.work, defaults.work),
     commandPalette: sanitizeCommandPalette(record.commandPalette, defaults.commandPalette),
+    jumpPalette: sanitizeJumpPalette(record.jumpPalette, defaults.jumpPalette),
   };
 }
 
@@ -366,6 +375,18 @@ function sanitizeCommandPalette(
   };
 }
 
+function sanitizeJumpPalette(
+  value: unknown,
+  defaults: ClientViewStateV1["jumpPalette"],
+): ClientViewStateV1["jumpPalette"] {
+  const record = isRecord(value) ? value : {};
+  return {
+    recentTargetIds: Array.isArray(record.recentTargetIds)
+      ? sanitizeOrderedStringList(record.recentTargetIds).slice(0, MAX_RECENT_JUMP_TARGETS)
+      : [...defaults.recentTargetIds],
+  };
+}
+
 function parseLegacyPreferences(raw: string | null): Partial<ClientViewStateV1["preferences"]> | null {
   if (!raw) return null;
   try {
@@ -418,6 +439,7 @@ function applyClientViewStatePatch(
       },
     },
     commandPalette: { ...state.commandPalette, ...patch.commandPalette },
+    jumpPalette: { ...state.jumpPalette, ...patch.jumpPalette },
   });
 }
 
@@ -435,6 +457,7 @@ function mergeClientViewState(base: ClientViewStateV1, override: ClientViewState
       },
     },
     commandPalette: { ...base.commandPalette, ...override.commandPalette },
+    jumpPalette: { ...base.jumpPalette, ...override.jumpPalette },
   });
 }
 

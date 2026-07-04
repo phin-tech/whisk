@@ -143,6 +143,13 @@
   import { runCommand } from "./commands";
   import type { JumpTarget } from "./jumpFilter";
   import { deriveJumpTargets } from "./jumpTargets";
+  import {
+    CLIENT_VIEW_STATE_KEY,
+    MAX_RECENT_JUMP_TARGETS,
+    parseClientViewState,
+    persistClientViewState,
+  } from "./viewState";
+  import { updateJumpRecents } from "./jumpRecents";
   import { notificationSurfaceCount, targetForStatusEvent } from "./notificationsView";
   import {
     clearNavigationStack as clearNavigationStackState,
@@ -235,6 +242,7 @@
   let workBoardOpenItemId = "";
   let navigationStack: MainView[] = [];
   let jumpTargets: JumpTarget[] = [];
+  let recentTargetIds: string[] = [];
 
   function emptyReadyWorkExplanation(): ReadyWorkExplanation {
     return { ready: [], blocked: [], summary: { totalReady: 0, totalBlocked: 0, cycleCount: 0 } };
@@ -452,6 +460,15 @@
     activeSidebar = target.sidebar;
   }
 
+  function loadJumpRecents() {
+    try {
+      const state = parseClientViewState(localStorage.getItem(CLIENT_VIEW_STATE_KEY));
+      recentTargetIds = state.jumpPalette.recentTargetIds;
+    } catch {
+      return;
+    }
+  }
+
   function loadLocalSettings() {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
@@ -476,6 +493,7 @@
   }
 
   async function loadSettings() {
+    loadJumpRecents();
     loadLocalSettings();
     try {
       const loaded = await LoadAppSettings();
@@ -1439,49 +1457,58 @@
     return selectPaneTarget(session.id, resolvedPaneId);
   }
 
+  function recordJumpRecent(targetId: string) {
+    recentTargetIds = updateJumpRecents(recentTargetIds, targetId, MAX_RECENT_JUMP_TARGETS);
+    try {
+      const state = parseClientViewState(localStorage.getItem(CLIENT_VIEW_STATE_KEY));
+      state.jumpPalette.recentTargetIds = recentTargetIds;
+      persistClientViewState(localStorage, state);
+    } catch {
+      return;
+    }
+  }
+
   async function jumpToTarget(target: JumpTarget) {
     jumpPaletteOpen = false;
     const payload = target.payload;
     if (!payload) return;
+
+    let activated = false;
 
     if (payload.kind === "session") {
       const session = sessions.find((candidate) => candidate.id === payload.sessionId);
       if (!session) return;
       activeSidebar = "sessions";
       selectSession(session);
-      return;
-    }
-
-    if (payload.kind === "pane") {
-      selectPaneTarget(payload.sessionId, payload.paneId);
-      return;
-    }
-
-    if (payload.kind === "pty") {
-      selectPtyTarget(payload.ptyId, payload.sessionId, payload.paneId);
-      return;
-    }
-
-    if (payload.kind === "project") {
+      activated = true;
+    } else if (payload.kind === "pane") {
+      activated = selectPaneTarget(payload.sessionId, payload.paneId);
+    } else if (payload.kind === "pty") {
+      activated = selectPtyTarget(payload.ptyId, payload.sessionId, payload.paneId);
+    } else if (payload.kind === "project") {
+      if (!projects.some((candidate) => candidate.id === payload.projectId)) return;
       selectProjectDetail(payload.projectId);
-      return;
-    }
-
-    if (payload.kind === "work-item") {
+      activated = true;
+    } else if (payload.kind === "work-item") {
+      if (
+        !workItems.some(
+          (candidate) => candidate.id === payload.workItemId && candidate.projectId === payload.projectId,
+        )
+      ) return;
       selectProject(payload.projectId);
       activeSidebar = "work";
       navigateTo("work", { openItemId: payload.workItemId });
-      return;
-    }
-
-    if (payload.kind === "work-item-run") {
+      activated = true;
+    } else if (payload.kind === "work-item-run") {
       const run = workItemRuns.find((candidate) => candidate.id === payload.runId);
       if (run) {
-        await openWorkItemRun(run);
-        return;
+        activated = await openWorkItemRun(run);
+      } else if (payload.ptyId) {
+        activated = selectPtyTarget(payload.ptyId, payload.sessionId);
       }
-      if (payload.ptyId) selectPtyTarget(payload.ptyId, payload.sessionId);
     }
+
+    if (activated) recordJumpRecent(target.id);
   }
 
   function selectProject(projectId: string) {
@@ -1598,13 +1625,15 @@
         },
         nextSessions,
       );
-      selectMain("session");
-      activeSidebar = "sessions";
-      if (target.sessionId) activeSessionId = target.sessionId;
-      if (target.paneId) activePaneId = target.paneId;
+      const selected = Boolean(
+        target.sessionId && target.paneId && selectPaneTarget(target.sessionId, target.paneId),
+      );
+      if (!selected) return false;
       if (run.ptyId) await refreshOutput(run.ptyId);
+      return true;
     } catch (err) {
       error = `Open run failed: ${backendError(err)}`;
+      return false;
     }
   }
 
@@ -2756,6 +2785,7 @@
   <JumpPalette
     visible={jumpPaletteOpen}
     targets={jumpTargets}
+    recentTargetIds={recentTargetIds}
     onclose={() => (jumpPaletteOpen = false)}
     onjump={(target) => void jumpToTarget(target)}
   />

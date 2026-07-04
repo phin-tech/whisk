@@ -8,8 +8,13 @@ describe("App notification refresh", () => {
     expect(source).toContain('id: "jumpPalette.open"');
     expect(source).toContain("function openJumpPalette()");
     expect(source).toContain("function jumpToTarget(target: JumpTarget)");
+    expect(source).toContain("function recordJumpRecent(targetId: string)");
+    expect(source).toContain("recentTargetIds={recentTargetIds}");
     expect(source).toContain("selectPaneTarget(payload.sessionId, payload.paneId)");
+    expect(source).toContain("selectPaneTarget(target.sessionId, target.paneId)");
+    expect(source).toContain("if (!selected) return false");
     expect(source).toContain('navigateTo("work", { openItemId: payload.workItemId })');
+    expect(source).toContain("if (activated) recordJumpRecent(target.id)");
     expect(source).toContain("<JumpPalette");
     expect(source).not.toContain("CreateJumpTarget");
     expect(source).not.toContain("PersistJump");
