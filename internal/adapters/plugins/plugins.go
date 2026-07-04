@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/phin-tech/whisk/internal/adapters/agents"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/appsettings"
 )
@@ -20,6 +21,7 @@ type Manifest struct {
 	Name            string           `json:"name"`
 	Version         string           `json:"version"`
 	Resolvers       []Resolver       `json:"resolvers"`
+	AgentProfiles   []agents.Profile `json:"agentProfiles,omitempty"`
 	Events          []EventHandler   `json:"events,omitempty"`
 	Hooks           []HookHandler    `json:"hooks,omitempty"`
 	Gates           []WorkflowGate   `json:"gates,omitempty"`
@@ -159,6 +161,8 @@ type Manager struct {
 	resolvers map[string]app.ProjectContextResolver
 	installer *Installer
 }
+
+const pluginProfilePrefix = "plugin:"
 
 func NewManager(envDirs []string, settings SettingsStore) (*Manager, error) {
 	manager := &Manager{envDirs: envDirs, settings: settings}
@@ -336,6 +340,27 @@ func (m *Manager) ResolveProjectAttachmentProvider(provider string) app.ProjectC
 	return m.resolvers[provider]
 }
 
+func (m *Manager) ListAgentProfiles(context.Context) ([]agents.ProfileInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	out := []agents.ProfileInfo{}
+	for _, status := range m.statuses {
+		if !status.Valid {
+			continue
+		}
+		manifest, ok := m.manifests[status.ID]
+		if !ok {
+			continue
+		}
+		for _, profile := range manifest.AgentProfiles {
+			info := pluginProfileInfo(status.ID, profile, m.trusted[status.ID])
+			out = append(out, info)
+		}
+	}
+	return out, nil
+}
+
 func (m *Manager) loadSettings(ctx context.Context) (appsettings.Settings, error) {
 	if m.settings == nil {
 		return appsettings.Default(), nil
@@ -406,6 +431,37 @@ func qualifiedID(registry, id string) string {
 		return id
 	}
 	return registry + "/" + id
+}
+
+func NamespacedAgentProfileID(pluginID, localProfileID string) string {
+	return pluginProfilePrefix + pluginID + "/" + localProfileID
+}
+
+func pluginProfileInfo(pluginID string, profile agents.Profile, trusted bool) agents.ProfileInfo {
+	info := agents.ProfileInfo{
+		ID:                  NamespacedAgentProfileID(pluginID, profile.ID),
+		Provider:            profile.Provider,
+		Label:               profile.Label,
+		Description:         profile.Description,
+		Source:              agents.ProfileSourcePlugin,
+		PluginID:            pluginID,
+		Launchable:          false,
+		DetectCmd:           profile.DetectCmd,
+		DetectAliases:       append([]string(nil), profile.DetectAliases...),
+		ExpectedProcess:     profile.ExpectedProcess,
+		PromptInjectionMode: profile.PromptInjectionMode,
+		DraftPromptFlag:     profile.DraftPromptFlag,
+		DraftPromptEnvVar:   profile.DraftPromptEnvVar,
+		PreflightTrust:      profile.PreflightTrust,
+		ReadySignal:         profile.ReadySignal,
+		HookProvider:        profile.HookProvider,
+	}
+	if trusted {
+		info.LaunchBlockedReason = "plugin agent profile launch is not implemented yet"
+	} else {
+		info.LaunchBlockedReason = fmt.Sprintf("plugin %s is not trusted", pluginID)
+	}
+	return info
 }
 
 func (m *Manager) statusFor(id string) (app.PluginStatus, error) {
@@ -608,6 +664,7 @@ func unknownManifestV2Fields(raw map[string]json.RawMessage) []string {
 		"name":            true,
 		"version":         true,
 		"resolvers":       true,
+		"agentProfiles":   true,
 		"events":          true,
 		"hooks":           true,
 		"gates":           true,
@@ -630,6 +687,7 @@ func validateManifest(manifest *Manifest) error {
 		return fmt.Errorf("plugin id required")
 	}
 	if manifest.ManifestVersion == defaultManifestVersion {
+		manifest.AgentProfiles = nil
 		return nil
 	}
 	return validateManifestV2(manifest)
@@ -637,6 +695,51 @@ func validateManifest(manifest *Manifest) error {
 
 func validateManifestV2(manifest *Manifest) error {
 	seenContributionIDs := map[string]string{}
+	for i := range manifest.AgentProfiles {
+		profile := &manifest.AgentProfiles[i]
+		id := strings.TrimSpace(profile.ID)
+		if id == "" {
+			return fmt.Errorf("agentProfiles[%d].id required", i)
+		}
+		if strings.Contains(id, "/") {
+			return fmt.Errorf("agentProfiles[%s].id must not contain /", id)
+		}
+		if agents.IsBuiltinProfileID(id) {
+			return fmt.Errorf("agentProfiles[%s].id shadows builtin agent profile", id)
+		}
+		if err := recordManifestContributionID(seenContributionIDs, id, "agentProfiles"); err != nil {
+			return err
+		}
+		profile.ID = id
+		profile.Label = strings.TrimSpace(profile.Label)
+		if profile.Label == "" {
+			return fmt.Errorf("agentProfiles[%s].label required", id)
+		}
+		profile.Provider = agents.Provider(strings.TrimSpace(string(profile.Provider)))
+		if profile.Provider == "" {
+			return fmt.Errorf("agentProfiles[%s].provider required", id)
+		}
+		profile.Command = strings.TrimSpace(profile.Command)
+		if profile.Command == "" {
+			return fmt.Errorf("agentProfiles[%s].command required", id)
+		}
+		if profile.PromptInjectionMode == "" {
+			profile.PromptInjectionMode = agents.PromptInjectionArgv
+		}
+		if !validPromptInjectionMode(profile.PromptInjectionMode) {
+			return fmt.Errorf("agentProfiles[%s].promptInjectionMode %q is unsupported", id, profile.PromptInjectionMode)
+		}
+		for _, alias := range profile.DetectAliases {
+			if strings.TrimSpace(alias) == "" {
+				return fmt.Errorf("agentProfiles[%s].detectAliases contains empty value", id)
+			}
+		}
+		for key := range profile.Env {
+			if strings.TrimSpace(key) == "" {
+				return fmt.Errorf("agentProfiles[%s].env contains empty key", id)
+			}
+		}
+	}
 	for i := range manifest.Events {
 		event := &manifest.Events[i]
 		id := strings.TrimSpace(event.ID)
@@ -754,6 +857,19 @@ func recordManifestContributionID(seen map[string]string, id, kind string) error
 	}
 	seen[id] = kind
 	return nil
+}
+
+func validPromptInjectionMode(mode agents.PromptInjectionMode) bool {
+	switch mode {
+	case agents.PromptInjectionArgv,
+		agents.PromptInjectionFlagPrompt,
+		agents.PromptInjectionFlagPromptInteractive,
+		agents.PromptInjectionFlagInteractive,
+		agents.PromptInjectionStdinAfterStart:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateManifestSubjectPattern(subject string) error {

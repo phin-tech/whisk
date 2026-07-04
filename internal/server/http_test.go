@@ -20,6 +20,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
+	"github.com/phin-tech/whisk/internal/adapters/agents"
 	"github.com/phin-tech/whisk/internal/adapters/transcriptstore"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
@@ -992,7 +993,7 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	if prompts := getJSON[[]protocol.PromptTemplate](t, handler, "/v1/prompt-templates", http.StatusOK); len(prompts) == 0 {
 		t.Fatalf("prompt templates = %#v", prompts)
 	}
-	if profiles := getJSON[[]protocol.AgentProfile](t, handler, "/v1/agent-profiles", http.StatusOK); len(profiles) == 0 || profiles[0].ID == "" || profiles[0].PromptInjectionMode == "" {
+	if profiles := getJSON[[]protocol.AgentProfile](t, handler, "/v1/agent-profiles", http.StatusOK); len(profiles) == 0 || profiles[0].ID == "" || profiles[0].PromptInjectionMode == "" || profiles[0].Source != "builtin" || !profiles[0].Launchable {
 		t.Fatalf("agent profiles = %#v", profiles)
 	}
 
@@ -1769,6 +1770,10 @@ func (f *pluginRegistryFake) InstallPlugin(_ context.Context, registry, id strin
 	status := app.PluginStatus{ID: id, Registry: registry, Name: "GitHub Issues", Valid: true}
 	f.statuses = []app.PluginStatus{status}
 	return status, nil
+}
+
+func (f *pluginRegistryFake) ListAgentProfiles(context.Context) ([]agents.ProfileInfo, error) {
+	return nil, nil
 }
 
 func (f *pluginRegistryFake) RunProjectAttachmentTemplate(_ context.Context, req app.RunPluginProjectAttachmentTemplateRequest) (app.AddProjectAttachmentRequest, error) {

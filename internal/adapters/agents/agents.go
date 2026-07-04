@@ -15,6 +15,13 @@ const (
 	ProviderCodex  Provider = "codex"
 )
 
+type ProfileSource string
+
+const (
+	ProfileSourceBuiltin ProfileSource = "builtin"
+	ProfileSourcePlugin  ProfileSource = "plugin"
+)
+
 type PromptInjectionMode string
 
 const (
@@ -41,7 +48,7 @@ const (
 	ReadySignalRenderCursorAfterBracketedPaste ReadySignal = "render-cursor-after-bracketed-paste"
 )
 
-// ProfileInfo is the selectable, human-facing view of a builtin agent profile.
+// ProfileInfo is the selectable, human-facing view of a daemon agent profile.
 // It deliberately omits launch internals (command/args/env) so it can be surfaced
 // to clients as a read model.
 type ProfileInfo struct {
@@ -49,6 +56,10 @@ type ProfileInfo struct {
 	Provider            Provider
 	Label               string
 	Description         string
+	Source              ProfileSource
+	PluginID            string
+	Launchable          bool
+	LaunchBlockedReason string
 	DetectCmd           string
 	DetectAliases       []string
 	ExpectedProcess     string
@@ -57,6 +68,7 @@ type ProfileInfo struct {
 	DraftPromptEnvVar   string
 	PreflightTrust      PreflightTrust
 	ReadySignal         ReadySignal
+	HookProvider        string
 }
 
 // profileCatalog lists the builtin profiles in display order with human labels.
@@ -77,25 +89,30 @@ func ProfileList() []ProfileInfo {
 	out := make([]ProfileInfo, len(profileCatalog))
 	copy(out, profileCatalog)
 	for i := range out {
+		out[i].Source = ProfileSourceBuiltin
+		out[i].Launchable = true
 		out[i].DetectAliases = append([]string(nil), out[i].DetectAliases...)
 	}
 	return out
 }
 
 type Profile struct {
-	ID                  string
-	Provider            Provider
-	Command             string
-	Args                []string
-	Env                 map[string]string
-	DetectCmd           string
-	DetectAliases       []string
-	ExpectedProcess     string
-	PromptInjectionMode PromptInjectionMode
-	DraftPromptFlag     string
-	DraftPromptEnvVar   string
-	PreflightTrust      PreflightTrust
-	ReadySignal         ReadySignal
+	ID                  string              `json:"id"`
+	Provider            Provider            `json:"provider"`
+	Label               string              `json:"label,omitempty"`
+	Description         string              `json:"description,omitempty"`
+	Command             string              `json:"command"`
+	Args                []string            `json:"args,omitempty"`
+	Env                 map[string]string   `json:"env,omitempty"`
+	DetectCmd           string              `json:"detectCmd,omitempty"`
+	DetectAliases       []string            `json:"detectAliases,omitempty"`
+	ExpectedProcess     string              `json:"expectedProcess,omitempty"`
+	PromptInjectionMode PromptInjectionMode `json:"promptInjectionMode,omitempty"`
+	DraftPromptFlag     string              `json:"draftPromptFlag,omitempty"`
+	DraftPromptEnvVar   string              `json:"draftPromptEnvVar,omitempty"`
+	PreflightTrust      PreflightTrust      `json:"preflightTrust,omitempty"`
+	ReadySignal         ReadySignal         `json:"readySignal,omitempty"`
+	HookProvider        string              `json:"hookProvider,omitempty"`
 }
 
 type LaunchRequest struct {
@@ -220,6 +237,8 @@ func BuiltinProfiles() map[string]Profile {
 		return Profile{
 			ID:                  info.ID,
 			Provider:            info.Provider,
+			Label:               info.Label,
+			Description:         info.Description,
 			Command:             command,
 			Args:                append([]string(nil), args...),
 			Env:                 env,
@@ -231,6 +250,7 @@ func BuiltinProfiles() map[string]Profile {
 			DraftPromptEnvVar:   info.DraftPromptEnvVar,
 			PreflightTrust:      info.PreflightTrust,
 			ReadySignal:         info.ReadySignal,
+			HookProvider:        info.HookProvider,
 		}
 	}
 	return map[string]Profile{
@@ -256,10 +276,17 @@ func BuiltinProfiles() map[string]Profile {
 	}
 }
 
+func IsBuiltinProfileID(id string) bool {
+	_, ok := profileInfoByID(id)
+	return ok
+}
+
 func profileInfoByID(id string) (ProfileInfo, bool) {
 	for _, profile := range profileCatalog {
 		if profile.ID == id {
 			profile.DetectAliases = append([]string(nil), profile.DetectAliases...)
+			profile.Source = ProfileSourceBuiltin
+			profile.Launchable = true
 			return profile, true
 		}
 	}

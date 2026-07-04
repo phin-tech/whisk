@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "25",
+    "version": "26",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -657,7 +657,7 @@
     "/v1/agent-profiles": {
       "get": {
         "operationId": "listAgentProfiles",
-        "summary": "List selectable builtin agent profiles",
+        "summary": "List daemon agent profiles",
         "tags": [
           "agents"
         ],
@@ -6188,10 +6188,22 @@
           "expectedProcess": {
             "type": "string"
           },
+          "hookProvider": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
           "label": {
+            "type": "string"
+          },
+          "launchBlockedReason": {
+            "type": "string"
+          },
+          "launchable": {
+            "type": "boolean"
+          },
+          "pluginId": {
             "type": "string"
           },
           "preflightTrust": {
@@ -6205,12 +6217,17 @@
           },
           "readySignal": {
             "type": "string"
+          },
+          "source": {
+            "type": "string"
           }
         },
         "required": [
           "id",
           "provider",
           "label",
+          "source",
+          "launchable",
           "promptInjectionMode"
         ],
         "type": "object"

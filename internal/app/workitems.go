@@ -1721,9 +1721,17 @@ func normalizeAgentProfileForPreset(profileID string, preset string) string {
 	return profileID
 }
 
-// ListAgentProfiles returns the selectable builtin agent profiles as a read model.
-func (r *Runtime) ListAgentProfiles(context.Context) ([]agents.ProfileInfo, error) {
-	return agents.ProfileList(), nil
+// ListAgentProfiles returns the selectable daemon agent profiles as a read model.
+func (r *Runtime) ListAgentProfiles(ctx context.Context) ([]agents.ProfileInfo, error) {
+	profiles := agents.ProfileList()
+	if r.plugins == nil {
+		return profiles, nil
+	}
+	pluginProfiles, err := r.plugins.ListAgentProfiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(profiles, pluginProfiles...), nil
 }
 
 func (r *Runtime) CancelWorkItemRun(ctx context.Context, req CancelWorkItemRunRequest) (workitem.WorkItemRun, error) {

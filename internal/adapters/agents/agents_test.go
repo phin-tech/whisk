@@ -201,6 +201,9 @@ func TestProfileListReturnsOrderedBuiltinProfilesWithLabels(t *testing.T) {
 	if byID["claude"].Label != "Claude Code" || byID["claude"].Provider != ProviderClaude {
 		t.Fatalf("claude profile = %#v", byID["claude"])
 	}
+	if byID["claude"].Source != ProfileSourceBuiltin || !byID["claude"].Launchable {
+		t.Fatalf("claude profile source/launchability = %#v", byID["claude"])
+	}
 	if byID["codex"].Provider != ProviderCodex {
 		t.Fatalf("codex profile = %#v", byID["codex"])
 	}

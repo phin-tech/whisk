@@ -17,28 +17,38 @@ class AgentProfile:
     Attributes:
         id (str):
         label (str):
+        launchable (bool):
         prompt_injection_mode (str):
         provider (str):
+        source (str):
         description (str | Unset):
         detect_aliases (list[str] | Unset):
         detect_cmd (str | Unset):
         draft_prompt_env_var (str | Unset):
         draft_prompt_flag (str | Unset):
         expected_process (str | Unset):
+        hook_provider (str | Unset):
+        launch_blocked_reason (str | Unset):
+        plugin_id (str | Unset):
         preflight_trust (str | Unset):
         ready_signal (str | Unset):
     """
 
     id: str
     label: str
+    launchable: bool
     prompt_injection_mode: str
     provider: str
+    source: str
     description: str | Unset = UNSET
     detect_aliases: list[str] | Unset = UNSET
     detect_cmd: str | Unset = UNSET
     draft_prompt_env_var: str | Unset = UNSET
     draft_prompt_flag: str | Unset = UNSET
     expected_process: str | Unset = UNSET
+    hook_provider: str | Unset = UNSET
+    launch_blocked_reason: str | Unset = UNSET
+    plugin_id: str | Unset = UNSET
     preflight_trust: str | Unset = UNSET
     ready_signal: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
@@ -48,9 +58,13 @@ class AgentProfile:
 
         label = self.label
 
+        launchable = self.launchable
+
         prompt_injection_mode = self.prompt_injection_mode
 
         provider = self.provider
+
+        source = self.source
 
         description = self.description
 
@@ -66,6 +80,12 @@ class AgentProfile:
 
         expected_process = self.expected_process
 
+        hook_provider = self.hook_provider
+
+        launch_blocked_reason = self.launch_blocked_reason
+
+        plugin_id = self.plugin_id
+
         preflight_trust = self.preflight_trust
 
         ready_signal = self.ready_signal
@@ -76,8 +96,10 @@ class AgentProfile:
             {
                 "id": id,
                 "label": label,
+                "launchable": launchable,
                 "promptInjectionMode": prompt_injection_mode,
                 "provider": provider,
+                "source": source,
             }
         )
         if description is not UNSET:
@@ -92,6 +114,12 @@ class AgentProfile:
             field_dict["draftPromptFlag"] = draft_prompt_flag
         if expected_process is not UNSET:
             field_dict["expectedProcess"] = expected_process
+        if hook_provider is not UNSET:
+            field_dict["hookProvider"] = hook_provider
+        if launch_blocked_reason is not UNSET:
+            field_dict["launchBlockedReason"] = launch_blocked_reason
+        if plugin_id is not UNSET:
+            field_dict["pluginId"] = plugin_id
         if preflight_trust is not UNSET:
             field_dict["preflightTrust"] = preflight_trust
         if ready_signal is not UNSET:
@@ -106,9 +134,13 @@ class AgentProfile:
 
         label = d.pop("label")
 
+        launchable = d.pop("launchable")
+
         prompt_injection_mode = d.pop("promptInjectionMode")
 
         provider = d.pop("provider")
+
+        source = d.pop("source")
 
         description = d.pop("description", UNSET)
 
@@ -122,6 +154,12 @@ class AgentProfile:
 
         expected_process = d.pop("expectedProcess", UNSET)
 
+        hook_provider = d.pop("hookProvider", UNSET)
+
+        launch_blocked_reason = d.pop("launchBlockedReason", UNSET)
+
+        plugin_id = d.pop("pluginId", UNSET)
+
         preflight_trust = d.pop("preflightTrust", UNSET)
 
         ready_signal = d.pop("readySignal", UNSET)
@@ -129,14 +167,19 @@ class AgentProfile:
         agent_profile = cls(
             id=id,
             label=label,
+            launchable=launchable,
             prompt_injection_mode=prompt_injection_mode,
             provider=provider,
+            source=source,
             description=description,
             detect_aliases=detect_aliases,
             detect_cmd=detect_cmd,
             draft_prompt_env_var=draft_prompt_env_var,
             draft_prompt_flag=draft_prompt_flag,
             expected_process=expected_process,
+            hook_provider=hook_provider,
+            launch_blocked_reason=launch_blocked_reason,
+            plugin_id=plugin_id,
             preflight_trust=preflight_trust,
             ready_signal=ready_signal,
         )

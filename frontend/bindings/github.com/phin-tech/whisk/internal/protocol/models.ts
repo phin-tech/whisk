@@ -383,7 +383,7 @@ export class AgentHookLogStatus {
 }
 
 /**
- * AgentProfile is the selectable, human-facing view of a builtin agent profile
+ * AgentProfile is the selectable, human-facing view of a daemon agent profile
  * exposed to clients so they can choose which agent runs an execution.
  */
 export class AgentProfile {
@@ -391,6 +391,10 @@ export class AgentProfile {
     "provider": string;
     "label": string;
     "description"?: string;
+    "source": string;
+    "pluginId"?: string;
+    "launchable": boolean;
+    "launchBlockedReason"?: string;
     "detectCmd"?: string;
     "detectAliases"?: string[];
     "expectedProcess"?: string;
@@ -399,6 +403,7 @@ export class AgentProfile {
     "draftPromptEnvVar"?: string;
     "preflightTrust"?: string;
     "readySignal"?: string;
+    "hookProvider"?: string;
 
     /** Creates a new AgentProfile instance. */
     constructor($$source: Partial<AgentProfile> = {}) {
@@ -411,6 +416,12 @@ export class AgentProfile {
         if (!("label" in $$source)) {
             this["label"] = "";
         }
+        if (!("source" in $$source)) {
+            this["source"] = "";
+        }
+        if (!("launchable" in $$source)) {
+            this["launchable"] = false;
+        }
         if (!("promptInjectionMode" in $$source)) {
             this["promptInjectionMode"] = "";
         }
@@ -422,10 +433,10 @@ export class AgentProfile {
      * Creates a new AgentProfile instance from a string or object.
      */
     static createFrom($$source: any = {}): AgentProfile {
-        const $$createField5_0 = $$createType6;
+        const $$createField9_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("detectAliases" in $$parsedSource) {
-            $$parsedSource["detectAliases"] = $$createField5_0($$parsedSource["detectAliases"]);
+            $$parsedSource["detectAliases"] = $$createField9_0($$parsedSource["detectAliases"]);
         }
         return new AgentProfile($$parsedSource as Partial<AgentProfile>);
     }

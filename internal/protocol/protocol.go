@@ -11,7 +11,7 @@ import (
 
 const (
 	// ProtocolVersion is the canonical daemon/client wire protocol version.
-	ProtocolVersion = 25
+	ProtocolVersion = 26
 	// DaemonAPIVersion is the legacy name kept for old clients and tooling.
 	DaemonAPIVersion = ProtocolVersion
 )
@@ -571,13 +571,17 @@ type BlockedWorkItem = workitem.BlockedWorkItem
 type ReadyBlockerInfo = workitem.ReadyBlockerInfo
 type ReadyWorkSummary = workitem.ReadyWorkSummary
 
-// AgentProfile is the selectable, human-facing view of a builtin agent profile
+// AgentProfile is the selectable, human-facing view of a daemon agent profile
 // exposed to clients so they can choose which agent runs an execution.
 type AgentProfile struct {
 	ID                  string   `json:"id"`
 	Provider            string   `json:"provider"`
 	Label               string   `json:"label"`
 	Description         string   `json:"description,omitempty"`
+	Source              string   `json:"source"`
+	PluginID            string   `json:"pluginId,omitempty"`
+	Launchable          bool     `json:"launchable"`
+	LaunchBlockedReason string   `json:"launchBlockedReason,omitempty"`
 	DetectCmd           string   `json:"detectCmd,omitempty"`
 	DetectAliases       []string `json:"detectAliases,omitempty"`
 	ExpectedProcess     string   `json:"expectedProcess,omitempty"`
@@ -586,6 +590,7 @@ type AgentProfile struct {
 	DraftPromptEnvVar   string   `json:"draftPromptEnvVar,omitempty"`
 	PreflightTrust      string   `json:"preflightTrust,omitempty"`
 	ReadySignal         string   `json:"readySignal,omitempty"`
+	HookProvider        string   `json:"hookProvider,omitempty"`
 }
 
 type DetectedAgent struct {

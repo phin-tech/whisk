@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/phin-tech/whisk/internal/adapters/agents"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/appsettings"
 )
@@ -19,6 +20,7 @@ func TestReadManifestDefaultsV1AndAllowsAdHocFields(t *testing.T) {
 		"name": "Legacy",
 		"version": "0.1.0",
 		"panels": [{"id": "legacy.panel"}],
+		"agentProfiles": [{"id": "codex"}],
 		"events": [{"id": "legacy.event"}],
 		"ui": {
 			"reviewActions": [{
@@ -44,6 +46,9 @@ func TestReadManifestDefaultsV1AndAllowsAdHocFields(t *testing.T) {
 	if len(manifest.UI.ReviewActions) != 1 || !manifest.UI.ReviewActions[0].Blocking {
 		t.Fatalf("review actions = %#v", manifest.UI.ReviewActions)
 	}
+	if len(manifest.AgentProfiles) != 0 {
+		t.Fatalf("v1 agent profiles should be ignored, got %#v", manifest.AgentProfiles)
+	}
 }
 
 func TestReadManifestParsesAndNormalizesManifestV2(t *testing.T) {
@@ -53,6 +58,21 @@ func TestReadManifestParsesAndNormalizesManifestV2(t *testing.T) {
 		"id": "linear",
 		"name": "Linear",
 		"version": "0.2.0",
+		"agentProfiles": [{
+			"id": "linear-agent",
+			"provider": "linear",
+			"label": "Linear Agent",
+			"description": "Linear-aware agent CLI.",
+			"command": "linear-agent",
+			"args": ["--workspace", "acme"],
+			"env": {"LINEAR_ENV": "test"},
+			"detectCmd": "linear-agent",
+			"detectAliases": ["linear"],
+			"expectedProcess": "linear-agent",
+			"promptInjectionMode": "argv",
+			"draftPromptFlag": "--prompt",
+			"hookProvider": "codex"
+		}],
 		"events": [{
 			"id": "linear.sync-work",
 			"subjects": ["workitem.stage.changed", "run.*"],
@@ -117,6 +137,20 @@ func TestReadManifestParsesAndNormalizesManifestV2(t *testing.T) {
 	if !manifest.Permissions.PTYOutput || len(manifest.Permissions.EnvPrefixes) != 2 || len(manifest.Permissions.Network) != 1 {
 		t.Fatalf("permissions = %#v", manifest.Permissions)
 	}
+	if len(manifest.AgentProfiles) != 1 {
+		t.Fatalf("agent profiles = %#v", manifest.AgentProfiles)
+	}
+	profile := manifest.AgentProfiles[0]
+	if profile.ID != "linear-agent" ||
+		profile.Provider != "linear" ||
+		profile.Label != "Linear Agent" ||
+		profile.Command != "linear-agent" ||
+		len(profile.Args) != 2 ||
+		profile.Env["LINEAR_ENV"] != "test" ||
+		profile.PromptInjectionMode != agents.PromptInjectionArgv ||
+		profile.HookProvider != "codex" {
+		t.Fatalf("agent profile = %#v", profile)
+	}
 }
 
 func TestReadManifestRejectsUnsupportedFutureManifestVersion(t *testing.T) {
@@ -145,6 +179,81 @@ func TestReadManifestRejectsInvalidV2Contributions(t *testing.T) {
 		manifest string
 		want     string
 	}{
+		{
+			name: "agent profile duplicate id",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"agentProfiles": [
+					{"id": "agent", "provider": "gemini", "label": "Gemini", "command": "gemini"},
+					{"id": "agent", "provider": "gemini", "label": "Gemini", "command": "gemini"}
+				]
+			}`,
+			want: `duplicate manifest contribution id "agent"`,
+		},
+		{
+			name: "agent profile command required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"agentProfiles": [{"id": "agent", "provider": "gemini", "label": "Gemini"}]
+			}`,
+			want: "agentProfiles[agent].command required",
+		},
+		{
+			name: "agent profile id cannot contain slash",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"agentProfiles": [{"id": "gemini/plan", "provider": "gemini", "label": "Gemini", "command": "gemini"}]
+			}`,
+			want: "agentProfiles[gemini/plan].id must not contain /",
+		},
+		{
+			name: "agent profile cannot shadow builtin",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"agentProfiles": [{"id": "codex", "provider": "gemini", "label": "Gemini", "command": "gemini"}]
+			}`,
+			want: "agentProfiles[codex].id shadows builtin agent profile",
+		},
+		{
+			name: "agent profile label required",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"agentProfiles": [{"id": "agent", "provider": "gemini", "label": "  ", "command": "gemini"}]
+			}`,
+			want: "agentProfiles[agent].label required",
+		},
+		{
+			name: "agent profile prompt mode must be known",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"agentProfiles": [{"id": "agent", "provider": "gemini", "label": "Gemini", "command": "gemini", "promptInjectionMode": "telepathy"}]
+			}`,
+			want: "promptInjectionMode",
+		},
+		{
+			name: "agent profile alias cannot be empty",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"agentProfiles": [{"id": "agent", "provider": "gemini", "label": "Gemini", "command": "gemini", "detectAliases": ["gemini", " "]}]
+			}`,
+			want: "agentProfiles[agent].detectAliases contains empty value",
+		},
+		{
+			name: "agent profile env key cannot be empty",
+			manifest: `{
+				"manifestVersion": 2,
+				"id": "bad",
+				"agentProfiles": [{"id": "agent", "provider": "gemini", "label": "Gemini", "command": "gemini", "env": {"": "bad"}}]
+			}`,
+			want: "agentProfiles[agent].env contains empty key",
+		},
 		{
 			name: "event command required",
 			manifest: `{
@@ -236,6 +345,63 @@ func TestScanTrustedResolversRunsCommandResolver(t *testing.T) {
 	}
 	if resolvers["github"] != nil {
 		t.Fatalf("untrusted resolver registered")
+	}
+}
+
+func TestManagerListsPluginAgentProfilesWithoutRegisteringLaunch(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	configPlugin := filepath.Join(configHome, "whisk", "plugins", "phin-tech", "gemini")
+	writeManifestOnly(t, configPlugin, `{
+		"manifestVersion": 2,
+		"id": "gemini",
+		"name": "Gemini",
+		"version": "0.1.0",
+		"agentProfiles": [{
+			"id": "gemini-cli",
+			"provider": "gemini",
+			"label": "Gemini CLI",
+			"description": "Gemini CLI from a plugin.",
+			"command": "gemini",
+			"detectCmd": "gemini",
+			"promptInjectionMode": "argv"
+		}]
+	}`)
+
+	store := appsettings.NewStore(filepath.Join(t.TempDir(), "whisk.json"))
+	manager, err := NewManager(nil, store)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	profiles, err := manager.ListAgentProfiles(context.Background())
+	if err != nil {
+		t.Fatalf("list profiles: %v", err)
+	}
+	if len(profiles) != 1 {
+		t.Fatalf("profiles = %#v", profiles)
+	}
+	profile := profiles[0]
+	if profile.ID != "plugin:phin-tech/gemini/gemini-cli" ||
+		profile.Source != agents.ProfileSourcePlugin ||
+		profile.PluginID != "phin-tech/gemini" ||
+		profile.Provider != "gemini" ||
+		profile.Label != "Gemini CLI" ||
+		profile.DetectCmd != "gemini" ||
+		profile.Launchable ||
+		!strings.Contains(profile.LaunchBlockedReason, "not trusted") {
+		t.Fatalf("untrusted profile = %#v", profile)
+	}
+
+	if _, err := manager.TrustPlugin(context.Background(), "phin-tech/gemini"); err != nil {
+		t.Fatalf("trust: %v", err)
+	}
+	profiles, err = manager.ListAgentProfiles(context.Background())
+	if err != nil {
+		t.Fatalf("list trusted profiles: %v", err)
+	}
+	if len(profiles) != 1 || profiles[0].Launchable || !strings.Contains(profiles[0].LaunchBlockedReason, "not implemented") {
+		t.Fatalf("trusted foundation profile = %#v", profiles)
 	}
 }
 

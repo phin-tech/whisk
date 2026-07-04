@@ -32,6 +32,10 @@ func agentProfileToProtocol(profile agents.ProfileInfo) protocol.AgentProfile {
 		Provider:            string(profile.Provider),
 		Label:               profile.Label,
 		Description:         profile.Description,
+		Source:              string(profile.Source),
+		PluginID:            profile.PluginID,
+		Launchable:          profile.Launchable,
+		LaunchBlockedReason: profile.LaunchBlockedReason,
 		DetectCmd:           profile.DetectCmd,
 		DetectAliases:       append([]string(nil), profile.DetectAliases...),
 		ExpectedProcess:     profile.ExpectedProcess,
@@ -40,5 +44,6 @@ func agentProfileToProtocol(profile agents.ProfileInfo) protocol.AgentProfile {
 		DraftPromptEnvVar:   profile.DraftPromptEnvVar,
 		PreflightTrust:      string(profile.PreflightTrust),
 		ReadySignal:         string(profile.ReadySignal),
+		HookProvider:        profile.HookProvider,
 	}
 }

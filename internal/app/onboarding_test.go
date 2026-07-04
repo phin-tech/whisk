@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
+	"github.com/phin-tech/whisk/internal/adapters/agents"
 	"github.com/phin-tech/whisk/internal/domain/onboarding"
 )
 
@@ -218,6 +219,10 @@ func (r *onboardingPluginRegistry) ListRegistryPlugins(context.Context) ([]Regis
 
 func (r *onboardingPluginRegistry) InstallPlugin(context.Context, string, string) (PluginStatus, error) {
 	return PluginStatus{}, nil
+}
+
+func (r *onboardingPluginRegistry) ListAgentProfiles(context.Context) ([]agents.ProfileInfo, error) {
+	return nil, nil
 }
 
 func (r *onboardingPluginRegistry) RunProjectAttachmentTemplate(context.Context, RunPluginProjectAttachmentTemplateRequest) (AddProjectAttachmentRequest, error) {

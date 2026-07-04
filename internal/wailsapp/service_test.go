@@ -46,7 +46,7 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 			Version: 1,
 		}},
 		promptTemplates: []protocol.PromptTemplate{{ID: "implement", Name: "Implement"}},
-		agentProfiles:   []protocol.AgentProfile{{ID: "claude", Label: "Claude"}},
+		agentProfiles:   []protocol.AgentProfile{{ID: "claude", Provider: "claude", Label: "Claude", Source: "builtin", Launchable: true}},
 		detectedAgents:  []protocol.DetectedAgent{{ProfileID: "claude", DetectCommand: "claude", Path: "/usr/local/bin/claude"}},
 		workItems:       []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
 		workItemLinks: []protocol.WorkItemLink{{
@@ -267,7 +267,7 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		t.Fatalf("list prompt templates = %#v, err = %v", promptTemplates, err)
 	}
 	agentProfiles, err := service.ListAgentProfiles(ctx)
-	if err != nil || len(agentProfiles) != 1 || agentProfiles[0].ID != "claude" {
+	if err != nil || len(agentProfiles) != 1 || agentProfiles[0].ID != "claude" || !agentProfiles[0].Launchable {
 		t.Fatalf("list agent profiles = %#v, err = %v", agentProfiles, err)
 	}
 	detectedAgents, err := service.ListDetectedAgents(ctx)

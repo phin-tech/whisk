@@ -249,7 +249,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List selectable builtin agent profiles */
+        /** List daemon agent profiles */
         get: operations["listAgentProfiles"];
         put?: never;
         post?: never;
@@ -1911,12 +1911,17 @@ export interface components {
             draftPromptEnvVar?: string;
             draftPromptFlag?: string;
             expectedProcess?: string;
+            hookProvider?: string;
             id: string;
             label: string;
+            launchBlockedReason?: string;
+            launchable: boolean;
+            pluginId?: string;
             preflightTrust?: string;
             promptInjectionMode: string;
             provider: string;
             readySignal?: string;
+            source: string;
         };
         AgentPrompt: {
             answer?: string;

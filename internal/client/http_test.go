@@ -14,6 +14,7 @@ import (
 
 	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
+	"github.com/phin-tech/whisk/internal/adapters/agents"
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/adapters/transcriptstore"
 	"github.com/phin-tech/whisk/internal/app"
@@ -840,6 +841,10 @@ func (f *pluginRegistryFake) InstallPlugin(_ context.Context, registry, id strin
 	status := app.PluginStatus{ID: id, Registry: registry, Name: "GitHub Issues", Valid: true}
 	f.statuses = []app.PluginStatus{status}
 	return status, nil
+}
+
+func (f *pluginRegistryFake) ListAgentProfiles(context.Context) ([]agents.ProfileInfo, error) {
+	return nil, nil
 }
 
 func (f *pluginRegistryFake) RunProjectAttachmentTemplate(_ context.Context, req app.RunPluginProjectAttachmentTemplateRequest) (app.AddProjectAttachmentRequest, error) {
