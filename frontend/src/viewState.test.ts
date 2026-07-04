@@ -182,9 +182,98 @@ describe("legacy migration", () => {
     expect(hydrated.preferences.railSide).toBe("right");
     expect(hydrated.work.collapsedStageIdsByProject).toEqual({ project_01: ["todo"] });
   });
+
+  it("keeps explicit empty collapsed-stage overrides ahead of stale legacy keys", () => {
+    const storage = memoryStorage({
+      [CLIENT_VIEW_STATE_KEY]: serializeClientViewState({
+        ...defaultClientViewState(),
+        work: {
+          ...defaultClientViewState().work,
+          collapsedStageIdsByProject: { project_01: [] },
+        },
+      }),
+      [legacyCollapsedStageStorageKey("project_01")]: JSON.stringify(["todo"]),
+    });
+
+    const hydrated = hydrateClientViewState({
+      storage,
+      projects: [{ id: "project_01", workflow: { stages: [{ id: "todo" }] } }],
+    });
+
+    expect(hydrated.work.collapsedStageIdsByProject).toEqual({ project_01: [] });
+    expect(JSON.parse(storage.get(CLIENT_VIEW_STATE_KEY) ?? "{}")).toMatchObject({
+      work: { collapsedStageIdsByProject: { project_01: [] } },
+    });
+  });
 });
 
 describe("reconciliation", () => {
+  it("preserves stored hints when read models are not available yet", () => {
+    const state = parseClientViewState(
+      JSON.stringify({
+        version: 1,
+        selection: {
+          activeSessionId: "session_01",
+          activePaneId: "pane_01",
+          activeProjectId: "project_01",
+          workBoardOpenItemId: "item_01",
+          selectedPtyHistoryId: "pty_01",
+        },
+        work: {
+          filterStageId: "doing",
+          collapsedStageIdsByProject: { project_01: ["doing", "todo"] },
+        },
+      }),
+    );
+
+    expect(reconcileClientViewState(state, {})).toMatchObject({
+      selection: {
+        activeSessionId: "session_01",
+        activePaneId: "pane_01",
+        activeProjectId: "project_01",
+        workBoardOpenItemId: "item_01",
+        selectedPtyHistoryId: "pty_01",
+      },
+      work: {
+        filterStageId: "doing",
+        collapsedStageIdsByProject: { project_01: ["doing", "todo"] },
+      },
+    });
+  });
+
+  it("repairs only the read-model families that are explicitly available", () => {
+    const state = parseClientViewState(
+      JSON.stringify({
+        version: 1,
+        selection: {
+          activeSessionId: "missing_session",
+          activePaneId: "missing_pane",
+          activeProjectId: "project_01",
+          workBoardOpenItemId: "item_01",
+          selectedPtyHistoryId: "pty_01",
+        },
+        work: {
+          filterStageId: "doing",
+          collapsedStageIdsByProject: { project_01: ["doing"] },
+        },
+      }),
+    );
+
+    const reconciled = reconcileClientViewState(state, {
+      sessions: [{ id: "session_02", panes: { pane_02: { id: "pane_02" } } }],
+    });
+
+    expect(reconciled.selection).toMatchObject({
+      activeSessionId: "session_02",
+      activePaneId: "pane_02",
+      activeProjectId: "project_01",
+      workBoardOpenItemId: "item_01",
+      selectedPtyHistoryId: "pty_01",
+    });
+    expect(reconciled.work.filterStageId).toBe("doing");
+    expect(reconciled.work.collapsedStageIdsByProject).toEqual({ project_01: ["doing"] });
+  });
+
   it("treats persisted daemon IDs as hints and repairs stale selection against read models", () => {
     const state = parseClientViewState(
       JSON.stringify({

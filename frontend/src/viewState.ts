@@ -183,72 +183,87 @@ export function reconcileClientViewState(
   readModels: ReconcileClientViewStateArgs,
 ): ClientViewStateV1 {
   const reconciled = sanitizeClientViewState(state);
-  const sessions = (readModels.sessions ?? []).map(sessionRecord).filter((session) => session.id);
-  const selectedSession =
-    sessions.find((session) => session.id === reconciled.selection.activeSessionId) ??
-    sessions[0] ??
-    null;
 
-  if (selectedSession) {
-    reconciled.selection.activeSessionId = selectedSession.id;
-    reconciled.selection.activePaneId = selectedSession.paneIds.includes(reconciled.selection.activePaneId)
-      ? reconciled.selection.activePaneId
-      : selectedSession.paneIds[0] ?? "";
-  } else {
-    reconciled.selection.activeSessionId = "";
-    reconciled.selection.activePaneId = "";
+  if (Array.isArray(readModels.sessions)) {
+    const sessions = readModels.sessions.map(sessionRecord).filter((session) => session.id);
+    const selectedSession =
+      sessions.find((session) => session.id === reconciled.selection.activeSessionId) ??
+      sessions[0] ??
+      null;
+
+    if (selectedSession) {
+      reconciled.selection.activeSessionId = selectedSession.id;
+      reconciled.selection.activePaneId = selectedSession.paneIds.includes(reconciled.selection.activePaneId)
+        ? reconciled.selection.activePaneId
+        : selectedSession.paneIds[0] ?? "";
+    } else {
+      reconciled.selection.activeSessionId = "";
+      reconciled.selection.activePaneId = "";
+    }
   }
 
-  const projects = (readModels.projects ?? []).map(projectRecord).filter((project) => project.id);
-  const projectIds = new Set(projects.map((project) => project.id));
-  if (!projectIds.has(reconciled.selection.activeProjectId)) {
-    reconciled.selection.activeProjectId = "";
+  const projects = Array.isArray(readModels.projects)
+    ? readModels.projects.map(projectRecord).filter((project) => project.id)
+    : null;
+  if (projects) {
+    const projectIds = new Set(projects.map((project) => project.id));
+    if (!projectIds.has(reconciled.selection.activeProjectId)) {
+      reconciled.selection.activeProjectId = "";
+    }
+
+    const stageIdsByProject = new Map(
+      projects.map((project) => [project.id, new Set(project.stageIds)] as const),
+    );
+    const allStageIds = new Set(projects.flatMap((project) => project.stageIds));
+    if (reconciled.work.filterStageId && !allStageIds.has(reconciled.work.filterStageId)) {
+      reconciled.work.filterStageId = "";
+    }
+
+    const collapsedStageIdsByProject: Record<string, string[]> = {};
+    for (const [projectId, collapsedStageIds] of Object.entries(
+      reconciled.work.collapsedStageIdsByProject,
+    )) {
+      const allowedStageIds = stageIdsByProject.get(projectId);
+      if (!allowedStageIds) continue;
+      collapsedStageIdsByProject[projectId] = collapsedStageIds.filter((stageId) =>
+        allowedStageIds.has(stageId),
+      );
+    }
+    reconciled.work.collapsedStageIdsByProject = collapsedStageIdsByProject;
   }
 
-  const ptyHistoryIds = new Set(
-    (readModels.ptyHistory ?? [])
-      .map((entry) => parsePtyId(entry.ptyId ?? entry.id))
-      .filter((id) => id !== null)
-      .map((id) => idString(id)),
-  );
-  if (!ptyHistoryIds.has(reconciled.selection.selectedPtyHistoryId)) {
-    reconciled.selection.selectedPtyHistoryId = "";
+  if (Array.isArray(readModels.ptyHistory)) {
+    const ptyHistoryIds = new Set(
+      readModels.ptyHistory
+        .map((entry) => parsePtyId(entry.ptyId ?? entry.id))
+        .filter((id) => id !== null)
+        .map((id) => idString(id)),
+    );
+    if (!ptyHistoryIds.has(reconciled.selection.selectedPtyHistoryId)) {
+      reconciled.selection.selectedPtyHistoryId = "";
+    }
   }
 
-  const workItems = (readModels.workItems ?? [])
-    .map((item) => ({
-      id: parseWorkItemId(item.id),
-      projectId: parseProjectId(item.projectId),
-    }))
-    .filter((item) => item.id);
-  const selectedWorkItem = workItems.find(
-    (item) => item.id && idString(item.id) === reconciled.selection.workBoardOpenItemId,
-  );
-  if (
-    !selectedWorkItem ||
-    (reconciled.selection.activeProjectId &&
-      selectedWorkItem.projectId &&
-      idString(selectedWorkItem.projectId) !== reconciled.selection.activeProjectId)
-  ) {
-    reconciled.selection.workBoardOpenItemId = "";
+  if (Array.isArray(readModels.workItems)) {
+    const workItems = readModels.workItems
+      .map((item) => ({
+        id: parseWorkItemId(item.id),
+        projectId: parseProjectId(item.projectId),
+      }))
+      .filter((item) => item.id);
+    const selectedWorkItem = workItems.find(
+      (item) => item.id && idString(item.id) === reconciled.selection.workBoardOpenItemId,
+    );
+    if (
+      !selectedWorkItem ||
+      (projects &&
+        reconciled.selection.activeProjectId &&
+        selectedWorkItem.projectId &&
+        idString(selectedWorkItem.projectId) !== reconciled.selection.activeProjectId)
+    ) {
+      reconciled.selection.workBoardOpenItemId = "";
+    }
   }
-
-  const stageIdsByProject = new Map(
-    projects.map((project) => [project.id, new Set(project.stageIds)] as const),
-  );
-  const allStageIds = new Set(projects.flatMap((project) => project.stageIds));
-  if (reconciled.work.filterStageId && !allStageIds.has(reconciled.work.filterStageId)) {
-    reconciled.work.filterStageId = "";
-  }
-
-  const collapsedStageIdsByProject: Record<string, string[]> = {};
-  for (const [projectId, collapsedStageIds] of Object.entries(reconciled.work.collapsedStageIdsByProject)) {
-    const allowedStageIds = stageIdsByProject.get(projectId);
-    if (!allowedStageIds) continue;
-    const kept = collapsedStageIds.filter((stageId) => allowedStageIds.has(stageId));
-    if (kept.length > 0) collapsedStageIdsByProject[projectId] = kept;
-  }
-  reconciled.work.collapsedStageIdsByProject = collapsedStageIdsByProject;
 
   return reconciled;
 }
@@ -460,9 +475,9 @@ function sanitizeCollapsedStageIdsByProject(value: unknown): Record<string, stri
   const collapsedStageIdsByProject: Record<string, string[]> = {};
   for (const [rawProjectId, rawStageIds] of Object.entries(value)) {
     const projectId = parseProjectId(rawProjectId);
-    if (!projectId) continue;
+    if (!projectId || !Array.isArray(rawStageIds)) continue;
     const stageIds = sanitizeSortedStringList(rawStageIds);
-    if (stageIds.length > 0) collapsedStageIdsByProject[idString(projectId)] = stageIds;
+    collapsedStageIdsByProject[idString(projectId)] = stageIds;
   }
   return collapsedStageIdsByProject;
 }
