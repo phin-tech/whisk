@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import appSource from "./App.svelte?raw";
 import mainRouterSource from "./MainRouter.svelte?raw";
 import boardSource from "./WorkBoard.svelte?raw";
+import boardStateSource from "./workboard/work-board-state.ts?raw";
 import detailSource from "./WorkItemDetail.svelte?raw";
 import projectSource from "./ProjectsView.svelte?raw";
 import projectAttachmentsSource from "./projects/ProjectAttachments.svelte?raw";
@@ -66,7 +67,7 @@ describe("WorkBoard", () => {
     expect(cardIndicatorsSource).toContain("text-green");
     expect(cardIndicatorsSource).toContain("text-blue");
     expect(cardIndicatorsSource).toContain("text-amber");
-    expect(boardSource).toContain("deriveWorkItemCardIndicators");
+    expect(boardStateSource).toContain("deriveWorkItemCardIndicators");
     expect(itemCardSource).toContain('from "../ui/CardIndicators.svelte"');
     expect(itemCardSource).toContain("<CardIndicators");
     expect(projectCardsSource).toContain("deriveWorkItemCardIndicators");
@@ -184,9 +185,11 @@ describe("WorkBoard", () => {
     expect(boardSource).toContain("export let workflowDefinitions");
     expect(boardSource).toContain("export let workflowActionsByItem");
     expect(boardSource).toContain("workflowActions={workflowActionsByItem[detailItem.id] ?? []}");
-    expect(boardSource).toContain("function workflowDefinitionLabel");
-    expect(boardSource).toContain("activeProject.workflow.definitionId");
-    expect(boardSource).toContain("activeProject.workflow.definitionVersion");
+    expect(boardSource).toContain("deriveWorkBoardView");
+    expect(boardSource).toContain("{workflowLabel}");
+    expect(boardStateSource).toContain("function workflowDefinitionLabel");
+    expect(boardStateSource).toContain("workflow.definitionId");
+    expect(boardStateSource).toContain("workflow.definitionVersion");
     expect(detailSource).toContain("export let workflowActions");
     expect(detailSource).toContain("function runWorkflowAction");
     expect(detailSource).toContain("function workflowActionReason");
@@ -194,8 +197,21 @@ describe("WorkBoard", () => {
   });
 
   it("does not show plan-required attention for done cards", () => {
-    expect(boardSource).toContain('return value.includes("execution") || value.includes("review");');
-    expect(boardSource).not.toContain('value.includes("done")');
+    expect(boardStateSource).toContain('return value.includes("execution") || value.includes("review");');
+    expect(boardStateSource).not.toContain('value.includes("done")');
+  });
+
+  it("derives WorkBoard view models from the beside-component state module", () => {
+    expect(boardSource).toContain('from "./workboard/work-board-state"');
+    expect(boardSource).toContain("deriveWorkBoardView");
+    expect(boardSource).toContain("stageViews");
+    expect(boardSource).toContain("{#each stageView.cards as card (card.key)}");
+    expect(boardStateSource).toContain("export function deriveWorkBoardView");
+    expect(boardStateSource).toContain("export type WorkBoardStageView");
+    expect(boardStateSource).toContain("export type WorkBoardCardView");
+    expect(boardSource).not.toContain("function filterWorkItems");
+    expect(boardSource).not.toContain("function groupRunsByItem");
+    expect(boardSource).not.toContain("function attentionFor");
   });
 
   it("uses hairline-separated rows instead of bordered item cards", () => {
