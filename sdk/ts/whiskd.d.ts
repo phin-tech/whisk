@@ -2014,6 +2014,9 @@ export interface components {
             apiVersion: number;
             dirty?: boolean;
             gitSha: string;
+            /** Format: int64 */
+            protocolVersion?: number;
+            supportedPreviousProtocolVersions?: number[];
             version?: string;
         };
         CompleteExecutionRequest: {

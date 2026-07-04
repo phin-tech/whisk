@@ -31,9 +31,11 @@ export class DaemonStatus {
     "managed": boolean;
 
     /**
-     * APIVersion and GitSHA come from the daemon's compatibility endpoint when it is reachable.
+     * Protocol/build fields come from the daemon's compatibility endpoint when it is reachable.
      */
     "apiVersion": number;
+    "protocolVersion": number;
+    "supportedPreviousProtocolVersions"?: number[];
     "gitSha": string;
     "version": string;
     "dirty": boolean;
@@ -85,6 +87,9 @@ export class DaemonStatus {
         if (!("apiVersion" in $$source)) {
             this["apiVersion"] = 0;
         }
+        if (!("protocolVersion" in $$source)) {
+            this["protocolVersion"] = 0;
+        }
         if (!("gitSha" in $$source)) {
             this["gitSha"] = "";
         }
@@ -120,7 +125,11 @@ export class DaemonStatus {
      * Creates a new DaemonStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): DaemonStatus {
+        const $$createField6_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("supportedPreviousProtocolVersions" in $$parsedSource) {
+            $$parsedSource["supportedPreviousProtocolVersions"] = $$createField6_0($$parsedSource["supportedPreviousProtocolVersions"]);
+        }
         return new DaemonStatus($$parsedSource as Partial<DaemonStatus>);
     }
 }
@@ -148,3 +157,6 @@ export class NotificationFocusContext {
         return new NotificationFocusContext($$parsedSource as Partial<NotificationFocusContext>);
     }
 }
+
+// Private type creation functions
+const $$createType0 = $Create.Array($Create.Any);

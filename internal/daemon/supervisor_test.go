@@ -222,7 +222,7 @@ func TestEnsureFailsFastWhenSpawnedDaemonReportsWrongVersion(t *testing.T) {
 	if elapsed > time.Second {
 		t.Fatalf("Ensure returned after %s, want fast version failure", elapsed)
 	}
-	if !strings.Contains(err.Error(), fmt.Sprintf("daemon api version %d does not match required %d", protocol.DaemonAPIVersion+1, protocol.DaemonAPIVersion)) {
+	if !strings.Contains(err.Error(), fmt.Sprintf("daemon protocol %d is not supported", protocol.ProtocolVersion+1)) {
 		t.Fatalf("expected explicit version mismatch, got %v", err)
 	}
 	if strings.Contains(err.Error(), "deadline exceeded") {
@@ -277,7 +277,7 @@ func TestEnsureVerifiesReplacementBeforeStoppingIncompatibleDaemon(t *testing.T)
 	if started {
 		t.Fatalf("expected Ensure not to start a replacement daemon")
 	}
-	if !strings.Contains(err.Error(), "replacement whiskd") || !strings.Contains(err.Error(), "daemon api version") {
+	if !strings.Contains(err.Error(), "replacement whiskd") || !strings.Contains(err.Error(), "daemon protocol") {
 		t.Fatalf("expected explicit replacement version error, got %v", err)
 	}
 	select {
@@ -414,6 +414,68 @@ func TestStatusReportsRunningManagedDaemon(t *testing.T) {
 	}
 	if status.APIVersion != protocol.DaemonAPIVersion || status.GitSHA != "abc1234def" || status.Version != "dev" || !status.Dirty {
 		t.Fatalf("compat fields not populated: %#v", status)
+	}
+	if status.ProtocolVersion != protocol.ProtocolVersion {
+		t.Fatalf("protocol fields not populated: %#v", status)
+	}
+}
+
+func TestStatusAcceptsDaemonThatSupportsCurrentClientProtocol(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/health":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/compat":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(
+				w,
+				`{"apiVersion":%d,"protocolVersion":%d,"supportedPreviousProtocolVersions":[%d],"gitSha":"abc1234def"}`,
+				protocol.ProtocolVersion+1,
+				protocol.ProtocolVersion+1,
+				protocol.ProtocolVersion,
+			)
+		default:
+			t.Fatalf("unexpected request: %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	status := daemon.Status(context.Background(), server.URL, daemon.Policy{})
+	if !status.Running || status.Error != "" {
+		t.Fatalf("expected compatible running daemon, status = %#v", status)
+	}
+	if status.ProtocolVersion != protocol.ProtocolVersion+1 {
+		t.Fatalf("protocol version = %d, want %d", status.ProtocolVersion, protocol.ProtocolVersion+1)
+	}
+	if len(status.SupportedPreviousProtocolVersions) != 1 || status.SupportedPreviousProtocolVersions[0] != protocol.ProtocolVersion {
+		t.Fatalf("supported previous protocol versions = %#v", status.SupportedPreviousProtocolVersions)
+	}
+}
+
+func TestStatusReportsIncompatibleDaemonProtocol(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/health":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/compat":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(
+				w,
+				`{"apiVersion":%d,"protocolVersion":%d,"gitSha":"abc1234def"}`,
+				protocol.ProtocolVersion+1,
+				protocol.ProtocolVersion+1,
+			)
+		default:
+			t.Fatalf("unexpected request: %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	status := daemon.Status(context.Background(), server.URL, daemon.Policy{})
+	if !status.Running || !strings.Contains(status.Error, "daemon protocol") {
+		t.Fatalf("expected incompatible protocol status, got %#v", status)
 	}
 }
 

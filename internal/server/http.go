@@ -856,10 +856,12 @@ func (s *HTTPServer) health(w http.ResponseWriter, _ *http.Request) {
 func (s *HTTPServer) compatibility(w http.ResponseWriter, _ *http.Request) {
 	build := buildinfo.Current()
 	writeJSON(w, http.StatusOK, protocol.CompatibilityResponse{
-		APIVersion: protocol.DaemonAPIVersion,
-		GitSHA:     build.GitSHA,
-		Version:    build.Version,
-		Dirty:      build.Dirty,
+		APIVersion:                        protocol.DaemonAPIVersion,
+		ProtocolVersion:                   protocol.ProtocolVersion,
+		SupportedPreviousProtocolVersions: append([]int(nil), protocol.SupportedPreviousProtocolVersions...),
+		GitSHA:                            build.GitSHA,
+		Version:                           build.Version,
+		Dirty:                             build.Dirty,
 	})
 }
 

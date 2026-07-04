@@ -447,14 +447,16 @@ func Stop(ctx context.Context, baseURL string, policies ...Policy) error {
 }
 
 type StatusReport struct {
-	Running    bool   `json:"running"`
-	Address    string `json:"address"`
-	Managed    bool   `json:"managed"`
-	APIVersion int    `json:"apiVersion"`
-	GitSHA     string `json:"gitSha"`
-	Version    string `json:"version"`
-	Dirty      bool   `json:"dirty"`
-	Error      string `json:"error"`
+	Running                           bool   `json:"running"`
+	Address                           string `json:"address"`
+	Managed                           bool   `json:"managed"`
+	APIVersion                        int    `json:"apiVersion"`
+	ProtocolVersion                   int    `json:"protocolVersion"`
+	SupportedPreviousProtocolVersions []int  `json:"supportedPreviousProtocolVersions,omitempty"`
+	GitSHA                            string `json:"gitSha"`
+	Version                           string `json:"version"`
+	Dirty                             bool   `json:"dirty"`
+	Error                             string `json:"error"`
 }
 
 // Status reports the daemon's current health, ownership, compatibility, and build metadata.
@@ -480,11 +482,13 @@ func Status(ctx context.Context, baseURL string, policies ...Policy) StatusRepor
 		return status
 	}
 	status.APIVersion = compatibility.APIVersion
+	status.ProtocolVersion = compatibility.DaemonProtocolVersion()
+	status.SupportedPreviousProtocolVersions = append([]int(nil), compatibility.SupportedPreviousProtocolVersions...)
 	status.GitSHA = compatibility.GitSHA
 	status.Version = compatibility.Version
 	status.Dirty = compatibility.Dirty
-	if compatibility.APIVersion != protocol.DaemonAPIVersion {
-		status.Error = fmt.Sprintf("daemon api version %d does not match required %d", compatibility.APIVersion, protocol.DaemonAPIVersion)
+	if err := protocol.EnsureCompatible(compatibility); err != nil {
+		status.Error = err.Error()
 	}
 	return status
 }
@@ -771,8 +775,8 @@ func compatibilityProbe(ctx context.Context, daemonClient *client.HTTPClient, po
 	if err != nil {
 		return compatibilityUnknown, fmt.Errorf("daemon compatibility probe is unknown: %w", err)
 	}
-	if compatibility.APIVersion != protocol.DaemonAPIVersion {
-		return compatibilityIncompatible, fmt.Errorf("daemon api version %d does not match required %d", compatibility.APIVersion, protocol.DaemonAPIVersion)
+	if err := protocol.EnsureCompatible(compatibility); err != nil {
+		return compatibilityIncompatible, err
 	}
 	return compatibilityCompatible, nil
 }

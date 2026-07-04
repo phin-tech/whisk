@@ -9,13 +9,23 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
-const DaemonAPIVersion = 25
+const (
+	// ProtocolVersion is the canonical daemon/client wire protocol version.
+	ProtocolVersion = 25
+	// DaemonAPIVersion is the legacy name kept for old clients and tooling.
+	DaemonAPIVersion = ProtocolVersion
+)
+
+// SupportedPreviousProtocolVersions lists older protocol versions this build accepts and advertises.
+var SupportedPreviousProtocolVersions = []int{}
 
 type CompatibilityResponse struct {
-	APIVersion int    `json:"apiVersion"`
-	GitSHA     string `json:"gitSha"`
-	Version    string `json:"version,omitempty"`
-	Dirty      bool   `json:"dirty,omitempty"`
+	APIVersion                        int    `json:"apiVersion"`
+	ProtocolVersion                   int    `json:"protocolVersion,omitempty"`
+	SupportedPreviousProtocolVersions []int  `json:"supportedPreviousProtocolVersions,omitempty"`
+	GitSHA                            string `json:"gitSha"`
+	Version                           string `json:"version,omitempty"`
+	Dirty                             bool   `json:"dirty,omitempty"`
 }
 
 type OnboardingItem = onboarding.Item

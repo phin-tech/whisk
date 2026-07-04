@@ -3,6 +3,7 @@ package wailsapp
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -242,11 +243,13 @@ type DaemonStatus struct {
 	// Managed is true when this app started the daemon (the state file matches its live process),
 	// as opposed to one started independently (e.g. `whisk daemon run`).
 	Managed bool `json:"managed"`
-	// APIVersion and GitSHA come from the daemon's compatibility endpoint when it is reachable.
-	APIVersion int    `json:"apiVersion"`
-	GitSHA     string `json:"gitSha"`
-	Version    string `json:"version"`
-	Dirty      bool   `json:"dirty"`
+	// Protocol/build fields come from the daemon's compatibility endpoint when it is reachable.
+	APIVersion                        int    `json:"apiVersion"`
+	ProtocolVersion                   int    `json:"protocolVersion"`
+	SupportedPreviousProtocolVersions []int  `json:"supportedPreviousProtocolVersions,omitempty"`
+	GitSHA                            string `json:"gitSha"`
+	Version                           string `json:"version"`
+	Dirty                             bool   `json:"dirty"`
 	// Error holds a human-readable reason when the daemon is unreachable or incompatible.
 	Error string `json:"error"`
 	// AutoRestartEnabled mirrors the opt-in app preference used by the client-side watcher.
@@ -272,14 +275,19 @@ func (s *Service) httpClient() (*client.HTTPClient, error) {
 func (s *Service) daemonStatus(ctx context.Context, httpClient *client.HTTPClient) DaemonStatus {
 	supervisorStatus := s.supervisor.Status(ctx, httpClient.BaseURL())
 	status := DaemonStatus{
-		Running:    supervisorStatus.Running,
-		Address:    supervisorStatus.Address,
-		Managed:    supervisorStatus.Managed,
-		APIVersion: supervisorStatus.APIVersion,
-		GitSHA:     supervisorStatus.GitSHA,
-		Version:    supervisorStatus.Version,
-		Dirty:      supervisorStatus.Dirty,
-		Error:      supervisorStatus.Error,
+		Running:         supervisorStatus.Running,
+		Address:         supervisorStatus.Address,
+		Managed:         supervisorStatus.Managed,
+		APIVersion:      supervisorStatus.APIVersion,
+		ProtocolVersion: supervisorStatus.ProtocolVersion,
+		SupportedPreviousProtocolVersions: append(
+			[]int(nil),
+			supervisorStatus.SupportedPreviousProtocolVersions...,
+		),
+		GitSHA:  supervisorStatus.GitSHA,
+		Version: supervisorStatus.Version,
+		Dirty:   supervisorStatus.Dirty,
+		Error:   supervisorStatus.Error,
 	}
 	if token, err := httpClient.ControlToken(); err == nil {
 		status.ControlToken = token
@@ -434,7 +442,7 @@ func (s *Service) runDaemonStatusWatcher(ctx context.Context, httpClient *client
 		if status.Running {
 			s.setDaemonExpectedStopped(false)
 		}
-		if lastStatus == nil || *lastStatus != status {
+		if lastStatus == nil || !daemonStatusEqual(*lastStatus, status) {
 			s.emitDaemonStatus(status)
 			next := status
 			lastStatus = &next
@@ -452,6 +460,25 @@ func (s *Service) runDaemonStatusWatcher(ctx context.Context, httpClient *client
 			return
 		}
 	}
+}
+
+func daemonStatusEqual(a, b DaemonStatus) bool {
+	return a.Running == b.Running &&
+		a.Address == b.Address &&
+		a.ControlToken == b.ControlToken &&
+		a.Managed == b.Managed &&
+		a.APIVersion == b.APIVersion &&
+		a.ProtocolVersion == b.ProtocolVersion &&
+		slices.Equal(a.SupportedPreviousProtocolVersions, b.SupportedPreviousProtocolVersions) &&
+		a.GitSHA == b.GitSHA &&
+		a.Version == b.Version &&
+		a.Dirty == b.Dirty &&
+		a.Error == b.Error &&
+		a.AutoRestartEnabled == b.AutoRestartEnabled &&
+		a.Restarting == b.Restarting &&
+		a.RestartAttempt == b.RestartAttempt &&
+		a.RestartMaxAttempts == b.RestartMaxAttempts &&
+		a.AutoRestartExhausted == b.AutoRestartExhausted
 }
 
 func (s *Service) maybeAutoRestartDaemon(ctx context.Context, httpClient *client.HTTPClient, status DaemonStatus, policy *daemonRestartPolicy) DaemonStatus {

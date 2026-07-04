@@ -121,7 +121,7 @@ func build() *openAPI {
 		OpenAPI: "3.0.3",
 		Info: info{
 			Title:       "whiskd daemon API",
-			Version:     fmt.Sprintf("%d", protocol.DaemonAPIVersion),
+			Version:     fmt.Sprintf("%d", protocol.ProtocolVersion),
 			Description: "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand.",
 		},
 		Servers: []serverURL{{URL: "http://127.0.0.1:8787"}},
