@@ -4,12 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/adapters/mailboxstore"
+	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/domain/mailbox"
+	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/protocol"
+	whiskserver "github.com/phin-tech/whisk/internal/server"
 )
 
 func TestRunMailSendUsesEnvDefaultsAndPrintsJSON(t *testing.T) {
@@ -207,6 +212,85 @@ func TestRunMailCheckAckUsesReturnedUnreadDefaultRecipient(t *testing.T) {
 	}
 	if readReq.To == nil || readReq.To.Kind != mailbox.AddressKindProject || readReq.To.ID != "proj_env" {
 		t.Fatalf("read request = %#v", readReq)
+	}
+}
+
+func TestRunMailCheckAckConsumesGroupDispatchedMessageOnceForWorker(t *testing.T) {
+	store, err := mailboxstore.NewSQLiteStore(filepath.Join(t.TempDir(), "mailbox.sqlite"))
+	if err != nil {
+		t.Fatalf("new mailbox store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("close mailbox store: %v", err)
+		}
+	})
+	runtime := app.NewRuntime(app.RuntimeConfig{MailboxStore: store})
+	project, err := runtime.CreateProject(t.Context(), app.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(t.Context(), app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Wire mailbox"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	runRecord, err := runtime.StartWorkItemRun(t.Context(), app.StartWorkItemRunRequest{
+		WorkItemID:       item.ID,
+		Preset:           workitem.RunPresetWriter,
+		PromptTemplateID: workitem.PromptTemplateImplement,
+		SessionID:        "sess_env",
+		PTYID:            "pty_env",
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	message, err := runtime.SendMail(t.Context(), app.SendMailRequest{
+		From:       mailbox.Address{Kind: mailbox.AddressKindPTY, ID: "coordinator"},
+		Recipients: []mailbox.Address{{Kind: mailbox.AddressKindWorkItemGroup, ID: item.ID}},
+		Type:       mailbox.TypeDispatch,
+		Subject:    "Implement",
+	})
+	if err != nil {
+		t.Fatalf("send mail: %v", err)
+	}
+	if len(message.Recipients) != 1 || message.Recipients[0].Address.Kind != mailbox.AddressKindRun || message.Recipients[0].Address.ID != runRecord.ID {
+		t.Fatalf("recipients = %#v", message.Recipients)
+	}
+
+	daemon := httptest.NewServer(whiskserver.NewHTTP(runtime))
+	defer daemon.Close()
+	t.Setenv("WHISK_PTY_ID", "pty_env")
+	t.Setenv("WHISK_RUN_ID", runRecord.ID)
+	t.Setenv("WHISK_SESSION_ID", "sess_env")
+	t.Setenv("WHISK_WORK_ITEM_ID", item.ID)
+	t.Setenv("WHISK_PROJECT_ID", project.ID)
+
+	firstOutput, err := captureStdout(func() error {
+		return run([]string{"mail", "check", "-url", daemon.URL, "-ack", "-json"})
+	})
+	if err != nil {
+		t.Fatalf("first check: %v", err)
+	}
+	var first protocol.NextMailResponse
+	if err := json.Unmarshal([]byte(firstOutput), &first); err != nil {
+		t.Fatalf("first json output %q: %v", firstOutput, err)
+	}
+	if first.Timeout || first.Message == nil || first.Message.ID != message.ID {
+		t.Fatalf("first response = %#v", first)
+	}
+
+	secondOutput, err := captureStdout(func() error {
+		return run([]string{"mail", "check", "-url", daemon.URL, "-ack", "-json"})
+	})
+	if err != nil {
+		t.Fatalf("second check: %v", err)
+	}
+	var second protocol.NextMailResponse
+	if err := json.Unmarshal([]byte(secondOutput), &second); err != nil {
+		t.Fatalf("second json output %q: %v", secondOutput, err)
+	}
+	if !second.Timeout || second.Message != nil {
+		t.Fatalf("second response = %#v", second)
 	}
 }
 

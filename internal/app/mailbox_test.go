@@ -226,7 +226,6 @@ func TestRuntimeSendMailExpandsGroupSelectorsAgainstDaemonReadModels(t *testing.
 		Recipients: []mailbox.Address{
 			{Kind: mailbox.AddressKindProjectGroup, ID: project.ID},
 			{Kind: mailbox.AddressKindWorkItemGroup, ID: item.ID},
-			{Kind: mailbox.AddressKindPTY, ID: "pty_run"},
 		},
 		Type:    mailbox.TypeDispatch,
 		Subject: "Fan out",
@@ -237,8 +236,6 @@ func TestRuntimeSendMailExpandsGroupSelectorsAgainstDaemonReadModels(t *testing.
 	assertMailRecipients(t, message.Recipients, []mailbox.Address{
 		{Kind: mailbox.AddressKindSession, ID: projectSession.Session.ID},
 		{Kind: mailbox.AddressKindRun, ID: run.ID},
-		{Kind: mailbox.AddressKindSession, ID: "sess_run"},
-		{Kind: mailbox.AddressKindPTY, ID: "pty_run"},
 	})
 }
 

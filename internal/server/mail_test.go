@@ -118,9 +118,7 @@ func TestHTTPServerSendMailExpandsGroupSelectors(t *testing.T) {
 		Subject: "Implement",
 	}, http.StatusCreated)
 	want := map[protocol.MailAddress]bool{
-		{Kind: mailbox.AddressKindRun, ID: run.ID}:         false,
-		{Kind: mailbox.AddressKindSession, ID: "sess_run"}: false,
-		{Kind: mailbox.AddressKindPTY, ID: "pty_run"}:      false,
+		{Kind: mailbox.AddressKindRun, ID: run.ID}: false,
 	}
 	if len(created.Recipients) != len(want) {
 		t.Fatalf("recipients = %#v", created.Recipients)

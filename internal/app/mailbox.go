@@ -283,23 +283,46 @@ func (r *Runtime) projectMailRecipients(projectID string) ([]mailbox.Address, er
 		return nil, fmt.Errorf("project %s not found", projectID)
 	}
 	recipients := []mailbox.Address{}
-	for _, current := range r.state.List() {
-		if current.ProjectID != projectID {
-			continue
-		}
-		recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindSession, ID: current.ID})
-		for _, pane := range current.Panes {
-			if pane.CurrentPTYID == nil {
-				continue
-			}
-			recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindPTY, ID: *pane.CurrentPTYID})
-		}
-	}
+	addressableRuns := []workitem.WorkItemRun{}
+	runSessionIDs := map[string]struct{}{}
+	runPTYIDs := map[string]struct{}{}
 	for _, run := range r.workItems.ListRuns("") {
 		if run.ProjectID != projectID || !mailRunAddressable(run) {
 			continue
 		}
-		recipients = appendRunMailRecipients(recipients, run)
+		addressableRuns = append(addressableRuns, run)
+		if run.SessionID != "" {
+			runSessionIDs[run.SessionID] = struct{}{}
+		}
+		if run.PTYID != "" {
+			runPTYIDs[run.PTYID] = struct{}{}
+		}
+	}
+	for _, run := range addressableRuns {
+		recipients = appendRunMailRecipient(recipients, run)
+	}
+	for _, current := range r.state.List() {
+		if current.ProjectID != projectID {
+			continue
+		}
+		hasTerminalRecipient := false
+		for _, pane := range current.Panes {
+			if pane.CurrentPTYID == nil {
+				continue
+			}
+			if _, ownedByRun := runPTYIDs[*pane.CurrentPTYID]; ownedByRun {
+				continue
+			}
+			recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindPTY, ID: *pane.CurrentPTYID})
+			hasTerminalRecipient = true
+		}
+		if hasTerminalRecipient {
+			continue
+		}
+		if _, ownedByRun := runSessionIDs[current.ID]; ownedByRun {
+			continue
+		}
+		recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindSession, ID: current.ID})
 	}
 	return mailbox.DeduplicateAddresses(recipients), nil
 }
@@ -313,20 +336,14 @@ func (r *Runtime) workItemMailRecipients(workItemID string) ([]mailbox.Address, 
 		if !mailRunAddressable(run) {
 			continue
 		}
-		recipients = appendRunMailRecipients(recipients, run)
+		recipients = appendRunMailRecipient(recipients, run)
 	}
 	return mailbox.DeduplicateAddresses(recipients), nil
 }
 
-func appendRunMailRecipients(recipients []mailbox.Address, run workitem.WorkItemRun) []mailbox.Address {
+func appendRunMailRecipient(recipients []mailbox.Address, run workitem.WorkItemRun) []mailbox.Address {
 	if run.ID != "" {
 		recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindRun, ID: run.ID})
-	}
-	if run.SessionID != "" {
-		recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindSession, ID: run.SessionID})
-	}
-	if run.PTYID != "" {
-		recipients = append(recipients, mailbox.Address{Kind: mailbox.AddressKindPTY, ID: run.PTYID})
 	}
 	return recipients
 }
