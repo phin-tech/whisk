@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   consumeOptimisticEcho,
+  base64DecodedByteLength,
   nextPTYStreamOffset,
+  outputSnapshotChunkAfterOffset,
+  outputSnapshotStartOffset,
   ptyInputFrame,
   ptyInputTraceLine,
   optimisticTerminalEcho,
@@ -31,6 +34,40 @@ describe("ptyStream", () => {
     expect(
       nextPTYStreamOffset(12, { type: "output", ptyId: "pty_01", offset: 10, outputBase64: "aGk=" }),
     ).toBe(12);
+  });
+
+  it("infers output snapshot starts from decoded byte length", () => {
+    expect(base64DecodedByteLength("aGk=")).toBe(2);
+    expect(outputSnapshotStartOffset({ offset: 12, outputBase64: "aGk=" })).toBe(10);
+    expect(outputSnapshotStartOffset({ offset: 12, output: "é" })).toBe(10);
+    expect(outputSnapshotStartOffset({ offset: 2, outputBase64: "aGVsbG8=" })).toBe(0);
+    expect(outputSnapshotStartOffset({ offset: 12 })).toBe(12);
+  });
+
+  it("trims output snapshots that overlap already rendered bytes", () => {
+    expect(outputSnapshotChunkAfterOffset({ offset: 16, outputBase64: "YWJjZGVm" }, 13)).toEqual({
+      startOffset: 13,
+      nextOffset: 16,
+      outputBase64: "ZGVm",
+    });
+    expect(outputSnapshotChunkAfterOffset({ offset: 16, outputBase64: "YWJjZGVm" }, 16)).toBeNull();
+    expect(outputSnapshotChunkAfterOffset({ offset: 16, outputBase64: "YWJjZGVm" }, 20)).toBeNull();
+  });
+
+  it("keeps clamped output snapshots at the inferred daemon start", () => {
+    expect(outputSnapshotChunkAfterOffset({ offset: 16, outputBase64: "YWJjZGVm" }, 4)).toEqual({
+      startOffset: 10,
+      nextOffset: 16,
+      outputBase64: "YWJjZGVm",
+    });
+  });
+
+  it("trims text output snapshots by encoded byte offsets", () => {
+    expect(outputSnapshotChunkAfterOffset({ offset: 5, output: "éabc" }, 2)).toEqual({
+      startOffset: 2,
+      nextOffset: 5,
+      outputBase64: "YWJj",
+    });
   });
 
   it("builds websocket input frames", () => {

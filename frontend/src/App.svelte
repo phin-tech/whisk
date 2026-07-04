@@ -152,11 +152,20 @@
   import { projectDetailWithStoreSessions } from "./projectView";
   import {
     nextPTYStreamOffset,
+    outputSnapshotChunkAfterOffset,
     ptyAttachWebSocketURL,
     ptyInputTraceLine,
     type PTYStreamFrame,
     writePTYInputOverSocket,
   } from "./ptyStream";
+  import {
+    claimSingleFlight,
+    initialDaemonLinkSnapshot,
+    isCurrentDaemonGeneration,
+    nextDaemonLinkSnapshot,
+    reconnectBackoffDelayMs,
+    releaseSingleFlight,
+  } from "./daemonLink";
   import { sessionSplitCommands } from "./sessionCommands";
   import { activeWindow, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
@@ -303,9 +312,9 @@
   let daemonStatus: DaemonStatus | null = null;
   let daemonAddress = "";
   let daemonControlToken = "";
+  let daemonLink = initialDaemonLinkSnapshot();
   let ptyStreams: Record<string, WebSocket> = {};
   let ptyTraceEnabled = false;
-  let outputReconcileTimer: number | undefined;
   let workReconcileTimer: number | undefined;
   let stopCommandEvents: (() => void) | undefined;
   let stopDaemonStatusEvents: (() => void) | undefined;
@@ -315,10 +324,13 @@
   let eventLoopRunning = false;
   let lastRuntimeEventSeq = 0;
   let settingsLoaded = false;
+  let runtimeReadModelsLoaded = false;
   let stopped = false;
-  const textEncoder = new TextEncoder();
-  const outputFetchInFlight = new Set<string>();
+  const outputFetchInFlight = new Map<string, number>();
   const outputFetchAgain = new Set<string>();
+  const ptyDialInFlight = new Set<string>();
+  let ptyReconnectTimers: Record<string, number> = {};
+  let ptyReconnectAttempts: Record<string, number> = {};
 
   $: activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   $: activeSessionWindow = activeWindow(activeSession, activePaneId);
@@ -521,6 +533,16 @@
     daemonStatus = status;
     if (status.address) daemonAddress = status.address;
     daemonControlToken = status.controlToken ?? "";
+    const transition = nextDaemonLinkSnapshot(daemonLink, status);
+    daemonLink = transition.snapshot;
+    if (!transition.changed) return;
+    if (transition.shouldResetEventCursor) lastRuntimeEventSeq = 0;
+    closePTYStreamsForDaemonGeneration();
+    if (runtimeReadModelsLoaded && transition.shouldReconcile) {
+      void reconcileDaemonGeneration(transition.snapshot.generation).catch((err) => {
+        error = backendError(err);
+      });
+    }
   }
 
   async function refreshDaemonStatus() {
@@ -761,11 +783,13 @@
   }
 
   async function refreshOutput(ptyId: string) {
-    if (outputFetchInFlight.has(ptyId)) {
+    const generation = daemonLink.generation;
+    const inFlightGeneration = outputFetchInFlight.get(ptyId);
+    if (inFlightGeneration === generation) {
       outputFetchAgain.add(ptyId);
       return;
     }
-    outputFetchInFlight.add(ptyId);
+    outputFetchInFlight.set(ptyId, generation);
     try {
       do {
         outputFetchAgain.delete(ptyId);
@@ -774,40 +798,83 @@
           ptyId,
           fromOffset,
         });
-        if (snapshot.outputBase64) {
+        if (!isCurrentDaemonGeneration(daemonLink, generation)) return;
+        const currentOffset = offsets[ptyId] ?? 0;
+        const snapshotChunk = outputSnapshotChunkAfterOffset(snapshot, currentOffset);
+        if (snapshotChunk) {
           outputChunks = {
             ...outputChunks,
-            [ptyId]: [...(outputChunks[ptyId] ?? []), snapshot.outputBase64],
+            [ptyId]: [...(outputChunks[ptyId] ?? []), snapshotChunk.outputBase64],
           };
           outputChunkStartOffsets = {
             ...outputChunkStartOffsets,
-            [ptyId]: [...(outputChunkStartOffsets[ptyId] ?? []), fromOffset],
-          };
-        } else if (snapshot.output) {
-          const bytes = textEncoder.encode(snapshot.output);
-          let binary = "";
-          for (const byte of bytes) binary += String.fromCharCode(byte);
-          outputChunks = {
-            ...outputChunks,
-            [ptyId]: [...(outputChunks[ptyId] ?? []), btoa(binary)],
-          };
-          outputChunkStartOffsets = {
-            ...outputChunkStartOffsets,
-            [ptyId]: [...(outputChunkStartOffsets[ptyId] ?? []), fromOffset],
+            [ptyId]: [...(outputChunkStartOffsets[ptyId] ?? []), snapshotChunk.startOffset],
           };
         }
-        offsets = { ...offsets, [ptyId]: snapshot.offset };
+        offsets = { ...offsets, [ptyId]: Math.max(currentOffset, snapshot.offset) };
       } while (outputFetchAgain.has(ptyId));
     } finally {
-      outputFetchInFlight.delete(ptyId);
+      if (outputFetchInFlight.get(ptyId) === generation) outputFetchInFlight.delete(ptyId);
     }
   }
 
   async function loadDaemonAddress() {
+    if (!daemonLink.canUseDaemon) return "";
     if (daemonAddress) return daemonAddress;
     if (!daemonStatus) await refreshDaemonStatus();
     daemonAddress = daemonStatus?.address ?? "";
     return daemonAddress;
+  }
+
+  function hasActivePTYStream(ptyId: string) {
+    const socket = ptyStreams[ptyId];
+    return Boolean(socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING);
+  }
+
+  function clearPTYReconnectTimer(ptyId: string) {
+    const timer = ptyReconnectTimers[ptyId];
+    if (timer === undefined) return;
+    window.clearTimeout(timer);
+    const { [ptyId]: _, ...remaining } = ptyReconnectTimers;
+    ptyReconnectTimers = remaining;
+  }
+
+  function clearPTYReconnectTimers() {
+    for (const timer of Object.values(ptyReconnectTimers)) window.clearTimeout(timer);
+    ptyReconnectTimers = {};
+  }
+
+  function closePTYStreamsForDaemonGeneration() {
+    clearPTYReconnectTimers();
+    ptyDialInFlight.clear();
+    ptyReconnectAttempts = {};
+    const sockets = Object.values(ptyStreams);
+    ptyStreams = {};
+    for (const socket of sockets) socket.close();
+  }
+
+  function schedulePTYReconnect(ptyId: string, generation: number) {
+    if (ptyReconnectTimers[ptyId] !== undefined) return;
+    const attempt = ptyReconnectAttempts[ptyId] ?? 0;
+    ptyReconnectAttempts = { ...ptyReconnectAttempts, [ptyId]: attempt + 1 };
+    const timer = window.setTimeout(() => {
+      const { [ptyId]: _, ...remaining } = ptyReconnectTimers;
+      ptyReconnectTimers = remaining;
+      if (stopped || !isCurrentDaemonGeneration(daemonLink, generation) || !visiblePTYIds.includes(ptyId)) return;
+      void openPTYStream(ptyId).catch((err) => {
+        if (!isStalePTYError(err)) error = backendError(err);
+      });
+    }, reconnectBackoffDelayMs(attempt));
+    ptyReconnectTimers = { ...ptyReconnectTimers, [ptyId]: timer };
+  }
+
+  async function reconcileDaemonGeneration(generation: number) {
+    if (!isCurrentDaemonGeneration(daemonLink, generation) || !daemonLink.canUseDaemon) return;
+    await refreshRuntimeReadModels();
+    if (!isCurrentDaemonGeneration(daemonLink, generation)) return;
+    await refreshVisibleOutput();
+    if (!isCurrentDaemonGeneration(daemonLink, generation)) return;
+    syncPTYStreams(visiblePTYIds);
   }
 
   function appendPTYStreamOutput(frame: PTYStreamFrame) {
@@ -828,44 +895,57 @@
 
   async function openPTYStream(ptyId: string) {
     if (!visiblePTYIds.includes(ptyId)) return;
-    const existing = ptyStreams[ptyId];
-    if (existing && existing.readyState !== WebSocket.CLOSED && existing.readyState !== WebSocket.CLOSING) return;
-    const address = await loadDaemonAddress();
-    const socket = new WebSocket(ptyAttachWebSocketURL(address, ptyId, offsets[ptyId] ?? 0, daemonControlToken));
-    ptyStreams = { ...ptyStreams, [ptyId]: socket };
-    socket.onmessage = (event) => {
-      const frame = JSON.parse(String(event.data)) as PTYStreamFrame;
-      if (frame.type === "output") {
-        appendPTYStreamOutput(frame);
-      } else if (frame.type === "error") {
-        error = frame.message;
-      }
-    };
-    socket.onclose = () => {
-      if (ptyStreams[ptyId] === socket) {
-        const { [ptyId]: _, ...remaining } = ptyStreams;
-        ptyStreams = remaining;
-      }
-      if (!stopped && visiblePTYIds.includes(ptyId)) {
-        refreshOutput(ptyId).catch((err) => {
-          if (!isStalePTYError(err)) error = backendError(err);
-        });
-        window.setTimeout(() => {
-          openPTYStream(ptyId).catch((err) => {
+    if (!daemonLink.canUseDaemon) return;
+    const generation = daemonLink.generation;
+    const dialClaimKey = `${generation}:${ptyId}`;
+    if (!claimSingleFlight(ptyDialInFlight, dialClaimKey)) return;
+    try {
+      const existing = ptyStreams[ptyId];
+      if (existing && existing.readyState !== WebSocket.CLOSED && existing.readyState !== WebSocket.CLOSING) return;
+      const address = await loadDaemonAddress();
+      if (!address || !isCurrentDaemonGeneration(daemonLink, generation) || !daemonLink.canUseDaemon) return;
+      const socket = new WebSocket(ptyAttachWebSocketURL(address, ptyId, offsets[ptyId] ?? 0, daemonControlToken));
+      ptyStreams = { ...ptyStreams, [ptyId]: socket };
+      socket.onopen = () => {
+        if (ptyStreams[ptyId] !== socket || !isCurrentDaemonGeneration(daemonLink, generation)) return;
+        ptyReconnectAttempts = { ...ptyReconnectAttempts, [ptyId]: 0 };
+      };
+      socket.onmessage = (event) => {
+        if (ptyStreams[ptyId] !== socket || !isCurrentDaemonGeneration(daemonLink, generation)) return;
+        const frame = JSON.parse(String(event.data)) as PTYStreamFrame;
+        if (frame.type === "output") {
+          appendPTYStreamOutput(frame);
+          ptyReconnectAttempts = { ...ptyReconnectAttempts, [ptyId]: 0 };
+        } else if (frame.type === "error") {
+          error = frame.message;
+        }
+      };
+      socket.onclose = () => {
+        if (ptyStreams[ptyId] === socket) {
+          const { [ptyId]: _, ...remaining } = ptyStreams;
+          ptyStreams = remaining;
+        }
+        if (!isCurrentDaemonGeneration(daemonLink, generation)) return;
+        if (!stopped && daemonLink.canUseDaemon && visiblePTYIds.includes(ptyId)) {
+          refreshOutput(ptyId).catch((err) => {
             if (!isStalePTYError(err)) error = backendError(err);
           });
-        }, 500);
-      }
-    };
-    socket.onerror = () => {
-      socket.close();
-    };
+          schedulePTYReconnect(ptyId, generation);
+        }
+      };
+      socket.onerror = () => {
+        socket.close();
+      };
+    } finally {
+      releaseSingleFlight(ptyDialInFlight, dialClaimKey);
+    }
   }
 
   function syncPTYStreams(ptyIds: string[]) {
     const visible = new Set(ptyIds);
     for (const [ptyId, socket] of Object.entries(ptyStreams)) {
       if (!visible.has(ptyId)) {
+        clearPTYReconnectTimer(ptyId);
         socket.close();
       }
     }
@@ -882,11 +962,14 @@
       if (ptyTraceEnabled) void LogPTYTrace(ptyInputTraceLine("frontend.websocket", ptyId, data, performance.now()));
       return;
     }
+    if (!daemonLink.canUseDaemon) return;
     await WritePTY({ ptyId, data });
     if (ptyTraceEnabled) void LogPTYTrace(ptyInputTraceLine("frontend.missing-websocket", ptyId, data, performance.now()));
-    void refreshOutput(ptyId).catch((err) => {
-      if (!isStalePTYError(err)) error = backendError(err);
-    });
+    if (!hasActivePTYStream(ptyId)) {
+      void refreshOutput(ptyId).catch((err) => {
+        if (!isStalePTYError(err)) error = backendError(err);
+      });
+    }
   }
 
   function openNewSession() {
@@ -1175,7 +1258,7 @@
     if (targets.ptys) await refreshPTYs();
     if (
       targets.outputPtyId &&
-      !ptyStreams[targets.outputPtyId]
+      !hasActivePTYStream(targets.outputPtyId)
     ) await refreshOutput(targets.outputPtyId);
     if (targets.statusEvents) await refreshStatusEvents();
     if (targets.agentBridgeApprovals) await refreshStatusEvents();
@@ -1189,15 +1272,28 @@
   async function runEventLoop() {
     if (eventLoopRunning) return;
     eventLoopRunning = true;
+    let backoffAttempt = 0;
     while (!stopped) {
+      if (!daemonLink.canUseDaemon) {
+        await new Promise((resolve) => window.setTimeout(resolve, reconnectBackoffDelayMs(backoffAttempt)));
+        backoffAttempt += 1;
+        continue;
+      }
+      const generation = daemonLink.generation;
       try {
         const response = await NextEvent({ timeoutMs: 30000, afterSeq: lastRuntimeEventSeq });
+        if (!isCurrentDaemonGeneration(daemonLink, generation)) continue;
+        backoffAttempt = 0;
         if (response.event.seq) lastRuntimeEventSeq = response.event.seq;
-        if (response.missed) await refreshRuntimeReadModels();
+        if (response.missed) {
+          await refreshRuntimeReadModels();
+          await refreshVisibleOutput();
+        }
         await handleRuntimeEvent(response.event);
       } catch {
-        if (!stopped) {
-          await new Promise((resolve) => window.setTimeout(resolve, 250));
+        if (!stopped && isCurrentDaemonGeneration(daemonLink, generation)) {
+          await new Promise((resolve) => window.setTimeout(resolve, reconnectBackoffDelayMs(backoffAttempt)));
+          backoffAttempt += 1;
         }
       }
     }
@@ -2207,16 +2303,14 @@
       .then(refreshWorkflowDefinitions)
       .then(refreshProjects)
       .then(refreshStatusEvents)
+      .then(() => {
+        runtimeReadModelsLoaded = true;
+      })
       .then(refreshVisibleOutput)
       .catch((err) => {
         error = backendError(err);
       });
     void runEventLoop();
-    outputReconcileTimer = window.setInterval(() => {
-      refreshVisibleOutput().catch((err) => {
-        error = backendError(err);
-      });
-    }, 2000);
     workReconcileTimer = window.setInterval(() => {
       refreshVisibleWorkState().catch((err) => {
         error = backendError(err);
@@ -2247,7 +2341,7 @@
     window.removeEventListener("focus", updateWindowFocusState);
     window.removeEventListener("blur", updateWindowFocusState);
     document.removeEventListener("visibilitychange", updateWindowFocusState);
-    if (outputReconcileTimer) window.clearInterval(outputReconcileTimer);
+    clearPTYReconnectTimers();
     if (workReconcileTimer) window.clearInterval(workReconcileTimer);
     for (const socket of Object.values(ptyStreams)) socket.close();
   });
