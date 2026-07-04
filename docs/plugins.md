@@ -124,6 +124,75 @@ as plugin catalog metadata so clients can see which providers a plugin will
 support in a later daemon-owned usage read model; they are not executed and do
 not create a usage cache in this slice.
 
+Manifest version 2 also catalogs plugin UI contributions in the `ui` section.
+`ui.panels`, `ui.commands`, and `ui.reviewActions` are returned through
+`PluginStatus` for both trusted and untrusted plugins so clients can show what a
+plugin would contribute before trust. These fields are catalog data only in this
+release: Whisk does not execute panel read commands, palette commands, panel
+actions, or review-action submit commands from these declarations yet.
+
+```json
+{
+  "manifestVersion": 2,
+  "id": "linear",
+  "name": "Linear",
+  "version": "0.2.0",
+  "permissions": {
+    "network": ["api.linear.app"]
+  },
+  "ui": {
+    "panels": [
+      {
+        "id": "linear.issue",
+        "title": "Linear issue",
+        "scope": "workItem",
+        "kind": "view",
+        "read": { "command": "node ./render-issue.mjs" },
+        "actions": [
+          {
+            "id": "sync",
+            "label": "Sync",
+            "command": "node ./sync.mjs"
+          }
+        ]
+      },
+      {
+        "id": "linear.board",
+        "title": "Linear board",
+        "scope": "project",
+        "kind": "html",
+        "entry": "./panel/"
+      }
+    ],
+    "commands": [
+      {
+        "id": "linear.open-triage",
+        "label": "Linear: Open triage",
+        "scope": "global",
+        "command": "node ./triage.mjs"
+      }
+    ],
+    "reviewActions": [
+      {
+        "id": "linear.review",
+        "label": "Linear review",
+        "scope": "workItem",
+        "urlTemplate": "https://linear.app/acme/issue/{{work_item.id.url}}",
+        "submitCommand": "node ./fetch-review.mjs",
+        "blocking": true
+      }
+    ]
+  }
+}
+```
+
+Supported UI scopes are `global`, `project`, `workItem`, `run`, and `gate`.
+Panel kinds are `view` for future host-rendered view documents and `html` for a
+future daemon-served iframe surface. The catalog summary intentionally omits raw
+command strings while retaining IDs, labels, scopes, kind, URL templates,
+permissions, and normalized timeout/output-cap metadata for later trust prompts
+and UI placement.
+
 Attachment templates are declarative UI hints. Whisk renders the form and sends the values to the daemon. The plugin command receives JSON on stdin:
 
 ```json

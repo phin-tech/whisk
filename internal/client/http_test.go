@@ -362,6 +362,35 @@ func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 			MinRefreshMs:   300000,
 			StaleAfterMs:   1800000,
 		}},
+		UIPanels: []app.PluginUIPanel{{
+			ID:    "github.issue.panel",
+			Title: "GitHub Issue",
+			Scope: app.PluginUIScope("workItem"),
+			Kind:  "view",
+			Read:  &app.PluginUICommandRef{TimeoutMs: 10000, OutputCapBytes: 262144},
+			Actions: []app.PluginUICommandRef{{
+				ID:             "sync",
+				Label:          "Sync",
+				TimeoutMs:      10000,
+				OutputCapBytes: 262144,
+			}},
+		}},
+		UICommands: []app.PluginUICommand{{
+			ID:             "github.open",
+			Label:          "GitHub: Open",
+			Scope:          app.PluginUIScope("global"),
+			TimeoutMs:      10000,
+			OutputCapBytes: 262144,
+		}},
+		ReviewActions: []app.PluginReviewAction{{
+			ID:          "github.review",
+			Label:       "GitHub Review",
+			Scope:       app.PluginUIScope("workItem"),
+			URLTemplate: "https://github.com/{{project.id.url}}",
+			HasSubmit:   true,
+			Blocking:    true,
+		}},
+		Permissions: &app.PluginPermissions{Network: []string{"api.github.com"}},
 	}}}})
 	httpServer := httptest.NewServer(server.NewHTTP(runtime))
 	t.Cleanup(httpServer.Close)
@@ -385,6 +414,20 @@ func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 		plugins[0].UsageResolvers[0].MinRefreshMs != 300000 ||
 		plugins[0].UsageResolvers[0].StaleAfterMs != 1800000 {
 		t.Fatalf("usage resolvers = %#v", plugins[0].UsageResolvers)
+	}
+	if len(plugins[0].UIPanels) != 1 ||
+		plugins[0].UIPanels[0].Read == nil ||
+		len(plugins[0].UIPanels[0].Actions) != 1 ||
+		plugins[0].UIPanels[0].Actions[0].ID != "sync" ||
+		len(plugins[0].UICommands) != 1 ||
+		plugins[0].UICommands[0].ID != "github.open" ||
+		len(plugins[0].ReviewActions) != 1 ||
+		!plugins[0].ReviewActions[0].HasSubmit ||
+		!plugins[0].ReviewActions[0].Blocking ||
+		plugins[0].Permissions == nil ||
+		len(plugins[0].Permissions.Network) != 1 ||
+		plugins[0].Permissions.Network[0] != "api.github.com" {
+		t.Fatalf("plugin ui catalog = %#v", plugins[0])
 	}
 	registry, err := daemon.ListRegistryPlugins(ctx)
 	if err != nil || len(registry) != 1 || registry[0].Registry != "phin-tech" || registry[0].SourceType != "path" {

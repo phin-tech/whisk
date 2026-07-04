@@ -217,6 +217,35 @@ func TestHTTPServerPluginRoutes(t *testing.T) {
 			MinRefreshMs:   300000,
 			StaleAfterMs:   1800000,
 		}},
+		UIPanels: []app.PluginUIPanel{{
+			ID:    "github.issue.panel",
+			Title: "GitHub Issue",
+			Scope: app.PluginUIScope("workItem"),
+			Kind:  "view",
+			Read:  &app.PluginUICommandRef{TimeoutMs: 10000, OutputCapBytes: 262144},
+			Actions: []app.PluginUICommandRef{{
+				ID:             "sync",
+				Label:          "Sync",
+				TimeoutMs:      10000,
+				OutputCapBytes: 262144,
+			}},
+		}},
+		UICommands: []app.PluginUICommand{{
+			ID:             "github.open",
+			Label:          "GitHub: Open",
+			Scope:          app.PluginUIScope("global"),
+			TimeoutMs:      10000,
+			OutputCapBytes: 262144,
+		}},
+		ReviewActions: []app.PluginReviewAction{{
+			ID:          "github.review",
+			Label:       "GitHub Review",
+			Scope:       app.PluginUIScope("workItem"),
+			URLTemplate: "https://github.com/{{project.id.url}}",
+			HasSubmit:   true,
+			Blocking:    true,
+		}},
+		Permissions: &app.PluginPermissions{Network: []string{"api.github.com"}},
 	}}}
 	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: plugins})
 	handler := server.NewHTTP(runtime)
@@ -236,6 +265,20 @@ func TestHTTPServerPluginRoutes(t *testing.T) {
 		listed[0].UsageResolvers[0].MinRefreshMs != 300000 ||
 		listed[0].UsageResolvers[0].StaleAfterMs != 1800000 {
 		t.Fatalf("usage resolvers = %#v", listed[0].UsageResolvers)
+	}
+	if len(listed[0].UIPanels) != 1 ||
+		listed[0].UIPanels[0].Read == nil ||
+		len(listed[0].UIPanels[0].Actions) != 1 ||
+		listed[0].UIPanels[0].Actions[0].ID != "sync" ||
+		len(listed[0].UICommands) != 1 ||
+		listed[0].UICommands[0].ID != "github.open" ||
+		len(listed[0].ReviewActions) != 1 ||
+		!listed[0].ReviewActions[0].HasSubmit ||
+		!listed[0].ReviewActions[0].Blocking ||
+		listed[0].Permissions == nil ||
+		len(listed[0].Permissions.Network) != 1 ||
+		listed[0].Permissions.Network[0] != "api.github.com" {
+		t.Fatalf("plugin ui catalog = %#v", listed[0])
 	}
 	registry := getJSON[[]protocol.RegistryPlugin](t, handler, "/v1/plugin-registry", http.StatusOK)
 	if len(registry) != 1 || registry[0].ID != "github" || registry[0].Registry != "phin-tech" || registry[0].SourceType != "path" {

@@ -50,8 +50,10 @@ type UsageResolver struct {
 }
 
 type UI struct {
-	ProjectAttachments []ProjectAttachmentAction `json:"projectAttachments"`
+	ProjectAttachments []ProjectAttachmentAction `json:"projectAttachments,omitempty"`
 	ReviewActions      []ReviewAction            `json:"reviewActions,omitempty"`
+	Panels             []UIPanel                 `json:"panels,omitempty"`
+	Commands           []UICommand               `json:"commands,omitempty"`
 }
 
 type ProjectAttachmentAction struct {
@@ -63,15 +65,75 @@ type ProjectAttachmentAction struct {
 	Fields   []app.PluginTemplateField `json:"fields"`
 }
 
-// ReviewAction is the legacy in-the-wild shape that manifest v2 replaces with
-// typed workflow gates/actions. It is parsed for visibility to daemon-side code,
-// but is not executed by this adapter.
+// ReviewAction is the in-the-wild review UI shape formalized for manifest v2.
+// It is cataloged for visibility, but is not executed by this adapter.
 type ReviewAction struct {
-	ID            string `json:"id"`
-	Label         string `json:"label"`
-	URLTemplate   string `json:"urlTemplate,omitempty"`
-	SubmitCommand string `json:"submitCommand,omitempty"`
-	Blocking      bool   `json:"blocking,omitempty"`
+	ID             string `json:"id"`
+	Label          string `json:"label"`
+	Scope          string `json:"scope,omitempty"`
+	URLTemplate    string `json:"urlTemplate,omitempty"`
+	SubmitCommand  string `json:"submitCommand,omitempty"`
+	Blocking       bool   `json:"blocking,omitempty"`
+	TimeoutMs      int    `json:"timeoutMs,omitempty"`
+	OutputCapBytes int    `json:"outputCapBytes,omitempty"`
+}
+
+type UIPanel struct {
+	ID      string          `json:"id"`
+	Title   string          `json:"title"`
+	Scope   string          `json:"scope"`
+	Kind    string          `json:"kind,omitempty"`
+	Read    UICommandRef    `json:"read,omitempty"`
+	Entry   UIPanelEntry    `json:"entry,omitempty"`
+	Actions []UIPanelAction `json:"actions,omitempty"`
+}
+
+type UICommand struct {
+	ID             string `json:"id"`
+	Label          string `json:"label"`
+	Scope          string `json:"scope"`
+	Command        string `json:"command"`
+	TimeoutMs      int    `json:"timeoutMs,omitempty"`
+	OutputCapBytes int    `json:"outputCapBytes,omitempty"`
+}
+
+type UIPanelAction struct {
+	ID             string `json:"id"`
+	Label          string `json:"label"`
+	Command        string `json:"command"`
+	TimeoutMs      int    `json:"timeoutMs,omitempty"`
+	OutputCapBytes int    `json:"outputCapBytes,omitempty"`
+}
+
+type UICommandRef struct {
+	Command        string `json:"command,omitempty"`
+	TimeoutMs      int    `json:"timeoutMs,omitempty"`
+	OutputCapBytes int    `json:"outputCapBytes,omitempty"`
+}
+
+type UIPanelEntry struct {
+	Path    string `json:"path,omitempty"`
+	Forward string `json:"forward,omitempty"`
+}
+
+func (e *UIPanelEntry) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*e = UIPanelEntry{}
+		return nil
+	}
+	var path string
+	if err := json.Unmarshal(data, &path); err == nil {
+		e.Path = path
+		e.Forward = ""
+		return nil
+	}
+	type entry UIPanelEntry
+	var decoded entry
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*e = UIPanelEntry(decoded)
+	return nil
 }
 
 type EventHandler struct {
@@ -149,9 +211,20 @@ const (
 	manifestGateMaxTimeoutMs               = 30000
 	manifestUsageResolverDefaultTimeoutMs  = 10000
 	manifestUsageResolverMaxTimeoutMs      = 30000
+	manifestUICommandDefaultTimeoutMs      = 10000
+	manifestUICommandMaxTimeoutMs          = 30000
 
 	manifestCommandDefaultOutputCapBytes = 1 << 20
 	manifestCommandMaxOutputCapBytes     = 4 << 20
+
+	pluginUIPanelKindView = "view"
+	pluginUIPanelKindHTML = "html"
+
+	pluginUIScopeGlobal   = "global"
+	pluginUIScopeProject  = "project"
+	pluginUIScopeWorkItem = "workItem"
+	pluginUIScopeRun      = "run"
+	pluginUIScopeGate     = "gate"
 )
 
 type CommandResolver struct {
@@ -525,6 +598,73 @@ func statusFromManifest(registry, dir string, manifest Manifest, trusted bool) a
 			Fields:   action.Fields,
 		})
 	}
+	panels := make([]app.PluginUIPanel, 0, len(manifest.UI.Panels))
+	for _, panel := range manifest.UI.Panels {
+		if strings.TrimSpace(panel.ID) == "" {
+			continue
+		}
+		summary := app.PluginUIPanel{
+			ID:      panel.ID,
+			Title:   panel.Title,
+			Scope:   app.PluginUIScope(panel.Scope),
+			Kind:    panel.Kind,
+			Actions: make([]app.PluginUICommandRef, 0, len(panel.Actions)),
+		}
+		if strings.TrimSpace(panel.Read.Command) != "" {
+			summary.Read = &app.PluginUICommandRef{
+				TimeoutMs:      panel.Read.TimeoutMs,
+				OutputCapBytes: panel.Read.OutputCapBytes,
+			}
+		}
+		if panel.Entry.Path != "" || panel.Entry.Forward != "" {
+			summary.Entry = &app.PluginUIPanelEntry{Path: panel.Entry.Path, Forward: panel.Entry.Forward}
+		}
+		for _, action := range panel.Actions {
+			if strings.TrimSpace(action.ID) == "" {
+				continue
+			}
+			summary.Actions = append(summary.Actions, app.PluginUICommandRef{
+				ID:             action.ID,
+				Label:          action.Label,
+				TimeoutMs:      action.TimeoutMs,
+				OutputCapBytes: action.OutputCapBytes,
+			})
+		}
+		panels = append(panels, summary)
+	}
+	commands := make([]app.PluginUICommand, 0, len(manifest.UI.Commands))
+	for _, command := range manifest.UI.Commands {
+		if strings.TrimSpace(command.ID) == "" {
+			continue
+		}
+		commands = append(commands, app.PluginUICommand{
+			ID:             command.ID,
+			Label:          command.Label,
+			Scope:          app.PluginUIScope(command.Scope),
+			TimeoutMs:      command.TimeoutMs,
+			OutputCapBytes: command.OutputCapBytes,
+		})
+	}
+	reviewActions := make([]app.PluginReviewAction, 0, len(manifest.UI.ReviewActions))
+	for _, action := range manifest.UI.ReviewActions {
+		if strings.TrimSpace(action.ID) == "" {
+			continue
+		}
+		scope := action.Scope
+		if strings.TrimSpace(scope) == "" {
+			scope = pluginUIScopeWorkItem
+		}
+		reviewActions = append(reviewActions, app.PluginReviewAction{
+			ID:             action.ID,
+			Label:          action.Label,
+			Scope:          app.PluginUIScope(scope),
+			URLTemplate:    action.URLTemplate,
+			HasSubmit:      strings.TrimSpace(action.SubmitCommand) != "",
+			Blocking:       action.Blocking,
+			TimeoutMs:      action.TimeoutMs,
+			OutputCapBytes: action.OutputCapBytes,
+		})
+	}
 	return app.PluginStatus{
 		ID:                         qualifiedID(registry, manifest.ID),
 		Registry:                   registry,
@@ -537,6 +677,21 @@ func statusFromManifest(registry, dir string, manifest Manifest, trusted bool) a
 		Resolvers:                  resolvers,
 		UsageResolvers:             usageResolvers,
 		ProjectAttachmentTemplates: templates,
+		UIPanels:                   panels,
+		UICommands:                 commands,
+		ReviewActions:              reviewActions,
+		Permissions:                pluginPermissionsSummary(manifest.Permissions),
+	}
+}
+
+func pluginPermissionsSummary(permissions Permissions) *app.PluginPermissions {
+	if !permissions.PTYOutput && len(permissions.EnvPrefixes) == 0 && len(permissions.Network) == 0 {
+		return nil
+	}
+	return &app.PluginPermissions{
+		PTYOutput:   permissions.PTYOutput,
+		EnvPrefixes: append([]string(nil), permissions.EnvPrefixes...),
+		Network:     append([]string(nil), permissions.Network...),
 	}
 }
 
@@ -926,6 +1081,9 @@ func validateManifestV2(manifest *Manifest) error {
 		action.TimeoutMs = limits.TimeoutMs
 		action.OutputCapBytes = limits.OutputCapBytes
 	}
+	if err := validateManifestUI(&manifest.UI, seenContributionIDs); err != nil {
+		return err
+	}
 	if err := validateManifestPermissions(&manifest.Permissions); err != nil {
 		return err
 	}
@@ -993,6 +1151,253 @@ func validateManifestPermissions(permissions *Permissions) error {
 	return nil
 }
 
+func validateManifestUI(ui *UI, seenContributionIDs map[string]string) error {
+	for i := range ui.ProjectAttachments {
+		action := &ui.ProjectAttachments[i]
+		id := strings.TrimSpace(action.ID)
+		if id == "" {
+			return fmt.Errorf("ui.projectAttachments[%d].id required", i)
+		}
+		if err := recordManifestContributionID(seenContributionIDs, id, "ui.projectAttachments"); err != nil {
+			return err
+		}
+		action.ID = id
+		action.Label = strings.TrimSpace(action.Label)
+		if action.Label == "" {
+			return fmt.Errorf("ui.projectAttachments[%s].label required", id)
+		}
+		action.Provider = strings.TrimSpace(action.Provider)
+		if action.Provider == "" {
+			return fmt.Errorf("ui.projectAttachments[%s].provider required", id)
+		}
+		action.Kind = strings.TrimSpace(action.Kind)
+		if action.Kind == "" {
+			return fmt.Errorf("ui.projectAttachments[%s].kind required", id)
+		}
+		action.Command = strings.TrimSpace(action.Command)
+		if action.Command == "" {
+			return fmt.Errorf("ui.projectAttachments[%s].command required", id)
+		}
+		if err := validateManifestTemplateFields("ui.projectAttachments", id, action.Fields); err != nil {
+			return err
+		}
+	}
+	for i := range ui.ReviewActions {
+		action := &ui.ReviewActions[i]
+		id := strings.TrimSpace(action.ID)
+		if id == "" {
+			return fmt.Errorf("ui.reviewActions[%d].id required", i)
+		}
+		if err := recordManifestContributionID(seenContributionIDs, id, "ui.reviewActions"); err != nil {
+			return err
+		}
+		action.ID = id
+		action.Label = strings.TrimSpace(action.Label)
+		if action.Label == "" {
+			return fmt.Errorf("ui.reviewActions[%s].label required", id)
+		}
+		action.Scope = normalizeManifestUIScope(action.Scope, pluginUIScopeWorkItem)
+		if !validManifestUIScope(action.Scope) {
+			return fmt.Errorf("ui.reviewActions[%s].scope %q is unsupported", id, action.Scope)
+		}
+		action.URLTemplate = strings.TrimSpace(action.URLTemplate)
+		action.SubmitCommand = strings.TrimSpace(action.SubmitCommand)
+		if action.URLTemplate == "" && action.SubmitCommand == "" {
+			return fmt.Errorf("ui.reviewActions[%s].urlTemplate or submitCommand required", id)
+		}
+		if action.SubmitCommand != "" {
+			limits, err := normalizeManifestCommandLimits("uiCommand", action.TimeoutMs, action.OutputCapBytes)
+			if err != nil {
+				return fmt.Errorf("ui.reviewActions[%s]: %w", id, err)
+			}
+			action.TimeoutMs = limits.TimeoutMs
+			action.OutputCapBytes = limits.OutputCapBytes
+		}
+	}
+	for i := range ui.Panels {
+		panel := &ui.Panels[i]
+		id := strings.TrimSpace(panel.ID)
+		if id == "" {
+			return fmt.Errorf("ui.panels[%d].id required", i)
+		}
+		if err := recordManifestContributionID(seenContributionIDs, id, "ui.panels"); err != nil {
+			return err
+		}
+		panel.ID = id
+		panel.Title = strings.TrimSpace(panel.Title)
+		if panel.Title == "" {
+			return fmt.Errorf("ui.panels[%s].title required", id)
+		}
+		panel.Scope = normalizeManifestUIScope(panel.Scope, "")
+		if panel.Scope == "" {
+			return fmt.Errorf("ui.panels[%s].scope required", id)
+		}
+		if !validManifestUIScope(panel.Scope) {
+			return fmt.Errorf("ui.panels[%s].scope %q is unsupported", id, panel.Scope)
+		}
+		panel.Kind = strings.TrimSpace(panel.Kind)
+		if panel.Kind == "" {
+			panel.Kind = pluginUIPanelKindView
+		}
+		switch panel.Kind {
+		case pluginUIPanelKindView:
+			panel.Read.Command = strings.TrimSpace(panel.Read.Command)
+			if panel.Read.Command == "" {
+				return fmt.Errorf("ui.panels[%s].read.command required", id)
+			}
+			limits, err := normalizeManifestCommandLimits("uiCommand", panel.Read.TimeoutMs, panel.Read.OutputCapBytes)
+			if err != nil {
+				return fmt.Errorf("ui.panels[%s].read: %w", id, err)
+			}
+			panel.Read.TimeoutMs = limits.TimeoutMs
+			panel.Read.OutputCapBytes = limits.OutputCapBytes
+		case pluginUIPanelKindHTML:
+			if err := validateManifestUIPanelEntry(id, &panel.Entry); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("ui.panels[%s].kind %q is unsupported", id, panel.Kind)
+		}
+		if err := validateManifestUIPanelActions(id, panel.Actions); err != nil {
+			return err
+		}
+	}
+	for i := range ui.Commands {
+		command := &ui.Commands[i]
+		id := strings.TrimSpace(command.ID)
+		if id == "" {
+			return fmt.Errorf("ui.commands[%d].id required", i)
+		}
+		if err := recordManifestContributionID(seenContributionIDs, id, "ui.commands"); err != nil {
+			return err
+		}
+		command.ID = id
+		command.Label = strings.TrimSpace(command.Label)
+		if command.Label == "" {
+			return fmt.Errorf("ui.commands[%s].label required", id)
+		}
+		command.Scope = normalizeManifestUIScope(command.Scope, "")
+		if command.Scope == "" {
+			return fmt.Errorf("ui.commands[%s].scope required", id)
+		}
+		if !validManifestUIScope(command.Scope) {
+			return fmt.Errorf("ui.commands[%s].scope %q is unsupported", id, command.Scope)
+		}
+		command.Command = strings.TrimSpace(command.Command)
+		if command.Command == "" {
+			return fmt.Errorf("ui.commands[%s].command required", id)
+		}
+		limits, err := normalizeManifestCommandLimits("uiCommand", command.TimeoutMs, command.OutputCapBytes)
+		if err != nil {
+			return fmt.Errorf("ui.commands[%s]: %w", id, err)
+		}
+		command.TimeoutMs = limits.TimeoutMs
+		command.OutputCapBytes = limits.OutputCapBytes
+	}
+	return nil
+}
+
+func validateManifestTemplateFields(section, id string, fields []app.PluginTemplateField) error {
+	seenFields := map[string]bool{}
+	for i := range fields {
+		field := &fields[i]
+		fieldID := strings.TrimSpace(field.ID)
+		if fieldID == "" {
+			return fmt.Errorf("%s[%s].fields[%d].id required", section, id, i)
+		}
+		if seenFields[fieldID] {
+			return fmt.Errorf("%s[%s].fields contains duplicate id %q", section, id, fieldID)
+		}
+		seenFields[fieldID] = true
+		field.ID = fieldID
+		field.Label = strings.TrimSpace(field.Label)
+		if field.Label == "" {
+			return fmt.Errorf("%s[%s].fields[%s].label required", section, id, fieldID)
+		}
+		field.Type = strings.TrimSpace(field.Type)
+		if field.Type == "" {
+			return fmt.Errorf("%s[%s].fields[%s].type required", section, id, fieldID)
+		}
+		seenOptions := map[string]bool{}
+		for j, option := range field.Options {
+			option = strings.TrimSpace(option)
+			if option == "" {
+				return fmt.Errorf("%s[%s].fields[%s].options[%d] required", section, id, fieldID, j)
+			}
+			if seenOptions[option] {
+				return fmt.Errorf("%s[%s].fields[%s].options contains duplicate value %q", section, id, fieldID, option)
+			}
+			seenOptions[option] = true
+			field.Options[j] = option
+		}
+	}
+	return nil
+}
+
+func validateManifestUIPanelEntry(panelID string, entry *UIPanelEntry) error {
+	entry.Path = strings.TrimSpace(entry.Path)
+	entry.Forward = strings.TrimSpace(entry.Forward)
+	if entry.Path == "" && entry.Forward == "" {
+		return fmt.Errorf("ui.panels[%s].entry.path or entry.forward required", panelID)
+	}
+	if entry.Path != "" && entry.Forward != "" {
+		return fmt.Errorf("ui.panels[%s].entry must not set both path and forward", panelID)
+	}
+	return nil
+}
+
+func validateManifestUIPanelActions(panelID string, actions []UIPanelAction) error {
+	seenActions := map[string]bool{}
+	for i := range actions {
+		action := &actions[i]
+		id := strings.TrimSpace(action.ID)
+		if id == "" {
+			return fmt.Errorf("ui.panels[%s].actions[%d].id required", panelID, i)
+		}
+		if seenActions[id] {
+			return fmt.Errorf("ui.panels[%s].actions contains duplicate id %q", panelID, id)
+		}
+		seenActions[id] = true
+		action.ID = id
+		action.Label = strings.TrimSpace(action.Label)
+		if action.Label == "" {
+			return fmt.Errorf("ui.panels[%s].actions[%s].label required", panelID, id)
+		}
+		action.Command = strings.TrimSpace(action.Command)
+		if action.Command == "" {
+			return fmt.Errorf("ui.panels[%s].actions[%s].command required", panelID, id)
+		}
+		limits, err := normalizeManifestCommandLimits("uiCommand", action.TimeoutMs, action.OutputCapBytes)
+		if err != nil {
+			return fmt.Errorf("ui.panels[%s].actions[%s]: %w", panelID, id, err)
+		}
+		action.TimeoutMs = limits.TimeoutMs
+		action.OutputCapBytes = limits.OutputCapBytes
+	}
+	return nil
+}
+
+func normalizeManifestUIScope(scope, fallback string) string {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		return fallback
+	}
+	return scope
+}
+
+func validManifestUIScope(scope string) bool {
+	switch scope {
+	case pluginUIScopeGlobal,
+		pluginUIScopeProject,
+		pluginUIScopeWorkItem,
+		pluginUIScopeRun,
+		pluginUIScopeGate:
+		return true
+	default:
+		return false
+	}
+}
+
 func normalizeManifestCommandLimits(kind string, timeoutMs, outputCapBytes int) (CommandLimits, error) {
 	defaultTimeout, maxTimeout, ok := manifestCommandTimeoutBounds(kind)
 	if !ok {
@@ -1031,6 +1436,8 @@ func manifestCommandTimeoutBounds(kind string) (int, int, bool) {
 		return manifestWorkflowActionDefaultTimeoutMs, manifestWorkflowActionMaxTimeoutMs, true
 	case "usageResolver":
 		return manifestUsageResolverDefaultTimeoutMs, manifestUsageResolverMaxTimeoutMs, true
+	case "uiCommand":
+		return manifestUICommandDefaultTimeoutMs, manifestUICommandMaxTimeoutMs, true
 	default:
 		return 0, 0, false
 	}
