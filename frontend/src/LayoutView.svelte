@@ -4,7 +4,7 @@
 
   export let node: LayoutNode;
   export let panes: { [_ in string]?: Pane };
-  export let outputChunks: Record<string, string[]>;
+  export let outputChunks: Record<string, Uint8Array[]>;
   export let outputChunkStartOffsets: Record<string, number[]> = {};
   export let bottomJumpRevisions: Record<string, number> = {};
   export let activePaneId: string;

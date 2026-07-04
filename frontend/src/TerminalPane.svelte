@@ -14,7 +14,7 @@
   import IconButton from "./ui/IconButton.svelte";
 
   export let pane: Pane;
-  export let outputChunks: string[] = [];
+  export let outputChunks: Uint8Array[] = [];
   export let chunkStartOffsets: number[] = [];
   export let jumpRevision = 0;
   export let bottomRevision = 0;
@@ -100,16 +100,6 @@
     onKillPTY();
   }
 
-  function base64Bytes(chunk: string) {
-    if (!chunk) return;
-    const binary = atob(chunk);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-  }
-
   function resetRenderedTerminal(nextPtyId: string) {
     pendingTerminalOperations = [];
     terminalWriting = false;
@@ -147,20 +137,18 @@
     enqueueTerminalOperation({ kind: "write", bytes });
   }
 
-  function writeBase64Chunk(chunk: string, _chunkStartOffset: number | undefined) {
-    const bytes = base64Bytes(chunk);
-    if (!bytes) return;
-    enqueueWrite(bytes);
+  function writeOutputChunk(chunk: Uint8Array, _chunkStartOffset: number | undefined) {
+    enqueueWrite(chunk);
   }
 
-  function replayOutputChunks(nextPtyId: string, chunks: string[], starts: number[]) {
+  function replayOutputChunks(nextPtyId: string, chunks: Uint8Array[], starts: number[]) {
     if (!terminal) return;
     if (renderedPtyId !== nextPtyId || chunks.length < writtenChunks) {
       resetRenderedTerminal(nextPtyId);
     }
     if (chunks.length <= writtenChunks) return;
     for (let index = writtenChunks; index < chunks.length; index += 1) {
-      writeBase64Chunk(chunks[index], starts[index]);
+      writeOutputChunk(chunks[index], starts[index]);
     }
     writtenChunks = chunks.length;
   }
@@ -172,7 +160,7 @@
     resetRenderedTerminal(nextPtyId);
   }
 
-  function replayAndMaybeScroll(nextPtyId: string, chunks: string[], starts: number[], nextJumpRevision: number) {
+  function replayAndMaybeScroll(nextPtyId: string, chunks: Uint8Array[], starts: number[], nextJumpRevision: number) {
     applyJumpRevision(nextPtyId, nextJumpRevision);
     replayOutputChunks(nextPtyId, chunks, starts);
     if (scrollToReplayStart && chunks.length > 0) {

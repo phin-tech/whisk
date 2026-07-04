@@ -1,5 +1,5 @@
 export type TerminalStreamState<Stream = unknown> = {
-  outputChunks: Record<string, string[]>;
+  outputChunks: Record<string, Uint8Array[]>;
   outputChunkStartOffsets: Record<string, number[]>;
   offsets: Record<string, number>;
   bottomJumpRevisions: Record<string, number>;

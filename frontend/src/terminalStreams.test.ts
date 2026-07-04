@@ -13,9 +13,9 @@ type SocketEntry = { id: string };
 function populatedState(): TerminalStreamState<SocketEntry> {
   return {
     outputChunks: {
-      pty_live: ["bGl2ZQ=="],
-      pty_aux: ["YXV4"],
-      pty_stale: ["c3RhbGU="],
+      pty_live: [new Uint8Array([1])],
+      pty_aux: [new Uint8Array([2])],
+      pty_stale: [new Uint8Array([3])],
     },
     outputChunkStartOffsets: {
       pty_live: [0],
@@ -88,8 +88,8 @@ describe("terminal stream state pruning", () => {
   it("preserves unrelated live PTYs while dropping a single stale PTY", () => {
     const pruned = dropPtyState(populatedState(), "pty_stale");
 
-    expect(pruned.outputChunks.pty_live).toEqual(["bGl2ZQ=="]);
-    expect(pruned.outputChunks.pty_aux).toEqual(["YXV4"]);
+    expect(pruned.outputChunks.pty_live).toEqual([new Uint8Array([1])]);
+    expect(pruned.outputChunks.pty_aux).toEqual([new Uint8Array([2])]);
     expect(pruned.offsets.pty_live).toBe(4);
     expect(pruned.offsets.pty_aux).toBe(8);
     expect(pruned.ptyStreams.pty_live).toEqual({ id: "socket-live" });

@@ -161,10 +161,13 @@
   } from "./navigation";
   import { projectDetailWithStoreSessions } from "./projectView";
   import {
-    nextPTYStreamOffset,
+    decodePTYBinaryOutputFrame,
     outputSnapshotChunkAfterOffset,
+    ptyOutputChunkAfterOffset,
+    ptyOutputChunkFromTextFrame,
     ptyAttachWebSocketURL,
     ptyInputTraceLine,
+    type PTYOutputChunk,
     type PTYStreamFrame,
     writePTYInputOverSocket,
   } from "./ptyStream";
@@ -323,7 +326,7 @@
   let loadingPTYHistory = false;
   let loadingWork = false;
   let loadingStatusEvents = false;
-  let outputChunks: Record<string, string[]> = {};
+  let outputChunks: Record<string, Uint8Array[]> = {};
   let outputChunkStartOffsets: Record<string, number[]> = {};
   let offsets: Record<string, number> = {};
   let bottomJumpRevisions: Record<string, number> = {};
@@ -845,7 +848,7 @@
         if (snapshotChunk) {
           outputChunks = {
             ...outputChunks,
-            [ptyId]: [...(outputChunks[ptyId] ?? []), snapshotChunk.outputBase64],
+            [ptyId]: [...(outputChunks[ptyId] ?? []), snapshotChunk.bytes],
           };
           outputChunkStartOffsets = {
             ...outputChunkStartOffsets,
@@ -972,20 +975,39 @@
     syncPTYStreams(visiblePTYIds);
   }
 
-  function appendPTYStreamOutput(frame: PTYStreamFrame) {
-    if (frame.type !== "output") return;
-    const currentOffset = offsets[frame.ptyId] ?? 0;
-    const nextOffset = nextPTYStreamOffset(currentOffset, frame);
-    if (nextOffset === currentOffset) return;
+  function appendPTYOutputChunk(ptyId: string, chunk: PTYOutputChunk) {
+    const currentOffset = offsets[ptyId] ?? 0;
+    const nextChunk = ptyOutputChunkAfterOffset(chunk, currentOffset);
+    if (!nextChunk) return false;
     outputChunks = {
       ...outputChunks,
-      [frame.ptyId]: [...(outputChunks[frame.ptyId] ?? []), frame.outputBase64],
+      [ptyId]: [...(outputChunks[ptyId] ?? []), nextChunk.bytes],
     };
     outputChunkStartOffsets = {
       ...outputChunkStartOffsets,
-      [frame.ptyId]: [...(outputChunkStartOffsets[frame.ptyId] ?? []), frame.offset],
+      [ptyId]: [...(outputChunkStartOffsets[ptyId] ?? []), nextChunk.startOffset],
     };
-    offsets = { ...offsets, [frame.ptyId]: nextOffset };
+    offsets = { ...offsets, [ptyId]: nextChunk.nextOffset };
+    return true;
+  }
+
+  function appendPTYStreamTextOutput(frame: PTYStreamFrame) {
+    const chunk = ptyOutputChunkFromTextFrame(frame);
+    if (!chunk) return false;
+    return appendPTYOutputChunk(chunk.ptyId, chunk);
+  }
+
+  function handlePTYStreamTextFrame(frame: PTYStreamFrame) {
+    if (frame.type === "output") return appendPTYStreamTextOutput(frame);
+    if (frame.type === "error") error = frame.message || "PTY stream error";
+    return false;
+  }
+
+  function appendPTYBinaryStreamOutput(ptyId: string, data: unknown) {
+    if (!(data instanceof ArrayBuffer) && !ArrayBuffer.isView(data)) {
+      throw new Error("unsupported PTY binary frame payload");
+    }
+    return appendPTYOutputChunk(ptyId, decodePTYBinaryOutputFrame(data));
   }
 
   async function openPTYStream(ptyId: string) {
@@ -1000,6 +1022,7 @@
       const address = await loadDaemonAddress();
       if (!address || !isCurrentDaemonGeneration(daemonLink, generation) || !daemonLink.canUseDaemon) return;
       const socket = new WebSocket(ptyAttachWebSocketURL(address, ptyId, offsets[ptyId] ?? 0, daemonControlToken));
+      socket.binaryType = "arraybuffer";
       ptyStreams = { ...ptyStreams, [ptyId]: socket };
       socket.onopen = () => {
         if (ptyStreams[ptyId] !== socket || !isCurrentDaemonGeneration(daemonLink, generation)) return;
@@ -1007,12 +1030,16 @@
       };
       socket.onmessage = (event) => {
         if (ptyStreams[ptyId] !== socket || !isCurrentDaemonGeneration(daemonLink, generation)) return;
-        const frame = JSON.parse(String(event.data)) as PTYStreamFrame;
-        if (frame.type === "output") {
-          appendPTYStreamOutput(frame);
-          ptyReconnectAttempts = { ...ptyReconnectAttempts, [ptyId]: 0 };
-        } else if (frame.type === "error") {
-          error = frame.message;
+        try {
+          const appended = typeof event.data === "string"
+            ? handlePTYStreamTextFrame(JSON.parse(event.data) as PTYStreamFrame)
+            : appendPTYBinaryStreamOutput(ptyId, event.data);
+          if (appended) {
+            ptyReconnectAttempts = { ...ptyReconnectAttempts, [ptyId]: 0 };
+          }
+        } catch (err) {
+          error = `PTY stream failed: ${backendError(err)}`;
+          socket.close();
         }
       };
       socket.onclose = () => {
