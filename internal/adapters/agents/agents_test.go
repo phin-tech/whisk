@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -205,5 +206,88 @@ func TestProfileListReturnsOrderedBuiltinProfilesWithLabels(t *testing.T) {
 	}
 	if byID["plain-shell"].Provider != ProviderShell {
 		t.Fatalf("plain-shell profile = %#v", byID["plain-shell"])
+	}
+}
+
+func TestProfileListIncludesCapabilityDefaults(t *testing.T) {
+	profiles := ProfileList()
+	byID := map[string]ProfileInfo{}
+	for _, profile := range profiles {
+		byID[profile.ID] = profile
+	}
+
+	claude := byID["claude"]
+	if claude.DetectCmd != "claude" ||
+		claude.ExpectedProcess != "claude" ||
+		claude.PromptInjectionMode != PromptInjectionArgv ||
+		claude.DraftPromptFlag != "--prefill" {
+		t.Fatalf("claude capabilities = %#v", claude)
+	}
+	if claude.PreflightTrust != "" || claude.ReadySignal != "" {
+		t.Fatalf("claude readiness/trust = %#v", claude)
+	}
+
+	codex := byID["codex"]
+	if codex.DetectCmd != "codex" ||
+		codex.ExpectedProcess != "codex" ||
+		codex.PromptInjectionMode != PromptInjectionArgv ||
+		codex.PreflightTrust != PreflightTrustCodex ||
+		codex.ReadySignal != ReadySignalCodexComposerPrompt {
+		t.Fatalf("codex capabilities = %#v", codex)
+	}
+
+	shell := byID["plain-shell"]
+	if shell.DetectCmd != "" || shell.ExpectedProcess != "" || shell.PromptInjectionMode != PromptInjectionStdinAfterStart {
+		t.Fatalf("shell capabilities = %#v", shell)
+	}
+}
+
+func TestBuiltinProfilesCarryCatalogCapabilities(t *testing.T) {
+	profiles := BuiltinProfiles()
+
+	claude := profiles["claude"]
+	if claude.DetectCmd != "claude" ||
+		claude.ExpectedProcess != "claude" ||
+		claude.PromptInjectionMode != PromptInjectionArgv ||
+		claude.DraftPromptFlag != "--prefill" {
+		t.Fatalf("claude profile = %#v", claude)
+	}
+
+	codexPlan := profiles["codex-plan"]
+	if codexPlan.DetectCmd != "codex" ||
+		codexPlan.ExpectedProcess != "codex" ||
+		codexPlan.PromptInjectionMode != PromptInjectionArgv ||
+		codexPlan.PreflightTrust != PreflightTrustCodex ||
+		codexPlan.ReadySignal != ReadySignalCodexComposerPrompt {
+		t.Fatalf("codex plan profile = %#v", codexPlan)
+	}
+}
+
+func TestDetectProfilesPrefersPrimaryCommandAndFallsBackToAliases(t *testing.T) {
+	profiles := []ProfileInfo{
+		{ID: "codex", Provider: ProviderCodex, Label: "Codex", DetectCmd: "codex", DetectAliases: []string{"codex-cli"}},
+		{ID: "claude", Provider: ProviderClaude, Label: "Claude", DetectCmd: "claude"},
+		{ID: "alias-only", Provider: ProviderClaude, Label: "Alias only", DetectCmd: "primary", DetectAliases: []string{"agent-alias"}},
+		{ID: "shell", Provider: ProviderShell, Label: "Shell"},
+	}
+	paths := map[string]string{
+		"codex":       "/tools/codex",
+		"codex-cli":   "/tools/codex-cli",
+		"agent-alias": "/tools/agent-alias",
+	}
+	lookup := func(command string) (string, error) {
+		if path, ok := paths[command]; ok {
+			return path, nil
+		}
+		return "", exec.ErrNotFound
+	}
+
+	detected := DetectProfiles(profiles, lookup)
+	want := []DetectedProfile{
+		{ProfileID: "codex", Provider: ProviderCodex, Label: "Codex", DetectCommand: "codex", Path: "/tools/codex"},
+		{ProfileID: "alias-only", Provider: ProviderClaude, Label: "Alias only", DetectCommand: "agent-alias", Path: "/tools/agent-alias"},
+	}
+	if !reflect.DeepEqual(detected, want) {
+		t.Fatalf("detected = %#v, want %#v", detected, want)
 	}
 }

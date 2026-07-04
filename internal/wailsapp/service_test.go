@@ -47,6 +47,7 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		}},
 		promptTemplates: []protocol.PromptTemplate{{ID: "implement", Name: "Implement"}},
 		agentProfiles:   []protocol.AgentProfile{{ID: "claude", Label: "Claude"}},
+		detectedAgents:  []protocol.DetectedAgent{{ProfileID: "claude", DetectCommand: "claude", Path: "/usr/local/bin/claude"}},
 		workItems:       []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
 		workItemLinks: []protocol.WorkItemLink{{
 			ID:               "link_01",
@@ -268,6 +269,10 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	agentProfiles, err := service.ListAgentProfiles(ctx)
 	if err != nil || len(agentProfiles) != 1 || agentProfiles[0].ID != "claude" {
 		t.Fatalf("list agent profiles = %#v, err = %v", agentProfiles, err)
+	}
+	detectedAgents, err := service.ListDetectedAgents(ctx)
+	if err != nil || len(detectedAgents) != 1 || detectedAgents[0].ProfileID != "claude" || detectedAgents[0].DetectCommand != "claude" {
+		t.Fatalf("list detected agents = %#v, err = %v", detectedAgents, err)
 	}
 	items, err := service.ListWorkItems(ctx, "proj_01")
 	if err != nil || len(items) != 1 || items[0].ID != "wi_01" || fake.listWorkItemsProjectID != "proj_01" {
@@ -663,6 +668,7 @@ type runtimeClientFake struct {
 	workflowDefinitions []protocol.WorkflowDefinitionRecord
 	promptTemplates     []protocol.PromptTemplate
 	agentProfiles       []protocol.AgentProfile
+	detectedAgents      []protocol.DetectedAgent
 	workItems           []protocol.WorkItem
 	workItemLinks       []protocol.WorkItemLink
 	readyWork           protocol.ReadyWorkExplanation
@@ -1043,6 +1049,10 @@ func (f *runtimeClientFake) PlanProjectWorkflowMigration(_ context.Context, proj
 
 func (f *runtimeClientFake) ListAgentProfiles(context.Context) ([]protocol.AgentProfile, error) {
 	return f.agentProfiles, nil
+}
+
+func (f *runtimeClientFake) ListDetectedAgents(context.Context) ([]protocol.DetectedAgent, error) {
+	return f.detectedAgents, nil
 }
 
 func (f *runtimeClientFake) ListPromptTemplates(context.Context) ([]protocol.PromptTemplate, error) {

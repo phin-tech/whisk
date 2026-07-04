@@ -84,6 +84,7 @@ type RuntimeClient interface {
 	DeleteWorkflowDefinition(ctx context.Context, id string, version int) (protocol.WorkflowDefinitionRecord, error)
 	ListPromptTemplates(ctx context.Context) ([]protocol.PromptTemplate, error)
 	ListAgentProfiles(ctx context.Context) ([]protocol.AgentProfile, error)
+	ListDetectedAgents(ctx context.Context) ([]protocol.DetectedAgent, error)
 	ListWorkItems(ctx context.Context, projectID string) ([]protocol.WorkItem, error)
 	CreateWorkItem(ctx context.Context, req protocol.CreateWorkItemRequest) (protocol.WorkItem, error)
 	UpdateWorkItem(ctx context.Context, req protocol.UpdateWorkItemRequest) (protocol.WorkItem, error)

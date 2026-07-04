@@ -40,6 +40,7 @@ export {
     DetachPanePTYRequest,
     DetachedPanePTY,
     DetectWorktrunkRequest,
+    DetectedAgent,
     ExportWorkflowDefinitionFileRequest,
     GateReport,
     HTTPForward,

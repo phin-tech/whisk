@@ -3,6 +3,8 @@ package client_test
 import (
 	"context"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
@@ -38,11 +40,52 @@ func TestHTTPClientListsAgentProfiles(t *testing.T) {
 		byID[p.ID] = p
 	}
 	claude, ok := byID["claude"]
-	if !ok || claude.Label == "" || claude.Provider != "claude" {
+	if !ok ||
+		claude.Label == "" ||
+		claude.Provider != "claude" ||
+		claude.DetectCmd != "claude" ||
+		claude.ExpectedProcess != "claude" ||
+		claude.PromptInjectionMode != "argv" ||
+		claude.DraftPromptFlag != "--prefill" {
 		t.Fatalf("claude profile = %#v (ok=%v)", claude, ok)
 	}
-	if _, ok := byID["codex"]; !ok {
-		t.Fatalf("expected codex profile, got %#v", byID)
+	codex, ok := byID["codex"]
+	if !ok ||
+		codex.DetectCmd != "codex" ||
+		codex.PromptInjectionMode != "argv" ||
+		codex.PreflightTrust != "codex" ||
+		codex.ReadySignal != "codex-composer-prompt" {
+		t.Fatalf("codex profile = %#v (ok=%v), all = %#v", codex, ok, byID)
+	}
+}
+
+func TestHTTPClientListsDetectedAgents(t *testing.T) {
+	binDir := t.TempDir()
+	writeExecutable(t, filepath.Join(binDir, "codex"))
+	t.Setenv("PATH", binDir)
+	daemon := newAgentTestDaemon(t)
+
+	detected, err := daemon.ListDetectedAgents(context.Background())
+	if err != nil {
+		t.Fatalf("list detected agents: %v", err)
+	}
+	byID := map[string]protocol.DetectedAgent{}
+	for _, agent := range detected {
+		byID[agent.ProfileID] = agent
+	}
+	codex, ok := byID["codex"]
+	if !ok ||
+		codex.Provider != "codex" ||
+		codex.Label == "" ||
+		codex.DetectCommand != "codex" ||
+		codex.Path != filepath.Join(binDir, "codex") {
+		t.Fatalf("codex detection = %#v (ok=%v), all = %#v", codex, ok, detected)
+	}
+	if _, ok := byID["codex-plan"]; !ok {
+		t.Fatalf("expected codex-plan detection, got %#v", detected)
+	}
+	if _, ok := byID["claude"]; ok {
+		t.Fatalf("unexpected claude detection = %#v", detected)
 	}
 }
 
@@ -113,5 +156,12 @@ func TestHTTPClientPersistsInteractiveAgentShellPreference(t *testing.T) {
 	}
 	if updated.Preferences.UseInteractiveAgentShell {
 		t.Fatalf("preferences = %#v", updated.Preferences)
+	}
+}
+
+func writeExecutable(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write executable %s: %v", path, err)
 	}
 }
