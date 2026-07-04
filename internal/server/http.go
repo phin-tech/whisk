@@ -1044,6 +1044,7 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid from offset"))
 		return
 	}
+	binaryOutput := r.URL.Query().Get("binary") == "1"
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{
 			"wails://*",
@@ -1071,13 +1072,13 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 	go s.readPTYStreamInput(ctx, cancel, conn, ptyID)
 
 	if len(attach.ReplayBytes) > 0 {
-		if err := writePTYOutputFrame(ctx, conn, ptyID, attach.ReplayOffset, attach.ReplayBytes); err != nil {
+		if err := writePTYOutputFrame(ctx, conn, ptyID, attach.ReplayOffset, attach.ReplayBytes, binaryOutput); err != nil {
 			return
 		}
 	}
 	nextOffset := attach.ReplayOffset + uint64(len(attach.ReplayBytes))
 	batcher := newPTYOutputBatcher(func(ctx context.Context, segment ptyOutputSegment) error {
-		return writePTYOutputFrame(ctx, conn, ptyID, segment.offset, segment.bytes)
+		return writePTYOutputFrame(ctx, conn, ptyID, segment.offset, segment.bytes, binaryOutput)
 	})
 	flushTicker := time.NewTicker(s.ptyOutputBatchInterval)
 	defer flushTicker.Stop()
@@ -1191,13 +1192,24 @@ func writePTYInputTrace(channel string, ptyID string, bytes int) {
 	ptytrace.Write(ptyInputTraceLine(channel, ptyID, bytes, time.Now()))
 }
 
-func writePTYOutputFrame(ctx context.Context, conn *websocket.Conn, ptyID string, offset uint64, output []byte) error {
+func writePTYOutputFrame(ctx context.Context, conn *websocket.Conn, ptyID string, offset uint64, output []byte, binaryOutput bool) error {
+	if binaryOutput {
+		return writePTYBinaryOutputFrame(ctx, conn, offset, output)
+	}
+	return writePTYTextOutputFrame(ctx, conn, ptyID, offset, output)
+}
+
+func writePTYTextOutputFrame(ctx context.Context, conn *websocket.Conn, ptyID string, offset uint64, output []byte) error {
 	return writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{
 		Type:         "output",
 		PtyID:        ptyID,
 		Offset:       offset,
 		OutputBase64: base64.StdEncoding.EncodeToString(output),
 	})
+}
+
+func writePTYBinaryOutputFrame(ctx context.Context, conn *websocket.Conn, offset uint64, output []byte) error {
+	return conn.Write(ctx, websocket.MessageBinary, protocol.EncodePTYBinaryOutputFrame(offset, output))
 }
 
 func writePTYStreamFrame(ctx context.Context, conn *websocket.Conn, frame protocol.PTYStreamFrame) error {
