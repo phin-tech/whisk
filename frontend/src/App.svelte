@@ -159,6 +159,11 @@
     writePTYInputOverSocket,
   } from "./ptyStream";
   import {
+    retainPtyState,
+    terminalStreamRemovedPtyIds,
+    type TerminalStreamState,
+  } from "./terminalStreams";
+  import {
     claimSingleFlight,
     initialDaemonLinkSnapshot,
     isCurrentDaemonGeneration,
@@ -568,9 +573,7 @@
       const [nextPtys, nextHistory] = await Promise.all([ListPTYs(), ListPTYHistory()]);
       ptys = nextPtys;
       ptyHistory = nextHistory;
-      outputChunkStartOffsets = Object.fromEntries(
-        nextPtys.map((pty) => [pty.id, outputChunkStartOffsets[pty.id] ?? []]),
-      );
+      pruneTerminalStreamsForLivePtys(nextPtys.map((pty) => pty.id));
       if (selectedPTYHistory && !nextHistory.some((item) => item.ptyId === selectedPTYHistory?.ptyId)) {
         selectedPTYHistory = null;
       }
@@ -831,6 +834,60 @@
     return Boolean(socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING);
   }
 
+  function currentTerminalStreamState(): TerminalStreamState<WebSocket> {
+    return {
+      outputChunks,
+      outputChunkStartOffsets,
+      offsets,
+      bottomJumpRevisions,
+      ptyStreams,
+      ptyReconnectTimers,
+      ptyReconnectAttempts,
+      outputFetchInFlight,
+      outputFetchAgain,
+      ptyDialInFlight,
+    };
+  }
+
+  function applyTerminalStreamState(nextState: TerminalStreamState<WebSocket>) {
+    outputChunks = nextState.outputChunks;
+    outputChunkStartOffsets = nextState.outputChunkStartOffsets;
+    offsets = nextState.offsets;
+    bottomJumpRevisions = nextState.bottomJumpRevisions;
+    ptyStreams = nextState.ptyStreams;
+    ptyReconnectTimers = nextState.ptyReconnectTimers;
+    ptyReconnectAttempts = nextState.ptyReconnectAttempts;
+    replaceMap(outputFetchInFlight, nextState.outputFetchInFlight);
+    replaceSet(outputFetchAgain, nextState.outputFetchAgain);
+    replaceSet(ptyDialInFlight, nextState.ptyDialInFlight);
+  }
+
+  function pruneTerminalStreamsForLivePtys(livePtyIds: string[]) {
+    const currentState = currentTerminalStreamState();
+    const removedPtyIds = terminalStreamRemovedPtyIds(currentState, livePtyIds);
+    const socketsToClose = removedPtyIds.flatMap((ptyId) => {
+      const socket = ptyStreams[ptyId];
+      return socket ? [socket] : [];
+    });
+    const timersToClear = removedPtyIds.flatMap((ptyId) => {
+      const timer = ptyReconnectTimers[ptyId];
+      return timer === undefined ? [] : [timer];
+    });
+    applyTerminalStreamState(retainPtyState(currentState, livePtyIds));
+    for (const timer of timersToClear) window.clearTimeout(timer);
+    for (const socket of socketsToClose) socket.close();
+  }
+
+  function replaceMap<K, V>(target: Map<K, V>, source: ReadonlyMap<K, V>) {
+    target.clear();
+    for (const [key, value] of source) target.set(key, value);
+  }
+
+  function replaceSet<T>(target: Set<T>, source: ReadonlySet<T>) {
+    target.clear();
+    for (const value of source) target.add(value);
+  }
+
   function clearPTYReconnectTimer(ptyId: string) {
     const timer = ptyReconnectTimers[ptyId];
     if (timer === undefined) return;
@@ -926,6 +983,7 @@
           ptyStreams = remaining;
         }
         if (!isCurrentDaemonGeneration(daemonLink, generation)) return;
+        if (!ptys.some((pty) => pty.id === ptyId)) return;
         if (!stopped && daemonLink.canUseDaemon && visiblePTYIds.includes(ptyId)) {
           refreshOutput(ptyId).catch((err) => {
             if (!isStalePTYError(err)) error = backendError(err);
