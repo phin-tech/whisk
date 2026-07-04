@@ -21,6 +21,7 @@ export default defineConfig({
         items: [
           { text: 'Overview', link: '/' },
           { text: 'Agent Interface', link: '/agent-interface' },
+          { text: 'Browser CDP Evaluation', link: '/browser-cdp-evaluation' },
           { text: 'Plugins', link: '/plugins' },
         ],
       },

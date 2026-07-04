@@ -129,6 +129,7 @@ type AttachPTYRequest struct {
 
 type RuntimeConfig struct {
 	PTYBackend                 PTYBackend
+	BrowserProbe               BrowserProbeBackend
 	Worktrees                  WorktreeBackend
 	ContextResolvers           map[string]ProjectContextResolver
 	Plugins                    PluginRegistry
@@ -152,6 +153,7 @@ type Runtime struct {
 	mu                         sync.Mutex
 	ids                        func() string
 	ptys                       PTYBackend
+	browserProbe               BrowserProbeBackend
 	worktrees                  WorktreeBackend
 	contextResolvers           map[string]ProjectContextResolver
 	plugins                    PluginRegistry
@@ -476,6 +478,7 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 	r := &Runtime{
 		ids:                        ids,
 		ptys:                       config.PTYBackend,
+		browserProbe:               config.BrowserProbe,
 		worktrees:                  config.Worktrees,
 		contextResolvers:           config.ContextResolvers,
 		plugins:                    config.Plugins,

@@ -22,5 +22,6 @@ question in notifications and sends the selected number back to the PTY.
 ## References
 
 - [Agent Interface](agent-interface.md)
+- [Browser CDP Evaluation](browser-cdp-evaluation.md)
 - [Plugins](plugins.md)
 - [Style Guide](STYLEGUIDE.md)

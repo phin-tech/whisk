@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/buildinfo"
 	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/daemon"
@@ -28,8 +29,9 @@ func run(args []string) error {
 }
 
 type runDeps struct {
-	context      func() (context.Context, context.CancelFunc)
-	startForward func(ctx context.Context, baseURL string, req protocol.StartHTTPForwardRequest) (protocol.StartedHTTPForward, func(context.Context) error, error)
+	context         func() (context.Context, context.CancelFunc)
+	startForward    func(ctx context.Context, baseURL string, req protocol.StartHTTPForwardRequest) (protocol.StartedHTTPForward, func(context.Context) error, error)
+	browserDiagnose func(ctx context.Context, req app.BrowserDiagnosticRequest) (app.BrowserDiagnostic, error)
 }
 
 func defaultRunDeps() runDeps {
@@ -37,13 +39,14 @@ func defaultRunDeps() runDeps {
 		context: func() (context.Context, context.CancelFunc) {
 			return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		},
-		startForward: startLocalForward,
+		startForward:    startLocalForward,
+		browserDiagnose: defaultBrowserDiagnose,
 	}
 }
 
 func runWithDeps(args []string, deps runDeps) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk <version|daemon|forward|session|project|work-item|run|workflow|question|prompt|gate|status|mail|agent|agent-bridge|plugin|onboarding>")
+		return fmt.Errorf("usage: whisk <version|daemon|forward|browser|session|project|work-item|run|workflow|question|prompt|gate|status|mail|agent|agent-bridge|plugin|onboarding>")
 	}
 	switch args[0] {
 	case "version":
@@ -52,6 +55,8 @@ func runWithDeps(args []string, deps runDeps) error {
 		return runDaemon(args[1:])
 	case "forward":
 		return runForward(args[1:], deps)
+	case "browser":
+		return runBrowser(args[1:], deps)
 	case "session":
 		return runSession(args[1:])
 	case "project":
@@ -81,7 +86,7 @@ func runWithDeps(args []string, deps runDeps) error {
 	case "onboarding":
 		return runOnboarding(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk <version|daemon|forward|session|project|work-item|run|workflow|question|prompt|gate|status|mail|agent|agent-bridge|plugin|onboarding>")
+		return fmt.Errorf("usage: whisk <version|daemon|forward|browser|session|project|work-item|run|workflow|question|prompt|gate|status|mail|agent|agent-bridge|plugin|onboarding>")
 	}
 }
 
