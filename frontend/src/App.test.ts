@@ -2,6 +2,19 @@ import { describe, expect, it } from "vitest";
 import source from "./App.svelte?raw";
 
 describe("App notification refresh", () => {
+  it("wires the jump palette as client-owned navigation over loaded read models", () => {
+    expect(source).toContain('import JumpPalette from "./JumpPalette.svelte"');
+    expect(source).toContain('import { deriveJumpTargets } from "./jumpTargets"');
+    expect(source).toContain('id: "jumpPalette.open"');
+    expect(source).toContain("function openJumpPalette()");
+    expect(source).toContain("function jumpToTarget(target: JumpTarget)");
+    expect(source).toContain("selectPaneTarget(payload.sessionId, payload.paneId)");
+    expect(source).toContain('navigateTo("work", { openItemId: payload.workItemId })');
+    expect(source).toContain("<JumpPalette");
+    expect(source).not.toContain("CreateJumpTarget");
+    expect(source).not.toContain("PersistJump");
+  });
+
   it("loads pending agent bridge approvals instead of clearing them", () => {
     expect(source).toContain('ListAgentBridgeApprovals({ status: "pending" })');
     expect(source).not.toContain("agentBridgeApprovals = [];");

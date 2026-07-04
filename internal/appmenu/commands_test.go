@@ -124,6 +124,23 @@ func TestCommandsIncludeCommandPaletteShortcut(t *testing.T) {
 	if !cmd.Editable {
 		t.Fatalf("command palette should be editable")
 	}
+
+	jumpCmd, ok := byID[CommandOpenJumpPalette]
+	if !ok {
+		t.Fatalf("registry missing jump palette command")
+	}
+	if jumpCmd.Label != "Open Jump Palette" {
+		t.Fatalf("jump palette label = %q", jumpCmd.Label)
+	}
+	if jumpCmd.Category != CategoryApplication {
+		t.Fatalf("jump palette category = %q, want %q", jumpCmd.Category, CategoryApplication)
+	}
+	if jumpCmd.Default != "CmdOrCtrl+J" {
+		t.Fatalf("jump palette shortcut = %q, want CmdOrCtrl+J", jumpCmd.Default)
+	}
+	if !jumpCmd.Editable {
+		t.Fatalf("jump palette should be editable")
+	}
 }
 
 func TestCommandsIncludeToggleSidebarShortcut(t *testing.T) {

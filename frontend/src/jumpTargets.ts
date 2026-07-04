@@ -86,6 +86,12 @@ type PaneEntry = {
   window: WindowLike | null;
 };
 
+type AttachedPTYTarget = {
+  session: SessionLike;
+  paneId: string;
+  windowId: string;
+};
+
 export function deriveJumpTargets(input: JumpTargetsInput): JumpTarget[] {
   const sessions = input.sessions ?? [];
   const ptys = input.ptys ?? [];
@@ -167,11 +173,13 @@ export function deriveJumpTargets(input: JumpTargetsInput): JumpTarget[] {
 
   for (const pty of ptys) {
     if (!pty.id) continue;
-    const session = pty.sessionId ? sessionsById.get(pty.sessionId) : undefined;
+    const attached = attachedPaneForPTY(pty, sessions, sessionsById);
+    if (!attached) continue;
+    const session = attached.session;
     const project = session?.projectId ? projectsById.get(session.projectId) : undefined;
     const active =
       pty.id === activePtyId ||
-      Boolean(pty.sessionId && pty.sessionId === input.activeSessionId && pty.paneId === input.activePaneId);
+      Boolean(session.id === input.activeSessionId && attached.paneId === input.activePaneId);
     targets.push({
       id: `pty:${pty.id}`,
       kind: "pty",
@@ -194,9 +202,9 @@ export function deriveJumpTargets(input: JumpTargetsInput): JumpTarget[] {
       payload: {
         kind: "pty",
         ptyId: pty.id,
-        ...(pty.sessionId ? { sessionId: pty.sessionId } : {}),
-        ...(pty.windowId ? { windowId: pty.windowId } : {}),
-        ...(pty.paneId ? { paneId: pty.paneId } : {}),
+        sessionId: session.id,
+        ...(attached.windowId ? { windowId: attached.windowId } : {}),
+        paneId: attached.paneId,
       },
     });
   }
@@ -336,6 +344,35 @@ function currentPtyId(sessions: readonly SessionLike[], activeSessionId: string,
   if (!activeSessionId || !activePaneId) return "";
   const session = sessions.find((candidate) => candidate.id === activeSessionId);
   return session?.panes?.[activePaneId]?.currentPtyId ?? "";
+}
+
+function attachedPaneForPTY(
+  pty: PTYInfoLike,
+  sessions: readonly SessionLike[],
+  sessionsById: ReadonlyMap<string, SessionLike>,
+): AttachedPTYTarget | null {
+  const candidateSessions = pty.sessionId
+    ? [sessionsById.get(pty.sessionId)].filter((session): session is SessionLike => Boolean(session))
+    : sessions;
+
+  for (const session of candidateSessions) {
+    const entries = orderedPanes(session);
+    const preferred = pty.paneId
+      ? entries.find((entry) => entry.paneId === pty.paneId || entry.pane.id === pty.paneId)
+      : undefined;
+    const match =
+      preferred?.pane.currentPtyId === pty.id
+        ? preferred
+        : entries.find((entry) => entry.pane.currentPtyId === pty.id);
+    if (!match) continue;
+    return {
+      session,
+      paneId: match.paneId,
+      windowId: match.window?.id || match.pane.windowId || pty.windowId || "",
+    };
+  }
+
+  return null;
 }
 
 function sessionTitle(session: SessionLike | null | undefined): string {

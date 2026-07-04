@@ -199,6 +199,52 @@ describe("jumpTargets", () => {
     });
   });
 
+  it("omits detached PTY targets that cannot resolve to a loaded session pane", () => {
+    const input = fixtureInput();
+    const targets = deriveJumpTargets({
+      ...input,
+      ptys: [
+        ...(input.ptys ?? []),
+        {
+          id: "pty_detached",
+          sessionId: "sess_api",
+          windowId: "",
+          paneId: "",
+          workingDir: "/repo/whisk",
+          running: true,
+          status: "running",
+        },
+      ],
+    });
+
+    expect(targets.filter((target) => target.kind === "pty").map((target) => target.id)).toEqual([
+      "pty:pty_api",
+      "pty:pty_docs",
+    ]);
+    expect(targets.map((target) => target.id)).not.toContain("pty:pty_detached");
+  });
+
+  it("indexes attached PTYs by resolving pane ownership from the session model", () => {
+    const input = fixtureInput();
+    const targets = deriveJumpTargets({
+      ...input,
+      ptys: (input.ptys ?? []).map((pty) =>
+        pty.id === "pty_api" ? { ...pty, windowId: "", paneId: "" } : pty,
+      ),
+    });
+
+    expect(targets.find((target) => target.id === "pty:pty_api")).toMatchObject({
+      kind: "pty",
+      payload: {
+        kind: "pty",
+        ptyId: "pty_api",
+        sessionId: "sess_api",
+        windowId: "win_api",
+        paneId: "pane_api",
+      },
+    });
+  });
+
   it("indexes only active-project work items when an active project is selected", () => {
     const targets = deriveJumpTargets(fixtureInput());
     const workTargets = targets.filter((target) => target.kind === "work-item");
