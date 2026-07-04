@@ -483,6 +483,18 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		len(plugins[0].Permissions.Network) != 1 {
 		t.Fatalf("plugin ui catalog = %#v", plugins[0])
 	}
+	usageResolvers, err := service.ListUsageResolvers(ctx)
+	if err != nil || len(usageResolvers) != 1 || usageResolvers[0].ResolverID != "github.usage" || !fake.listUsageResolversCalled {
+		t.Fatalf("list usage resolvers = %#v, called = %v, err = %v", usageResolvers, fake.listUsageResolversCalled, err)
+	}
+	usageResolver, err := service.RefreshUsageResolver(ctx, "github", "github.usage", protocol.RefreshUsageResolverRequest{Profile: "codex"})
+	if err != nil ||
+		usageResolver.Status != "ok" ||
+		fake.refreshUsagePluginID != "github" ||
+		fake.refreshUsageResolverID != "github.usage" ||
+		fake.refreshUsageReq.Profile != "codex" {
+		t.Fatalf("refresh usage resolver = %#v, plugin = %q, resolver = %q, req = %#v, err = %v", usageResolver, fake.refreshUsagePluginID, fake.refreshUsageResolverID, fake.refreshUsageReq, err)
+	}
 	uiContribs, err := service.ListUIContributions(ctx, protocol.UIContributionScope{WorkItemID: "wi_01"})
 	if err != nil || len(uiContribs.Plugins) != 1 || uiContribs.Plugins[0].PluginID != "github" || !uiContribs.Plugins[0].Enabled {
 		t.Fatalf("list ui contributions = %#v, err = %v", uiContribs, err)
@@ -772,6 +784,10 @@ type runtimeClientFake struct {
 	setAgentHookLogReq              protocol.SetAgentHookLogSettingsRequest
 	clearAgentHookLogCalled         bool
 	openAgentHookLogCalled          bool
+	listUsageResolversCalled        bool
+	refreshUsagePluginID            string
+	refreshUsageResolverID          string
+	refreshUsageReq                 protocol.RefreshUsageResolverRequest
 	rescanPluginsCalled             bool
 	trustPluginID                   string
 	untrustPluginID                 string
@@ -1331,11 +1347,33 @@ func (f *runtimeClientFake) ListPlugins(context.Context) ([]protocol.PluginStatu
 }
 
 func (f *runtimeClientFake) ListUsageResolvers(context.Context) ([]protocol.UsageResolverReadModel, error) {
-	return nil, nil
+	f.listUsageResolversCalled = true
+	return []protocol.UsageResolverReadModel{{
+		PluginID:   "github",
+		ResolverID: "github.usage",
+		Provider:   "github",
+		Label:      "GitHub",
+		Profile:    "codex",
+		Trusted:    true,
+		Valid:      true,
+		Status:     "pending",
+	}}, nil
 }
 
-func (f *runtimeClientFake) RefreshUsageResolver(context.Context, string, string, protocol.RefreshUsageResolverRequest) (protocol.UsageResolverReadModel, error) {
-	return protocol.UsageResolverReadModel{}, nil
+func (f *runtimeClientFake) RefreshUsageResolver(_ context.Context, pluginID string, resolverID string, req protocol.RefreshUsageResolverRequest) (protocol.UsageResolverReadModel, error) {
+	f.refreshUsagePluginID = pluginID
+	f.refreshUsageResolverID = resolverID
+	f.refreshUsageReq = req
+	return protocol.UsageResolverReadModel{
+		PluginID:   pluginID,
+		ResolverID: resolverID,
+		Provider:   "github",
+		Label:      "GitHub",
+		Profile:    req.Profile,
+		Trusted:    true,
+		Valid:      true,
+		Status:     "ok",
+	}, nil
 }
 
 func (f *runtimeClientFake) ListUIContributions(_ context.Context, scope protocol.UIContributionScope) (protocol.UIContributionsResponse, error) {
