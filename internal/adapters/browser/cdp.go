@@ -17,7 +17,14 @@ func NewCDPProbe(client *http.Client) *CDPProbe {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	return &CDPProbe{client: client}
+	safeClient := *client
+	safeClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) == 0 {
+			return fmt.Errorf("cdp probe refused redirect to %s", req.URL.Redacted())
+		}
+		return fmt.Errorf("cdp probe refused redirect from %s to %s", via[len(via)-1].URL.Redacted(), req.URL.Redacted())
+	}
+	return &CDPProbe{client: &safeClient}
 }
 
 func (p *CDPProbe) ProbeCDP(ctx context.Context, endpoint string) (domainbrowser.CDPProbeResult, error) {

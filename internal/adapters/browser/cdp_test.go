@@ -65,3 +65,18 @@ func TestCDPProbeReportsHTTPError(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestCDPProbeRejectsRedirects(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/json/version" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		http.Redirect(w, r, "http://example.com/json/version", http.StatusFound)
+	}))
+	defer server.Close()
+
+	_, err := adapter.NewCDPProbe(server.Client()).ProbeCDP(context.Background(), server.URL)
+	if err == nil || !strings.Contains(err.Error(), "refused redirect") {
+		t.Fatalf("err = %v", err)
+	}
+}

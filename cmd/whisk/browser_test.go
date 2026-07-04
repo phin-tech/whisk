@@ -63,3 +63,18 @@ func TestRunBrowserDiagnosePrintsDisabledTable(t *testing.T) {
 		t.Fatalf("output = %q", output)
 	}
 }
+
+func TestFormatLaunchCommandUsesShellSafeQuoting(t *testing.T) {
+	got := formatLaunchCommand(
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		[]string{
+			"--remote-debugging-address=127.0.0.1",
+			"--user-data-dir=/tmp/whisk profile/o'hare",
+			"",
+		},
+	)
+	want := `'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --remote-debugging-address=127.0.0.1 '--user-data-dir=/tmp/whisk profile/o'\''hare' ''`
+	if got != want {
+		t.Fatalf("formatLaunchCommand = %q, want %q", got, want)
+	}
+}

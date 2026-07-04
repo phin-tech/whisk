@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -99,10 +98,24 @@ func formatLaunchCommand(command string, args []string) string {
 
 func shellQuote(value string) string {
 	if value == "" {
-		return `""`
+		return "''"
 	}
-	if strings.ContainsAny(value, " \t\n\"'\\$`") {
-		return strconv.Quote(value)
+	if isShellSafeUnquoted(value) {
+		return value
 	}
-	return value
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func isShellSafeUnquoted(value string) bool {
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case strings.ContainsRune("_@%+=:,./-", r):
+		default:
+			return false
+		}
+	}
+	return true
 }
