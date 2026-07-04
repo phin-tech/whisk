@@ -33,8 +33,13 @@ type Modes struct {
 }
 
 type ModeTracker struct {
-	parser *ansi.Parser
-	modes  Modes
+	parser                *ansi.Parser
+	modes                 Modes
+	mouseTrackingNormal   bool
+	mouseTrackingButton   bool
+	mouseTrackingAny      bool
+	mouseEncodingSGR      bool
+	mouseEncodingSGRPixel bool
 }
 
 func NewModeTracker() *ModeTracker {
@@ -63,6 +68,11 @@ func (t *ModeTracker) Modes() Modes {
 
 func (t *ModeTracker) Reset() {
 	t.modes = Modes{CursorVisible: true}
+	t.mouseTrackingNormal = false
+	t.mouseTrackingButton = false
+	t.mouseTrackingAny = false
+	t.mouseEncodingSGR = false
+	t.mouseEncodingSGRPixel = false
 }
 
 func (t *ModeTracker) handleESC(cmd ansi.Cmd) {
@@ -125,21 +135,47 @@ func (t *ModeTracker) applyDECPrivateMode(mode int, set bool) {
 }
 
 func (t *ModeTracker) setMouseTracking(mode MouseTrackingMode, set bool) {
-	if set {
-		t.modes.MouseTracking = mode
-		return
+	switch mode {
+	case MouseTrackingNormal:
+		t.mouseTrackingNormal = set
+	case MouseTrackingButton:
+		t.mouseTrackingButton = set
+	case MouseTrackingAny:
+		t.mouseTrackingAny = set
 	}
-	if t.modes.MouseTracking == mode {
+	t.refreshMouseTracking()
+}
+
+func (t *ModeTracker) refreshMouseTracking() {
+	switch {
+	case t.mouseTrackingAny:
+		t.modes.MouseTracking = MouseTrackingAny
+	case t.mouseTrackingButton:
+		t.modes.MouseTracking = MouseTrackingButton
+	case t.mouseTrackingNormal:
+		t.modes.MouseTracking = MouseTrackingNormal
+	default:
 		t.modes.MouseTracking = MouseTrackingNone
 	}
 }
 
 func (t *ModeTracker) setMouseEncoding(mode MouseEncodingMode, set bool) {
-	if set {
-		t.modes.MouseEncoding = mode
-		return
+	switch mode {
+	case MouseEncodingSGR:
+		t.mouseEncodingSGR = set
+	case MouseEncodingSGRPixel:
+		t.mouseEncodingSGRPixel = set
 	}
-	if t.modes.MouseEncoding == mode {
+	t.refreshMouseEncoding()
+}
+
+func (t *ModeTracker) refreshMouseEncoding() {
+	switch {
+	case t.mouseEncodingSGRPixel:
+		t.modes.MouseEncoding = MouseEncodingSGRPixel
+	case t.mouseEncodingSGR:
+		t.modes.MouseEncoding = MouseEncodingSGR
+	default:
 		t.modes.MouseEncoding = MouseEncodingNone
 	}
 }

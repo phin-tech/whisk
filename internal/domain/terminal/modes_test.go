@@ -104,3 +104,27 @@ func TestModeTrackerHandlesModeReset(t *testing.T) {
 		t.Fatalf("modes = %#v, want %#v", got, want)
 	}
 }
+
+func TestModeTrackerFallsBackToLowerPrecedenceMouseTracking(t *testing.T) {
+	tracker := terminal.NewModeTracker()
+
+	tracker.Feed([]byte("\x1b[?1000;1002h"))
+	tracker.Feed([]byte("\x1b[?1002l"))
+
+	want := terminal.Modes{CursorVisible: true, MouseTracking: terminal.MouseTrackingNormal}
+	if got := tracker.Modes(); got != want {
+		t.Fatalf("modes = %#v, want %#v", got, want)
+	}
+}
+
+func TestModeTrackerFallsBackToLowerPrecedenceMouseEncoding(t *testing.T) {
+	tracker := terminal.NewModeTracker()
+
+	tracker.Feed([]byte("\x1b[?1006;1016h"))
+	tracker.Feed([]byte("\x1b[?1016l"))
+
+	want := terminal.Modes{CursorVisible: true, MouseEncoding: terminal.MouseEncodingSGR}
+	if got := tracker.Modes(); got != want {
+		t.Fatalf("modes = %#v, want %#v", got, want)
+	}
+}
