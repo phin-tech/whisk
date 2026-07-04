@@ -1,14 +1,11 @@
 package plugins
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -293,30 +290,23 @@ func (m *Manager) RunProjectAttachmentTemplate(ctx context.Context, req app.RunP
 			return app.AddProjectAttachmentRequest{}, fmt.Errorf("field %s required", field.ID)
 		}
 	}
-	input, err := json.Marshal(struct {
+	input := struct {
 		PluginID   string            `json:"pluginId"`
 		TemplateID string            `json:"templateId"`
 		ProjectID  string            `json:"projectId"`
 		Values     map[string]string `json:"values,omitempty"`
-	}{PluginID: req.PluginID, TemplateID: req.TemplateID, ProjectID: req.ProjectID, Values: req.Values})
+	}{PluginID: req.PluginID, TemplateID: req.TemplateID, ProjectID: req.ProjectID, Values: req.Values}
+	result, err := runPluginCommand(ctx, PluginCommandRequest{
+		PluginID: req.PluginID,
+		Dir:      dir,
+		Command:  action.Command,
+		Input:    input,
+	})
 	if err != nil {
 		return app.AddProjectAttachmentRequest{}, err
 	}
-	cmd := shellCommand(ctx, action.Command)
-	cmd.Dir = dir
-	cmd.Stdin = bytes.NewReader(input)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return app.AddProjectAttachmentRequest{}, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
-		}
-		return app.AddProjectAttachmentRequest{}, err
-	}
 	var out app.PluginProjectAttachmentOutput
-	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
+	if err := json.Unmarshal(result.Stdout, &out); err != nil {
 		return app.AddProjectAttachmentRequest{}, err
 	}
 	if out.Kind == "" {
@@ -848,33 +838,18 @@ func manifestCommandTimeoutBounds(kind string) (int, int, bool) {
 }
 
 func (r CommandResolver) ResolveProjectAttachment(ctx context.Context, req app.ResolveProjectAttachmentRequest) (app.ResolvedProjectAttachment, error) {
-	input, err := json.Marshal(req)
+	result, err := runPluginCommand(ctx, PluginCommandRequest{
+		PluginID: r.PluginID,
+		Dir:      r.Dir,
+		Command:  r.Command,
+		Input:    req,
+	})
 	if err != nil {
 		return app.ResolvedProjectAttachment{}, err
 	}
-	cmd := shellCommand(ctx, r.Command)
-	cmd.Dir = r.Dir
-	cmd.Stdin = bytes.NewReader(input)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return app.ResolvedProjectAttachment{}, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
-		}
-		return app.ResolvedProjectAttachment{}, err
-	}
 	var out app.ResolvedProjectAttachment
-	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
+	if err := json.Unmarshal(result.Stdout, &out); err != nil {
 		return app.ResolvedProjectAttachment{}, err
 	}
 	return out, nil
-}
-
-func shellCommand(ctx context.Context, command string) *exec.Cmd {
-	if runtime.GOOS == "windows" {
-		return exec.CommandContext(ctx, "cmd", "/c", command)
-	}
-	return exec.CommandContext(ctx, "sh", "-lc", command)
 }
