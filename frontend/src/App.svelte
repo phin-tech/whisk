@@ -152,7 +152,7 @@
   import { projectDetailWithStoreSessions } from "./projectView";
   import {
     nextPTYStreamOffset,
-    outputSnapshotStartOffset,
+    outputSnapshotChunkAfterOffset,
     ptyAttachWebSocketURL,
     ptyInputTraceLine,
     type PTYStreamFrame,
@@ -326,7 +326,6 @@
   let settingsLoaded = false;
   let runtimeReadModelsLoaded = false;
   let stopped = false;
-  const textEncoder = new TextEncoder();
   const outputFetchInFlight = new Map<string, number>();
   const outputFetchAgain = new Set<string>();
   const ptyDialInFlight = new Set<string>();
@@ -800,30 +799,19 @@
           fromOffset,
         });
         if (!isCurrentDaemonGeneration(daemonLink, generation)) return;
-        const snapshotStartOffset = outputSnapshotStartOffset(snapshot);
-        if (snapshot.outputBase64) {
+        const currentOffset = offsets[ptyId] ?? 0;
+        const snapshotChunk = outputSnapshotChunkAfterOffset(snapshot, currentOffset);
+        if (snapshotChunk) {
           outputChunks = {
             ...outputChunks,
-            [ptyId]: [...(outputChunks[ptyId] ?? []), snapshot.outputBase64],
+            [ptyId]: [...(outputChunks[ptyId] ?? []), snapshotChunk.outputBase64],
           };
           outputChunkStartOffsets = {
             ...outputChunkStartOffsets,
-            [ptyId]: [...(outputChunkStartOffsets[ptyId] ?? []), snapshotStartOffset],
-          };
-        } else if (snapshot.output) {
-          const bytes = textEncoder.encode(snapshot.output);
-          let binary = "";
-          for (const byte of bytes) binary += String.fromCharCode(byte);
-          outputChunks = {
-            ...outputChunks,
-            [ptyId]: [...(outputChunks[ptyId] ?? []), btoa(binary)],
-          };
-          outputChunkStartOffsets = {
-            ...outputChunkStartOffsets,
-            [ptyId]: [...(outputChunkStartOffsets[ptyId] ?? []), snapshotStartOffset],
+            [ptyId]: [...(outputChunkStartOffsets[ptyId] ?? []), snapshotChunk.startOffset],
           };
         }
-        offsets = { ...offsets, [ptyId]: snapshot.offset };
+        offsets = { ...offsets, [ptyId]: Math.max(currentOffset, snapshot.offset) };
       } while (outputFetchAgain.has(ptyId));
     } finally {
       if (outputFetchInFlight.get(ptyId) === generation) outputFetchInFlight.delete(ptyId);
