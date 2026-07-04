@@ -1,8 +1,8 @@
 <script lang="ts">
   import MoreHorizontal from "@lucide/svelte/icons/ellipsis";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import VirtualWorkItemList from "./workboard/VirtualWorkItemList.svelte";
   import WorkBoardColumn from "./workboard/WorkBoardColumn.svelte";
-  import WorkItemCard from "./workboard/WorkItemCard.svelte";
   import WorkItemDetail from "./WorkItemDetail.svelte";
   import Button from "./ui/Button.svelte";
   import EmptyState from "./ui/EmptyState.svelte";
@@ -283,7 +283,7 @@
     {/if}
 
     <div class="app-scrollbar min-h-0 flex-1 overflow-auto p-3">
-      <div class="flex min-h-full min-w-max items-stretch gap-3">
+      <div class="flex h-full min-w-max items-stretch gap-3">
         {#each stageViews as stageView (stageView.key)}
           <WorkBoardColumn
             stage={stageView.stage}
@@ -293,28 +293,21 @@
             attentionClass={stageView.attentionClass}
             onToggle={toggleStageCollapsed}
           >
-            {#each stageView.cards as card (card.key)}
-              <WorkItemCard
-                item={card.item}
-                targets={card.targets}
-                latestRun={card.latestRun}
-                terminalRun={card.terminalRun}
-                attention={card.attention}
-                indicators={card.indicators}
-                canExecute={card.canExecute}
-                {loading}
-                {cardRailClass}
-                {attentionDotClass}
-                onOpenDetail={openDetail}
-                onOpenRunTerminal={openRunTerminal}
-                {onLaunchRun}
-                {onQueueExecution}
-                onLaunchExecution={(workItemId) => onLaunchExecution(workItemId)}
-                onGenerateWorktree={generateWorktree}
-                onMovePrevious={movePrevious}
-                onMoveNext={moveNext}
-              />
-            {/each}
+            <VirtualWorkItemList
+              stageName={stageView.stage.name}
+              cards={stageView.cards}
+              {loading}
+              {cardRailClass}
+              {attentionDotClass}
+              onOpenDetail={openDetail}
+              onOpenRunTerminal={openRunTerminal}
+              {onLaunchRun}
+              {onQueueExecution}
+              onLaunchExecution={(workItemId) => onLaunchExecution(workItemId)}
+              onGenerateWorktree={generateWorktree}
+              onMovePrevious={movePrevious}
+              onMoveNext={moveNext}
+            />
           </WorkBoardColumn>
         {/each}
       </div>

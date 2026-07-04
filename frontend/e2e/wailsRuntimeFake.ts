@@ -34,6 +34,8 @@ const seedLongPTY =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eLongPty");
 const seedActivePTY =
   seedLongPTY || (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2ePty"));
+const seedLargeWorkBoard =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eLargeWorkBoard");
 const longPTYOutput = Array.from(
   { length: 90 },
   (_, index) => `scrollback line ${String(index).padStart(2, "0")}\n`,
@@ -203,6 +205,20 @@ function seedState() {
     workItem({ id: "wi_done", number: 5, title: "Ship Wails bridge contract", stageId: "done", runState: "completed" }),
     workItem({ id: "wi_dependency", number: 6, title: "Map dependency graph", stageId: "ready", runState: "idle" }),
   ];
+  if (seedLargeWorkBoard) {
+    for (let index = 1; index <= 360; index += 1) {
+      workItems.push(
+        workItem({
+          id: `wi_large_ready_${index}`,
+          number: 1000 + index,
+          title: `Large ready item ${String(index).padStart(3, "0")}`,
+          stageId: "ready",
+          runState: "idle",
+        }),
+      );
+    }
+    project.nextWorkItemNumber = Math.max(...workItems.map((item) => item.number)) + 1;
+  }
   return {
     now,
     daemonStatus: {

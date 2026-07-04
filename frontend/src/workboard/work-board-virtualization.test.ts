@@ -85,6 +85,36 @@ describe("work-board-virtualization", () => {
     expect(window.cards.map((entry) => entry.offsetTop)).toEqual([256, 288, 320, 352, 384, 416, 448]);
   });
 
+  it("caps mounted card rows to the viewport plus overscan for large columns", () => {
+    const window = deriveWorkBoardCardWindow({
+      cards: cards(500),
+      rowHeight: 128,
+      viewportHeight: 512,
+      scrollOffset: 128 * 200,
+      overscan: 4,
+    });
+
+    expect(window.visibleStartIndex).toBe(200);
+    expect(window.visibleEndIndex).toBe(204);
+    expect(window.startIndex).toBe(196);
+    expect(window.endIndex).toBe(208);
+    expect(window.cards).toHaveLength(12);
+    expect(window.cards.map((entry) => entry.key)).toEqual([
+      "work-item:item-196",
+      "work-item:item-197",
+      "work-item:item-198",
+      "work-item:item-199",
+      "work-item:item-200",
+      "work-item:item-201",
+      "work-item:item-202",
+      "work-item:item-203",
+      "work-item:item-204",
+      "work-item:item-205",
+      "work-item:item-206",
+      "work-item:item-207",
+    ]);
+  });
+
   it("clamps overscan and overscrolled offsets at list boundaries", () => {
     const window = deriveWorkBoardCardWindow({
       cards: cards(10),
