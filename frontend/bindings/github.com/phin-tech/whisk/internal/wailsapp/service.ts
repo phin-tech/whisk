@@ -366,57 +366,63 @@ export function ListUIContributions(scope: protocol$0.UIContributionScope): $Can
     });
 }
 
+export function ListUsageResolvers(): $CancellablePromise<protocol$0.UsageResolverReadModel[]> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListUsageResolvers").then(($result: any) => {
+        return $$createType50($result);
+    });
+}
+
 export function ListWorkItemLinks(workItemID: string): $CancellablePromise<protocol$0.WorkItemLink[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorkItemLinks", workItemID).then(($result: any) => {
-        return $$createType49($result);
+        return $$createType51($result);
     });
 }
 
 export function ListWorkItemRuns(workItemID: string): $CancellablePromise<protocol$0.WorkItemRun[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorkItemRuns", workItemID).then(($result: any) => {
-        return $$createType50($result);
+        return $$createType52($result);
     });
 }
 
 export function ListWorkItemWorkflowActions(workItemID: string): $CancellablePromise<protocol$0.WorkflowActionAvailability[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorkItemWorkflowActions", workItemID).then(($result: any) => {
-        return $$createType52($result);
+        return $$createType54($result);
     });
 }
 
 export function ListWorkItems(projectID: string): $CancellablePromise<protocol$0.WorkItem[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorkItems", projectID).then(($result: any) => {
-        return $$createType53($result);
+        return $$createType55($result);
     });
 }
 
 export function ListWorkflowDefinitions(): $CancellablePromise<protocol$0.WorkflowDefinitionRecord[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorkflowDefinitions").then(($result: any) => {
-        return $$createType54($result);
+        return $$createType56($result);
     });
 }
 
 export function ListWorkflowEvents(workItemID: string): $CancellablePromise<protocol$0.WorkflowEvent[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorkflowEvents", workItemID).then(($result: any) => {
-        return $$createType56($result);
+        return $$createType58($result);
     });
 }
 
 export function ListWorkflowTemplates(): $CancellablePromise<protocol$0.WorkflowTemplate[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorkflowTemplates").then(($result: any) => {
-        return $$createType58($result);
+        return $$createType60($result);
     });
 }
 
 export function ListWorktrees(req: protocol$0.ListWorktreesRequest): $CancellablePromise<protocol$0.Worktree[]> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ListWorktrees", req).then(($result: any) => {
-        return $$createType60($result);
+        return $$createType62($result);
     });
 }
 
 export function LoadAppSettings(): $CancellablePromise<appsettings$0.Settings> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.LoadAppSettings").then(($result: any) => {
-        return $$createType61($result);
+        return $$createType63($result);
     });
 }
 
@@ -426,7 +432,7 @@ export function LoadAppSettings(): $CancellablePromise<appsettings$0.Settings> {
  */
 export function LoadKeybindings(): $CancellablePromise<appmenu$0.KeybindingsView> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.LoadKeybindings").then(($result: any) => {
-        return $$createType62($result);
+        return $$createType64($result);
     });
 }
 
@@ -454,7 +460,7 @@ export function MoveWorkItem(req: protocol$0.MoveWorkItemRequest): $CancellableP
 
 export function NextEvent(req: protocol$0.NextEventRequest): $CancellablePromise<protocol$0.NextEventResponse> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.NextEvent", req).then(($result: any) => {
-        return $$createType63($result);
+        return $$createType65($result);
     });
 }
 
@@ -472,7 +478,7 @@ export function OpenAgentHookLog(): $CancellablePromise<protocol$0.AgentHookLogS
 
 export function Output(req: protocol$0.OutputRequest): $CancellablePromise<protocol$0.OutputSnapshot> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.Output", req).then(($result: any) => {
-        return $$createType64($result);
+        return $$createType66($result);
     });
 }
 
@@ -482,19 +488,19 @@ export function PTYTraceEnabled(): $CancellablePromise<boolean> {
 
 export function PlanProjectWorkflowMigration(projectID: string, req: protocol$0.PlanProjectWorkflowMigrationRequest): $CancellablePromise<protocol$0.WorkflowMigrationPlan> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.PlanProjectWorkflowMigration", projectID, req).then(($result: any) => {
-        return $$createType65($result);
+        return $$createType67($result);
     });
 }
 
 export function ProjectContext(projectID: string): $CancellablePromise<protocol$0.ProjectContext> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ProjectContext", projectID).then(($result: any) => {
-        return $$createType66($result);
+        return $$createType68($result);
     });
 }
 
 export function ProjectDetail(projectID: string): $CancellablePromise<protocol$0.ProjectDetail> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ProjectDetail", projectID).then(($result: any) => {
-        return $$createType67($result);
+        return $$createType69($result);
     });
 }
 
@@ -506,13 +512,19 @@ export function QueueExecution(req: protocol$0.QueueExecutionRequest): $Cancella
 
 export function ReadPTYHistory(ptyID: string): $CancellablePromise<protocol$0.PTYHistory> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ReadPTYHistory", ptyID).then(($result: any) => {
-        return $$createType68($result);
+        return $$createType70($result);
     });
 }
 
 export function ReadyWork(req: protocol$0.ReadyWorkRequest): $CancellablePromise<protocol$0.ReadyWorkExplanation> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ReadyWork", req).then(($result: any) => {
-        return $$createType69($result);
+        return $$createType71($result);
+    });
+}
+
+export function RefreshUsageResolver(pluginID: string, resolverID: string, req: protocol$0.RefreshUsageResolverRequest): $CancellablePromise<protocol$0.UsageResolverReadModel> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.RefreshUsageResolver", pluginID, resolverID, req).then(($result: any) => {
+        return $$createType49($result);
     });
 }
 
@@ -528,7 +540,7 @@ export function RemoveWorktree(req: protocol$0.RemoveWorktreeRequest): $Cancella
 
 export function ReportStatus(req: protocol$0.ReportStatusRequest): $CancellablePromise<protocol$0.ReportStatusResponse> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ReportStatus", req).then(($result: any) => {
-        return $$createType70($result);
+        return $$createType72($result);
     });
 }
 
@@ -565,7 +577,7 @@ export function RestartDaemon(): $CancellablePromise<$models.DaemonStatus> {
 
 export function RestartPanePTY(req: protocol$0.RestartPanePTYRequest): $CancellablePromise<protocol$0.RestartedPanePTY> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.RestartPanePTY", req).then(($result: any) => {
-        return $$createType71($result);
+        return $$createType73($result);
     });
 }
 
@@ -577,7 +589,7 @@ export function RunPluginProjectAttachmentTemplate(pluginID: string, templateID:
 
 export function SaveAppSettings(settings: appsettings$0.Settings): $CancellablePromise<appsettings$0.Settings> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SaveAppSettings", settings).then(($result: any) => {
-        return $$createType61($result);
+        return $$createType63($result);
     });
 }
 
@@ -588,7 +600,7 @@ export function SaveAppSettings(settings: appsettings$0.Settings): $CancellableP
  */
 export function SaveKeybindings(overrides: { [_ in string]?: string }): $CancellablePromise<appmenu$0.KeybindingsView> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SaveKeybindings", overrides).then(($result: any) => {
-        return $$createType62($result);
+        return $$createType64($result);
     });
 }
 
@@ -628,7 +640,7 @@ export function SetSessionRootDir(req: protocol$0.SetSessionRootDirRequest): $Ca
 
 export function SplitPane(req: protocol$0.SplitPaneRequest): $CancellablePromise<protocol$0.SplitPaneResult> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SplitPane", req).then(($result: any) => {
-        return $$createType72($result);
+        return $$createType74($result);
     });
 }
 
@@ -649,13 +661,13 @@ export function StartExecution(req: protocol$0.StartExecutionRequest): $Cancella
 
 export function StartHTTPForward(req: protocol$0.StartHTTPForwardRequest): $CancellablePromise<protocol$0.StartedHTTPForward> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartHTTPForward", req).then(($result: any) => {
-        return $$createType73($result);
+        return $$createType75($result);
     });
 }
 
 export function StartPanePTY(req: protocol$0.StartPanePTYRequest): $CancellablePromise<protocol$0.StartedPanePTY> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.StartPanePTY", req).then(($result: any) => {
-        return $$createType74($result);
+        return $$createType76($result);
     });
 }
 
@@ -736,13 +748,13 @@ export function UpdateWorkItem(req: protocol$0.UpdateWorkItemRequest): $Cancella
 
 export function ValidateWorkflowDefinition(req: protocol$0.ValidateWorkflowDefinitionRequest): $CancellablePromise<protocol$0.WorkflowValidationReport> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ValidateWorkflowDefinition", req).then(($result: any) => {
-        return $$createType75($result);
+        return $$createType77($result);
     });
 }
 
 export function ValidateWorkflowDefinitionFile(req: protocol$0.ValidateWorkflowDefinitionFileRequest): $CancellablePromise<protocol$0.WorkflowValidationReport> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.ValidateWorkflowDefinitionFile", req).then(($result: any) => {
-        return $$createType75($result);
+        return $$createType77($result);
     });
 }
 
@@ -800,30 +812,32 @@ const $$createType45 = $Create.Array($$createType44);
 const $$createType46 = workitem$0.StatusEvent.createFrom;
 const $$createType47 = $Create.Array($$createType46);
 const $$createType48 = protocol$0.UIContributionsResponse.createFrom;
-const $$createType49 = $Create.Array($$createType2);
-const $$createType50 = $Create.Array($$createType6);
-const $$createType51 = workitem$0.WorkflowActionAvailability.createFrom;
-const $$createType52 = $Create.Array($$createType51);
-const $$createType53 = $Create.Array($$createType1);
-const $$createType54 = $Create.Array($$createType15);
-const $$createType55 = workitem$0.WorkflowEvent.createFrom;
-const $$createType56 = $Create.Array($$createType55);
-const $$createType57 = workitem$0.WorkflowTemplate.createFrom;
+const $$createType49 = protocol$0.UsageResolverReadModel.createFrom;
+const $$createType50 = $Create.Array($$createType49);
+const $$createType51 = $Create.Array($$createType2);
+const $$createType52 = $Create.Array($$createType6);
+const $$createType53 = workitem$0.WorkflowActionAvailability.createFrom;
+const $$createType54 = $Create.Array($$createType53);
+const $$createType55 = $Create.Array($$createType1);
+const $$createType56 = $Create.Array($$createType15);
+const $$createType57 = workitem$0.WorkflowEvent.createFrom;
 const $$createType58 = $Create.Array($$createType57);
-const $$createType59 = protocol$0.Worktree.createFrom;
+const $$createType59 = workitem$0.WorkflowTemplate.createFrom;
 const $$createType60 = $Create.Array($$createType59);
-const $$createType61 = appsettings$0.Settings.createFrom;
-const $$createType62 = appmenu$0.KeybindingsView.createFrom;
-const $$createType63 = protocol$0.NextEventResponse.createFrom;
-const $$createType64 = protocol$0.OutputSnapshot.createFrom;
-const $$createType65 = workitem$0.WorkflowMigrationPlan.createFrom;
-const $$createType66 = protocol$0.ProjectContext.createFrom;
-const $$createType67 = protocol$0.ProjectDetail.createFrom;
-const $$createType68 = protocol$0.PTYHistory.createFrom;
-const $$createType69 = workitem$0.ReadyWorkExplanation.createFrom;
-const $$createType70 = protocol$0.ReportStatusResponse.createFrom;
-const $$createType71 = protocol$0.RestartedPanePTY.createFrom;
-const $$createType72 = protocol$0.SplitPaneResult.createFrom;
-const $$createType73 = protocol$0.StartedHTTPForward.createFrom;
-const $$createType74 = protocol$0.StartedPanePTY.createFrom;
-const $$createType75 = workitem$0.WorkflowValidationReport.createFrom;
+const $$createType61 = protocol$0.Worktree.createFrom;
+const $$createType62 = $Create.Array($$createType61);
+const $$createType63 = appsettings$0.Settings.createFrom;
+const $$createType64 = appmenu$0.KeybindingsView.createFrom;
+const $$createType65 = protocol$0.NextEventResponse.createFrom;
+const $$createType66 = protocol$0.OutputSnapshot.createFrom;
+const $$createType67 = workitem$0.WorkflowMigrationPlan.createFrom;
+const $$createType68 = protocol$0.ProjectContext.createFrom;
+const $$createType69 = protocol$0.ProjectDetail.createFrom;
+const $$createType70 = protocol$0.PTYHistory.createFrom;
+const $$createType71 = workitem$0.ReadyWorkExplanation.createFrom;
+const $$createType72 = protocol$0.ReportStatusResponse.createFrom;
+const $$createType73 = protocol$0.RestartedPanePTY.createFrom;
+const $$createType74 = protocol$0.SplitPaneResult.createFrom;
+const $$createType75 = protocol$0.StartedHTTPForward.createFrom;
+const $$createType76 = protocol$0.StartedPanePTY.createFrom;
+const $$createType77 = workitem$0.WorkflowValidationReport.createFrom;

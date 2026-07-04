@@ -348,7 +348,9 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 }
 
 func TestHTTPClientDrivesPluginAPI(t *testing.T) {
-	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: &pluginRegistryFake{statuses: []app.PluginStatus{{
+	used := 1.0
+	limit := 10.0
+	pluginRegistry := &pluginRegistryFake{statuses: []app.PluginStatus{{
 		ID:      "github",
 		Name:    "GitHub",
 		Trusted: true,
@@ -392,7 +394,16 @@ func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 			Blocking:    true,
 		}},
 		Permissions: &app.PluginPermissions{Network: []string{"api.github.com"}},
-	}}}})
+	}}, usageResult: app.UsageResolverResult{
+		Summary: "ok",
+		Metrics: []app.UsageResolverMetric{{
+			ID:    "requests",
+			Kind:  app.UsageMetricKindUsage,
+			Used:  &used,
+			Limit: &limit,
+		}},
+	}}
+	runtime := app.NewRuntime(app.RuntimeConfig{Plugins: pluginRegistry})
 	httpServer := httptest.NewServer(server.NewHTTP(runtime))
 	t.Cleanup(httpServer.Close)
 
@@ -429,6 +440,31 @@ func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 		len(plugins[0].Permissions.Network) != 1 ||
 		plugins[0].Permissions.Network[0] != "api.github.com" {
 		t.Fatalf("plugin ui catalog = %#v", plugins[0])
+	}
+	usageResolvers, err := daemon.ListUsageResolvers(ctx)
+	if err != nil {
+		t.Fatalf("list usage resolvers: %v", err)
+	}
+	if len(usageResolvers) != 1 ||
+		usageResolvers[0].PluginID != "github" ||
+		usageResolvers[0].ResolverID != "github.usage" ||
+		usageResolvers[0].Profile != "codex" ||
+		usageResolvers[0].Status != app.UsageResolverStatusPending {
+		t.Fatalf("usage resolvers = %#v", usageResolvers)
+	}
+	refreshed, err := daemon.RefreshUsageResolver(ctx, "github", "github.usage", protocol.RefreshUsageResolverRequest{Profile: "codex"})
+	if err != nil {
+		t.Fatalf("refresh usage resolver: %v", err)
+	}
+	if refreshed.Status != app.UsageResolverStatusOK ||
+		refreshed.Result == nil ||
+		refreshed.Result.Summary != "ok" ||
+		refreshed.Result.Metrics[0].ID != "requests" ||
+		refreshed.RefreshedAt == nil {
+		t.Fatalf("refreshed usage resolver = %#v", refreshed)
+	}
+	if pluginRegistry.usageReq.PluginID != "github" || pluginRegistry.usageReq.ResolverID != "github.usage" || pluginRegistry.usageReq.Profile != "codex" {
+		t.Fatalf("usage request = %#v", pluginRegistry.usageReq)
 	}
 	uiContribs, err := daemon.ListUIContributions(ctx, protocol.UIContributionScope{WorkItemID: " wi_01 "})
 	if err != nil {
@@ -910,7 +946,10 @@ func (b *fakeEventBus) Next(ctx context.Context, afterSeq uint64) (app.NextRunti
 }
 
 type pluginRegistryFake struct {
-	statuses []app.PluginStatus
+	statuses    []app.PluginStatus
+	usageResult app.UsageResolverResult
+	usageReq    app.RunUsageResolverRequest
+	usageErr    error
 }
 
 func (f *pluginRegistryFake) ListPlugins(context.Context) ([]app.PluginStatus, error) {
@@ -957,6 +996,14 @@ func (f *pluginRegistryFake) RunProjectAttachmentTemplate(_ context.Context, req
 		Title:            "Issue",
 		IncludeInContext: true,
 	}, nil
+}
+
+func (f *pluginRegistryFake) RunUsageResolver(_ context.Context, req app.RunUsageResolverRequest) (app.UsageResolverResult, error) {
+	f.usageReq = req
+	if f.usageErr != nil {
+		return app.UsageResolverResult{}, f.usageErr
+	}
+	return f.usageResult, nil
 }
 
 func (f *pluginRegistryFake) ResolveProjectAttachmentProvider(string) app.ProjectContextResolver {

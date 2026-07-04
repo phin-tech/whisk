@@ -35,6 +35,8 @@ type RuntimeClient interface {
 	ListRegistryPlugins(ctx context.Context) ([]protocol.RegistryPlugin, error)
 	InstallPlugin(ctx context.Context, registry, id string) (protocol.PluginStatus, error)
 	RunPluginProjectAttachmentTemplate(ctx context.Context, pluginID string, templateID string, req protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error)
+	ListUsageResolvers(ctx context.Context) ([]protocol.UsageResolverReadModel, error)
+	RefreshUsageResolver(ctx context.Context, pluginID string, resolverID string, req protocol.RefreshUsageResolverRequest) (protocol.UsageResolverReadModel, error)
 	ListSessions(ctx context.Context) ([]session.Session, error)
 	CreateSession(ctx context.Context, req protocol.CreateSessionRequest) (protocol.CreatedSession, error)
 	SplitPane(ctx context.Context, req protocol.SplitPaneRequest) (protocol.SplitPaneResult, error)

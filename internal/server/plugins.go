@@ -99,10 +99,92 @@ func (s *HTTPServer) runPluginProjectAttachmentTemplate(w http.ResponseWriter, r
 	writeJSON(w, http.StatusCreated, project)
 }
 
+func (s *HTTPServer) listUsageResolvers(w http.ResponseWriter, r *http.Request) {
+	results, err := s.runtime.ListUsageResolverResults(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, protocolUsageResolverReadModels(results))
+}
+
+func (s *HTTPServer) refreshUsageResolver(w http.ResponseWriter, r *http.Request) {
+	var req protocol.RefreshUsageResolverRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	result, err := s.runtime.RefreshUsageResolver(r.Context(), app.RunUsageResolverRequest{
+		PluginID:   pathValue(r, "pluginID", ""),
+		ResolverID: pathValue(r, "resolverID", ""),
+		Profile:    req.Profile,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, protocolUsageResolverReadModel(result))
+}
+
 func protocolPluginStatuses(statuses []app.PluginStatus) []protocol.PluginStatus {
 	out := make([]protocol.PluginStatus, 0, len(statuses))
 	for _, status := range statuses {
 		out = append(out, protocolPluginStatus(status))
+	}
+	return out
+}
+
+func protocolUsageResolverReadModels(models []app.UsageResolverReadModel) []protocol.UsageResolverReadModel {
+	out := make([]protocol.UsageResolverReadModel, 0, len(models))
+	for _, model := range models {
+		out = append(out, protocolUsageResolverReadModel(model))
+	}
+	return out
+}
+
+func protocolUsageResolverReadModel(model app.UsageResolverReadModel) protocol.UsageResolverReadModel {
+	return protocol.UsageResolverReadModel{
+		PluginID:     model.PluginID,
+		ResolverID:   model.ResolverID,
+		Provider:     model.Provider,
+		Label:        model.Label,
+		Profile:      model.Profile,
+		Trusted:      model.Trusted,
+		Valid:        model.Valid,
+		Status:       model.Status,
+		Error:        model.Error,
+		RefreshedAt:  model.RefreshedAt,
+		Stale:        model.Stale,
+		MinRefreshMs: model.MinRefreshMs,
+		StaleAfterMs: model.StaleAfterMs,
+		Result:       protocolUsageResolverResult(model.Result),
+	}
+}
+
+func protocolUsageResolverResult(result *app.UsageResolverResult) *protocol.UsageResolverResult {
+	if result == nil {
+		return nil
+	}
+	return &protocol.UsageResolverResult{
+		Summary:   result.Summary,
+		Metrics:   protocolUsageResolverMetrics(result.Metrics),
+		FetchedAt: result.FetchedAt,
+		Meta:      result.Meta,
+	}
+}
+
+func protocolUsageResolverMetrics(metrics []app.UsageResolverMetric) []protocol.UsageResolverMetric {
+	out := make([]protocol.UsageResolverMetric, 0, len(metrics))
+	for _, metric := range metrics {
+		out = append(out, protocol.UsageResolverMetric{
+			ID:        metric.ID,
+			Kind:      metric.Kind,
+			Label:     metric.Label,
+			Unit:      metric.Unit,
+			Used:      metric.Used,
+			Limit:     metric.Limit,
+			Remaining: metric.Remaining,
+			ResetAt:   metric.ResetAt,
+		})
 	}
 	return out
 }

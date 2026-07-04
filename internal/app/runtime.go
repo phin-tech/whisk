@@ -172,6 +172,7 @@ type Runtime struct {
 	agentHookLogEnabled        bool
 	clearHookLogAfterSession   bool
 	agentHookEvents            []agentbridge.Event
+	usageResolverResults       map[string]UsageResolverReadModel
 	ptyMeta                    map[string]ptyMetadata
 	ptyLastInputAt             map[string]time.Time
 	forwards                   *httpforward.State
@@ -496,6 +497,7 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		agentHookPaths:             config.AgentHookPaths,
 		agentHookLogPaths:          config.AgentHookLogPaths,
 		agentHookLogEnabled:        true,
+		usageResolverResults:       map[string]UsageResolverReadModel{},
 		ptyMeta:                    map[string]ptyMetadata{},
 		ptyLastInputAt:             map[string]time.Time{},
 		forwards:                   httpforward.NewState(),

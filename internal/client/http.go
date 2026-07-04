@@ -298,6 +298,19 @@ func (c *HTTPClient) InstallPlugin(ctx context.Context, registry, id string) (pr
 	return status, err
 }
 
+func (c *HTTPClient) ListUsageResolvers(ctx context.Context) ([]protocol.UsageResolverReadModel, error) {
+	var results []protocol.UsageResolverReadModel
+	err := c.get(ctx, "/v1/usage-resolvers", nil, &results)
+	return results, err
+}
+
+func (c *HTTPClient) RefreshUsageResolver(ctx context.Context, pluginID string, resolverID string, req protocol.RefreshUsageResolverRequest) (protocol.UsageResolverReadModel, error) {
+	var result protocol.UsageResolverReadModel
+	path := "/v1/plugins/" + url.PathEscape(pluginID) + "/usage-resolvers/" + url.PathEscape(resolverID) + "/refresh"
+	err := c.post(ctx, path, req, &result)
+	return result, err
+}
+
 func (c *HTTPClient) RunPluginProjectAttachmentTemplate(ctx context.Context, pluginID string, templateID string, req protocol.RunPluginProjectAttachmentTemplateRequest) (protocol.Project, error) {
 	var project protocol.Project
 	path := "/v1/plugins/" + url.PathEscape(pluginID) + "/project-attachment-templates/" + url.PathEscape(templateID)

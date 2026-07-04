@@ -2687,6 +2687,9 @@ type memoryPluginRegistry struct {
 	registry      app.RegistryPlugin
 	agentProfiles []agents.ProfileInfo
 	resolver      app.ProjectContextResolver
+	usageResult   app.UsageResolverResult
+	usageReq      app.RunUsageResolverRequest
+	usageErr      error
 	rescanned     bool
 	trustedID     string
 	untrustedID   string
@@ -2743,6 +2746,14 @@ func (r *memoryPluginRegistry) RunProjectAttachmentTemplate(_ context.Context, r
 		Title:            "Issue",
 		IncludeInContext: true,
 	}, nil
+}
+
+func (r *memoryPluginRegistry) RunUsageResolver(_ context.Context, req app.RunUsageResolverRequest) (app.UsageResolverResult, error) {
+	r.usageReq = req
+	if r.usageErr != nil {
+		return app.UsageResolverResult{}, r.usageErr
+	}
+	return r.usageResult, nil
 }
 
 func (r *memoryPluginRegistry) ResolveProjectAttachmentProvider(provider string) app.ProjectContextResolver {

@@ -15,7 +15,7 @@ import (
 
 func runPlugin(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk plugin <list|registry|install|rescan|trust|untrust|attach|contributions>")
+		return fmt.Errorf("usage: whisk plugin <list|registry|install|rescan|trust|untrust|attach|contributions|usage>")
 	}
 	switch args[0] {
 	case "list":
@@ -34,8 +34,10 @@ func runPlugin(args []string) error {
 		return runPluginAttach(args[1:])
 	case "contributions":
 		return runPluginContributions(args[1:])
+	case "usage":
+		return runPluginUsage(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk plugin <list|registry|install|rescan|trust|untrust|attach|contributions>")
+		return fmt.Errorf("usage: whisk plugin <list|registry|install|rescan|trust|untrust|attach|contributions|usage>")
 	}
 }
 
@@ -228,6 +230,58 @@ func runPluginContributions(args []string) error {
 	return printUIContributions(contributions)
 }
 
+func runPluginUsage(args []string) error {
+	if len(args) > 0 && args[0] == "refresh" {
+		return runPluginUsageRefresh(args[1:])
+	}
+	flags := flag.NewFlagSet("plugin usage", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: whisk plugin usage [-json] [-url http://127.0.0.1:8787]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	results, err := client.NewHTTP(*baseURL, nil).ListUsageResolvers(ctx)
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(results)
+	}
+	return printUsageResolvers(results)
+}
+
+func runPluginUsageRefresh(args []string) error {
+	flags := flag.NewFlagSet("plugin usage refresh", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	baseURL := flags.String("url", envOrDefault("WHISKD_URL", "http://127.0.0.1:8787"), "daemon URL")
+	outputJSON := flags.Bool("json", false, "write JSON output")
+	profile := flags.String("profile", "", "usage resolver profile")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 2 {
+		return fmt.Errorf("usage: whisk plugin usage refresh <plugin-id> <resolver-id> [-profile profile] [-json] [-url http://127.0.0.1:8787]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+	defer cancel()
+	result, err := client.NewHTTP(*baseURL, nil).RefreshUsageResolver(ctx, flags.Arg(0), flags.Arg(1), protocol.RefreshUsageResolverRequest{
+		Profile: *profile,
+	})
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(result)
+	}
+	return printUsageResolvers([]protocol.UsageResolverReadModel{result})
+}
+
 func runPluginTrustCommand(command string, args []string) error {
 	flags := flag.NewFlagSet("plugin "+command, flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
@@ -286,6 +340,34 @@ func printUIContributions(contributions protocol.UIContributionsResponse) error 
 		for _, action := range plugin.ReviewActions {
 			fmt.Fprintf(writer, "%s\treviewAction\t%s\t%s\t%s\n", plugin.PluginID, action.Scope, action.ID, action.Label)
 		}
+	}
+	return nil
+}
+
+func printUsageResolvers(results []protocol.UsageResolverReadModel) error {
+	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	defer writer.Flush()
+	fmt.Fprintln(writer, "PLUGIN\tRESOLVER\tPROVIDER\tPROFILE\tSTATUS\tSTALE\tREFRESHED\tSUMMARY\tERROR")
+	for _, result := range results {
+		refreshed := "-"
+		if result.RefreshedAt != nil {
+			refreshed = result.RefreshedAt.Format(time.RFC3339)
+		}
+		summary := ""
+		if result.Result != nil {
+			summary = result.Result.Summary
+		}
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%v\t%s\t%s\t%s\n",
+			result.PluginID,
+			result.ResolverID,
+			result.Provider,
+			result.Profile,
+			result.Status,
+			result.Stale,
+			refreshed,
+			summary,
+			result.Error,
+		)
 	}
 	return nil
 }

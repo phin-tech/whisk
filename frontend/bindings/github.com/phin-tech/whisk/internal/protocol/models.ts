@@ -2468,6 +2468,24 @@ export class ReadyWorkRequest {
     }
 }
 
+export class RefreshUsageResolverRequest {
+    "profile"?: string;
+
+    /** Creates a new RefreshUsageResolverRequest instance. */
+    constructor($$source: Partial<RefreshUsageResolverRequest> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RefreshUsageResolverRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RefreshUsageResolverRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RefreshUsageResolverRequest($$parsedSource as Partial<RefreshUsageResolverRequest>);
+    }
+}
+
 /**
  * RegistryPlugin is one installable plugin advertised by a configured plugin
  * registry, annotated with local install and trust state.
@@ -3529,6 +3547,125 @@ export class UpdateWorkItemRequest {
     }
 }
 
+export class UsageResolverMetric {
+    "id": string;
+    "kind": string;
+    "label"?: string;
+    "unit"?: string;
+    "used"?: number | null;
+    "limit"?: number | null;
+    "remaining"?: number | null;
+    "resetAt"?: time$0.Time | null;
+
+    /** Creates a new UsageResolverMetric instance. */
+    constructor($$source: Partial<UsageResolverMetric> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UsageResolverMetric instance from a string or object.
+     */
+    static createFrom($$source: any = {}): UsageResolverMetric {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new UsageResolverMetric($$parsedSource as Partial<UsageResolverMetric>);
+    }
+}
+
+export class UsageResolverReadModel {
+    "pluginId": string;
+    "resolverId": string;
+    "provider": string;
+    "label": string;
+    "profile"?: string;
+    "trusted": boolean;
+    "valid": boolean;
+    "status": string;
+    "error"?: string;
+    "refreshedAt"?: time$0.Time | null;
+    "stale"?: boolean;
+    "minRefreshMs"?: number;
+    "staleAfterMs"?: number;
+    "result"?: UsageResolverResult | null;
+
+    /** Creates a new UsageResolverReadModel instance. */
+    constructor($$source: Partial<UsageResolverReadModel> = {}) {
+        if (!("pluginId" in $$source)) {
+            this["pluginId"] = "";
+        }
+        if (!("resolverId" in $$source)) {
+            this["resolverId"] = "";
+        }
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("trusted" in $$source)) {
+            this["trusted"] = false;
+        }
+        if (!("valid" in $$source)) {
+            this["valid"] = false;
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UsageResolverReadModel instance from a string or object.
+     */
+    static createFrom($$source: any = {}): UsageResolverReadModel {
+        const $$createField13_0 = $$createType55;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("result" in $$parsedSource) {
+            $$parsedSource["result"] = $$createField13_0($$parsedSource["result"]);
+        }
+        return new UsageResolverReadModel($$parsedSource as Partial<UsageResolverReadModel>);
+    }
+}
+
+export class UsageResolverResult {
+    "summary"?: string;
+    "metrics": UsageResolverMetric[];
+    "fetchedAt"?: time$0.Time | null;
+    "meta"?: { [_ in string]?: string };
+
+    /** Creates a new UsageResolverResult instance. */
+    constructor($$source: Partial<UsageResolverResult> = {}) {
+        if (!("metrics" in $$source)) {
+            this["metrics"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UsageResolverResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): UsageResolverResult {
+        const $$createField1_0 = $$createType57;
+        const $$createField3_0 = $$createType47;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("metrics" in $$parsedSource) {
+            $$parsedSource["metrics"] = $$createField1_0($$parsedSource["metrics"]);
+        }
+        if ("meta" in $$parsedSource) {
+            $$parsedSource["meta"] = $$createField3_0($$parsedSource["meta"]);
+        }
+        return new UsageResolverResult($$parsedSource as Partial<UsageResolverResult>);
+    }
+}
+
 export class ValidateWorkflowDefinitionFileRequest {
     "path": string;
 
@@ -3699,7 +3836,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType54;
+        const $$createField2_0 = $$createType58;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -3788,4 +3925,8 @@ const $$createType50 = HTTPForward.createFrom;
 const $$createType51 = UIContributionScope.createFrom;
 const $$createType52 = UIContributionPlugin.createFrom;
 const $$createType53 = $Create.Array($$createType52);
-const $$createType54 = WorktrunkBinary.createFrom;
+const $$createType54 = UsageResolverResult.createFrom;
+const $$createType55 = $Create.Nullable($$createType54);
+const $$createType56 = UsageResolverMetric.createFrom;
+const $$createType57 = $Create.Array($$createType56);
+const $$createType58 = WorktrunkBinary.createFrom;

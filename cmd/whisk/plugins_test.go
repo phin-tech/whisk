@@ -173,6 +173,77 @@ func TestRunPluginContributionsTablePrintsRenderableRows(t *testing.T) {
 	}
 }
 
+func TestRunPluginUsageJSONListsResults(t *testing.T) {
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.Method + " " + r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `[{
+			"pluginId":"github",
+			"resolverId":"github.usage",
+			"provider":"github",
+			"label":"GitHub",
+			"profile":"codex",
+			"trusted":true,
+			"valid":true,
+			"status":"pending"
+		}]`)
+	}))
+	defer server.Close()
+
+	out, err := captureStdout(func() error {
+		return runPluginUsage([]string{"-json", "-url", server.URL})
+	})
+	if err != nil {
+		t.Fatalf("runPluginUsage: %v", err)
+	}
+	if gotPath != "GET /v1/usage-resolvers" {
+		t.Fatalf("request = %q", gotPath)
+	}
+	for _, want := range []string{`"pluginId": "github"`, `"resolverId": "github.usage"`, `"status": "pending"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %s: %q", want, out)
+		}
+	}
+}
+
+func TestRunPluginUsageRefreshPostsProfileAndPrintsTable(t *testing.T) {
+	var gotPath string
+	var gotReq protocol.RefreshUsageResolverRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.Method + " " + r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&gotReq)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"pluginId":"github",
+			"resolverId":"github.usage",
+			"provider":"github",
+			"label":"GitHub",
+			"profile":"codex",
+			"trusted":true,
+			"valid":true,
+			"status":"ok",
+			"result":{"summary":"ok","metrics":[{"id":"requests","kind":"usage","used":1}]}
+		}`)
+	}))
+	defer server.Close()
+
+	out, err := captureStdout(func() error {
+		return runPluginUsage([]string{"refresh", "-url", server.URL, "-profile", "codex", "github", "github.usage"})
+	})
+	if err != nil {
+		t.Fatalf("runPluginUsage refresh: %v", err)
+	}
+	if gotPath != "POST /v1/plugins/github/usage-resolvers/github.usage/refresh" || gotReq.Profile != "codex" {
+		t.Fatalf("request = %q body = %#v", gotPath, gotReq)
+	}
+	for _, want := range []string{"PLUGIN", "RESOLVER", "github", "github.usage", "ok"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q: %q", want, out)
+		}
+	}
+}
+
 func TestRunPluginInstallPostsRegistryAndID(t *testing.T) {
 	var gotPath string
 	var gotReq protocol.InstallRegistryPluginRequest

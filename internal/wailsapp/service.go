@@ -1027,6 +1027,14 @@ func (s *Service) ListPlugins(ctx context.Context) ([]protocol.PluginStatus, err
 	return s.client.ListPlugins(ctx)
 }
 
+func (s *Service) ListUsageResolvers(ctx context.Context) ([]protocol.UsageResolverReadModel, error) {
+	return s.client.ListUsageResolvers(ctx)
+}
+
+func (s *Service) RefreshUsageResolver(ctx context.Context, pluginID string, resolverID string, req protocol.RefreshUsageResolverRequest) (protocol.UsageResolverReadModel, error) {
+	return s.client.RefreshUsageResolver(ctx, pluginID, resolverID, req)
+}
+
 func (s *Service) ListUIContributions(ctx context.Context, scope protocol.UIContributionScope) (protocol.UIContributionsResponse, error) {
 	return s.client.ListUIContributions(ctx, scope)
 }

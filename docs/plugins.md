@@ -118,12 +118,62 @@ disclosures:
 }
 ```
 
-These version 2 sections are catalog foundations only in this release. Whisk
-does not dispatch plugin events, invoke blocking hooks, run usage resolver
-commands, or run workflow gate/action commands yet. Usage resolvers are exposed
-as plugin catalog metadata so clients can see which providers a plugin will
-support in a later daemon-owned usage read model; they are not executed and do
-not create a usage cache in this slice.
+These version 2 sections are catalog foundations unless a daemon route explicitly
+executes them. Whisk does not dispatch plugin events, invoke blocking hooks, or
+run workflow gate/action commands yet. Usage resolvers are the first executable
+foundation: trusted manifest v2 resolver commands can be refreshed through the
+daemon, producing a daemon-owned usage read model keyed by plugin, resolver,
+provider, and profile. Untrusted plugins are never executed, and command strings
+stay out of public plugin status and usage result metadata.
+
+Usage resolver commands receive JSON on stdin:
+
+```json
+{
+  "pluginId": "linear",
+  "resolverId": "linear.usage",
+  "provider": "linear",
+  "profile": "linear-agent"
+}
+```
+
+They return normalized usage/rate-limit JSON on stdout:
+
+```json
+{
+  "summary": "75% daily API budget remaining",
+  "metrics": [
+    {
+      "id": "api.requests",
+      "kind": "rateLimit",
+      "label": "API requests",
+      "unit": "requests",
+      "used": 2500,
+      "limit": 10000,
+      "remaining": 7500,
+      "resetAt": "2026-07-04T20:00:00Z"
+    }
+  ],
+  "meta": {
+    "workspace": "acme"
+  }
+}
+```
+
+Supported metric kinds are `usage` and `rateLimit`. Each metric must include an
+`id`, a supported `kind`, and at least one of `used`, `limit`, or `remaining`;
+numeric values must be finite and non-negative. The daemon validates successful
+command output, records command failures as usage result status `error`, and
+marks cached results stale when `staleAfterMs` has elapsed.
+
+CLI:
+
+```sh
+whisk plugin usage
+whisk plugin usage -json
+whisk plugin usage refresh linear linear.usage -profile linear-agent
+whisk plugin usage refresh linear linear.usage -profile linear-agent -json
+```
 
 Manifest version 2 also catalogs plugin UI contributions in the `ui` section.
 `ui.panels`, `ui.commands`, and `ui.reviewActions` are returned through

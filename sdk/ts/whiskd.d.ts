@@ -662,6 +662,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/plugins/{pluginID}/usage-resolvers/{resolverID}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh one trusted plugin usage resolver */
+        post: operations["refreshUsageResolver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/project-attachments/{attachmentID}/delete": {
         parameters: {
             query?: never;
@@ -1233,6 +1250,23 @@ export interface paths {
         };
         /** Get aggregated UI contributions scoped to an entity */
         get: operations["listUIContributions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/usage-resolvers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List daemon-owned usage resolver results */
+        get: operations["listUsageResolvers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2608,6 +2642,9 @@ export interface components {
             /** Format: int64 */
             totalReady: number;
         };
+        RefreshUsageResolverRequest: {
+            profile?: string;
+        };
         RegistryPlugin: {
             description?: string;
             id: string;
@@ -2916,6 +2953,45 @@ export interface components {
             bodyMarkdown?: string | null;
             id: string;
             title?: string | null;
+        };
+        UsageResolverMetric: {
+            id: string;
+            kind: string;
+            label?: string;
+            limit?: number | null;
+            remaining?: number | null;
+            /** Format: date-time */
+            resetAt?: string | null;
+            unit?: string;
+            used?: number | null;
+        };
+        UsageResolverReadModel: {
+            error?: string;
+            label: string;
+            /** Format: int64 */
+            minRefreshMs?: number;
+            pluginId: string;
+            profile?: string;
+            provider: string;
+            /** Format: date-time */
+            refreshedAt?: string | null;
+            resolverId: string;
+            result?: components["schemas"]["UsageResolverResult"] | null;
+            stale?: boolean;
+            /** Format: int64 */
+            staleAfterMs?: number;
+            status: string;
+            trusted: boolean;
+            valid: boolean;
+        };
+        UsageResolverResult: {
+            /** Format: date-time */
+            fetchedAt?: string | null;
+            meta?: {
+                [key: string]: string;
+            };
+            metrics: components["schemas"]["UsageResolverMetric"][] | null;
+            summary?: string;
         };
         ValidateWorkflowDefinitionFileRequest: {
             path: string;
@@ -4466,6 +4542,42 @@ export interface operations {
             };
         };
     };
+    refreshUsageResolver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginID: string;
+                resolverID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshUsageResolverRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageResolverReadModel"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     deleteProjectAttachment: {
         parameters: {
             query?: never;
@@ -5754,6 +5866,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UIContributionsResponse"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listUsageResolvers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageResolverReadModel"][];
                 };
             };
             /** @description error */

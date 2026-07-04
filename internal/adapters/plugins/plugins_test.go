@@ -733,7 +733,13 @@ func TestManagerScansEnvAndConfigPluginsAndTrustsLive(t *testing.T) {
 		"name": "GitHub Issues",
 		"version": "0.1.0",
 		"resolvers": [{"provider": "github", "kinds": ["external"], "command": "printf '{\"delivery\":\"inline\",\"content\":\"ok\"}'"}],
-		"usageResolvers": [{"id": "github.usage", "provider": "github", "label": "GitHub", "profiles": ["codex"], "command": "printf '{}'"}],
+		"usageResolvers": [{
+			"id": "github.usage",
+			"provider": "github",
+			"label": "GitHub",
+			"profiles": ["codex"],
+			"command": "printf '{\"summary\":\"ok\",\"metrics\":[{\"id\":\"requests\",\"kind\":\"rateLimit\",\"used\":1,\"limit\":10,\"remaining\":9}]}'"
+		}],
 		"permissions": {"network": ["api.github.com"]},
 		"ui": {
 			"projectAttachments": [{
@@ -827,6 +833,22 @@ func TestManagerScansEnvAndConfigPluginsAndTrustsLive(t *testing.T) {
 	if resolver := manager.ResolveProjectAttachmentProvider("github"); resolver == nil {
 		t.Fatalf("trusted resolver missing")
 	}
+	usage, err := manager.RunUsageResolver(context.Background(), app.RunUsageResolverRequest{
+		PluginID:   "github",
+		ResolverID: "github.usage",
+		Profile:    "codex",
+	})
+	if err != nil {
+		t.Fatalf("run usage resolver: %v", err)
+	}
+	if usage.Summary != "ok" ||
+		len(usage.Metrics) != 1 ||
+		usage.Metrics[0].ID != "requests" ||
+		usage.Metrics[0].Kind != app.UsageMetricKindRateLimit ||
+		usage.Metrics[0].Remaining == nil ||
+		*usage.Metrics[0].Remaining != 9 {
+		t.Fatalf("usage = %#v", usage)
+	}
 	created, err := manager.RunProjectAttachmentTemplate(context.Background(), app.RunPluginProjectAttachmentTemplateRequest{
 		PluginID:   "github",
 		TemplateID: "github.issue",
@@ -862,6 +884,59 @@ func TestManagerRunTemplateRejectsUntrustedPlugin(t *testing.T) {
 	}
 	if _, err := manager.RunProjectAttachmentTemplate(context.Background(), app.RunPluginProjectAttachmentTemplateRequest{PluginID: "github", TemplateID: "github.issue"}); err == nil {
 		t.Fatalf("expected untrusted template error")
+	}
+}
+
+func TestManagerRunUsageResolverRejectsUntrustedPlugin(t *testing.T) {
+	dir := t.TempDir()
+	writePlugin(t, dir, `{
+		"manifestVersion": 2,
+		"id": "github",
+		"name": "GitHub",
+		"version": "0.1.0",
+		"usageResolvers": [{
+			"id": "github.usage",
+			"provider": "github",
+			"label": "GitHub",
+			"command": "printf '{\"metrics\":[{\"id\":\"requests\",\"used\":1}]}'"
+		}]
+	}`)
+	manager, err := NewManager([]string{dir}, appsettings.NewStore(filepath.Join(t.TempDir(), "whisk.json")))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	_, err = manager.RunUsageResolver(context.Background(), app.RunUsageResolverRequest{PluginID: "github", ResolverID: "github.usage"})
+	if err == nil || !strings.Contains(err.Error(), "not trusted") {
+		t.Fatalf("expected untrusted usage resolver error, got %v", err)
+	}
+}
+
+func TestManagerRunUsageResolverHonorsOutputCap(t *testing.T) {
+	dir := t.TempDir()
+	writePlugin(t, dir, `{
+		"manifestVersion": 2,
+		"id": "github",
+		"name": "GitHub",
+		"version": "0.1.0",
+		"usageResolvers": [{
+			"id": "github.usage",
+			"provider": "github",
+			"label": "GitHub",
+			"command": "printf '{\"metrics\":[{\"id\":\"requests\",\"used\":1}]}'",
+			"outputCapBytes": 2
+		}]
+	}`)
+	store := appsettings.NewStore(filepath.Join(t.TempDir(), "whisk.json"))
+	manager, err := NewManager([]string{dir}, store)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	if _, err := manager.TrustPlugin(context.Background(), "github"); err != nil {
+		t.Fatalf("trust: %v", err)
+	}
+	_, err = manager.RunUsageResolver(context.Background(), app.RunUsageResolverRequest{PluginID: "github", ResolverID: "github.usage"})
+	if err == nil || !strings.Contains(err.Error(), "stdout exceeded 2 bytes") {
+		t.Fatalf("expected output cap error, got %v", err)
 	}
 }
 
