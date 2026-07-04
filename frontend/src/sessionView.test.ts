@@ -11,6 +11,7 @@ import {
   sessionGroups,
   visiblePtyIds,
 } from "./sessionView";
+import { idString, parsePaneId, parsePtyId, type PaneId, type PtyId } from "./ids";
 
 describe("paneIds", () => {
   it("walks nested split layouts in render order", () => {
@@ -76,6 +77,58 @@ describe("visiblePtyIds", () => {
     ];
 
     expect(visiblePtyIds(sessions, "sess_01", "pane_02")).toEqual(["pty_02", "pty_01"]);
+  });
+
+  it("matches active panes and visible PTYs through their branded ID families", () => {
+    const sessions = [
+      {
+        id: "sess_01",
+        name: "one",
+        rootDir: ".",
+        windows: {
+          win_01: {
+            id: "win_01",
+            layout: {
+              kind: "split",
+              direction: "horizontal",
+              children: [
+                { kind: "leaf", paneId: "pane_01" },
+                { kind: "leaf", paneId: "pty_same_text" },
+              ],
+            },
+          },
+        },
+        panes: {
+          pane_01: { id: "pane_01", currentPtyId: "pty_same_text" },
+          pty_same_text: { id: "pty_same_text", currentPtyId: "pty_02" },
+        },
+      },
+    ];
+
+    expect(visiblePtyIds(sessions, "sess_01", "pane_01")).toEqual(["pty_same_text", "pty_02"]);
+  });
+});
+
+describe("typed ID joins", () => {
+  function expectsPtyId(ptyId: PtyId) {
+    return idString(ptyId);
+  }
+
+  function expectsPaneId(paneId: PaneId) {
+    return idString(paneId);
+  }
+
+  it("keeps pane and PTY IDs distinct at helper join sites while preserving string values", () => {
+    const paneId = parsePaneId("same_text")!;
+    const ptyId = parsePtyId("same_text")!;
+
+    expect(expectsPaneId(paneId)).toBe("same_text");
+    expect(expectsPtyId(ptyId)).toBe("same_text");
+
+    // @ts-expect-error pane IDs must not be used as PTY IDs in helper joins.
+    expectsPtyId(paneId);
+    // @ts-expect-error PTY IDs must not be used as pane IDs in helper joins.
+    expectsPaneId(ptyId);
   });
 });
 

@@ -1,3 +1,17 @@
+import {
+  currentPtyIdOf,
+  idString,
+  parsePaneId,
+  parseProjectId,
+  parsePtyId,
+  parseRunId,
+  parseSessionId,
+  parseWorkItemId,
+  sessionIdOf,
+  type PaneId,
+  type PtyId,
+  type SessionId,
+} from "./ids";
 import { firstPaneId } from "./sessionView";
 
 type StatusEventLike = {
@@ -84,7 +98,7 @@ export function notificationRows(events: StatusEventLike[]) {
 }
 
 export function notificationDetailRows(event: StatusEventLike, sessions: SessionLike[]) {
-  const session = sessionForEvent(event, sessions);
+  const session = sessionForEvent(statusEventIds(event), sessions)?.session ?? null;
   return [
     detail("Agent", event.actor),
     detail("Session", event.sessionId),
@@ -101,27 +115,66 @@ export function notificationDetailRows(event: StatusEventLike, sessions: Session
 }
 
 export function targetForStatusEvent(event: StatusEventLike, sessions: SessionLike[]) {
-  if (event.sessionId || event.ptyId) {
-    const session = sessionForEvent(event, sessions);
-    if (session) {
-      const matchedPaneId =
-        Object.entries(session.panes).find(([, pane]) => pane?.currentPtyId === event.ptyId)?.[0] ??
-        firstPaneId(session);
-      const paneId = (event.paneId && session.panes[event.paneId] ? event.paneId : "") || matchedPaneId;
-      return { main: "session" as const, sessionId: session.id, paneId };
+  const ids = statusEventIds(event);
+  if (ids.sessionId || ids.ptyId) {
+    const match = sessionForEvent(ids, sessions);
+    if (match) {
+      const explicitPaneId = ids.paneId && match.session.panes[idString(ids.paneId)] ? ids.paneId : null;
+      const matchedPaneId = explicitPaneId ?? paneIdForPty(match.session, ids.ptyId) ?? parsePaneId(firstPaneId(match.session));
+      return {
+        main: "session" as const,
+        sessionId: idString(match.sessionId),
+        paneId: matchedPaneId ? idString(matchedPaneId) : "",
+      };
     }
   }
-  if (event.workItemId) return { main: "work" as const, sessionId: "", paneId: "" };
-  return { main: "session" as const, sessionId: event.sessionId || "", paneId: "" };
+  if (ids.workItemId) return { main: "work" as const, sessionId: "", paneId: "" };
+  return { main: "session" as const, sessionId: ids.sessionId ? idString(ids.sessionId) : "", paneId: "" };
 }
 
-function sessionForEvent(event: StatusEventLike, sessions: SessionLike[]) {
-  return (
-    sessions.find((candidate) => candidate.id === event.sessionId) ??
-    sessions.find((candidate) =>
-      Object.values(candidate.panes).some((pane) => pane?.currentPtyId === event.ptyId),
-    )
-  );
+type StatusEventIds = {
+  projectId: ReturnType<typeof parseProjectId>;
+  sessionId: SessionId | null;
+  ptyId: PtyId | null;
+  workItemId: ReturnType<typeof parseWorkItemId>;
+  runId: ReturnType<typeof parseRunId>;
+  paneId: PaneId | null;
+};
+
+function statusEventIds(event: StatusEventLike): StatusEventIds {
+  return {
+    projectId: parseProjectId(event.projectId),
+    sessionId: parseSessionId(event.sessionId),
+    ptyId: parsePtyId(event.ptyId),
+    workItemId: parseWorkItemId(event.workItemId),
+    runId: parseRunId(event.runId),
+    paneId: parsePaneId(event.paneId),
+  };
+}
+
+function sessionForEvent(ids: StatusEventIds, sessions: SessionLike[]) {
+  if (ids.sessionId) {
+    const session = sessions.find((candidate) => sessionIdOf(candidate) === ids.sessionId);
+    if (session) return { session, sessionId: ids.sessionId };
+  }
+
+  if (ids.ptyId) {
+    for (const session of sessions) {
+      const sessionId = sessionIdOf(session);
+      if (sessionId && paneIdForPty(session, ids.ptyId)) return { session, sessionId };
+    }
+  }
+
+  return null;
+}
+
+function paneIdForPty(session: SessionLike, ptyId: PtyId | null): PaneId | null {
+  if (!ptyId) return null;
+  for (const [paneKey, pane] of Object.entries(session.panes)) {
+    const panePtyId = currentPtyIdOf(pane);
+    if (panePtyId === ptyId) return parsePaneId(pane?.id) ?? parsePaneId(paneKey);
+  }
+  return null;
 }
 
 function detail(label: string, value: unknown) {

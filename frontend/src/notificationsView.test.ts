@@ -7,6 +7,7 @@ import {
   notificationSurfaceCount,
   targetForStatusEvent,
 } from "./notificationsView";
+import { idString, parsePaneId, parsePtyId, type PaneId, type PtyId } from "./ids";
 
 const sessions = [
   {
@@ -176,5 +177,62 @@ describe("notificationsView", () => {
         sessions,
       ),
     ).toEqual({ main: "work", sessionId: "", paneId: "" });
+  });
+
+  it("resolves a PTY-backed event to the pane that owns that PTY even when another pane has the same text", () => {
+    expect(
+      targetForStatusEvent(
+        {
+          id: "status_04",
+          kind: "question",
+          sessionId: "sess_01",
+          ptyId: "pane_02",
+          requiresAttention: true,
+        },
+        [
+          {
+            id: "sess_01",
+            rootDir: "/repo",
+            windows: {
+              win_01: {
+                id: "win_01",
+                layout: {
+                  kind: "split",
+                  children: [
+                    { kind: "leaf", paneId: "pane_01" },
+                    { kind: "leaf", paneId: "pane_02" },
+                  ],
+                },
+              },
+            },
+            panes: {
+              pane_01: { id: "pane_01", currentPtyId: "pane_02" },
+              pane_02: { id: "pane_02", currentPtyId: "pty_other" },
+            },
+          },
+        ],
+      ),
+    ).toEqual({ main: "session", sessionId: "sess_01", paneId: "pane_01" });
+  });
+
+  it("keeps notification pane and PTY IDs distinct at compile time while preserving runtime strings", () => {
+    function expectsPtyId(ptyId: PtyId) {
+      return idString(ptyId);
+    }
+
+    function expectsPaneId(paneId: PaneId) {
+      return idString(paneId);
+    }
+
+    const paneId = parsePaneId("same_text")!;
+    const ptyId = parsePtyId("same_text")!;
+
+    expect(expectsPaneId(paneId)).toBe("same_text");
+    expect(expectsPtyId(ptyId)).toBe("same_text");
+
+    // @ts-expect-error notification target resolution must not join panes through PTY IDs.
+    expectsPaneId(ptyId);
+    // @ts-expect-error notification target resolution must not join PTYs through pane IDs.
+    expectsPtyId(paneId);
   });
 });
