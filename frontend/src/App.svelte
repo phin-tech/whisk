@@ -132,6 +132,7 @@
   import AppSidebar from "./AppSidebar.svelte";
   import CommandPalette from "./CommandPalette.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import JumpPalette from "./JumpPalette.svelte";
   import MainRouter from "./MainRouter.svelte";
   import NewProjectDialog from "./NewProjectDialog.svelte";
   import NewSessionDialog from "./NewSessionDialog.svelte";
@@ -140,6 +141,8 @@
   import { agentHookNotificationClickTarget, isAgentHookNotification, upsertAgentHookIntegration as upsertAgentHookIntegrationView } from "./agentHooksView";
   import type { Command } from "./commands";
   import { runCommand } from "./commands";
+  import type { JumpTarget } from "./jumpFilter";
+  import { deriveJumpTargets } from "./jumpTargets";
   import { notificationSurfaceCount, targetForStatusEvent } from "./notificationsView";
   import {
     clearNavigationStack as clearNavigationStackState,
@@ -231,6 +234,7 @@
   let activeMain: MainView = "session";
   let workBoardOpenItemId = "";
   let navigationStack: MainView[] = [];
+  let jumpTargets: JumpTarget[] = [];
 
   function emptyReadyWorkExplanation(): ReadyWorkExplanation {
     return { ready: [], blocked: [], summary: { totalReady: 0, totalBlocked: 0, cycleCount: 0 } };
@@ -281,6 +285,7 @@
   }
   let activeSidebar: SidebarId | null = "sessions";
   let commandPaletteOpen = false;
+  let jumpPaletteOpen = false;
   let newProjectOpen = false;
   let newSessionOpen = false;
   let pendingSessionProjectId = "";
@@ -352,9 +357,13 @@
       id: "palette.open",
       title: "Open Command Palette",
       shortcut: "Cmd/Ctrl K",
-      run: () => {
-        commandPaletteOpen = true;
-      },
+      run: openCommandPalette,
+    },
+    {
+      id: "jumpPalette.open",
+      title: "Open Jump Palette",
+      shortcut: "Cmd/Ctrl J",
+      run: openJumpPalette,
     },
     {
       id: "sidebar.toggle",
@@ -414,6 +423,17 @@
       run: () => selectSessionByIndex(i),
     })),
   ] satisfies Command[];
+  $: jumpTargets = deriveJumpTargets({
+    sessions,
+    activeSessionId,
+    activePaneId,
+    ptys,
+    projects,
+    activeProjectId,
+    workItems,
+    workItemRuns,
+    openWorkItemId: workBoardOpenItemId,
+  });
   $: if (activeSession && (!activePaneId || !activeSession.panes[activePaneId])) {
     activePaneId = firstPaneId(activeSession);
   }
@@ -1041,6 +1061,16 @@
     newSessionOpen = true;
   }
 
+  function openCommandPalette() {
+    jumpPaletteOpen = false;
+    commandPaletteOpen = true;
+  }
+
+  function openJumpPalette() {
+    commandPaletteOpen = false;
+    jumpPaletteOpen = true;
+  }
+
   function openNewProjectSession(projectId: string) {
     const project = projects.find((candidate) => candidate.id === projectId);
     if (!project) return;
@@ -1383,6 +1413,74 @@
         error = backendError(err);
       },
     );
+  }
+
+  function selectPaneTarget(sessionId: string, paneId: string) {
+    const session = sessions.find((candidate) => candidate.id === sessionId);
+    if (!session || !paneId || !session.panes[paneId]) return false;
+    selectMain("session");
+    activeSidebar = "sessions";
+    activeSessionId = session.id;
+    activePaneId = paneId;
+    void refreshVisibleOutput().catch((err) => {
+      error = backendError(err);
+    });
+    return true;
+  }
+
+  function selectPtyTarget(ptyId: string, sessionId = "", paneId = "") {
+    if (sessionId && paneId && selectPaneTarget(sessionId, paneId)) return true;
+    const pty = ptys.find((candidate) => candidate.id === ptyId);
+    const resolvedSessionId = sessionId || pty?.sessionId || "";
+    const session = sessions.find((candidate) => candidate.id === resolvedSessionId);
+    const resolvedPaneId = paneId || pty?.paneId || paneIdForPty(session, ptyId);
+    if (!session || !resolvedPaneId) return false;
+    return selectPaneTarget(session.id, resolvedPaneId);
+  }
+
+  async function jumpToTarget(target: JumpTarget) {
+    jumpPaletteOpen = false;
+    const payload = target.payload;
+    if (!payload) return;
+
+    if (payload.kind === "session") {
+      const session = sessions.find((candidate) => candidate.id === payload.sessionId);
+      if (!session) return;
+      activeSidebar = "sessions";
+      selectSession(session);
+      return;
+    }
+
+    if (payload.kind === "pane") {
+      selectPaneTarget(payload.sessionId, payload.paneId);
+      return;
+    }
+
+    if (payload.kind === "pty") {
+      selectPtyTarget(payload.ptyId, payload.sessionId, payload.paneId);
+      return;
+    }
+
+    if (payload.kind === "project") {
+      selectProjectDetail(payload.projectId);
+      return;
+    }
+
+    if (payload.kind === "work-item") {
+      selectProject(payload.projectId);
+      activeSidebar = "work";
+      navigateTo("work", { openItemId: payload.workItemId });
+      return;
+    }
+
+    if (payload.kind === "work-item-run") {
+      const run = workItemRuns.find((candidate) => candidate.id === payload.runId);
+      if (run) {
+        await openWorkItemRun(run);
+        return;
+      }
+      if (payload.ptyId) selectPtyTarget(payload.ptyId, payload.sessionId);
+    }
   }
 
   function selectProject(projectId: string) {
@@ -2653,5 +2751,11 @@
     {commands}
     onclose={() => (commandPaletteOpen = false)}
     onrun={(id) => void executeCommand(id)}
+  />
+  <JumpPalette
+    visible={jumpPaletteOpen}
+    targets={jumpTargets}
+    onclose={() => (jumpPaletteOpen = false)}
+    onjump={(target) => void jumpToTarget(target)}
   />
 </main>

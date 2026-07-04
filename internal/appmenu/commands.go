@@ -24,6 +24,7 @@ const (
 const (
 	CommandOpenPreferences     = "open-preferences"
 	CommandOpenPalette         = "open-palette"
+	CommandOpenJumpPalette     = "open-jump-palette"
 	CommandToggleSidebar       = "toggle-sidebar"
 	CommandSplitPaneVertical   = "split-pane-vertical"
 	CommandSplitPaneHorizontal = "split-pane-horizontal"
@@ -82,7 +83,7 @@ func defaultSessionAccelerator(i int) string {
 // Commands returns the full registry in display order: the editable app commands first, then the
 // read-only standard macOS items surfaced for reference in the panel.
 func Commands() []Command {
-	commands := make([]Command, 0, 6+SessionSlots+8)
+	commands := make([]Command, 0, 7+SessionSlots+8)
 	commands = append(commands, Command{
 		ID:       CommandOpenPreferences,
 		Label:    "Open Preferences",
@@ -95,6 +96,13 @@ func Commands() []Command {
 		Label:    "Open Command Palette",
 		Category: CategoryApplication,
 		Default:  "CmdOrCtrl+K",
+		Editable: true,
+	})
+	commands = append(commands, Command{
+		ID:       CommandOpenJumpPalette,
+		Label:    "Open Jump Palette",
+		Category: CategoryApplication,
+		Default:  "CmdOrCtrl+J",
 		Editable: true,
 	})
 	commands = append(commands, Command{

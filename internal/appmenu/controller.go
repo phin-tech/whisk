@@ -17,6 +17,7 @@ const EventCommandRun = "command:run"
 const (
 	FrontendCommandOpenPreferences = "preferences.open"
 	FrontendCommandOpenPalette     = "palette.open"
+	FrontendCommandOpenJumpPalette = "jumpPalette.open"
 	FrontendCommandToggleSidebar   = "sidebar.toggle"
 	FrontendCommandSplitVertical   = "split-pane-vertical"
 	FrontendCommandSplitHorizontal = "split-pane-horizontal"
@@ -160,6 +161,10 @@ func (c *Controller) build(settings appsettings.Settings, sessions []SessionRef)
 	palette := viewMenu.Add("Open Command Palette").SetAccelerator(effective[CommandOpenPalette])
 	palette.OnClick(func(*application.Context) {
 		c.app.Event.Emit(EventCommandRun, FrontendCommandOpenPalette)
+	})
+	jumpPalette := viewMenu.Add("Open Jump Palette").SetAccelerator(effective[CommandOpenJumpPalette])
+	jumpPalette.OnClick(func(*application.Context) {
+		c.app.Event.Emit(EventCommandRun, FrontendCommandOpenJumpPalette)
 	})
 	toggleSidebar := viewMenu.Add("Show/Hide Sidebar").SetAccelerator(effective[CommandToggleSidebar])
 	toggleSidebar.OnClick(func(*application.Context) {

@@ -44,12 +44,16 @@ func TestSessionMenuEntriesUsesOverrideAndFallbackLabel(t *testing.T) {
 }
 
 func TestControllerBuildIncludesNativeCommandAccelerators(t *testing.T) {
-	settings := appsettings.Settings{Keybindings: map[string]string{CommandOpenPalette: "Cmd+Shift+K"}}
+	settings := appsettings.Settings{Keybindings: map[string]string{
+		CommandOpenPalette:     "Cmd+Shift+K",
+		CommandOpenJumpPalette: "Cmd+Shift+J",
+	}}
 	menu := NewController(nil, settings).build(settings, nil)
 
 	effective := Resolve(settings)
 	cases := map[string]string{
 		"Open Command Palette":    nativeAccelerator(effective[CommandOpenPalette]),
+		"Open Jump Palette":       nativeAccelerator(effective[CommandOpenJumpPalette]),
 		"Show/Hide Sidebar":       nativeAccelerator(effective[CommandToggleSidebar]),
 		"Split Pane Vertically":   nativeAccelerator(effective[CommandSplitPaneVertical]),
 		"Split Pane Horizontally": nativeAccelerator(effective[CommandSplitPaneHorizontal]),
