@@ -66,6 +66,31 @@ func (t *ModeTracker) Modes() Modes {
 	return t.modes
 }
 
+func (t *ModeTracker) MouseTrackingModes() []MouseTrackingMode {
+	var modes []MouseTrackingMode
+	if t.mouseTrackingNormal {
+		modes = append(modes, MouseTrackingNormal)
+	}
+	if t.mouseTrackingButton {
+		modes = append(modes, MouseTrackingButton)
+	}
+	if t.mouseTrackingAny {
+		modes = append(modes, MouseTrackingAny)
+	}
+	return modes
+}
+
+func (t *ModeTracker) MouseEncodingModes() []MouseEncodingMode {
+	var modes []MouseEncodingMode
+	if t.mouseEncodingSGR {
+		modes = append(modes, MouseEncodingSGR)
+	}
+	if t.mouseEncodingSGRPixel {
+		modes = append(modes, MouseEncodingSGRPixel)
+	}
+	return modes
+}
+
 func (t *ModeTracker) Reset() {
 	t.modes = Modes{CursorVisible: true}
 	t.mouseTrackingNormal = false

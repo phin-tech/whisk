@@ -13,18 +13,20 @@ type Cursor struct {
 }
 
 type Snapshot struct {
-	Offset                  uint64 `json:"offset"`
-	Cols                    int    `json:"cols"`
-	Rows                    int    `json:"rows"`
-	Cursor                  Cursor `json:"cursor"`
-	Title                   string `json:"title,omitempty"`
-	WorkingDirectory        string `json:"workingDirectory,omitempty"`
-	ScrollbackAnsi          string `json:"scrollbackAnsi"`
-	RehydrateBeforeViewport string `json:"rehydrateBeforeViewport,omitempty"`
-	ViewportAnsi            string `json:"viewportAnsi"`
-	RehydrateSequences      string `json:"rehydrateSequences"`
-	Modes                   Modes  `json:"modes"`
-	Truncated               bool   `json:"truncated,omitempty"`
+	Offset                  uint64              `json:"offset"`
+	Cols                    int                 `json:"cols"`
+	Rows                    int                 `json:"rows"`
+	Cursor                  Cursor              `json:"cursor"`
+	Title                   string              `json:"title,omitempty"`
+	WorkingDirectory        string              `json:"workingDirectory,omitempty"`
+	ScrollbackAnsi          string              `json:"scrollbackAnsi"`
+	RehydrateBeforeViewport string              `json:"rehydrateBeforeViewport,omitempty"`
+	ViewportAnsi            string              `json:"viewportAnsi"`
+	RehydrateSequences      string              `json:"rehydrateSequences"`
+	Modes                   Modes               `json:"modes"`
+	MouseTrackingModes      []MouseTrackingMode `json:"mouseTrackingModes,omitempty"`
+	MouseEncodingModes      []MouseEncodingMode `json:"mouseEncodingModes,omitempty"`
+	Truncated               bool                `json:"truncated,omitempty"`
 }
 
 const (

@@ -12,6 +12,8 @@ import (
 
 func snapshotFromState(s *State) Snapshot {
 	modes := s.modes.Modes()
+	mouseTrackingModes := s.modes.MouseTrackingModes()
+	mouseEncodingModes := s.modes.MouseEncodingModes()
 	cursor := s.term.CursorPosition()
 	scrollback, scrollbackTruncated := renderScrollback(s)
 	viewport, viewportTruncated := renderViewport(s)
@@ -25,8 +27,10 @@ func snapshotFromState(s *State) Snapshot {
 		ScrollbackAnsi:          scrollback,
 		RehydrateBeforeViewport: rehydrateBeforeViewport(modes),
 		ViewportAnsi:            viewport,
-		RehydrateSequences:      rehydrateSequences(modes, Cursor{X: cursor.X, Y: cursor.Y}),
+		RehydrateSequences:      rehydrateSequences(modes, mouseTrackingModes, mouseEncodingModes, Cursor{X: cursor.X, Y: cursor.Y}),
 		Modes:                   modes,
+		MouseTrackingModes:      mouseTrackingModes,
+		MouseEncodingModes:      mouseEncodingModes,
 		Truncated:               scrollbackTruncated || viewportTruncated,
 	}
 	return snapshot
@@ -119,25 +123,13 @@ func rehydrateBeforeViewport(modes Modes) string {
 	return ansi.SetModeAltScreenSaveCursor
 }
 
-func rehydrateSequences(modes Modes, cursor Cursor) string {
+func rehydrateSequences(modes Modes, mouseTrackingModes []MouseTrackingMode, mouseEncodingModes []MouseEncodingMode, cursor Cursor) string {
 	var b strings.Builder
 	if modes.ApplicationCursor {
 		b.WriteString(ansi.SetModeCursorKeys)
 	}
-	switch modes.MouseTracking {
-	case MouseTrackingNormal:
-		b.WriteString(ansi.SetModeMouseNormal)
-	case MouseTrackingButton:
-		b.WriteString(ansi.SetModeMouseButtonEvent)
-	case MouseTrackingAny:
-		b.WriteString(ansi.SetModeMouseAnyEvent)
-	}
-	switch modes.MouseEncoding {
-	case MouseEncodingSGR:
-		b.WriteString(ansi.SetModeMouseExtSgr)
-	case MouseEncodingSGRPixel:
-		b.WriteString(ansi.SetModeMouseExtSgrPixel)
-	}
+	writeMouseTrackingModes(&b, modes, mouseTrackingModes)
+	writeMouseEncodingModes(&b, modes, mouseEncodingModes)
 	if modes.BracketedPaste {
 		b.WriteString(ansi.SetModeBracketedPaste)
 	}
@@ -148,6 +140,60 @@ func rehydrateSequences(modes Modes, cursor Cursor) string {
 		b.WriteString(ansi.ResetModeTextCursorEnable)
 	}
 	return b.String()
+}
+
+func writeMouseTrackingModes(b *strings.Builder, modes Modes, mouseTrackingModes []MouseTrackingMode) {
+	if len(mouseTrackingModes) == 0 {
+		mouseTrackingModes = collapsedMouseTrackingModes(modes.MouseTracking)
+	}
+	for _, mode := range mouseTrackingModes {
+		switch mode {
+		case MouseTrackingNormal:
+			b.WriteString(ansi.SetModeMouseNormal)
+		case MouseTrackingButton:
+			b.WriteString(ansi.SetModeMouseButtonEvent)
+		case MouseTrackingAny:
+			b.WriteString(ansi.SetModeMouseAnyEvent)
+		}
+	}
+}
+
+func collapsedMouseTrackingModes(mode MouseTrackingMode) []MouseTrackingMode {
+	switch mode {
+	case MouseTrackingNormal:
+		return []MouseTrackingMode{MouseTrackingNormal}
+	case MouseTrackingButton:
+		return []MouseTrackingMode{MouseTrackingButton}
+	case MouseTrackingAny:
+		return []MouseTrackingMode{MouseTrackingAny}
+	default:
+		return nil
+	}
+}
+
+func writeMouseEncodingModes(b *strings.Builder, modes Modes, mouseEncodingModes []MouseEncodingMode) {
+	if len(mouseEncodingModes) == 0 {
+		mouseEncodingModes = collapsedMouseEncodingModes(modes.MouseEncoding)
+	}
+	for _, mode := range mouseEncodingModes {
+		switch mode {
+		case MouseEncodingSGR:
+			b.WriteString(ansi.SetModeMouseExtSgr)
+		case MouseEncodingSGRPixel:
+			b.WriteString(ansi.SetModeMouseExtSgrPixel)
+		}
+	}
+}
+
+func collapsedMouseEncodingModes(mode MouseEncodingMode) []MouseEncodingMode {
+	switch mode {
+	case MouseEncodingSGR:
+		return []MouseEncodingMode{MouseEncodingSGR}
+	case MouseEncodingSGRPixel:
+		return []MouseEncodingMode{MouseEncodingSGRPixel}
+	default:
+		return nil
+	}
 }
 
 func sanitizeText(value string, maxBytes int) string {

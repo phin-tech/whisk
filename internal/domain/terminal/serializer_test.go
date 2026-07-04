@@ -1,6 +1,7 @@
 package terminal_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -74,6 +75,49 @@ func TestSnapshotResetClearsRehydrateModes(t *testing.T) {
 	}
 	if !strings.Contains(snapshot.RehydrateSequences, ansi.SetModeTextCursorEnable) {
 		t.Fatalf("rehydrate sequences should restore default visible cursor: %q", snapshot.RehydrateSequences)
+	}
+}
+
+func TestSnapshotRehydratesMouseModeStackForFutureResets(t *testing.T) {
+	state := terminal.New(20, 4, terminal.Options{})
+	input := "\x1b[?1000;1002;1006;1016hstacked modes"
+	if err := state.Write(0, []byte(input)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	snapshot := state.Snapshot()
+	wantTrackingModes := []terminal.MouseTrackingMode{
+		terminal.MouseTrackingNormal,
+		terminal.MouseTrackingButton,
+	}
+	if !reflect.DeepEqual(snapshot.MouseTrackingModes, wantTrackingModes) {
+		t.Fatalf("mouse tracking modes = %#v, want %#v", snapshot.MouseTrackingModes, wantTrackingModes)
+	}
+	wantEncodingModes := []terminal.MouseEncodingMode{
+		terminal.MouseEncodingSGR,
+		terminal.MouseEncodingSGRPixel,
+	}
+	if !reflect.DeepEqual(snapshot.MouseEncodingModes, wantEncodingModes) {
+		t.Fatalf("mouse encoding modes = %#v, want %#v", snapshot.MouseEncodingModes, wantEncodingModes)
+	}
+	assertOrder(t, snapshot.RehydrateSequences,
+		ansi.SetModeMouseNormal,
+		ansi.SetModeMouseButtonEvent,
+		ansi.SetModeMouseExtSgr,
+		ansi.SetModeMouseExtSgrPixel,
+	)
+
+	tracker := terminal.NewModeTracker()
+	tracker.Feed([]byte(snapshot.RehydrateSequences))
+	tracker.Feed([]byte("\x1b[?1002;1016l"))
+
+	wantModes := terminal.Modes{
+		CursorVisible: true,
+		MouseTracking: terminal.MouseTrackingNormal,
+		MouseEncoding: terminal.MouseEncodingSGR,
+	}
+	if got := tracker.Modes(); got != wantModes {
+		t.Fatalf("rehydrated modes after live reset = %#v, want %#v", got, wantModes)
 	}
 }
 
