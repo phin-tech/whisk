@@ -6,6 +6,8 @@ import (
 	"unicode"
 )
 
+const MaxFallbackDescriptionBytes = 240
+
 // Metadata is the display metadata parsed from a SKILL.md file.
 type Metadata struct {
 	Name        string
@@ -163,8 +165,12 @@ func firstParagraph(body string) string {
 			}
 			continue
 		}
+		candidate := strings.Join(append(paragraph, trimmed), " ")
+		if len(candidate) >= MaxFallbackDescriptionBytes {
+			return truncateString(candidate, MaxFallbackDescriptionBytes)
+		}
 		paragraph = append(paragraph, trimmed)
-		if len(strings.Join(paragraph, " ")) > 240 {
+		if len(strings.Join(paragraph, " ")) > MaxFallbackDescriptionBytes {
 			break
 		}
 	}
@@ -172,4 +178,27 @@ func firstParagraph(body string) string {
 		return ""
 	}
 	return strings.Join(paragraph, " ")
+}
+
+func truncateString(value string, maxBytes int) string {
+	if maxBytes <= 0 {
+		return ""
+	}
+	if len(value) <= maxBytes {
+		return value
+	}
+	lastBoundary := 0
+	for i := range value {
+		if i == maxBytes {
+			return value[:i]
+		}
+		if i > maxBytes {
+			return value[:lastBoundary]
+		}
+		lastBoundary = i
+	}
+	if lastBoundary > 0 {
+		return value[:lastBoundary]
+	}
+	return ""
 }

@@ -1,135 +1,42 @@
 package skills
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	domainskills "github.com/phin-tech/whisk/internal/domain/skills"
 )
 
 const (
-	SkillFileName         = "SKILL.md"
+	SkillFileName         = domainskills.SkillFileName
 	MaxSkillMarkdownBytes = 256 * 1024
+	MaxDiscoveredSkills   = 200
 	MaxSkillFiles         = 200
+	MaxDirectoryEntries   = 256
+	MaxVisitedDirectories = 1000
+	MaxPackageDepth       = 8
 	DefaultMaxDepth       = 4
 	PluginMaxDepth        = 9
 )
 
-type Provider string
+type Source = domainskills.Source
+type DiscoverySource = domainskills.DiscoverySource
+type Skill = domainskills.Skill
+type DiscoveryResult = domainskills.DiscoveryResult
+type Metadata = domainskills.Metadata
+type SourceKind = domainskills.SourceKind
+type Provider = domainskills.Provider
 
 const (
-	ProviderCodex       Provider = "codex"
-	ProviderClaude      Provider = "claude"
-	ProviderAgentSkills Provider = "agent-skills"
+	SourceKindBundled = domainskills.SourceKindBundled
+	SourceKindHome    = domainskills.SourceKindHome
+	SourceKindProject = domainskills.SourceKindProject
+	SourceKindPlugin  = domainskills.SourceKindPlugin
 )
-
-type SourceKind string
-
-const (
-	SourceKindBundled SourceKind = "bundled"
-	SourceKindHome    SourceKind = "home"
-	SourceKindProject SourceKind = "project"
-	SourceKindPlugin  SourceKind = "plugin"
-)
-
-// Source is a filesystem root that may contain one or more SKILL.md packages.
-type Source struct {
-	ID        string
-	Label     string
-	Path      string
-	Kind      SourceKind
-	Providers []Provider
-	MaxDepth  int
-}
-
-// DiscoverySource records whether a source root was present during a scan.
-type DiscoverySource struct {
-	Source
-	Exists        bool
-	SkippedReason string
-}
-
-// Skill is the daemon read-model entry for one discovered SKILL.md package.
-type Skill struct {
-	ID            string
-	Name          string
-	Description   string
-	Providers     []Provider
-	SourceKind    SourceKind
-	SourceLabel   string
-	RootPath      string
-	DirectoryPath string
-	SkillFilePath string
-	FileCount     int
-	UpdatedAt     time.Time
-}
-
-// DiscoveryResult is the deterministic skill catalog produced from source roots.
-type DiscoveryResult struct {
-	Skills    []Skill
-	Sources   []DiscoverySource
-	ScannedAt time.Time
-}
-
-// SourceConfig builds the known daemon-side roots for later runtime wiring.
-type SourceConfig struct {
-	HomeDir      string
-	ProjectPaths []string
-	BundledPath  string
-}
-
-// DefaultSources returns the source roots Whisk expects the daemon to scan.
-func DefaultSources(config SourceConfig) []Source {
-	var out []Source
-	if strings.TrimSpace(config.BundledPath) != "" {
-		out = append(out, Source{
-			ID:        "bundled",
-			Label:     "Whisk bundled",
-			Path:      filepath.Clean(config.BundledPath),
-			Kind:      SourceKindBundled,
-			Providers: []Provider{ProviderCodex, ProviderClaude, ProviderAgentSkills},
-		})
-	}
-	home := strings.TrimSpace(config.HomeDir)
-	if home != "" {
-		out = append(out,
-			Source{ID: "home-codex", Label: "Codex home", Path: filepath.Join(home, ".codex", "skills"), Kind: SourceKindHome, Providers: []Provider{ProviderCodex}},
-			Source{ID: "codex-plugin-cache", Label: "Codex plugin cache", Path: filepath.Join(home, ".codex", "plugins", "cache"), Kind: SourceKindPlugin, Providers: []Provider{ProviderCodex, ProviderAgentSkills}},
-			Source{ID: "home-claude", Label: "Claude home", Path: filepath.Join(home, ".claude", "skills"), Kind: SourceKindHome, Providers: []Provider{ProviderClaude}},
-			Source{ID: "home-agents", Label: "Agent skills home", Path: filepath.Join(home, ".agents", "skills"), Kind: SourceKindHome, Providers: []Provider{ProviderAgentSkills}},
-		)
-	}
-
-	seenProjects := map[string]struct{}{}
-	for _, projectPath := range config.ProjectPaths {
-		projectPath = strings.TrimSpace(projectPath)
-		if projectPath == "" {
-			continue
-		}
-		clean := filepath.Clean(projectPath)
-		if _, ok := seenProjects[clean]; ok {
-			continue
-		}
-		seenProjects[clean] = struct{}{}
-		base := filepath.Base(clean)
-		id := StablePathID(clean)
-		out = append(out,
-			Source{ID: "project-skills-" + id, Label: "Project " + base + " skills", Path: filepath.Join(clean, "skills"), Kind: SourceKindProject, Providers: []Provider{ProviderCodex, ProviderAgentSkills}},
-			Source{ID: "project-claude-" + id, Label: "Project " + base + " .claude", Path: filepath.Join(clean, ".claude", "skills"), Kind: SourceKindProject, Providers: []Provider{ProviderClaude}},
-		)
-	}
-	return out
-}
-
-// StablePathID returns a short deterministic ID for source paths.
-func StablePathID(path string) string {
-	sum := sha1.Sum([]byte(path))
-	return hex.EncodeToString(sum[:])[:16]
-}
 
 // Discover scans all sources and returns a stable, read-only skill catalog.
 func Discover(sources []Source, scannedAt time.Time) DiscoveryResult {
@@ -187,7 +94,7 @@ func scanSource(source Source) []Skill {
 		}
 		sourceKind := sourceKindForSkill(source, skillFilePath)
 		skills = append(skills, Skill{
-			ID:            StablePathID(skillFilePath),
+			ID:            domainskills.StablePathID(skillFilePath),
 			Name:          metadata.Name,
 			Description:   metadata.Description,
 			Providers:     append([]Provider(nil), source.Providers...),
@@ -218,6 +125,9 @@ func findSkillFiles(rootPath, rootReal string, maxDepth int) []string {
 	visitedDirs := map[string]struct{}{}
 	var visit func(string)
 	visit = func(dirPath string) {
+		if len(out) >= MaxDiscoveredSkills || len(visitedDirs) >= MaxVisitedDirectories {
+			return
+		}
 		if !isWithinDepth(rootPath, dirPath, maxDepth) {
 			return
 		}
@@ -230,11 +140,14 @@ func findSkillFiles(rootPath, rootReal string, maxDepth int) []string {
 		}
 		visitedDirs[dirReal] = struct{}{}
 
-		entries, err := os.ReadDir(dirPath)
+		entries, err := readDirLimited(dirPath)
 		if err != nil {
 			return
 		}
 		for _, entry := range entries {
+			if len(out) >= MaxDiscoveredSkills {
+				return
+			}
 			entryPath := filepath.Join(dirPath, entry.Name())
 			if entry.Name() == SkillFileName {
 				if isRegularFileWithinRoot(entryPath, rootReal) {
@@ -257,7 +170,7 @@ func countFiles(dirPath, rootReal string) int {
 	visitedDirs := map[string]struct{}{}
 	var visit func(string)
 	visit = func(currentPath string) {
-		if count >= MaxSkillFiles {
+		if count >= MaxSkillFiles || len(visitedDirs) >= MaxVisitedDirectories || !isWithinDepth(dirPath, currentPath, MaxPackageDepth) {
 			return
 		}
 		currentReal, err := filepath.EvalSymlinks(currentPath)
@@ -269,7 +182,7 @@ func countFiles(dirPath, rootReal string) int {
 		}
 		visitedDirs[currentReal] = struct{}{}
 
-		entries, err := os.ReadDir(currentPath)
+		entries, err := readDirLimited(currentPath)
 		if err != nil {
 			return
 		}
@@ -304,7 +217,23 @@ func readSkillMetadata(path string) (Metadata, time.Time) {
 	if err != nil {
 		return Metadata{}, info.ModTime()
 	}
-	return SummarizeMarkdown(string(data)), info.ModTime()
+	return domainskills.SummarizeMarkdown(string(data)), info.ModTime()
+}
+
+func readDirLimited(dirPath string) ([]os.DirEntry, error) {
+	dir, err := os.Open(dirPath)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
+	entries, err := dir.ReadDir(MaxDirectoryEntries)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name() < entries[j].Name()
+	})
+	return entries, nil
 }
 
 func isDirectory(path string, entry os.DirEntry) bool {
