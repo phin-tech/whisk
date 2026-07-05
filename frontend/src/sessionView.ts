@@ -11,6 +11,7 @@ import {
   type SessionId,
   type WindowId,
 } from "./ids";
+import { derivePtyHistoryRows, derivePtyLiveRows } from "./ptys-panel-state";
 
 type LayoutNodeLike = {
   kind: string;
@@ -216,25 +217,25 @@ export function killPTYRequest(pane: PaneLike | null | undefined): KillPTYReques
 }
 
 export function ptyRowsFromInventory(ptys: PtyInfoLike[]) {
-  return ptys.map((pty) => ({
-    id: pty.id,
-    title: pty.id,
-    subtitle: `${pty.sessionId || "unowned"} / ${pty.paneId || "detached"}`,
-    detail: `${pty.workingDir || "."} / ${pty.cols}x${pty.rows}`,
-    running: pty.running,
-    status: pty.status || (pty.running ? "running" : "exited"),
-    canDelete: !pty.running,
+  return derivePtyLiveRows(ptys).map((row) => ({
+    id: row.id,
+    title: row.title,
+    subtitle: row.subtitle,
+    detail: row.detail,
+    running: row.running,
+    status: row.status,
+    canDelete: row.canDelete,
   }));
 }
 
 export function ptyHistoryRows(history: PtyHistorySummaryLike[]) {
-  return history.map((item) => ({
-    id: item.ptyId,
-    title: item.ptyId,
-    subtitle: `${item.sessionId || "unowned"} / ${item.paneId || "detached"}`,
-    detail: item.workingDir || ".",
-    createdAt: item.createdAt || "",
-    exitCode: item.exitCode ?? null,
+  return derivePtyHistoryRows(history).map((row) => ({
+    id: row.id,
+    title: row.title,
+    subtitle: row.subtitle,
+    detail: row.detail,
+    createdAt: row.createdAt,
+    exitCode: row.exitCode,
   }));
 }
 
