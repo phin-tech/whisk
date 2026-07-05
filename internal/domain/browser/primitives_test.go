@@ -134,6 +134,123 @@ func TestNormalizeTargetStatus(t *testing.T) {
 	}
 }
 
+func TestStateConnectsResourcesAndListsDeterministically(t *testing.T) {
+	state := NewState()
+
+	second, err := state.ConnectResource(Resource{
+		ID:     "browser_b",
+		Name:   " Second ",
+		CDPURL: " http://127.0.0.1:9223/ ",
+	}, []Target{{
+		ID:         "page_b",
+		ResourceID: "browser_b",
+		Type:       "page",
+		Status:     "available",
+		URL:        " https://example.test/b ",
+		Title:      " B ",
+	}})
+	if err != nil {
+		t.Fatalf("connect second: %v", err)
+	}
+	if !second.Connected || second.Name != "Second" || second.CDPURL != "http://127.0.0.1:9223" {
+		t.Fatalf("second = %#v", second)
+	}
+	first, err := state.ConnectResource(Resource{
+		ID:     "browser_a",
+		Name:   "First",
+		CDPURL: "http://127.0.0.1:9222",
+	}, []Target{
+		{ID: "page_z", ResourceID: "browser_a", Type: "page", Status: "available"},
+		{ID: "page_a", ResourceID: "browser_a", Type: "service-worker", Status: "attached"},
+	})
+	if err != nil {
+		t.Fatalf("connect first: %v", err)
+	}
+	if first.ID != "browser_a" {
+		t.Fatalf("first = %#v", first)
+	}
+
+	resources := state.ListResources()
+	wantResources := []Resource{
+		{ID: "browser_a", Name: "First", CDPURL: "http://127.0.0.1:9222", Connected: true},
+		{ID: "browser_b", Name: "Second", CDPURL: "http://127.0.0.1:9223", Connected: true},
+	}
+	if !reflect.DeepEqual(resources, wantResources) {
+		t.Fatalf("resources = %#v, want %#v", resources, wantResources)
+	}
+
+	targets, err := state.ListTargets("browser_a")
+	if err != nil {
+		t.Fatalf("list targets: %v", err)
+	}
+	wantTargets := []Target{
+		{ID: "page_a", ResourceID: "browser_a", Type: TargetTypeServiceWorker, Status: TargetStatusAttached},
+		{ID: "page_z", ResourceID: "browser_a", Type: TargetTypePage, Status: TargetStatusAvailable},
+	}
+	if !reflect.DeepEqual(targets, wantTargets) {
+		t.Fatalf("targets = %#v, want %#v", targets, wantTargets)
+	}
+}
+
+func TestStateRejectsDuplicateResourceEndpointAndTargets(t *testing.T) {
+	state := NewState()
+	if _, err := state.ConnectResource(Resource{ID: "browser_a", CDPURL: "http://127.0.0.1:9222"}, nil); err != nil {
+		t.Fatalf("connect first: %v", err)
+	}
+	if _, err := state.ConnectResource(Resource{ID: "browser_b", CDPURL: "http://127.0.0.1:9222/"}, nil); err == nil || !strings.Contains(err.Error(), "already connected") {
+		t.Fatalf("duplicate endpoint err = %v", err)
+	}
+	if _, err := state.ConnectResource(Resource{ID: "browser_a", CDPURL: "http://127.0.0.1:9223"}, nil); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("duplicate id err = %v", err)
+	}
+	if _, err := state.ConnectResource(Resource{ID: "browser_c", CDPURL: "http://127.0.0.1:9224"}, []Target{
+		{ID: "page_1", ResourceID: "browser_c"},
+		{ID: "page_1", ResourceID: "browser_c"},
+	}); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("duplicate target err = %v", err)
+	}
+	if _, err := state.ConnectResource(Resource{ID: "browser_d", CDPURL: "http://127.0.0.1:9225"}, []Target{
+		{ID: "page_1", ResourceID: "browser_else"},
+	}); err == nil || !strings.Contains(err.Error(), "belongs to resource") {
+		t.Fatalf("wrong resource target err = %v", err)
+	}
+}
+
+func TestStateReplaceTargetsAndDisconnect(t *testing.T) {
+	state := NewState()
+	if _, err := state.ConnectResource(Resource{ID: "browser_a", CDPURL: "http://127.0.0.1:9222"}, []Target{
+		{ID: "page_old", ResourceID: "browser_a"},
+	}); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+
+	targets, err := state.ReplaceTargets(" browser_a ", []Target{{ID: "page_new", ResourceID: "browser_a", Type: "page"}})
+	if err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	wantTargets := []Target{{ID: "page_new", ResourceID: "browser_a", Type: TargetTypePage, Status: TargetStatusUnknown}}
+	if !reflect.DeepEqual(targets, wantTargets) {
+		t.Fatalf("targets = %#v, want %#v", targets, wantTargets)
+	}
+
+	disconnected, err := state.DisconnectResource("browser_a")
+	if err != nil {
+		t.Fatalf("disconnect: %v", err)
+	}
+	if disconnected.ID != "browser_a" {
+		t.Fatalf("disconnected = %#v", disconnected)
+	}
+	if resources := state.ListResources(); len(resources) != 0 {
+		t.Fatalf("resources after disconnect = %#v", resources)
+	}
+	if _, err := state.ListTargets("browser_a"); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("list after disconnect err = %v", err)
+	}
+	if _, err := state.DisconnectResource("browser_a"); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("second disconnect err = %v", err)
+	}
+}
+
 func TestNormalizeCaptureOptionsDefaultsAndCaps(t *testing.T) {
 	got, err := NormalizeCaptureOptions(CaptureOptions{
 		Selector:           " #main ",

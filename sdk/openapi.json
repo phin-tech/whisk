@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "whiskd daemon API",
-    "version": "28",
+    "version": "29",
     "description": "HTTP/JSON API exposed by the whiskd daemon on loopback. Generated from Go structs; do not edit by hand."
   },
   "servers": [
@@ -865,6 +865,177 @@
                 "schema": {
                   "items": {
                     "$ref": "#/components/schemas/Artifact"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/browser-resources": {
+      "get": {
+        "operationId": "listBrowserResources",
+        "summary": "List daemon-owned browser resources",
+        "tags": [
+          "browser"
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BrowserResource"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "connectBrowserResource",
+        "summary": "Register an existing loopback Chrome CDP endpoint",
+        "tags": [
+          "browser"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectBrowserResourceRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserResource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/browser-resources/{resourceID}": {
+      "delete": {
+        "operationId": "disconnectBrowserResource",
+        "summary": "Detach a daemon-owned browser resource",
+        "tags": [
+          "browser"
+        ],
+        "parameters": [
+          {
+            "name": "resourceID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/browser-resources/{resourceID}/targets": {
+      "get": {
+        "operationId": "listBrowserTargets",
+        "summary": "List targets for a daemon-owned browser resource",
+        "tags": [
+          "browser"
+        ],
+        "parameters": [
+          {
+            "name": "resourceID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BrowserTarget"
                   },
                   "type": "array"
                 }
@@ -6743,6 +6914,57 @@
         ],
         "type": "object"
       },
+      "BrowserResource": {
+        "properties": {
+          "cdpUrl": {
+            "type": "string"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "cdpUrl",
+          "connected"
+        ],
+        "type": "object"
+      },
+      "BrowserTarget": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "resourceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "resourceId",
+          "type",
+          "status"
+        ],
+        "type": "object"
+      },
       "CancelWorkItemRunRequest": {
         "properties": {
           "actor": {
@@ -6883,6 +7105,24 @@
         "required": [
           "id",
           "status"
+        ],
+        "type": "object"
+      },
+      "ConnectBrowserResourceRequest": {
+        "properties": {
+          "acknowledgeBrowserControlRisk": {
+            "type": "boolean"
+          },
+          "cdpUrl": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cdpUrl",
+          "acknowledgeBrowserControlRisk"
         ],
         "type": "object"
       },

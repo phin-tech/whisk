@@ -326,6 +326,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/browser-resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List daemon-owned browser resources */
+        get: operations["listBrowserResources"];
+        put?: never;
+        /** Register an existing loopback Chrome CDP endpoint */
+        post: operations["connectBrowserResource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/browser-resources/{resourceID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detach a daemon-owned browser resource */
+        delete: operations["disconnectBrowserResource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/browser-resources/{resourceID}/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List targets for a daemon-owned browser resource */
+        get: operations["listBrowserTargets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/compat": {
         parameters: {
             query?: never;
@@ -2068,6 +2120,20 @@ export interface components {
             blockedByCount: number;
             workItem: components["schemas"]["WorkItem"];
         };
+        BrowserResource: {
+            cdpUrl: string;
+            connected: boolean;
+            id: string;
+            name?: string;
+        };
+        BrowserTarget: {
+            id: string;
+            resourceId: string;
+            status: string;
+            title?: string;
+            type: string;
+            url?: string;
+        };
         CancelWorkItemRunRequest: {
             actor?: string;
             id: string;
@@ -2111,6 +2177,11 @@ export interface components {
             id: string;
             overrideReason?: string;
             status: string;
+        };
+        ConnectBrowserResourceRequest: {
+            acknowledgeBrowserControlRisk: boolean;
+            cdpUrl: string;
+            name?: string;
         };
         CreateHTTPForwardRequest: {
             name: string;
@@ -3823,6 +3894,128 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Artifact"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listBrowserResources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserResource"][];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    connectBrowserResource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectBrowserResourceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserResource"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    disconnectBrowserResource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resourceID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listBrowserTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resourceID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserTarget"][];
                 };
             };
             /** @description error */

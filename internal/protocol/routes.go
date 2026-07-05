@@ -45,6 +45,8 @@ var (
 	apiWorkflowEventList        = []WorkflowEvent(nil)
 	apiStatusList               = []StatusEvent(nil)
 	apiMailList                 = []MailMessage(nil)
+	apiBrowserResourceList      = []BrowserResource(nil)
+	apiBrowserTargetList        = []BrowserTarget(nil)
 	apiAgentBridgeApprovalList  = []AgentBridgeApproval(nil)
 	apiAgentBridgeEventList     = []AgentBridgeEvent(nil)
 	apiAgentPromptList          = []AgentPrompt(nil)
@@ -118,6 +120,11 @@ var APIRoutes = []APIRoute{
 	{Method: "GET", Path: "/v1/ptys/{ptyID}/output", OperationID: "getPTYOutput", Tag: "ptys", Response: OutputSnapshot{}, Query: []APIQueryParam{{Name: "from", Type: "integer"}}},
 
 	{Method: "GET", Path: "/v1/events/next", OperationID: "nextEvent", Tag: "events", Response: NextEventResponse{}, Query: []APIQueryParam{{Name: "timeoutMs", Type: "integer"}, {Name: "afterSeq", Type: "integer"}}},
+
+	{Method: "GET", Path: "/v1/browser-resources", OperationID: "listBrowserResources", Tag: "browser", Summary: "List daemon-owned browser resources", Response: apiBrowserResourceList},
+	{Method: "POST", Path: "/v1/browser-resources", OperationID: "connectBrowserResource", Tag: "browser", Summary: "Register an existing loopback Chrome CDP endpoint", Request: ConnectBrowserResourceRequest{}, Response: BrowserResource{}, Status: 201},
+	{Method: "DELETE", Path: "/v1/browser-resources/{resourceID}", OperationID: "disconnectBrowserResource", Tag: "browser", Summary: "Detach a daemon-owned browser resource", Status: 204},
+	{Method: "GET", Path: "/v1/browser-resources/{resourceID}/targets", OperationID: "listBrowserTargets", Tag: "browser", Summary: "List targets for a daemon-owned browser resource", Response: apiBrowserTargetList},
 
 	{Method: "POST", Path: "/v1/mail", OperationID: "sendMail", Tag: "mail", Summary: "Send a daemon-owned mailbox message", Request: SendMailRequest{}, Response: MailMessage{}, Status: 201},
 	{Method: "GET", Path: "/v1/mail", OperationID: "listMail", Tag: "mail", Summary: "List daemon-owned mailbox messages", Response: apiMailList, Query: []APIQueryParam{
