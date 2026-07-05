@@ -23,6 +23,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/agents"
 	"github.com/phin-tech/whisk/internal/adapters/transcriptstore"
 	"github.com/phin-tech/whisk/internal/app"
+	domainbrowser "github.com/phin-tech/whisk/internal/domain/browser"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/server"
@@ -380,6 +381,47 @@ func TestHTTPServerPluginRoutes(t *testing.T) {
 	if len(attached.Attachments) != 1 || attached.Attachments[0].Provider != "github" || attached.Attachments[0].URL == "" {
 		t.Fatalf("attached = %#v", attached.Attachments)
 	}
+}
+
+func TestHTTPServerBrowserResourceRoutes(t *testing.T) {
+	targetBackend := &fakeBrowserTargetBackend{}
+	eventBus := newFakeEventBus()
+	runtime := app.NewRuntime(app.RuntimeConfig{BrowserTargets: targetBackend, EventSink: eventBus})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	handler := server.NewHTTP(runtime)
+
+	created := postJSON[protocol.BrowserResource](t, handler, "/v1/browser-resources", protocol.ConnectBrowserResourceRequest{
+		Name:                          "Main",
+		CDPURL:                        "http://127.0.0.1:9222",
+		AcknowledgeBrowserControlRisk: true,
+	}, http.StatusCreated)
+	if created.ID != "whisk_000001" || created.Name != "Main" || created.CDPURL != "http://127.0.0.1:9222" || !created.Connected {
+		t.Fatalf("created = %#v", created)
+	}
+	if !targetBackend.called || targetBackend.endpoint != "http://127.0.0.1:9222" || targetBackend.resourceID != "whisk_000001" {
+		t.Fatalf("target backend called=%v endpoint=%q resourceID=%q", targetBackend.called, targetBackend.endpoint, targetBackend.resourceID)
+	}
+
+	resources := getJSON[[]protocol.BrowserResource](t, handler, "/v1/browser-resources", http.StatusOK)
+	if len(resources) != 1 || resources[0] != created {
+		t.Fatalf("resources = %#v", resources)
+	}
+	targets := getJSON[[]protocol.BrowserTarget](t, handler, "/v1/browser-resources/"+created.ID+"/targets", http.StatusOK)
+	if len(targets) != 1 || targets[0].ID != "page_1" || targets[0].ResourceID != created.ID || targets[0].Type != "page" || targets[0].Status != "available" {
+		t.Fatalf("targets = %#v", targets)
+	}
+	event := getJSON[protocol.NextEventResponse](t, handler, "/v1/events/next?timeoutMs=10", http.StatusOK)
+	if event.Event.Type != "browser.changed" || event.Event.Seq == 0 {
+		t.Fatalf("event = %#v", event)
+	}
+
+	deleteNoContent(t, handler, "/v1/browser-resources/"+created.ID)
+	resources = getJSON[[]protocol.BrowserResource](t, handler, "/v1/browser-resources", http.StatusOK)
+	if len(resources) != 0 {
+		t.Fatalf("resources after detach = %#v", resources)
+	}
+	assertStatus(t, handler, http.MethodGet, "/v1/browser-resources/"+created.ID+"/targets", "", http.StatusNotFound)
+	assertStatus(t, handler, http.MethodPost, "/v1/browser-resources", `{"cdpUrl":"http://127.0.0.1:9223"}`, http.StatusBadRequest)
 }
 
 func TestHTTPServerAgentHookIntegrationRoutes(t *testing.T) {
@@ -2039,6 +2081,26 @@ type fakeEventBus struct {
 	ch       chan app.RuntimeEvent
 	afterSeq uint64
 	missed   bool
+}
+
+type fakeBrowserTargetBackend struct {
+	called     bool
+	endpoint   string
+	resourceID domainbrowser.ResourceID
+}
+
+func (b *fakeBrowserTargetBackend) ListTargets(_ context.Context, endpoint string, resourceID domainbrowser.ResourceID) ([]domainbrowser.Target, error) {
+	b.called = true
+	b.endpoint = endpoint
+	b.resourceID = resourceID
+	return []domainbrowser.Target{{
+		ID:         "page_1",
+		ResourceID: resourceID,
+		Type:       domainbrowser.TargetTypePage,
+		Status:     domainbrowser.TargetStatusAvailable,
+		URL:        "https://example.test",
+		Title:      "Example",
+	}}, nil
 }
 
 type pluginRegistryFake struct {

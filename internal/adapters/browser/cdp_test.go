@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	adapter "github.com/phin-tech/whisk/internal/adapters/browser"
+	domainbrowser "github.com/phin-tech/whisk/internal/domain/browser"
 )
 
 func TestCDPProbeReadsVersionAndTargets(t *testing.T) {
@@ -77,6 +78,45 @@ func TestCDPProbeRejectsRedirects(t *testing.T) {
 
 	_, err := adapter.NewCDPProbe(server.Client()).ProbeCDP(context.Background(), server.URL)
 	if err == nil || !strings.Contains(err.Error(), "refused redirect") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCDPProbeListsTargetsForResource(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/json/list" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"id":"page_1","type":"page","url":"https://example.test/","title":"Example"}]`))
+	}))
+	defer server.Close()
+
+	targets, err := adapter.NewCDPProbe(server.Client()).ListTargets(context.Background(), server.URL, "browser_1")
+	if err != nil {
+		t.Fatalf("ListTargets: %v", err)
+	}
+	want := []domainbrowser.Target{{
+		ID:         "page_1",
+		ResourceID: "browser_1",
+		Type:       domainbrowser.TargetTypePage,
+		Status:     domainbrowser.TargetStatusAvailable,
+		URL:        "https://example.test/",
+		Title:      "Example",
+	}}
+	if len(targets) != len(want) || targets[0] != want[0] {
+		t.Fatalf("targets = %#v, want %#v", targets, want)
+	}
+}
+
+func TestCDPProbeRejectsOversizedJSONResponses(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`"` + strings.Repeat("x", 1024*1024+1) + `"`))
+	}))
+	defer server.Close()
+
+	_, err := adapter.NewCDPProbe(server.Client()).ListTargets(context.Background(), server.URL, "browser_1")
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("err = %v", err)
 	}
 }

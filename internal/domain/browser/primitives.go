@@ -2,6 +2,7 @@ package browser
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -102,6 +103,121 @@ type CapturePromptBlock struct {
 	URL      string
 	Selector string
 	Payload  CapturedPayload
+}
+
+type State struct {
+	resources map[ResourceID]Resource
+	targets   map[ResourceID]map[TargetID]Target
+}
+
+func NewState() *State {
+	return &State{
+		resources: map[ResourceID]Resource{},
+		targets:   map[ResourceID]map[TargetID]Target{},
+	}
+}
+
+func (s *State) ConnectResource(resource Resource, targets []Target) (Resource, error) {
+	s.ensure()
+
+	resource.Connected = true
+	normalized, err := NormalizeResource(resource)
+	if err != nil {
+		return Resource{}, err
+	}
+	if _, ok := s.resources[normalized.ID]; ok {
+		return Resource{}, fmt.Errorf("browser resource %s already exists", normalized.ID)
+	}
+	for _, existing := range s.resources {
+		if existing.CDPURL == normalized.CDPURL {
+			return Resource{}, fmt.Errorf("browser resource already connected for cdp url %s", normalized.CDPURL)
+		}
+	}
+
+	normalizedTargets, err := normalizeTargetsForResource(normalized.ID, targets)
+	if err != nil {
+		return Resource{}, err
+	}
+	s.resources[normalized.ID] = normalized
+	s.targets[normalized.ID] = normalizedTargets
+	return normalized, nil
+}
+
+func (s *State) ListResources() []Resource {
+	s.ensure()
+
+	out := make([]Resource, 0, len(s.resources))
+	for _, resource := range s.resources {
+		out = append(out, resource)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func (s *State) ListTargets(resourceID ResourceID) ([]Target, error) {
+	s.ensure()
+
+	id, err := NormalizeResourceID(string(resourceID))
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := s.resources[id]; !ok {
+		return nil, fmt.Errorf("browser resource %s not found", id)
+	}
+	targetsByID := s.targets[id]
+	out := make([]Target, 0, len(targetsByID))
+	for _, target := range targetsByID {
+		out = append(out, target)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
+func (s *State) ReplaceTargets(resourceID ResourceID, targets []Target) ([]Target, error) {
+	s.ensure()
+
+	id, err := NormalizeResourceID(string(resourceID))
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := s.resources[id]; !ok {
+		return nil, fmt.Errorf("browser resource %s not found", id)
+	}
+	normalizedTargets, err := normalizeTargetsForResource(id, targets)
+	if err != nil {
+		return nil, err
+	}
+	s.targets[id] = normalizedTargets
+	return s.ListTargets(id)
+}
+
+func (s *State) DisconnectResource(resourceID ResourceID) (Resource, error) {
+	s.ensure()
+
+	id, err := NormalizeResourceID(string(resourceID))
+	if err != nil {
+		return Resource{}, err
+	}
+	resource, ok := s.resources[id]
+	if !ok {
+		return Resource{}, fmt.Errorf("browser resource %s not found", id)
+	}
+	delete(s.resources, id)
+	delete(s.targets, id)
+	return resource, nil
+}
+
+func (s *State) ensure() {
+	if s.resources == nil {
+		s.resources = map[ResourceID]Resource{}
+	}
+	if s.targets == nil {
+		s.targets = map[ResourceID]map[TargetID]Target{}
+	}
 }
 
 func NormalizeResourceID(raw string) (ResourceID, error) {
@@ -290,6 +406,24 @@ func RenderCapturePromptBlock(block CapturePromptBlock) string {
 	}
 
 	return b.String()
+}
+
+func normalizeTargetsForResource(resourceID ResourceID, targets []Target) (map[TargetID]Target, error) {
+	out := map[TargetID]Target{}
+	for _, target := range targets {
+		normalized, err := NormalizeTarget(target)
+		if err != nil {
+			return nil, err
+		}
+		if normalized.ResourceID != resourceID {
+			return nil, fmt.Errorf("browser target %s belongs to resource %s, want %s", normalized.ID, normalized.ResourceID, resourceID)
+		}
+		if _, ok := out[normalized.ID]; ok {
+			return nil, fmt.Errorf("browser target %s already exists for resource %s", normalized.ID, resourceID)
+		}
+		out[normalized.ID] = normalized
+	}
+	return out, nil
 }
 
 func normalizeBrowserIdentifier(raw string, label string) (string, error) {

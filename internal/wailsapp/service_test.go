@@ -911,6 +911,22 @@ func (f *runtimeClientFake) NextEvent(_ context.Context, req protocol.NextEventR
 	return f.event, nil
 }
 
+func (f *runtimeClientFake) ConnectBrowserResource(context.Context, protocol.ConnectBrowserResourceRequest) (protocol.BrowserResource, error) {
+	return protocol.BrowserResource{}, nil
+}
+
+func (f *runtimeClientFake) ListBrowserResources(context.Context) ([]protocol.BrowserResource, error) {
+	return nil, nil
+}
+
+func (f *runtimeClientFake) ListBrowserTargets(context.Context, string) ([]protocol.BrowserTarget, error) {
+	return nil, nil
+}
+
+func (f *runtimeClientFake) DisconnectBrowserResource(context.Context, string) error {
+	return nil
+}
+
 func (f *runtimeClientFake) SendMail(_ context.Context, req protocol.SendMailRequest) (protocol.MailMessage, error) {
 	return protocol.MailMessage{}, nil
 }

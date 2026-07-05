@@ -11,7 +11,7 @@ import (
 
 const (
 	// ProtocolVersion is the canonical daemon/client wire protocol version.
-	ProtocolVersion = 28
+	ProtocolVersion = 29
 	// DaemonAPIVersion is the legacy name kept for old clients and tooling.
 	DaemonAPIVersion = ProtocolVersion
 )
@@ -280,6 +280,28 @@ type RuntimeEvent struct {
 type NextEventResponse struct {
 	Event  RuntimeEvent `json:"event"`
 	Missed bool         `json:"missed"`
+}
+
+type BrowserResource struct {
+	ID        string `json:"id"`
+	Name      string `json:"name,omitempty"`
+	CDPURL    string `json:"cdpUrl"`
+	Connected bool   `json:"connected"`
+}
+
+type BrowserTarget struct {
+	ID         string `json:"id"`
+	ResourceID string `json:"resourceId"`
+	Type       string `json:"type"`
+	Status     string `json:"status"`
+	URL        string `json:"url,omitempty"`
+	Title      string `json:"title,omitempty"`
+}
+
+type ConnectBrowserResourceRequest struct {
+	Name                          string `json:"name,omitempty"`
+	CDPURL                        string `json:"cdpUrl"`
+	AcknowledgeBrowserControlRisk bool   `json:"acknowledgeBrowserControlRisk"`
 }
 
 type MailAddress struct {

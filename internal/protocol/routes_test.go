@@ -76,6 +76,52 @@ func TestUsageResolverRoutesUsePluginTagAndReadModels(t *testing.T) {
 	}
 }
 
+func TestBrowserResourceRoutesUseBrowserTagAndReadModels(t *testing.T) {
+	list, ok := routeByOperationID("listBrowserResources")
+	if !ok {
+		t.Fatalf("listBrowserResources route missing")
+	}
+	if list.Method != "GET" || list.Path != "/v1/browser-resources" || list.Tag != "browser" {
+		t.Fatalf("list route = %#v", list)
+	}
+	if _, ok := list.Response.([]BrowserResource); !ok {
+		t.Fatalf("listBrowserResources response = %T, want []BrowserResource", list.Response)
+	}
+
+	connect, ok := routeByOperationID("connectBrowserResource")
+	if !ok {
+		t.Fatalf("connectBrowserResource route missing")
+	}
+	if connect.Method != "POST" || connect.Path != "/v1/browser-resources" || connect.Status != 201 || connect.Tag != "browser" {
+		t.Fatalf("connect route = %#v", connect)
+	}
+	if _, ok := connect.Request.(ConnectBrowserResourceRequest); !ok {
+		t.Fatalf("connectBrowserResource request = %T, want ConnectBrowserResourceRequest", connect.Request)
+	}
+	if _, ok := connect.Response.(BrowserResource); !ok {
+		t.Fatalf("connectBrowserResource response = %T, want BrowserResource", connect.Response)
+	}
+
+	targets, ok := routeByOperationID("listBrowserTargets")
+	if !ok {
+		t.Fatalf("listBrowserTargets route missing")
+	}
+	if targets.Method != "GET" || targets.Path != "/v1/browser-resources/{resourceID}/targets" || targets.Tag != "browser" {
+		t.Fatalf("targets route = %#v", targets)
+	}
+	if _, ok := targets.Response.([]BrowserTarget); !ok {
+		t.Fatalf("listBrowserTargets response = %T, want []BrowserTarget", targets.Response)
+	}
+
+	disconnect, ok := routeByOperationID("disconnectBrowserResource")
+	if !ok {
+		t.Fatalf("disconnectBrowserResource route missing")
+	}
+	if disconnect.Method != "DELETE" || disconnect.Path != "/v1/browser-resources/{resourceID}" || disconnect.Status != 204 || disconnect.Tag != "browser" {
+		t.Fatalf("disconnect route = %#v", disconnect)
+	}
+}
+
 func TestAPIRoutesDoNotExposePTYBookmarks(t *testing.T) {
 	for _, route := range APIRoutes {
 		if route.OperationID == "addPTYBookmark" || route.OperationID == "listPTYBookmarks" || route.OperationID == "removePTYBookmark" {

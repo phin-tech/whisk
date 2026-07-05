@@ -57,6 +57,10 @@ type RuntimeClient interface {
 	ListPTYHistory(ctx context.Context) ([]protocol.PTYHistorySummary, error)
 	ReadPTYHistory(ctx context.Context, ptyID string) (protocol.PTYHistory, error)
 	NextEvent(ctx context.Context, req protocol.NextEventRequest) (protocol.NextEventResponse, error)
+	ConnectBrowserResource(ctx context.Context, req protocol.ConnectBrowserResourceRequest) (protocol.BrowserResource, error)
+	ListBrowserResources(ctx context.Context) ([]protocol.BrowserResource, error)
+	ListBrowserTargets(ctx context.Context, resourceID string) ([]protocol.BrowserTarget, error)
+	DisconnectBrowserResource(ctx context.Context, resourceID string) error
 	SendMail(ctx context.Context, req protocol.SendMailRequest) (protocol.MailMessage, error)
 	ListMail(ctx context.Context, req protocol.ListMailRequest) ([]protocol.MailMessage, error)
 	NextMail(ctx context.Context, req protocol.NextMailRequest) (protocol.NextMailResponse, error)

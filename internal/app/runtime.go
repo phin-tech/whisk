@@ -13,6 +13,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
+	domainbrowser "github.com/phin-tech/whisk/internal/domain/browser"
 	"github.com/phin-tech/whisk/internal/domain/httpforward"
 	"github.com/phin-tech/whisk/internal/domain/mailbox"
 	"github.com/phin-tech/whisk/internal/domain/session"
@@ -130,6 +131,7 @@ type AttachPTYRequest struct {
 type RuntimeConfig struct {
 	PTYBackend                 PTYBackend
 	BrowserProbe               BrowserProbeBackend
+	BrowserTargets             BrowserTargetBackend
 	Worktrees                  WorktreeBackend
 	ContextResolvers           map[string]ProjectContextResolver
 	Plugins                    PluginRegistry
@@ -154,6 +156,8 @@ type Runtime struct {
 	ids                        func() string
 	ptys                       PTYBackend
 	browserProbe               BrowserProbeBackend
+	browserTargets             BrowserTargetBackend
+	browserResources           *domainbrowser.State
 	worktrees                  WorktreeBackend
 	contextResolvers           map[string]ProjectContextResolver
 	plugins                    PluginRegistry
@@ -229,6 +233,7 @@ const (
 	EventWorkItemsChanged            RuntimeEventType = "workitems.changed"
 	EventStatusChanged               RuntimeEventType = "status.changed"
 	EventPluginsChanged              RuntimeEventType = "plugins.changed"
+	EventBrowserChanged              RuntimeEventType = "browser.changed"
 	EventMailboxChanged              RuntimeEventType = "mailbox.changed"
 	EventAgentBridgeApprovalsChanged RuntimeEventType = "agent_bridge_approvals.changed"
 	EventAgentPromptsChanged         RuntimeEventType = "agent_prompts.changed"
@@ -481,6 +486,8 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		ids:                        ids,
 		ptys:                       config.PTYBackend,
 		browserProbe:               config.BrowserProbe,
+		browserTargets:             config.BrowserTargets,
+		browserResources:           domainbrowser.NewState(),
 		worktrees:                  config.Worktrees,
 		contextResolvers:           config.ContextResolvers,
 		plugins:                    config.Plugins,
@@ -513,6 +520,11 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 	}
 	if r.ids == nil {
 		r.ids = r.generatedID
+	}
+	if r.browserTargets == nil {
+		if targetBackend, ok := r.browserProbe.(BrowserTargetBackend); ok {
+			r.browserTargets = targetBackend
+		}
 	}
 	if err := r.reconcileLoadedWorkItemRuns(context.Background()); err != nil {
 		watchCancel()
@@ -1354,6 +1366,8 @@ func (r *Runtime) ClearDaemon(ctx context.Context) (ClearDaemonResult, error) {
 	r.mu.Lock()
 	forwardsCleared := len(r.forwards.List())
 	r.forwards = httpforward.NewState()
+	browserResourcesCleared := len(r.browserResources.ListResources())
+	r.browserResources = domainbrowser.NewState()
 	r.ptyMeta = map[string]ptyMetadata{}
 	r.ptyLastInputAt = map[string]time.Time{}
 	r.mu.Unlock()
@@ -1392,6 +1406,9 @@ func (r *Runtime) ClearDaemon(ctx context.Context) (ClearDaemonResult, error) {
 	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged})
+	if browserResourcesCleared > 0 {
+		r.publish(ctx, RuntimeEvent{Type: EventBrowserChanged})
+	}
 	if r.mailboxStore != nil {
 		r.publish(ctx, RuntimeEvent{Type: EventMailboxChanged})
 	}

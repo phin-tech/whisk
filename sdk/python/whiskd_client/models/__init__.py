@@ -31,6 +31,8 @@ from .attachment import Attachment
 from .attachment_meta import AttachmentMeta
 from .bind_work_item_worktree_request import BindWorkItemWorktreeRequest
 from .blocked_work_item import BlockedWorkItem
+from .browser_resource import BrowserResource
+from .browser_target import BrowserTarget
 from .cancel_work_item_run_request import CancelWorkItemRunRequest
 from .clear_daemon_request import ClearDaemonRequest
 from .clear_daemon_response import ClearDaemonResponse
@@ -38,6 +40,7 @@ from .close_pane_request import ClosePaneRequest
 from .compatibility_response import CompatibilityResponse
 from .complete_execution_request import CompleteExecutionRequest
 from .complete_gate_request import CompleteGateRequest
+from .connect_browser_resource_request import ConnectBrowserResourceRequest
 from .create_http_forward_request import CreateHTTPForwardRequest
 from .create_project_request import CreateProjectRequest
 from .create_session_request import CreateSessionRequest
@@ -233,6 +236,8 @@ __all__ = (
     "AttachmentMeta",
     "BindWorkItemWorktreeRequest",
     "BlockedWorkItem",
+    "BrowserResource",
+    "BrowserTarget",
     "CancelWorkItemRunRequest",
     "ClearDaemonRequest",
     "ClearDaemonResponse",
@@ -240,6 +245,7 @@ __all__ = (
     "CompatibilityResponse",
     "CompleteExecutionRequest",
     "CompleteGateRequest",
+    "ConnectBrowserResourceRequest",
     "CreatedSession",
     "CreatedWorktree",
     "CreateHTTPForwardRequest",
