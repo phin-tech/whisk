@@ -3,7 +3,10 @@ import {
   dropPtyState,
   retainPtyState,
   retainPtyStateFromReadModel,
+  terminalStreamCleanupForLivePtys,
+  terminalStreamHasLivePty,
   terminalStreamRemovedPtyIds,
+  terminalStreamPtyIds,
   terminalStreamSizes,
   type TerminalStreamState,
 } from "./terminalStreams";
@@ -57,6 +60,25 @@ function populatedState(): TerminalStreamState<SocketEntry> {
   };
 }
 
+function addPtyState(
+  state: TerminalStreamState<SocketEntry>,
+  ptyId: string,
+  index: number,
+): TerminalStreamState<SocketEntry> {
+  return {
+    outputChunks: { ...state.outputChunks, [ptyId]: [new Uint8Array([index])] },
+    outputChunkStartOffsets: { ...state.outputChunkStartOffsets, [ptyId]: [index * 10] },
+    offsets: { ...state.offsets, [ptyId]: index * 10 + 1 },
+    bottomJumpRevisions: { ...state.bottomJumpRevisions, [ptyId]: index },
+    ptyStreams: { ...state.ptyStreams, [ptyId]: { id: `socket-${ptyId}` } },
+    ptyReconnectTimers: { ...state.ptyReconnectTimers, [ptyId]: index + 100 },
+    ptyReconnectAttempts: { ...state.ptyReconnectAttempts, [ptyId]: index + 1 },
+    outputFetchInFlight: new Map([...state.outputFetchInFlight, [ptyId, index]]),
+    outputFetchAgain: new Set([...state.outputFetchAgain, ptyId]),
+    ptyDialInFlight: new Set([...state.ptyDialInFlight, `${index}:${ptyId}`]),
+  };
+}
+
 describe("terminal stream state pruning", () => {
   it("prunes every PTY-keyed terminal stream container together", () => {
     const pruned = retainPtyState(populatedState(), ["pty_live", "pty_aux"]);
@@ -103,6 +125,13 @@ describe("terminal stream state pruning", () => {
     expect(terminalStreamRemovedPtyIds(populatedState(), ["pty_live"])).toEqual(["pty_aux", "pty_stale"]);
   });
 
+  it("checks continuation PTY liveness with the same normalized IDs used for pruning", () => {
+    expect(terminalStreamHasLivePty("pty_live", [" pty_live ", "pty_aux"])).toBe(true);
+    expect(terminalStreamHasLivePty(" pty_aux ", ["pty_live", "pty_aux"])).toBe(true);
+    expect(terminalStreamHasLivePty("", ["pty_live"])).toBe(false);
+    expect(terminalStreamHasLivePty("pty_stale", ["pty_live", "pty_aux"])).toBe(false);
+  });
+
   it("does not erase client-owned visual state when PTY read-model input is omitted or partial", () => {
     const state = populatedState();
 
@@ -129,5 +158,58 @@ describe("terminal stream state pruning", () => {
       outputFetchAgain: 0,
       ptyDialInFlight: 0,
     });
+  });
+
+  it("describes stream handles and timers that App must clean up for removed PTYs", () => {
+    const cleanup = terminalStreamCleanupForLivePtys(populatedState(), ["pty_live", "pty_aux"]);
+
+    expect(cleanup.removedPtyIds).toEqual(["pty_stale"]);
+    expect(cleanup.streamsToClose).toEqual([{ id: "socket-stale" }]);
+    expect(cleanup.reconnectTimersToClear).toEqual([33]);
+    expect(terminalStreamPtyIds(cleanup.nextState)).toEqual(["pty_aux", "pty_live"]);
+    expect(cleanup.nextState.outputChunks.pty_stale).toBeUndefined();
+    expect(cleanup.nextState.outputChunkStartOffsets.pty_stale).toBeUndefined();
+    expect(cleanup.nextState.offsets.pty_stale).toBeUndefined();
+    expect(cleanup.nextState.ptyStreams.pty_stale).toBeUndefined();
+    expect(cleanup.nextState.outputFetchInFlight.has("pty_stale")).toBe(false);
+    expect(cleanup.nextState.outputFetchAgain.has("pty_stale")).toBe(false);
+    expect([...cleanup.nextState.ptyDialInFlight]).not.toContain("7:pty_stale");
+  });
+
+  it("purges every PTY owned by a closed session from stream and pending state", () => {
+    const cleanup = terminalStreamCleanupForLivePtys(populatedState(), ["pty_aux"]);
+
+    expect(cleanup.removedPtyIds).toEqual(["pty_live", "pty_stale"]);
+    expect(cleanup.streamsToClose).toEqual([{ id: "socket-live" }, { id: "socket-stale" }]);
+    expect(cleanup.reconnectTimersToClear).toEqual([11, 33]);
+    expect(terminalStreamPtyIds(cleanup.nextState)).toEqual(["pty_aux"]);
+    expect(terminalStreamSizes(cleanup.nextState)).toEqual({
+      outputChunks: 1,
+      outputChunkStartOffsets: 1,
+      offsets: 1,
+      bottomJumpRevisions: 1,
+      ptyStreams: 1,
+      ptyReconnectTimers: 1,
+      ptyReconnectAttempts: 1,
+      outputFetchInFlight: 1,
+      outputFetchAgain: 1,
+      ptyDialInFlight: 1,
+    });
+    expect([...cleanup.nextState.outputFetchInFlight.keys()]).toEqual(["pty_aux"]);
+    expect([...cleanup.nextState.outputFetchAgain]).toEqual(["pty_aux"]);
+    expect([...cleanup.nextState.ptyDialInFlight]).toEqual(["7:pty_aux"]);
+  });
+
+  it("returns PTY-keyed stream containers to baseline after repeated remove cascades", () => {
+    let state = retainPtyState(populatedState(), ["pty_live"]);
+    const baselineSizes = terminalStreamSizes(state);
+
+    for (let index = 0; index < 25; index += 1) {
+      state = addPtyState(state, `pty_closed_${index}`, index);
+      state = terminalStreamCleanupForLivePtys(state, ["pty_live"]).nextState;
+
+      expect(terminalStreamSizes(state)).toEqual(baselineSizes);
+      expect(terminalStreamPtyIds(state)).toEqual(["pty_live"]);
+    }
   });
 });
