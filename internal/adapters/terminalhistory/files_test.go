@@ -188,6 +188,15 @@ func TestWriteCheckpointIncrementsGenerationTruncatesLogAndRestoresMatchingGener
 	if written.Generation != 2 {
 		t.Fatalf("second checkpoint generation = %d", written.Generation)
 	}
+	readBack, err := store.ReadCheckpoint(ctx, "pty_01")
+	if err != nil {
+		t.Fatalf("read checkpoint: %v", err)
+	}
+	if readBack.Generation != 2 ||
+		readBack.Offset != 11 ||
+		compactJSON(t, readBack.TerminalSnapshot) != `{"screen":"next"}` {
+		t.Fatalf("read checkpoint = %#v", readBack)
+	}
 	header, payload = readOutputLog(t, root, "pty_01")
 	if header.Generation != 2 || header.BaseOffset != 11 || len(payload) != 0 {
 		t.Fatalf("second log header=%#v payload=%q", header, string(payload))
@@ -310,6 +319,51 @@ func TestListRestorableSkipsCorruptRecords(t *testing.T) {
 	}
 	if len(restored) != 1 || restored[0].Meta.PTYID != "good" {
 		t.Fatalf("restored = %#v", restored)
+	}
+}
+
+func TestListRestorableSortsByDurableMetadataCreationTime(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	store := newTestStore(t, root)
+	createdFirst := testNow.Add(-2 * time.Hour)
+	createdSecond := testNow.Add(-1 * time.Hour)
+
+	for _, meta := range []PTYMeta{
+		{PTYID: "pty_late", CreatedAt: createdSecond},
+		{PTYID: "pty_tie_b", CreatedAt: createdFirst},
+		{PTYID: "pty_tie_a", CreatedAt: createdFirst},
+	} {
+		if err := store.RegisterPTY(ctx, PTYMeta{
+			PTYID:      meta.PTYID,
+			SessionID:  "sess_01",
+			WindowID:   "win_01",
+			PaneID:     "pane_01",
+			WorkingDir: "/repo",
+			Cols:       80,
+			Rows:       24,
+			CreatedAt:  meta.CreatedAt,
+		}); err != nil {
+			t.Fatalf("register %s: %v", meta.PTYID, err)
+		}
+		if _, err := store.WriteCheckpoint(ctx, Checkpoint{
+			PTYID:            meta.PTYID,
+			Cols:             80,
+			Rows:             24,
+			TerminalSnapshot: json.RawMessage(`{"ok":true}`),
+		}); err != nil {
+			t.Fatalf("write checkpoint for %s: %v", meta.PTYID, err)
+		}
+	}
+
+	restored, err := store.ListRestorable(ctx)
+	if err != nil {
+		t.Fatalf("list restorable: %v", err)
+	}
+	got := restoredPTYIDs(restored)
+	want := []string{"pty_tie_a", "pty_tie_b", "pty_late"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("restored order = %#v, want %#v", got, want)
 	}
 }
 
@@ -501,4 +555,12 @@ func compactJSON(t *testing.T, raw json.RawMessage) string {
 		t.Fatalf("compact json: %v", err)
 	}
 	return out.String()
+}
+
+func restoredPTYIDs(restored []RestoredPTY) []string {
+	out := make([]string, 0, len(restored))
+	for _, item := range restored {
+		out = append(out, item.Meta.PTYID)
+	}
+	return out
 }

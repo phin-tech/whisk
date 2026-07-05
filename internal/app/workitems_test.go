@@ -2488,6 +2488,10 @@ func (b *attachableMemoryPTYBackend) Attach(_ context.Context, req app.AttachPTY
 	}, nil
 }
 
+func (b *attachableMemoryPTYBackend) output(ptyID string, offset uint64, data []byte) {
+	b.events[ptyID] <- app.PTYEvent{Kind: app.PTYOutput, Offset: offset, Bytes: append([]byte(nil), data...)}
+}
+
 func (b *attachableMemoryPTYBackend) exit(ptyID string, code int) {
 	record := b.records[ptyID]
 	record.Running = false
