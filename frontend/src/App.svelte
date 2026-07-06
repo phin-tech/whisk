@@ -168,10 +168,12 @@
     outputSnapshotChunkAfterOffset,
     ptyOutputChunkAfterOffset,
     ptyOutputChunkFromTextFrame,
+    ptySnapshotFromTextFrame,
     ptyAttachWebSocketURL,
     ptyInputTraceLine,
     type PTYOutputChunk,
     type PTYStreamFrame,
+    type TerminalSnapshot,
     writePTYInputOverSocket,
   } from "./ptyStream";
   import {
@@ -345,6 +347,7 @@
   let loadingStatusEvents = false;
   let outputChunks: Record<string, Uint8Array[]> = {};
   let outputChunkStartOffsets: Record<string, number[]> = {};
+  let terminalSnapshots: Record<string, TerminalSnapshot> = {};
   let offsets: Record<string, number> = {};
   let bottomJumpRevisions: Record<string, number> = {};
   let daemonStatus: DaemonStatus | null = null;
@@ -884,8 +887,10 @@
         const snapshot = await Output({
           ptyId,
           fromOffset,
+          snapshot: true,
         });
         if (!isCurrentDaemonGeneration(daemonLink, generation) || !canRefreshPTYOutput(ptyId)) return;
+        if (snapshot.terminalSnapshot) applyPTYTerminalSnapshot(ptyId, snapshot.terminalSnapshot);
         const currentOffset = offsets[ptyId] ?? 0;
         const snapshotChunk = outputSnapshotChunkAfterOffset(snapshot, currentOffset);
         if (snapshotChunk) {
@@ -938,10 +943,11 @@
     return terminalStreamHasLivePty(ptyId, ptys.map((pty) => pty.id));
   }
 
-  function currentTerminalStreamState(): TerminalStreamState<WebSocket> {
+  function currentTerminalStreamState(): TerminalStreamState<WebSocket, TerminalSnapshot> {
     return {
       outputChunks,
       outputChunkStartOffsets,
+      terminalSnapshots,
       offsets,
       bottomJumpRevisions,
       ptyStreams,
@@ -953,9 +959,10 @@
     };
   }
 
-  function applyTerminalStreamState(nextState: TerminalStreamState<WebSocket>) {
+  function applyTerminalStreamState(nextState: TerminalStreamState<WebSocket, TerminalSnapshot>) {
     outputChunks = nextState.outputChunks;
     outputChunkStartOffsets = nextState.outputChunkStartOffsets;
+    terminalSnapshots = nextState.terminalSnapshots;
     offsets = nextState.offsets;
     bottomJumpRevisions = nextState.bottomJumpRevisions;
     ptyStreams = nextState.ptyStreams;
@@ -1029,6 +1036,22 @@
     syncPTYStreams(visiblePTYIds);
   }
 
+  function applyPTYTerminalSnapshot(ptyId: string, snapshot: TerminalSnapshot) {
+    const currentOffset = offsets[ptyId] ?? 0;
+    if (snapshot.offset < currentOffset) return false;
+    terminalSnapshots = { ...terminalSnapshots, [ptyId]: snapshot };
+    outputChunks = {
+      ...outputChunks,
+      [ptyId]: [],
+    };
+    outputChunkStartOffsets = {
+      ...outputChunkStartOffsets,
+      [ptyId]: [],
+    };
+    offsets = { ...offsets, [ptyId]: snapshot.offset };
+    return true;
+  }
+
   function appendPTYOutputChunk(ptyId: string, chunk: PTYOutputChunk) {
     const currentOffset = offsets[ptyId] ?? 0;
     const nextChunk = ptyOutputChunkAfterOffset(chunk, currentOffset);
@@ -1052,6 +1075,8 @@
   }
 
   function handlePTYStreamTextFrame(frame: PTYStreamFrame) {
+    const snapshot = ptySnapshotFromTextFrame(frame);
+    if (snapshot) return applyPTYTerminalSnapshot(snapshot.ptyId, snapshot.snapshot);
     if (frame.type === "output") return appendPTYStreamTextOutput(frame);
     if (frame.type === "error") error = frame.message || "PTY stream error";
     return false;
@@ -1074,7 +1099,7 @@
       if (existing && existing.readyState !== WebSocket.CLOSED && existing.readyState !== WebSocket.CLOSING) return;
       const address = await loadDaemonAddress();
       if (!address || !isCurrentDaemonGeneration(daemonLink, generation) || !canContinuePTYStream(ptyId)) return;
-      const socket = new WebSocket(ptyAttachWebSocketURL(address, ptyId, offsets[ptyId] ?? 0, daemonControlToken));
+      const socket = new WebSocket(ptyAttachWebSocketURL(address, ptyId, offsets[ptyId] ?? 0, daemonControlToken, true, true));
       socket.binaryType = "arraybuffer";
       ptyStreams = { ...ptyStreams, [ptyId]: socket };
       socket.onopen = () => {
@@ -2748,6 +2773,7 @@
           {activeSessionWindow}
           {outputChunks}
           {outputChunkStartOffsets}
+          {terminalSnapshots}
           {bottomJumpRevisions}
           {activePaneId}
           {terminalFontSize}

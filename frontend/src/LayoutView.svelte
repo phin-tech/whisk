@@ -1,11 +1,13 @@
 <script lang="ts">
   import type { LayoutNode, Pane } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
+  import type { TerminalSnapshot } from "./ptyStream";
   import TerminalPane from "./TerminalPane.svelte";
 
   export let node: LayoutNode;
   export let panes: { [_ in string]?: Pane };
   export let outputChunks: Record<string, Uint8Array[]>;
   export let outputChunkStartOffsets: Record<string, number[]> = {};
+  export let terminalSnapshots: Record<string, TerminalSnapshot> = {};
   export let bottomJumpRevisions: Record<string, number> = {};
   export let activePaneId: string;
   export let terminalFontSize = 13;
@@ -24,6 +26,7 @@
     {#key pane.currentPtyId ?? pane.id}
       <TerminalPane
         pane={pane}
+        terminalSnapshot={pane.currentPtyId ? (terminalSnapshots[pane.currentPtyId] ?? null) : null}
         outputChunks={pane.currentPtyId ? (outputChunks[pane.currentPtyId] ?? []) : []}
         chunkStartOffsets={pane.currentPtyId ? (outputChunkStartOffsets[pane.currentPtyId] ?? []) : []}
         jumpRevision={0}
@@ -54,6 +57,7 @@
         panes={panes}
         {outputChunks}
         {outputChunkStartOffsets}
+        {terminalSnapshots}
         {bottomJumpRevisions}
         activePaneId={activePaneId}
         {terminalFontSize}

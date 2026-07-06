@@ -6,6 +6,7 @@ import {
   nextPTYStreamOffset,
   outputSnapshotChunkAfterOffset,
   outputSnapshotStartOffset,
+  ptySnapshotFromTextFrame,
   ptyOutputChunkAfterOffset,
   ptyOutputChunkFromTextFrame,
   ptyInputFrame,
@@ -43,15 +44,32 @@ describe("ptyStream", () => {
     expect(ptyAttachWebSocketURL("http://127.0.0.1:8787", "pty_01", 7, "", false)).toBe(
       "ws://127.0.0.1:8787/v1/ptys/pty_01/attach?from=7",
     );
+    expect(ptyAttachWebSocketURL("http://127.0.0.1:8787", "pty_01", 7, "", true, true)).toBe(
+      "ws://127.0.0.1:8787/v1/ptys/pty_01/attach?from=7&binary=1&snapshot=1",
+    );
   });
 
-  it("advances output offsets and ignores stale frames", () => {
+  it("advances output and snapshot offsets and ignores stale frames", () => {
     expect(
       nextPTYStreamOffset(10, { type: "output", ptyId: "pty_01", offset: 10, outputBase64: "aGk=" }),
     ).toBe(12);
     expect(
       nextPTYStreamOffset(12, { type: "output", ptyId: "pty_01", offset: 10, outputBase64: "aGk=" }),
     ).toBe(12);
+    expect(
+      nextPTYStreamOffset(12, {
+        type: "snapshot",
+        ptyId: "pty_01",
+        terminalSnapshot: {
+          offset: 40,
+          cols: 80,
+          rows: 24,
+          scrollbackAnsi: "",
+          viewportAnsi: "ready",
+          rehydrateSequences: "",
+        },
+      }),
+    ).toBe(40);
   });
 
   it("infers output snapshot starts from decoded byte length", () => {
@@ -101,6 +119,37 @@ describe("ptyStream", () => {
       nextOffset: 9,
       bytes: "hi",
     });
+  });
+
+  it("decodes snapshot frames into terminal snapshots", () => {
+    const snapshot = ptySnapshotFromTextFrame({
+      type: "snapshot",
+      ptyId: "pty_01",
+      terminalSnapshot: {
+        offset: 33,
+        cols: 100,
+        rows: 30,
+        scrollbackAnsi: "old",
+        rehydrateBeforeViewport: "\x1b[?1049h",
+        viewportAnsi: "\x1b[H\x1b[2Jready",
+        rehydrateSequences: "\x1b[1;6H",
+      },
+    });
+
+    expect(snapshot).toEqual({
+      ptyId: "pty_01",
+      snapshot: {
+        offset: 33,
+        cols: 100,
+        rows: 30,
+        scrollbackAnsi: "old",
+        rehydrateBeforeViewport: "\x1b[?1049h",
+        viewportAnsi: "\x1b[H\x1b[2Jready",
+        rehydrateSequences: "\x1b[1;6H",
+      },
+    });
+    expect(ptySnapshotFromTextFrame({ type: "snapshot", ptyId: "pty_01" })).toBeNull();
+    expect(ptySnapshotFromTextFrame({ type: "output", ptyId: "pty_01" })).toBeNull();
   });
 
   it("keeps output chunk offset propagation behavior", () => {

@@ -24,6 +24,7 @@
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import LayoutView from "./LayoutView.svelte";
   import type { MainView } from "./navigation";
+  import type { TerminalSnapshot } from "./ptyStream";
   import ProjectsView from "./ProjectsView.svelte";
   import Button from "./ui/Button.svelte";
   import WorkBoard from "./WorkBoard.svelte";
@@ -33,6 +34,7 @@
   export let activeSessionWindow: SessionWindow | null = null;
   export let outputChunks: Record<string, Uint8Array[]> = {};
   export let outputChunkStartOffsets: Record<string, number[]> = {};
+  export let terminalSnapshots: Record<string, TerminalSnapshot> = {};
   export let bottomJumpRevisions: Record<string, number> = {};
   export let activePaneId = "";
   export let terminalFontSize = 13;
@@ -268,6 +270,7 @@
       panes={activeSession.panes}
       {outputChunks}
       {outputChunkStartOffsets}
+      {terminalSnapshots}
       {bottomJumpRevisions}
       {activePaneId}
       {terminalFontSize}

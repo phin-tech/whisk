@@ -25,6 +25,11 @@ function populatedState(): TerminalStreamState<SocketEntry> {
       pty_aux: [5],
       pty_stale: [10],
     },
+    terminalSnapshots: {
+      pty_live: { offset: 4 },
+      pty_aux: { offset: 8 },
+      pty_stale: { offset: 15 },
+    },
     offsets: {
       pty_live: 4,
       pty_aux: 8,
@@ -68,6 +73,7 @@ function addPtyState(
   return {
     outputChunks: { ...state.outputChunks, [ptyId]: [new Uint8Array([index])] },
     outputChunkStartOffsets: { ...state.outputChunkStartOffsets, [ptyId]: [index * 10] },
+    terminalSnapshots: { ...state.terminalSnapshots, [ptyId]: { offset: index * 10 + 1 } },
     offsets: { ...state.offsets, [ptyId]: index * 10 + 1 },
     bottomJumpRevisions: { ...state.bottomJumpRevisions, [ptyId]: index },
     ptyStreams: { ...state.ptyStreams, [ptyId]: { id: `socket-${ptyId}` } },
@@ -85,6 +91,7 @@ describe("terminal stream state pruning", () => {
 
     expect(Object.keys(pruned.outputChunks).sort()).toEqual(["pty_aux", "pty_live"]);
     expect(Object.keys(pruned.outputChunkStartOffsets).sort()).toEqual(["pty_aux", "pty_live"]);
+    expect(Object.keys(pruned.terminalSnapshots).sort()).toEqual(["pty_aux", "pty_live"]);
     expect(Object.keys(pruned.offsets).sort()).toEqual(["pty_aux", "pty_live"]);
     expect(Object.keys(pruned.bottomJumpRevisions).sort()).toEqual(["pty_aux", "pty_live"]);
     expect(Object.keys(pruned.ptyStreams).sort()).toEqual(["pty_aux", "pty_live"]);
@@ -96,6 +103,7 @@ describe("terminal stream state pruning", () => {
     expect(terminalStreamSizes(pruned)).toEqual({
       outputChunks: 2,
       outputChunkStartOffsets: 2,
+      terminalSnapshots: 2,
       offsets: 2,
       bottomJumpRevisions: 2,
       ptyStreams: 2,
@@ -112,6 +120,8 @@ describe("terminal stream state pruning", () => {
 
     expect(pruned.outputChunks.pty_live).toEqual([new Uint8Array([1])]);
     expect(pruned.outputChunks.pty_aux).toEqual([new Uint8Array([2])]);
+    expect(pruned.terminalSnapshots.pty_live).toEqual({ offset: 4 });
+    expect(pruned.terminalSnapshots.pty_stale).toBeUndefined();
     expect(pruned.offsets.pty_live).toBe(4);
     expect(pruned.offsets.pty_aux).toBe(8);
     expect(pruned.ptyStreams.pty_live).toEqual({ id: "socket-live" });
@@ -149,6 +159,7 @@ describe("terminal stream state pruning", () => {
     expect(terminalStreamSizes(retainPtyStateFromReadModel(populatedState(), { ptys: [] }))).toEqual({
       outputChunks: 0,
       outputChunkStartOffsets: 0,
+      terminalSnapshots: 0,
       offsets: 0,
       bottomJumpRevisions: 0,
       ptyStreams: 0,
@@ -169,6 +180,7 @@ describe("terminal stream state pruning", () => {
     expect(terminalStreamPtyIds(cleanup.nextState)).toEqual(["pty_aux", "pty_live"]);
     expect(cleanup.nextState.outputChunks.pty_stale).toBeUndefined();
     expect(cleanup.nextState.outputChunkStartOffsets.pty_stale).toBeUndefined();
+    expect(cleanup.nextState.terminalSnapshots.pty_stale).toBeUndefined();
     expect(cleanup.nextState.offsets.pty_stale).toBeUndefined();
     expect(cleanup.nextState.ptyStreams.pty_stale).toBeUndefined();
     expect(cleanup.nextState.outputFetchInFlight.has("pty_stale")).toBe(false);
@@ -186,6 +198,7 @@ describe("terminal stream state pruning", () => {
     expect(terminalStreamSizes(cleanup.nextState)).toEqual({
       outputChunks: 1,
       outputChunkStartOffsets: 1,
+      terminalSnapshots: 1,
       offsets: 1,
       bottomJumpRevisions: 1,
       ptyStreams: 1,

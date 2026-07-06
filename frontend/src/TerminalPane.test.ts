@@ -38,7 +38,7 @@ describe("TerminalPane", () => {
     expect(source).toContain("export let chunkStartOffsets");
     expect(source).toContain("export let jumpRevision");
     expect(source).toContain("scrollToTop");
-    expect(source).toContain('replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, jumpRevision)');
+    expect(source).toContain('replayAndMaybeScroll(pane.currentPtyId ?? "", terminalSnapshot, outputChunks, chunkStartOffsets, jumpRevision)');
   });
 
   it("scrolls back to the terminal bottom when requested", () => {
@@ -47,4 +47,14 @@ describe("TerminalPane", () => {
     expect(source).toContain("scrollToBottom");
   });
 
+  it("applies daemon terminal snapshots in rehydrate order before replaying deltas", () => {
+    expect(source).toContain("export let terminalSnapshot");
+    expect(source).toContain("function applyTerminalSnapshot");
+    expect(source).toContain("snapshot.rehydrateBeforeViewport");
+    expect(source).toContain("snapshot.scrollbackAnsi");
+    expect(source).toContain("snapshot.viewportAnsi");
+    expect(source).toContain("snapshot.rehydrateSequences");
+    expect(source).toMatch(/applyTerminalSnapshot\(nextPtyId, snapshot\);[\s\S]*replayOutputChunks/);
+    expect(source).toContain('replayAndMaybeScroll(pane.currentPtyId ?? "", terminalSnapshot, outputChunks, chunkStartOffsets, jumpRevision)');
+  });
 });
