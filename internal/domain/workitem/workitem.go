@@ -1298,25 +1298,7 @@ func (s *State) ListWorkflowActionAvailability(workItemID string) ([]WorkflowAct
 		if !workflowActionCanStartFrom(action, item.StageID) {
 			continue
 		}
-		availability := WorkflowActionAvailability{
-			Action:    cloneWorkflowActionDefinition(action),
-			Enabled:   true,
-			InputKind: workflowActionInputKind(action),
-		}
-		if missing := s.missingArtifactRequirements(item.ID, action.Requires); len(missing) > 0 {
-			availability.Enabled = false
-			availability.Reason = workflowArtifactRequirementReason(missing[0])
-		}
-		if availability.Enabled && action.RequiresPassingBlockingGates {
-			for _, gate := range s.gateReports {
-				if gate.WorkItemID == item.ID && gate.Blocking && gate.Status != GateStatusPassed && gate.Status != GateStatusOverridden {
-					availability.Enabled = false
-					availability.Reason = "blocking gates must pass or be overridden"
-					break
-				}
-			}
-		}
-		out = append(out, availability)
+		out = append(out, s.workflowActionAvailability(item, action))
 	}
 	return out, nil
 }
@@ -1978,6 +1960,16 @@ func (s *State) MoveWorkItem(req MoveWorkItem) (WorkItem, error) {
 	}
 	if stage.ProvisionWorktree && item.Worktree == nil {
 		return WorkItem{}, fmt.Errorf("stage %s requires worktree", req.StageID)
+	}
+	availability, ok, err := s.workflowActionAvailabilityForTransition(item, req.StageID)
+	if err != nil {
+		return WorkItem{}, err
+	}
+	if !ok {
+		return WorkItem{}, fmt.Errorf("workflow action from %s to %s not found", item.StageID, req.StageID)
+	}
+	if !availability.Enabled {
+		return WorkItem{}, fmt.Errorf("%s", availability.Reason)
 	}
 	item.StageID = req.StageID
 	item.UpdatedAt = req.Now
@@ -3370,6 +3362,55 @@ func (s *State) workflowActionForItem(item WorkItem, id string) (WorkflowActionD
 		return WorkflowActionDefinition{}, fmt.Errorf("workflow action %s not found", id)
 	}
 	return action, nil
+}
+
+func (s *State) workflowActionAvailabilityForTransition(item WorkItem, stageID string) (WorkflowActionAvailability, bool, error) {
+	definition, err := s.workflowDefinitionForItem(item)
+	if err != nil {
+		return WorkflowActionAvailability{}, false, err
+	}
+	for _, action := range definition.Actions {
+		if !workflowActionCanStartFrom(action, item.StageID) {
+			continue
+		}
+		if workflowActionTargetStage(action, item) != stageID {
+			continue
+		}
+		return s.workflowActionAvailability(item, action), true, nil
+	}
+	return WorkflowActionAvailability{}, false, nil
+}
+
+func (s *State) workflowActionAvailability(item WorkItem, action WorkflowActionDefinition) WorkflowActionAvailability {
+	availability := WorkflowActionAvailability{
+		Action:    cloneWorkflowActionDefinition(action),
+		Enabled:   true,
+		InputKind: workflowActionInputKind(action),
+	}
+	if missing := s.missingArtifactRequirements(item.ID, action.Requires); len(missing) > 0 {
+		availability.Enabled = false
+		availability.Reason = workflowArtifactRequirementReason(missing[0])
+	}
+	if availability.Enabled && action.RequiresPassingBlockingGates {
+		for _, gate := range s.gateReports {
+			if gate.WorkItemID == item.ID && gate.Blocking && gate.Status != GateStatusPassed && gate.Status != GateStatusOverridden {
+				availability.Enabled = false
+				availability.Reason = "blocking gates must pass or be overridden"
+				break
+			}
+		}
+	}
+	return availability
+}
+
+func workflowActionTargetStage(action WorkflowActionDefinition, item WorkItem) string {
+	if action.To == "$previousStage" {
+		if item.PreviousStageID != "" {
+			return item.PreviousStageID
+		}
+		return StageExecution
+	}
+	return action.To
 }
 
 func workflowActionCanStartFrom(action WorkflowActionDefinition, stageID string) bool {

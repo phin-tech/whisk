@@ -286,8 +286,29 @@ func TestStateRejectsInvalidWorkItemUpdates(t *testing.T) {
 func TestMoveToExecutionRequiresWorktreeAndBindWorktreeAllowsMove(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
-	mustProject(t, state, "proj_01", "One")
-	item := mustWorkItem(t, state, "wi_01", "proj_01")
+	definition := WorkflowDefinition{
+		ID:      "worktree-only",
+		Version: 1,
+		Stages:  []string{StageBacklog, StageExecution},
+		Actions: []WorkflowActionDefinition{{ID: "start", From: []string{StageBacklog}, To: StageExecution}},
+	}
+	if _, err := state.ImportWorkflowDefinition(ImportWorkflowDefinition{
+		Definition: definition,
+		Source:     "test",
+		Now:        now,
+	}); err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project := mustProject(t, state, "proj_01", "One")
+	if _, err := state.SetProjectWorkflowDefinition(SetProjectWorkflowDefinition{
+		ProjectID: project.ID,
+		ID:        definition.ID,
+		Version:   definition.Version,
+		Now:       now,
+	}); err != nil {
+		t.Fatalf("set project workflow: %v", err)
+	}
+	item := mustWorkItem(t, state, "wi_01", project.ID)
 
 	if _, err := state.MoveWorkItem(MoveWorkItem{
 		ID:        item.ID,

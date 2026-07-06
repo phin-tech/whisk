@@ -2084,6 +2084,30 @@ func TestRuntimeWorkflowListsAndAuxiliaryActions(t *testing.T) {
 	if done.StageID != workitem.StageDone {
 		t.Fatalf("done = %#v", done)
 	}
+	dependencyWorkflow := workitem.WorkflowDefinition{
+		ID:      "dependency-workflow",
+		Version: 1,
+		Stages:  []string{workitem.StageBacklog, workitem.StageReady, workitem.StageDone},
+		Actions: []workitem.WorkflowActionDefinition{
+			{ID: "ready", From: []string{workitem.StageBacklog}, To: workitem.StageReady},
+			{ID: "done", From: []string{workitem.StageReady}, To: workitem.StageDone},
+		},
+	}
+	dependencyRecord, err := runtime.ImportWorkflowDefinition(ctx, app.ImportWorkflowDefinitionRequest{
+		Definition: dependencyWorkflow,
+		Source:     "test",
+	})
+	if err != nil {
+		t.Fatalf("import dependency workflow: %v", err)
+	}
+	project, err = runtime.SetProjectWorkflowDefinition(ctx, app.SetProjectWorkflowDefinitionRequest{
+		ProjectID: project.ID,
+		ID:        dependencyRecord.ID,
+		Version:   dependencyRecord.Version,
+	})
+	if err != nil {
+		t.Fatalf("set dependency workflow: %v", err)
+	}
 	blockedItem, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Blocked by dependency", Actor: "human"})
 	if err != nil {
 		t.Fatalf("create blocked item: %v", err)

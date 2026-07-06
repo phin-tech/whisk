@@ -103,6 +103,31 @@ func TestHTTPClientDrivesDaemonWorkItemAPI(t *testing.T) {
 		t.Fatalf("bound item = %#v", item)
 	}
 
+	planning, err := daemon.StartPlanning(ctx, protocol.StartPlanningRequest{
+		WorkItemID: item.ID,
+		Actor:      "agent",
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	draft, err := daemon.SubmitDraftPlan(ctx, protocol.SubmitDraftPlanRequest{
+		WorkItemID: item.ID,
+		RunID:      planning.ID,
+		Body:       "Plan.",
+		Actor:      "agent",
+	})
+	if err != nil {
+		t.Fatalf("submit draft: %v", err)
+	}
+	item, err = daemon.ApprovePlan(ctx, protocol.ApprovePlanRequest{
+		WorkItemID: item.ID,
+		ArtifactID: draft.ID,
+		Actor:      "human",
+	})
+	if err != nil {
+		t.Fatalf("approve plan: %v", err)
+	}
+
 	item, err = daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: item.ID, StageID: "execution", Actor: "agent"})
 	if err != nil {
 		t.Fatalf("move ready: %v", err)
@@ -171,7 +196,7 @@ func TestHTTPClientDrivesDaemonWorkItemAPI(t *testing.T) {
 		t.Fatalf("mark read = %#v, err = %v", read, err)
 	}
 	runs, err := daemon.ListWorkItemRuns(ctx, item.ID)
-	if err != nil || len(runs) != 1 || runs[0].ID != run.ID {
+	if err != nil || !containsWorkItemRun(runs, run.ID) {
 		t.Fatalf("runs = %#v, err = %v", runs, err)
 	}
 	completed, err := daemon.ReportStatus(ctx, protocol.ReportStatusRequest{
@@ -339,30 +364,31 @@ func TestHTTPClientDrivesDaemonWorkItemLinkAndReadyAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	blocker, err := daemon.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{
-		ProjectID: project.ID,
-		Title:     "Publish API contract",
-		Actor:     "agent",
+	dependencyWorkflow := workitem.WorkflowDefinition{
+		ID:      "dependency-workflow",
+		Version: 1,
+		Stages:  []string{workitem.StageBacklog, workitem.StageReady, workitem.StageDone},
+		Actions: []workitem.WorkflowActionDefinition{
+			{ID: "ready", From: []string{workitem.StageBacklog}, To: workitem.StageReady},
+			{ID: "done", From: []string{workitem.StageReady}, To: workitem.StageDone},
+		},
+	}
+	dependencyRecord, err := daemon.ImportWorkflowDefinition(ctx, protocol.ImportWorkflowDefinitionRequest{
+		Definition: dependencyWorkflow,
+		Source:     "test",
 	})
 	if err != nil {
-		t.Fatalf("create blocker: %v", err)
+		t.Fatalf("import dependency workflow: %v", err)
 	}
-	blocked, err := daemon.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{
-		ProjectID: project.ID,
-		Title:     "Build UI dependency controls",
-		Actor:     "agent",
+	project, err = daemon.SetProjectWorkflowDefinition(ctx, project.ID, protocol.SetProjectWorkflowDefinitionRequest{
+		ID:      dependencyRecord.ID,
+		Version: dependencyRecord.Version,
 	})
 	if err != nil {
-		t.Fatalf("create blocked: %v", err)
+		t.Fatalf("set dependency workflow: %v", err)
 	}
-	blocker, err = daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: blocker.ID, StageID: workitem.StageReady, Actor: "agent"})
-	if err != nil {
-		t.Fatalf("move blocker: %v", err)
-	}
-	blocked, err = daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: blocked.ID, StageID: workitem.StageReady, Actor: "agent"})
-	if err != nil {
-		t.Fatalf("move blocked: %v", err)
-	}
+	blocker := createReadyWorkItemViaClient(t, daemon, ctx, project.ID, "Publish API contract")
+	blocked := createReadyWorkItemViaClient(t, daemon, ctx, project.ID, "Build UI dependency controls")
 
 	link, err := daemon.AddWorkItemLink(ctx, protocol.AddWorkItemLinkRequest{
 		SourceWorkItemID: blocked.ID,
@@ -396,7 +422,7 @@ func TestHTTPClientDrivesDaemonWorkItemLinkAndReadyAPI(t *testing.T) {
 		t.Fatalf("blocked items = %#v", ready.Blocked)
 	}
 
-	blocker, err = daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{ID: blocker.ID, StageID: workitem.StageDone, Actor: "agent"})
+	blocker, err = completeReadyWorkItemViaClient(t, daemon, ctx, blocker)
 	if err != nil {
 		t.Fatalf("complete blocker: %v", err)
 	}
@@ -524,4 +550,43 @@ func TestHTTPClientGetsProjectDetail(t *testing.T) {
 	if _, err := daemon.GetProjectDetail(ctx, "missing"); err == nil {
 		t.Fatalf("expected missing project error")
 	}
+}
+
+func createReadyWorkItemViaClient(t *testing.T, daemon *client.HTTPClient, ctx context.Context, projectID string, title string) protocol.WorkItem {
+	t.Helper()
+	item, err := daemon.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{
+		ProjectID: projectID,
+		Title:     title,
+		Actor:     "agent",
+	})
+	if err != nil {
+		t.Fatalf("create %q: %v", title, err)
+	}
+	ready, err := daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{
+		ID:      item.ID,
+		StageID: workitem.StageReady,
+		Actor:   "agent",
+	})
+	if err != nil {
+		t.Fatalf("move %s ready: %v", item.ID, err)
+	}
+	return ready
+}
+
+func completeReadyWorkItemViaClient(t *testing.T, daemon *client.HTTPClient, ctx context.Context, item protocol.WorkItem) (protocol.WorkItem, error) {
+	t.Helper()
+	return daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{
+		ID:      item.ID,
+		StageID: workitem.StageDone,
+		Actor:   "agent",
+	})
+}
+
+func containsWorkItemRun(runs []protocol.WorkItemRun, id string) bool {
+	for _, run := range runs {
+		if run.ID == id {
+			return true
+		}
+	}
+	return false
 }
