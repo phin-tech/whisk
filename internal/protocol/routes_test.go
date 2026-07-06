@@ -2,6 +2,22 @@ package protocol
 
 import "testing"
 
+func TestCompatibilityRouteUsesProtocolMetadataResponse(t *testing.T) {
+	route, ok := routeByOperationID("getCompatibility")
+	if !ok {
+		t.Fatalf("getCompatibility route missing")
+	}
+	if route.Method != "GET" || route.Path != "/v1/compat" || route.Tag != "system" {
+		t.Fatalf("route = %#v", route)
+	}
+	if route.Summary != "Daemon protocol compatibility and build metadata" {
+		t.Fatalf("summary = %q", route.Summary)
+	}
+	if _, ok := route.Response.(CompatibilityResponse); !ok {
+		t.Fatalf("getCompatibility response = %T, want CompatibilityResponse", route.Response)
+	}
+}
+
 func TestNextEventRouteIncludesCursorAndResponseEnvelope(t *testing.T) {
 	route, ok := routeByOperationID("nextEvent")
 	if !ok {

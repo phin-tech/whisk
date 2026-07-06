@@ -58,7 +58,7 @@ var (
 )
 
 var APIRoutes = []APIRoute{
-	{Method: "GET", Path: "/v1/compat", OperationID: "getCompatibility", Tag: "system", Summary: "Daemon API version and git SHA", Response: CompatibilityResponse{}},
+	{Method: "GET", Path: "/v1/compat", OperationID: "getCompatibility", Tag: "system", Summary: "Daemon protocol compatibility and build metadata", Response: CompatibilityResponse{}},
 	{Method: "POST", Path: "/v1/daemon/clear", OperationID: "clearDaemon", Tag: "system", Summary: "Clear daemon-owned runtime state", Request: ClearDaemonRequest{}, Response: ClearDaemonResponse{}},
 	{Method: "GET", Path: "/v1/onboarding", OperationID: "getOnboarding", Tag: "system", Summary: "Get local onboarding status", Response: OnboardingStatus{}},
 	{Method: "POST", Path: "/v1/onboarding/apply", OperationID: "applyOnboarding", Tag: "system", Summary: "Apply selected local onboarding items", Request: OnboardingApplyRequest{}, Response: OnboardingStatus{}},

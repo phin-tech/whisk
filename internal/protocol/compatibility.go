@@ -14,7 +14,7 @@ func (r CompatibilityResponse) DaemonProtocolVersion() int {
 }
 
 func SupportedDaemonProtocolVersions() []int {
-	return supportedProtocolVersions(ProtocolVersion, SupportedPreviousProtocolVersions)
+	return supportedProtocolVersions(ProtocolVersion, SupportedPreviousProtocolVersions())
 }
 
 type CompatibilityPolicy struct {
@@ -78,10 +78,11 @@ type CompatibilityError struct {
 
 func (e *CompatibilityError) Error() string {
 	return fmt.Sprintf(
-		"daemon protocol %s is not supported by this app (client protocol %d; supported daemon protocols: %s). Upgrade Whisk, restart the daemon with this app, or use a matching CLI.",
+		"daemon protocol %s is not supported by this app (client protocol %d; supported daemon protocols: %s; daemon supports previous client protocols: %s). Upgrade Whisk, run `whisk daemon start`, or use a matching CLI/app build.",
 		protocolVersionLabel(e.Decision.DaemonProtocolVersion),
 		e.Decision.ClientProtocolVersion,
 		formatProtocolVersions(e.Decision.SupportedDaemonProtocolVersions),
+		formatProtocolVersions(e.Decision.DaemonSupportedPreviousProtocolVersions),
 	)
 }
 

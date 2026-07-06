@@ -16,13 +16,19 @@ const (
 	DaemonAPIVersion = ProtocolVersion
 )
 
+var supportedPreviousProtocolVersions = []int{}
+
 // SupportedPreviousProtocolVersions lists older protocol versions this build accepts and advertises.
-var SupportedPreviousProtocolVersions = []int{}
+func SupportedPreviousProtocolVersions() []int {
+	versions := make([]int, len(supportedPreviousProtocolVersions))
+	copy(versions, supportedPreviousProtocolVersions)
+	return versions
+}
 
 type CompatibilityResponse struct {
 	APIVersion                        int    `json:"apiVersion"`
-	ProtocolVersion                   int    `json:"protocolVersion,omitempty"`
-	SupportedPreviousProtocolVersions []int  `json:"supportedPreviousProtocolVersions,omitempty"`
+	ProtocolVersion                   int    `json:"protocolVersion"`
+	SupportedPreviousProtocolVersions []int  `json:"supportedPreviousProtocolVersions"`
 	GitSHA                            string `json:"gitSha"`
 	Version                           string `json:"version,omitempty"`
 	Dirty                             bool   `json:"dirty,omitempty"`

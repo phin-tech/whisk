@@ -47,7 +47,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient,
 ) -> Response[CompatibilityResponse | ErrorResponse]:
-    """Daemon API version and git SHA
+    """Daemon protocol compatibility and build metadata
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -70,7 +70,7 @@ def sync(
     *,
     client: AuthenticatedClient,
 ) -> CompatibilityResponse | ErrorResponse | None:
-    """Daemon API version and git SHA
+    """Daemon protocol compatibility and build metadata
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -89,7 +89,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
 ) -> Response[CompatibilityResponse | ErrorResponse]:
-    """Daemon API version and git SHA
+    """Daemon protocol compatibility and build metadata
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -110,7 +110,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient,
 ) -> CompatibilityResponse | ErrorResponse | None:
-    """Daemon API version and git SHA
+    """Daemon protocol compatibility and build metadata
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

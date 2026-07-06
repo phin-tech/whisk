@@ -29,6 +29,54 @@ import (
 	"github.com/phin-tech/whisk/internal/server"
 )
 
+func TestHTTPServerCompatibilityResponseShape(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	handler := server.NewHTTP(runtime)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/compat", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode compatibility response: %v", err)
+	}
+	for _, key := range []string{"apiVersion", "protocolVersion", "supportedPreviousProtocolVersions", "gitSha"} {
+		if _, ok := raw[key]; !ok {
+			t.Fatalf("compatibility response missing %q: %s", key, recorder.Body.String())
+		}
+	}
+
+	var protocolVersion int
+	if err := json.Unmarshal(raw["protocolVersion"], &protocolVersion); err != nil {
+		t.Fatalf("decode protocol version: %v", err)
+	}
+	if protocolVersion != protocol.ProtocolVersion {
+		t.Fatalf("protocol version = %d, want %d", protocolVersion, protocol.ProtocolVersion)
+	}
+
+	var previous []int
+	if err := json.Unmarshal(raw["supportedPreviousProtocolVersions"], &previous); err != nil {
+		t.Fatalf("decode supported previous protocol versions: %v", err)
+	}
+	wantPrevious := protocol.SupportedPreviousProtocolVersions()
+	if len(previous) != len(wantPrevious) {
+		t.Fatalf("supported previous protocol versions = %#v, want %#v", previous, wantPrevious)
+	}
+	for i := range previous {
+		if previous[i] != wantPrevious[i] {
+			t.Fatalf("supported previous protocol versions = %#v, want %#v", previous, wantPrevious)
+		}
+	}
+	if len(wantPrevious) == 0 && string(raw["supportedPreviousProtocolVersions"]) != "[]" {
+		t.Fatalf("empty supported previous protocol versions encoded as %s, want []", raw["supportedPreviousProtocolVersions"])
+	}
+}
+
 func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 	backend := newFakePTYBackend()
 	eventBus := newFakeEventBus()

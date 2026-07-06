@@ -866,7 +866,7 @@ func (s *HTTPServer) compatibility(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, protocol.CompatibilityResponse{
 		APIVersion:                        protocol.DaemonAPIVersion,
 		ProtocolVersion:                   protocol.ProtocolVersion,
-		SupportedPreviousProtocolVersions: append([]int(nil), protocol.SupportedPreviousProtocolVersions...),
+		SupportedPreviousProtocolVersions: protocol.SupportedPreviousProtocolVersions(),
 		GitSHA:                            build.GitSHA,
 		Version:                           build.Version,
 		Dirty:                             build.Dirty,
