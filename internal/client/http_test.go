@@ -1027,6 +1027,25 @@ func TestHTTPClientEnsureCompatibleAcceptsLegacyAPIVersion(t *testing.T) {
 	}
 }
 
+func TestHTTPClientEnsureCompatibleAgainstInProcessServer(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	httpServer := httptest.NewServer(server.NewHTTP(runtime))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	compatibility, err := daemon.EnsureCompatible(context.Background())
+	if err != nil {
+		t.Fatalf("ensure compatible: %v", err)
+	}
+	if compatibility.ProtocolVersion != protocol.ProtocolVersion {
+		t.Fatalf("protocol version = %d, want %d", compatibility.ProtocolVersion, protocol.ProtocolVersion)
+	}
+	if compatibility.SupportedPreviousProtocolVersions == nil {
+		t.Fatalf("supported previous protocol versions must be explicit: %#v", compatibility)
+	}
+}
+
 func TestHTTPClientEnsureCompatibleReturnsTypedError(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1047,6 +1066,11 @@ func TestHTTPClientEnsureCompatibleReturnsTypedError(t *testing.T) {
 	var compatibilityErr *protocol.CompatibilityError
 	if !errors.As(err, &compatibilityErr) {
 		t.Fatalf("expected CompatibilityError, got %T", err)
+	}
+	for _, want := range []string{httpServer.URL, "whisk daemon restart"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err.Error(), want)
+		}
 	}
 }
 

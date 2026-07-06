@@ -94,7 +94,7 @@ func (c *HTTPClient) EnsureCompatible(ctx context.Context) (protocol.Compatibili
 		return response, err
 	}
 	if err := protocol.EnsureCompatible(response); err != nil {
-		return response, err
+		return response, fmt.Errorf("check daemon compatibility at %s: %w", c.baseURL, err)
 	}
 	return response, nil
 }

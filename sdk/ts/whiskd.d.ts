@@ -385,7 +385,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Daemon API version and git SHA */
+        /** Daemon protocol compatibility and build metadata */
         get: operations["getCompatibility"];
         put?: never;
         post?: never;
@@ -2162,8 +2162,8 @@ export interface components {
             dirty?: boolean;
             gitSha: string;
             /** Format: int64 */
-            protocolVersion?: number;
-            supportedPreviousProtocolVersions?: number[];
+            protocolVersion: number;
+            supportedPreviousProtocolVersions: number[] | null;
             version?: string;
         };
         CompleteExecutionRequest: {

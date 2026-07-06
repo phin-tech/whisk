@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -14,6 +15,23 @@ func TestCompatibilityResponseDaemonProtocolVersionFallsBackToAPIVersion(t *test
 	response.ProtocolVersion = ProtocolVersion
 	if got := response.DaemonProtocolVersion(); got != ProtocolVersion {
 		t.Fatalf("daemon protocol version = %d, want %d", got, ProtocolVersion)
+	}
+}
+
+func TestCompatibilityResponseJSONShapeIncludesProtocolMetadata(t *testing.T) {
+	response := CompatibilityResponse{
+		APIVersion:                        7,
+		ProtocolVersion:                   7,
+		SupportedPreviousProtocolVersions: []int{},
+		GitSHA:                            "abc123",
+	}
+	data, err := json.Marshal(response)
+	if err != nil {
+		t.Fatalf("marshal compatibility response: %v", err)
+	}
+	want := `{"apiVersion":7,"protocolVersion":7,"supportedPreviousProtocolVersions":[],"gitSha":"abc123"}`
+	if string(data) != want {
+		t.Fatalf("json = %s, want %s", data, want)
 	}
 }
 
@@ -108,11 +126,20 @@ func TestEnsureCompatibleReturnsTypedActionableError(t *testing.T) {
 		"daemon protocol",
 		"client protocol",
 		"supported daemon protocols",
+		"daemon supports previous client protocols",
 		"Upgrade Whisk",
+		"whisk daemon restart",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error %q missing %q", err.Error(), want)
 		}
+	}
+}
+
+func TestSupportedPreviousProtocolVersionsReturnsExplicitCopy(t *testing.T) {
+	versions := SupportedPreviousProtocolVersions()
+	if versions == nil {
+		t.Fatalf("supported previous protocol versions must be an explicit empty list, got nil")
 	}
 }
 

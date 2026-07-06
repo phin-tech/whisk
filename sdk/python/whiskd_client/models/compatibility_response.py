@@ -17,17 +17,17 @@ class CompatibilityResponse:
     Attributes:
         api_version (int):
         git_sha (str):
+        protocol_version (int):
+        supported_previous_protocol_versions (list[int] | None):
         dirty (bool | Unset):
-        protocol_version (int | Unset):
-        supported_previous_protocol_versions (list[int] | Unset):
         version (str | Unset):
     """
 
     api_version: int
     git_sha: str
+    protocol_version: int
+    supported_previous_protocol_versions: list[int] | None
     dirty: bool | Unset = UNSET
-    protocol_version: int | Unset = UNSET
-    supported_previous_protocol_versions: list[int] | Unset = UNSET
     version: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -36,15 +36,20 @@ class CompatibilityResponse:
 
         git_sha = self.git_sha
 
-        dirty = self.dirty
-
         protocol_version = self.protocol_version
 
-        supported_previous_protocol_versions: list[int] | Unset = UNSET
-        if not isinstance(self.supported_previous_protocol_versions, Unset):
+        supported_previous_protocol_versions: list[int] | None
+        if isinstance(self.supported_previous_protocol_versions, list):
             supported_previous_protocol_versions = (
                 self.supported_previous_protocol_versions
             )
+
+        else:
+            supported_previous_protocol_versions = (
+                self.supported_previous_protocol_versions
+            )
+
+        dirty = self.dirty
 
         version = self.version
 
@@ -54,16 +59,12 @@ class CompatibilityResponse:
             {
                 "apiVersion": api_version,
                 "gitSha": git_sha,
+                "protocolVersion": protocol_version,
+                "supportedPreviousProtocolVersions": supported_previous_protocol_versions,
             }
         )
         if dirty is not UNSET:
             field_dict["dirty"] = dirty
-        if protocol_version is not UNSET:
-            field_dict["protocolVersion"] = protocol_version
-        if supported_previous_protocol_versions is not UNSET:
-            field_dict["supportedPreviousProtocolVersions"] = (
-                supported_previous_protocol_versions
-            )
         if version is not UNSET:
             field_dict["version"] = version
 
@@ -76,22 +77,39 @@ class CompatibilityResponse:
 
         git_sha = d.pop("gitSha")
 
-        dirty = d.pop("dirty", UNSET)
+        protocol_version = d.pop("protocolVersion")
 
-        protocol_version = d.pop("protocolVersion", UNSET)
+        def _parse_supported_previous_protocol_versions(
+            data: object,
+        ) -> list[int] | None:
+            if data is None:
+                return data
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                supported_previous_protocol_versions_type_0 = cast(list[int], data)
 
-        supported_previous_protocol_versions = cast(
-            list[int], d.pop("supportedPreviousProtocolVersions", UNSET)
+                return supported_previous_protocol_versions_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(list[int] | None, data)
+
+        supported_previous_protocol_versions = (
+            _parse_supported_previous_protocol_versions(
+                d.pop("supportedPreviousProtocolVersions")
+            )
         )
+
+        dirty = d.pop("dirty", UNSET)
 
         version = d.pop("version", UNSET)
 
         compatibility_response = cls(
             api_version=api_version,
             git_sha=git_sha,
-            dirty=dirty,
             protocol_version=protocol_version,
             supported_previous_protocol_versions=supported_previous_protocol_versions,
+            dirty=dirty,
             version=version,
         )
 
