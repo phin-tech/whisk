@@ -25,6 +25,17 @@ describe("App notification refresh", () => {
     expect(source).not.toContain("PersistJump");
   });
 
+  it("wires plugin UI contributions into command and jump palettes through the daemon read model", () => {
+    expect(source).toContain("ListUIContributions");
+    expect(source).toContain('} from "./pluginUI"');
+    expect(source).toContain("let uiContributions");
+    expect(source).toContain("derivePluginCommandDescriptors(uiContributions)");
+    expect(source).toContain("derivePluginCommandJumpTargets(uiContributions)");
+    expect(source).toContain("async function refreshUIContributionsForScope");
+    expect(source).toContain("function activatePluginCommand");
+    expect(source).toContain("payload.kind === \"plugin-command\"");
+  });
+
   it("loads pending agent bridge approvals instead of clearing them", () => {
     expect(source).toContain('ListAgentBridgeApprovals({ status: "pending" })');
     expect(source).not.toContain("agentBridgeApprovals = [];");
