@@ -41,6 +41,7 @@ type AgentHookIntegrationRequest = protocol.AgentHookIntegrationRequest
 type AgentHookLogStatus = protocol.AgentHookLogStatus
 type AgentProfile = protocol.AgentProfile
 type AgentPrompt = protocol.AgentPrompt
+type AgentStatus = protocol.AgentStatus
 type AnswerQuestionRequest = protocol.AnswerQuestionRequest
 type ApproveDoneRequest = protocol.ApproveDoneRequest
 type ApprovePlanRequest = protocol.ApprovePlanRequest

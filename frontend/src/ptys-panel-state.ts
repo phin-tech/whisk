@@ -14,6 +14,16 @@ type PtyInfoLike = {
   status?: string;
   sessionId: string;
   paneId: string;
+  title?: string;
+  terminalWorkingDirectory?: string;
+  agentStatus?: PtyAgentStatusLike | null;
+};
+
+type PtyAgentStatusLike = {
+  label?: string;
+  state?: string;
+  title?: string;
+  prompt?: string;
 };
 
 type PtyHistorySummaryLike = {
@@ -47,7 +57,10 @@ export type PtysPanelLiveRow = {
   detail: string;
   running: boolean;
   status: string;
+  statusTone: "running" | "waiting" | "working" | "idle" | "exited";
   canDelete: boolean;
+  agentLabel: string;
+  agentTitle: string;
 };
 
 export type PtysPanelHistoryRow = {
@@ -138,17 +151,24 @@ export function derivePtysPanelView(input: PtysPanelViewInput): PtysPanelView {
 }
 
 export function derivePtyLiveRows(ptys: readonly PtyInfoLike[]): PtysPanelLiveRow[] {
-  return ptys.map((pty) => ({
-    kind: "live",
-    key: `live:${pty.id}`,
-    id: pty.id,
-    title: pty.id,
-    subtitle: `${pty.sessionId || "unowned"} / ${pty.paneId || "detached"}`,
-    detail: `${pty.workingDir || "."} / ${pty.cols}x${pty.rows}`,
-    running: pty.running,
-    status: pty.status || (pty.running ? "running" : "exited"),
-    canDelete: !pty.running,
-  }));
+  return ptys.map((pty) => {
+    const agentState = normalizedAgentState(pty.agentStatus?.state);
+    const status = agentState || pty.status || (pty.running ? "running" : "exited");
+    return {
+      kind: "live",
+      key: `live:${pty.id}`,
+      id: pty.id,
+      title: pty.title || pty.id,
+      subtitle: `${pty.sessionId || "unowned"} / ${pty.paneId || "detached"}`,
+      detail: `${pty.terminalWorkingDirectory || pty.workingDir || "."} / ${pty.cols}x${pty.rows}`,
+      running: pty.running,
+      status,
+      statusTone: ptyStatusTone(pty.running, agentState),
+      canDelete: !pty.running,
+      agentLabel: pty.agentStatus?.label || "",
+      agentTitle: pty.agentStatus?.title || pty.agentStatus?.prompt || "",
+    };
+  });
 }
 
 export function derivePtyHistoryRows(
@@ -211,4 +231,23 @@ function sectionRow(
     title,
     count,
   };
+}
+
+function normalizedAgentState(state: string | undefined): string {
+  if (!state || state === "unknown") return "";
+  if (state === "waiting" || state === "working" || state === "idle" || state === "done") {
+    return state;
+  }
+  return "";
+}
+
+function ptyStatusTone(
+  running: boolean,
+  agentState: string,
+): PtysPanelLiveRow["statusTone"] {
+  if (!running) return "exited";
+  if (agentState === "waiting") return "waiting";
+  if (agentState === "working") return "working";
+  if (agentState === "idle" || agentState === "done") return "idle";
+  return "running";
 }

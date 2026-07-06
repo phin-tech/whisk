@@ -6791,6 +6791,43 @@
         ],
         "type": "object"
       },
+      "AgentStatus": {
+        "properties": {
+          "advisory": {
+            "type": "boolean"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "label",
+          "state",
+          "source",
+          "confidence",
+          "advisory"
+        ],
+        "type": "object"
+      },
       "AnswerQuestionRequest": {
         "properties": {
           "actor": {
@@ -8245,6 +8282,14 @@
       },
       "PTYInfo": {
         "properties": {
+          "agentStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentStatus"
+              }
+            ],
+            "nullable": true
+          },
           "cols": {
             "format": "int64",
             "type": "integer"
@@ -8277,6 +8322,12 @@
             "type": "string"
           },
           "status": {
+            "type": "string"
+          },
+          "terminalWorkingDirectory": {
+            "type": "string"
+          },
+          "title": {
             "type": "string"
           },
           "windowId": {

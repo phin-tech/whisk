@@ -21,6 +21,7 @@ from .agent_hook_log_status import AgentHookLogStatus
 from .agent_profile import AgentProfile
 from .agent_prompt import AgentPrompt
 from .agent_prompt_tool_input import AgentPromptToolInput
+from .agent_status import AgentStatus
 from .answer_question_request import AnswerQuestionRequest
 from .approve_done_request import ApproveDoneRequest
 from .approve_plan_request import ApprovePlanRequest
@@ -233,6 +234,7 @@ __all__ = (
     "AgentProfile",
     "AgentPrompt",
     "AgentPromptToolInput",
+    "AgentStatus",
     "AnswerQuestionRequest",
     "ApproveDoneRequest",
     "ApprovePlanRequest",

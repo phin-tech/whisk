@@ -373,6 +373,31 @@ func TestHTTPClientOutputCanRequestTerminalSnapshot(t *testing.T) {
 	}
 }
 
+func TestHTTPClientListPTYsDecodesTerminalMetadataAndAgentStatus(t *testing.T) {
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/ptys" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `[{"id":"pty_01","workingDir":"/repo","cols":80,"rows":24,"running":true,"status":"running","title":"Codex waiting for approval","terminalWorkingDirectory":"file://localhost/repo","agentStatus":{"agent":"codex","label":"Codex","state":"waiting","source":"osc-title","confidence":"fallback","title":"Codex waiting for approval","advisory":true}}]`)
+	}))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ptys, err := daemon.ListPTYs(context.Background())
+	if err != nil {
+		t.Fatalf("list ptys: %v", err)
+	}
+	if len(ptys) != 1 ||
+		ptys[0].Title != "Codex waiting for approval" ||
+		ptys[0].TerminalWorkingDirectory != "file://localhost/repo" ||
+		ptys[0].AgentStatus == nil ||
+		ptys[0].AgentStatus.State != "waiting" ||
+		!ptys[0].AgentStatus.Advisory {
+		t.Fatalf("ptys = %#v", ptys)
+	}
+}
+
 func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 	used := 1.0
 	limit := 10.0

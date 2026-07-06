@@ -2084,6 +2084,16 @@ export interface components {
             };
             toolName?: string;
         };
+        AgentStatus: {
+            advisory: boolean;
+            agent: string;
+            confidence: string;
+            label: string;
+            prompt?: string;
+            source: string;
+            state: string;
+            title?: string;
+        };
         AnswerQuestionRequest: {
             actor?: string;
             answer: string;
@@ -2501,6 +2511,7 @@ export interface components {
             workingDir: string;
         };
         PTYInfo: {
+            agentStatus?: components["schemas"]["AgentStatus"] | null;
             /** Format: int64 */
             cols: number;
             /** Format: int64 */
@@ -2514,6 +2525,8 @@ export interface components {
             running: boolean;
             sessionId: string;
             status: string;
+            terminalWorkingDirectory?: string;
+            title?: string;
             windowId: string;
             workingDir: string;
         };

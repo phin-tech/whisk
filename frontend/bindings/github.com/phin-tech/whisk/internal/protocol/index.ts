@@ -14,6 +14,7 @@ export {
     AgentHookLogStatus,
     AgentProfile,
     AgentPrompt,
+    AgentStatus,
     AnswerQuestionRequest,
     ApproveDoneRequest,
     ApprovePlanRequest,

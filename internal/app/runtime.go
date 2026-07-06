@@ -14,6 +14,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/agenthooklog"
 	"github.com/phin-tech/whisk/internal/adapters/agenthooks"
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
+	"github.com/phin-tech/whisk/internal/domain/agentstatus"
 	domainbrowser "github.com/phin-tech/whisk/internal/domain/browser"
 	"github.com/phin-tech/whisk/internal/domain/httpforward"
 	"github.com/phin-tech/whisk/internal/domain/mailbox"
@@ -50,18 +51,32 @@ type PTYRecord struct {
 }
 
 type PTYInfo struct {
-	ID             string    `json:"id"`
-	WorkingDir     string    `json:"workingDir"`
-	Cols           int       `json:"cols"`
-	Rows           int       `json:"rows"`
-	Running        bool      `json:"running"`
-	Status         PTYStatus `json:"status"`
-	ExitCode       *int      `json:"exitCode,omitempty"`
-	SessionID      string    `json:"sessionId"`
-	WindowID       string    `json:"windowId"`
-	PaneID         string    `json:"paneId"`
-	OriginWindowID string    `json:"originWindowId"`
-	OriginPaneID   string    `json:"originPaneId"`
+	ID                       string       `json:"id"`
+	WorkingDir               string       `json:"workingDir"`
+	Cols                     int          `json:"cols"`
+	Rows                     int          `json:"rows"`
+	Running                  bool         `json:"running"`
+	Status                   PTYStatus    `json:"status"`
+	ExitCode                 *int         `json:"exitCode,omitempty"`
+	SessionID                string       `json:"sessionId"`
+	WindowID                 string       `json:"windowId"`
+	PaneID                   string       `json:"paneId"`
+	OriginWindowID           string       `json:"originWindowId"`
+	OriginPaneID             string       `json:"originPaneId"`
+	Title                    string       `json:"title,omitempty"`
+	TerminalWorkingDirectory string       `json:"terminalWorkingDirectory,omitempty"`
+	AgentStatus              *AgentStatus `json:"agentStatus,omitempty"`
+}
+
+type AgentStatus struct {
+	Agent      agentstatus.Agent      `json:"agent"`
+	Label      string                 `json:"label"`
+	State      agentstatus.State      `json:"state"`
+	Source     agentstatus.Source     `json:"source"`
+	Confidence agentstatus.Confidence `json:"confidence"`
+	Title      string                 `json:"title,omitempty"`
+	Prompt     string                 `json:"prompt,omitempty"`
+	Advisory   bool                   `json:"advisory"`
 }
 
 type ClearDaemonResult struct {
@@ -1724,7 +1739,10 @@ func (r *Runtime) appendPTYHistoryOutput(ctx context.Context, ptyID string, offs
 	if len(data) == 0 {
 		return
 	}
-	terminalWriteErr := r.writeTerminalOutput(ptyID, offset, data)
+	terminalMetadataChanged, terminalWriteErr := r.writeTerminalOutput(ptyID, offset, data)
+	if terminalMetadataChanged {
+		r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: ptyID})
+	}
 	if r.terminalHistoryStore == nil {
 		return
 	}
@@ -1755,14 +1773,19 @@ func (r *Runtime) resizeTerminalState(ptyID string, size PTYSize) {
 	state.Resize(size.Cols, size.Rows)
 }
 
-func (r *Runtime) writeTerminalOutput(ptyID string, offset uint64, data []byte) error {
+func (r *Runtime) writeTerminalOutput(ptyID string, offset uint64, data []byte) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	state, ok := r.terminalStates[ptyID]
 	if !ok {
-		return fmt.Errorf("terminal state for pty %s not found", ptyID)
+		return false, fmt.Errorf("terminal state for pty %s not found", ptyID)
 	}
-	return state.Write(offset, data)
+	before := state.Snapshot()
+	if err := state.Write(offset, data); err != nil {
+		return false, err
+	}
+	after := state.Snapshot()
+	return before.Title != after.Title || before.WorkingDirectory != after.WorkingDirectory, nil
 }
 
 func (r *Runtime) writeTerminalCheckpoint(ctx context.Context, ptyID string) {
@@ -2015,19 +2038,60 @@ func (r *Runtime) markPTYKilled(ptyID string) {
 
 func (r *Runtime) ptyInfoForRecord(record PTYRecord) PTYInfo {
 	meta := r.ptyMetadataForRecord(record)
+	title, terminalWorkingDirectory, agentStatus := r.terminalPTYReadModel(record.ID)
 	return PTYInfo{
-		ID:             record.ID,
-		WorkingDir:     record.WorkingDir,
-		Cols:           record.Cols,
-		Rows:           record.Rows,
-		Running:        record.Running,
-		Status:         meta.Status,
-		ExitCode:       cloneIntPtr(meta.ExitCode),
-		SessionID:      meta.SessionID,
-		WindowID:       meta.WindowID,
-		PaneID:         meta.PaneID,
-		OriginWindowID: meta.OriginWindowID,
-		OriginPaneID:   meta.OriginPaneID,
+		ID:                       record.ID,
+		WorkingDir:               record.WorkingDir,
+		Cols:                     record.Cols,
+		Rows:                     record.Rows,
+		Running:                  record.Running,
+		Status:                   meta.Status,
+		ExitCode:                 cloneIntPtr(meta.ExitCode),
+		SessionID:                meta.SessionID,
+		WindowID:                 meta.WindowID,
+		PaneID:                   meta.PaneID,
+		OriginWindowID:           meta.OriginWindowID,
+		OriginPaneID:             meta.OriginPaneID,
+		Title:                    title,
+		TerminalWorkingDirectory: terminalWorkingDirectory,
+		AgentStatus:              agentStatus,
+	}
+}
+
+func (r *Runtime) terminalPTYReadModel(ptyID string) (string, string, *AgentStatus) {
+	r.mu.Lock()
+	state, ok := r.terminalStates[ptyID]
+	if !ok {
+		r.mu.Unlock()
+		return "", "", nil
+	}
+	snapshot := state.Snapshot()
+	r.mu.Unlock()
+
+	candidates := make([]agentstatus.Status, 0, 2)
+	if status, ok := agentstatus.ClassifyTitle(snapshot.Title); ok {
+		candidates = append(candidates, status)
+	}
+	if status, ok := agentstatus.ClassifyOutputTail(snapshot.ScrollbackAnsi + "\n" + snapshot.ViewportAnsi); ok {
+		candidates = append(candidates, status)
+	}
+	if status, ok := agentstatus.SelectStatus(candidates...); ok {
+		return snapshot.Title, snapshot.WorkingDirectory, toPTYAgentStatus(status)
+	}
+	return snapshot.Title, snapshot.WorkingDirectory, nil
+}
+
+func toPTYAgentStatus(status agentstatus.Status) *AgentStatus {
+	status = agentstatus.NormalizeStatus(status)
+	return &AgentStatus{
+		Agent:      status.Agent,
+		Label:      status.Label,
+		State:      status.State,
+		Source:     status.Source,
+		Confidence: status.Confidence,
+		Title:      status.Title,
+		Prompt:     status.Prompt,
+		Advisory:   status.Advisory(),
 	}
 }
 

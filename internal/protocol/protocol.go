@@ -292,18 +292,32 @@ type TerminalSnapshot struct {
 }
 
 type PTYInfo struct {
-	ID             string `json:"id"`
-	WorkingDir     string `json:"workingDir"`
-	Cols           int    `json:"cols"`
-	Rows           int    `json:"rows"`
-	Running        bool   `json:"running"`
-	Status         string `json:"status"`
-	ExitCode       *int   `json:"exitCode,omitempty"`
-	SessionID      string `json:"sessionId"`
-	WindowID       string `json:"windowId"`
-	PaneID         string `json:"paneId"`
-	OriginWindowID string `json:"originWindowId"`
-	OriginPaneID   string `json:"originPaneId"`
+	ID                       string       `json:"id"`
+	WorkingDir               string       `json:"workingDir"`
+	Cols                     int          `json:"cols"`
+	Rows                     int          `json:"rows"`
+	Running                  bool         `json:"running"`
+	Status                   string       `json:"status"`
+	ExitCode                 *int         `json:"exitCode,omitempty"`
+	SessionID                string       `json:"sessionId"`
+	WindowID                 string       `json:"windowId"`
+	PaneID                   string       `json:"paneId"`
+	OriginWindowID           string       `json:"originWindowId"`
+	OriginPaneID             string       `json:"originPaneId"`
+	Title                    string       `json:"title,omitempty"`
+	TerminalWorkingDirectory string       `json:"terminalWorkingDirectory,omitempty"`
+	AgentStatus              *AgentStatus `json:"agentStatus,omitempty"`
+}
+
+type AgentStatus struct {
+	Agent      string `json:"agent"`
+	Label      string `json:"label"`
+	State      string `json:"state"`
+	Source     string `json:"source"`
+	Confidence string `json:"confidence"`
+	Title      string `json:"title,omitempty"`
+	Prompt     string `json:"prompt,omitempty"`
+	Advisory   bool   `json:"advisory"`
 }
 
 type PTYHistorySummary struct {

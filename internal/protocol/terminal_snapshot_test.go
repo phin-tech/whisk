@@ -75,3 +75,53 @@ func TestPTYStreamSnapshotFrameJSONShape(t *testing.T) {
 		t.Fatalf("decoded frame = %#v", decoded)
 	}
 }
+
+func TestPTYInfoJSONIncludesTerminalMetadataAndAgentStatus(t *testing.T) {
+	info := PTYInfo{
+		ID:                       "pty_01",
+		WorkingDir:               "/repo",
+		Cols:                     80,
+		Rows:                     24,
+		Running:                  true,
+		Status:                   "running",
+		Title:                    "Codex waiting for approval",
+		TerminalWorkingDirectory: "file://localhost/repo",
+		AgentStatus: &AgentStatus{
+			Agent:      "codex",
+			Label:      "Codex",
+			State:      "waiting",
+			Source:     "osc-title",
+			Confidence: "fallback",
+			Title:      "Codex waiting for approval",
+			Advisory:   true,
+		},
+	}
+
+	data, err := json.Marshal(info)
+	if err != nil {
+		t.Fatalf("marshal pty info: %v", err)
+	}
+	jsonText := string(data)
+	for _, want := range []string{
+		`"title":"Codex waiting for approval"`,
+		`"terminalWorkingDirectory":"file://localhost/repo"`,
+		`"agentStatus"`,
+		`"agent":"codex"`,
+		`"advisory":true`,
+	} {
+		if !strings.Contains(jsonText, want) {
+			t.Fatalf("json %s missing %s", jsonText, want)
+		}
+	}
+
+	var decoded PTYInfo
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal pty info: %v", err)
+	}
+	if decoded.AgentStatus == nil ||
+		decoded.AgentStatus.State != "waiting" ||
+		!decoded.AgentStatus.Advisory ||
+		decoded.TerminalWorkingDirectory != "file://localhost/repo" {
+		t.Fatalf("decoded pty info = %#v", decoded)
+	}
+}
