@@ -3984,6 +3984,106 @@
         }
       }
     },
+    "/v1/skills": {
+      "get": {
+        "operationId": "listSkills",
+        "summary": "List daemon-discovered agent skills",
+        "tags": [
+          "skills"
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillCatalog"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
+    "/v1/skills/rescan": {
+      "post": {
+        "operationId": "rescanSkills",
+        "summary": "Rescan daemon-discovered agent skills",
+        "tags": [
+          "skills"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListSkillsRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "controlBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillCatalog"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "error"
+          }
+        }
+      }
+    },
     "/v1/status": {
       "post": {
         "operationId": "reportStatus",
@@ -7757,6 +7857,17 @@
         ],
         "type": "object"
       },
+      "ListSkillsRequest": {
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ListWorktreesRequest": {
         "properties": {
           "overridePath": {
@@ -9547,6 +9658,128 @@
         "required": [
           "sessionId",
           "rootDir"
+        ],
+        "type": "object"
+      },
+      "Skill": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "directoryPath": {
+            "type": "string"
+          },
+          "fileCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "rootPath": {
+            "type": "string"
+          },
+          "skillFilePath": {
+            "type": "string"
+          },
+          "sourceKind": {
+            "type": "string"
+          },
+          "sourceLabel": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "providers",
+          "sourceKind",
+          "sourceLabel",
+          "rootPath",
+          "directoryPath",
+          "skillFilePath",
+          "fileCount",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "SkillCatalog": {
+        "properties": {
+          "scannedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/Skill"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SkillSource"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "required": [
+          "skills",
+          "sources",
+          "scannedAt"
+        ],
+        "type": "object"
+      },
+      "SkillSource": {
+        "properties": {
+          "exists": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "skippedReason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "path",
+          "kind",
+          "providers",
+          "exists"
         ],
         "type": "object"
       },

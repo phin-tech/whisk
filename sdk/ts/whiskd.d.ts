@@ -1245,6 +1245,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List daemon-discovered agent skills */
+        get: operations["listSkills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/skills/rescan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rescan daemon-discovered agent skills */
+        post: operations["rescanSkills"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/status": {
         parameters: {
             query?: never;
@@ -2358,6 +2392,10 @@ export interface components {
             paneId?: string;
             sizes?: number[];
         };
+        ListSkillsRequest: {
+            projectId?: string;
+            sessionId?: string;
+        };
         ListWorktreesRequest: {
             overridePath?: string;
             repoPath: string;
@@ -2861,6 +2899,36 @@ export interface components {
         SetSessionRootDirRequest: {
             rootDir: string;
             sessionId: string;
+        };
+        Skill: {
+            description?: string;
+            directoryPath: string;
+            /** Format: int64 */
+            fileCount: number;
+            id: string;
+            name: string;
+            providers: string[] | null;
+            rootPath: string;
+            skillFilePath: string;
+            sourceKind: string;
+            sourceLabel: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SkillCatalog: {
+            /** Format: date-time */
+            scannedAt: string;
+            skills: components["schemas"]["Skill"][] | null;
+            sources: components["schemas"]["SkillSource"][] | null;
+        };
+        SkillSource: {
+            exists: boolean;
+            id: string;
+            kind: string;
+            label: string;
+            path: string;
+            providers: string[] | null;
+            skippedReason?: string;
         };
         SplitPaneRequest: {
             direction: string;
@@ -5954,6 +6022,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listSkills: {
+        parameters: {
+            query?: {
+                projectId?: string;
+                sessionId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillCatalog"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rescanSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListSkillsRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillCatalog"];
                 };
             };
             /** @description error */

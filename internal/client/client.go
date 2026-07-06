@@ -11,6 +11,8 @@ type RuntimeClient interface {
 	ClearDaemon(ctx context.Context, req protocol.ClearDaemonRequest) (protocol.ClearDaemonResponse, error)
 	OnboardingStatus(ctx context.Context) (protocol.OnboardingStatus, error)
 	ApplyOnboarding(ctx context.Context, req protocol.OnboardingApplyRequest) (protocol.OnboardingStatus, error)
+	ListSkills(ctx context.Context, req protocol.ListSkillsRequest) (protocol.SkillCatalog, error)
+	RescanSkills(ctx context.Context, req protocol.ListSkillsRequest) (protocol.SkillCatalog, error)
 	AgentBridgeHook(ctx context.Context, bridgeID string, req protocol.AgentBridgeHookRequest) (protocol.AgentBridgeHookResponse, error)
 	RecordAgentHookEvent(ctx context.Context, req protocol.AgentBridgeHookRequest) (protocol.AgentBridgeEvent, error)
 	ListAgentBridgeApprovals(ctx context.Context, req protocol.ListAgentBridgeApprovalsRequest) ([]protocol.AgentBridgeApproval, error)

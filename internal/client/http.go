@@ -117,6 +117,25 @@ func (c *HTTPClient) ApplyOnboarding(ctx context.Context, req protocol.Onboardin
 	return status, err
 }
 
+func (c *HTTPClient) ListSkills(ctx context.Context, req protocol.ListSkillsRequest) (protocol.SkillCatalog, error) {
+	query := url.Values{}
+	if req.ProjectID != "" {
+		query.Set("projectId", req.ProjectID)
+	}
+	if req.SessionID != "" {
+		query.Set("sessionId", req.SessionID)
+	}
+	var catalog protocol.SkillCatalog
+	err := c.get(ctx, "/v1/skills", query, &catalog)
+	return catalog, err
+}
+
+func (c *HTTPClient) RescanSkills(ctx context.Context, req protocol.ListSkillsRequest) (protocol.SkillCatalog, error) {
+	var catalog protocol.SkillCatalog
+	err := c.post(ctx, "/v1/skills/rescan", req, &catalog)
+	return catalog, err
+}
+
 func (c *HTTPClient) AgentBridgeHook(ctx context.Context, bridgeID string, req protocol.AgentBridgeHookRequest) (protocol.AgentBridgeHookResponse, error) {
 	var response protocol.AgentBridgeHookResponse
 	path := "/v1/agent-bridges/" + url.PathEscape(bridgeID) + "/hooks"

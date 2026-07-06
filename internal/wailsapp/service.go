@@ -639,6 +639,14 @@ func (s *Service) ApplyOnboarding(ctx context.Context, req protocol.OnboardingAp
 	return s.client.ApplyOnboarding(ctx, req)
 }
 
+func (s *Service) ListSkills(ctx context.Context, req protocol.ListSkillsRequest) (protocol.SkillCatalog, error) {
+	return s.client.ListSkills(ctx, req)
+}
+
+func (s *Service) RescanSkills(ctx context.Context, req protocol.ListSkillsRequest) (protocol.SkillCatalog, error) {
+	return s.client.RescanSkills(ctx, req)
+}
+
 func (s *Service) ListSessions(ctx context.Context) ([]session.Session, error) {
 	return s.client.ListSessions(ctx)
 }
