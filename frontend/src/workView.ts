@@ -45,6 +45,16 @@ type ArtifactLike = {
   status: string;
 };
 
+type WorkflowActionAvailabilityLike = {
+  action: {
+    id: string;
+  };
+  enabled: boolean;
+  recommended?: boolean;
+  reason?: string;
+  inputKind?: string;
+};
+
 export type WorkItemAttentionTone = "info" | "success" | "warning" | "danger";
 
 export type WorkItemAttentionSignal = {
@@ -130,8 +140,9 @@ export function deriveNextStep(context: {
   hasApprovedPlan: boolean;
   hasDraftPlan: boolean;
   hasLatestRun: boolean;
+  workflowActions?: WorkflowActionAvailabilityLike[];
 }): NextStepView {
-  const { stageId, runStatus, hasTerminal, hasApprovedPlan, hasDraftPlan, hasLatestRun } = context;
+  const { stageId, runStatus, hasTerminal, hasApprovedPlan, hasDraftPlan, hasLatestRun, workflowActions } = context;
 
   if (runStatus === "running" || runStatus === "awaiting_input") {
     return {
@@ -149,6 +160,17 @@ export function deriveNextStep(context: {
       label: "Launch run",
       tone: "accent",
       isLaunch: true,
+    };
+  }
+  if (workflowActions) {
+    const step = deriveDaemonWorkflowNextStep(workflowActions, { hasDraftPlan, hasLatestRun });
+    if (step) return step;
+    return {
+      kind: "none",
+      message: "Use the available workflow actions below to move this item forward.",
+      label: "",
+      tone: "neutral",
+      isLaunch: false,
     };
   }
   if (stageId === "done") {
@@ -215,6 +237,59 @@ export function deriveNextStep(context: {
     tone: "neutral",
     isLaunch: false,
   };
+}
+
+function deriveDaemonWorkflowNextStep(
+  actions: WorkflowActionAvailabilityLike[],
+  context: { hasDraftPlan: boolean; hasLatestRun: boolean },
+): NextStepView | null {
+  const recommended = actions.find((availability) => availability.enabled && availability.recommended);
+  switch (recommended?.action.id) {
+    case "start_planning":
+      return {
+        kind: "start-planning",
+        message: "Start planning to generate a draft plan for review.",
+        label: "Start planning",
+        tone: "accent",
+        isLaunch: false,
+      };
+    case "approve_plan":
+      if (!context.hasDraftPlan) return null;
+      return {
+        kind: "approve-plan",
+        message: "A draft plan is ready — review it and approve to continue.",
+        label: "Approve plan",
+        tone: "accent",
+        isLaunch: false,
+      };
+    case "start_execution":
+      return {
+        kind: "launch-execution",
+        message: "Plan approved. Choose an agent and launch execution.",
+        label: "Launch execution",
+        tone: "accent",
+        isLaunch: true,
+      };
+    case "complete_execution":
+      if (!context.hasLatestRun) return null;
+      return {
+        kind: "send-to-review",
+        message: "Execution is done — send it to review.",
+        label: "Send to review",
+        tone: "accent",
+        isLaunch: false,
+      };
+    case "approve_done":
+      return {
+        kind: "mark-done",
+        message: "Review the work, then mark it done or send feedback below.",
+        label: "Mark done",
+        tone: "accent",
+        isLaunch: false,
+      };
+    default:
+      return null;
+  }
 }
 
 export function deriveWorkItemAttention<T extends WorkItemLike>(

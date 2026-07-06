@@ -1313,6 +1313,7 @@ func (s *State) ListWorkflowActionAvailability(workItemID string) ([]WorkflowAct
 		}
 		out = append(out, s.workflowActionAvailability(item, action))
 	}
+	markRecommendedWorkflowAction(item, out)
 	return out, nil
 }
 
@@ -3541,6 +3542,45 @@ func (s *State) workflowActionAvailability(item WorkItem, action WorkflowActionD
 		}
 	}
 	return availability
+}
+
+func markRecommendedWorkflowAction(item WorkItem, actions []WorkflowActionAvailability) {
+	bestIndex := -1
+	bestRank := 0
+	for i := range actions {
+		if !actions[i].Enabled {
+			continue
+		}
+		rank := workflowActionRecommendationRank(item, actions[i].Action)
+		if bestIndex == -1 || rank < bestRank {
+			bestIndex = i
+			bestRank = rank
+		}
+	}
+	if bestIndex >= 0 {
+		actions[bestIndex].Recommended = true
+	}
+}
+
+func workflowActionRecommendationRank(item WorkItem, action WorkflowActionDefinition) int {
+	switch action.ID {
+	case WorkflowActionStartPlanning,
+		WorkflowActionApprovePlan,
+		WorkflowActionStartExecution,
+		WorkflowActionCompleteExecution,
+		WorkflowActionApproveDone:
+		return 0
+	case WorkflowActionSubmitDraftPlan,
+		WorkflowActionSubmitReviewFeedback:
+		return 10
+	}
+	if action.SideStage {
+		return 30
+	}
+	if action.To != "" && workflowActionTargetStage(action, item) != item.StageID {
+		return 20
+	}
+	return 40
 }
 
 func workflowActionTargetStage(action WorkflowActionDefinition, item WorkItem) string {

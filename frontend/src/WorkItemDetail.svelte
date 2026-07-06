@@ -171,7 +171,7 @@
     ...agentProfiles.map((profile) => ({ value: profile.id, label: profile.label })),
   ];
 
-  $: nextStep = computeNextStep(item, detailCurrentRun, detailLatestRun, approvedPlan, latestDraftPlan);
+  $: nextStep = computeNextStep(item, detailCurrentRun, detailLatestRun, approvedPlan, latestDraftPlan, workflowActions);
 
   function timestamp(value: unknown) {
     if (!value) return 0;
@@ -435,6 +435,7 @@
     latestRun: WorkItemRun | null,
     approved: Artifact | undefined,
     draft: Artifact | undefined,
+    workflowActions: WorkflowActionAvailability[],
   ): NextStep {
     const view = deriveNextStep({
       stageId: target.stageId,
@@ -443,6 +444,7 @@
       hasApprovedPlan: Boolean(approved),
       hasDraftPlan: Boolean(draft),
       hasLatestRun: Boolean(latestRun),
+      workflowActions,
     });
 
     const run = () => {

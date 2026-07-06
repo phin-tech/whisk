@@ -10970,11 +10970,15 @@
           },
           "reason": {
             "type": "string"
+          },
+          "recommended": {
+            "type": "boolean"
           }
         },
         "required": [
           "action",
           "enabled",
+          "recommended",
           "inputKind"
         ],
         "type": "object"

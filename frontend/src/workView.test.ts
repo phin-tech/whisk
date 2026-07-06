@@ -265,6 +265,49 @@ describe("deriveNextStep", () => {
     expect(deriveNextStep({ ...base, stageId: "done" }).kind).toBe("none");
   });
 
+  it("does not recommend a disabled daemon workflow action", () => {
+    const step = deriveNextStep({
+      ...base,
+      stageId: "review",
+      workflowActions: [
+        {
+          action: { id: "approve_done" },
+          enabled: false,
+          recommended: false,
+          reason: "blocking gates must pass or be overridden",
+          inputKind: "gate",
+        },
+      ],
+    });
+
+    expect(step.kind).toBe("none");
+    expect(step.label).toBe("");
+  });
+
+  it("uses the daemon-recommended workflow action when multiple actions are enabled", () => {
+    const step = deriveNextStep({
+      ...base,
+      stageId: "ready",
+      workflowActions: [
+        {
+          action: { id: "start_planning" },
+          enabled: true,
+          recommended: false,
+          inputKind: "run",
+        },
+        {
+          action: { id: "start_execution" },
+          enabled: true,
+          recommended: true,
+          inputKind: "run",
+        },
+      ],
+    });
+
+    expect(step.kind).toBe("launch-execution");
+    expect(step.label).toBe("Launch execution");
+  });
+
   it("sends finished execution to review", () => {
     const step = deriveNextStep({ ...base, stageId: "execution", hasApprovedPlan: true, hasLatestRun: true });
     expect(step.kind).toBe("send-to-review");
