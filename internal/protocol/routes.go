@@ -185,6 +185,7 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/update", OperationID: "updateWorkItem", Tag: "workitems", Request: UpdateWorkItemRequest{}, Response: WorkItem{}},
 	{Method: "POST", Path: "/v1/work-items/{workItemID}/move", OperationID: "moveWorkItem", Tag: "workitems", Request: MoveWorkItemRequest{}, Response: WorkItem{}},
 	{Method: "GET", Path: "/v1/work-items/{workItemID}/workflow-actions", OperationID: "listWorkItemWorkflowActions", Tag: "workitems", Response: apiWorkflowActionList},
+	{Method: "POST", Path: "/v1/work-items/{workItemID}/actions/{actionID}", OperationID: "runWorkItemWorkflowAction", Tag: "workitems", Request: RunWorkItemWorkflowActionRequest{}, Response: WorkItem{}},
 	{Method: "GET", Path: "/v1/work-item-links", OperationID: "listWorkItemLinks", Tag: "workitems", Response: apiWorkItemLinkList, Query: []APIQueryParam{{Name: "workItemId", Type: "string"}}},
 	{Method: "POST", Path: "/v1/work-item-links", OperationID: "addWorkItemLink", Tag: "workitems", Request: AddWorkItemLinkRequest{}, Response: WorkItemLink{}, Status: 201},
 	{Method: "GET", Path: "/v1/ready-work", OperationID: "readyWork", Tag: "workitems", Response: ReadyWorkExplanation{}, Query: []APIQueryParam{{Name: "projectId", Type: "string"}}},

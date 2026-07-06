@@ -206,6 +206,7 @@ func NewHTTP(runtime *app.Runtime, optionFns ...HTTPOption) http.Handler {
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/update", server.updateWorkItem)
 	mux.HandleFunc("POST /v1/work-items/{workItemID}/move", server.moveWorkItem)
 	mux.HandleFunc("GET /v1/work-items/{workItemID}/workflow-actions", server.listWorkItemWorkflowActions)
+	mux.HandleFunc("POST /v1/work-items/{workItemID}/actions/{actionID}", server.runWorkItemWorkflowAction)
 	mux.HandleFunc("GET /v1/work-item-links", server.listWorkItemLinks)
 	mux.HandleFunc("POST /v1/work-item-links", server.addWorkItemLink)
 	mux.HandleFunc("GET /v1/ready-work", server.readyWork)

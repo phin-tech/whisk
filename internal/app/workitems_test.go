@@ -1994,6 +1994,29 @@ func TestRuntimeWorkflowListsAndAuxiliaryActions(t *testing.T) {
 	if moved.StageID != workitem.StagePlanning {
 		t.Fatalf("moved = %#v", moved)
 	}
+	blocked, err := runtime.RunWorkItemWorkflowAction(ctx, app.RunWorkItemWorkflowActionRequest{
+		WorkItemID: item.ID,
+		ActionID:   workitem.WorkflowActionReportBlocked,
+		Reason:     "Waiting for credentials.",
+		Actor:      "agent",
+	})
+	if err != nil {
+		t.Fatalf("run blocked action: %v", err)
+	}
+	if blocked.StageID != workitem.StageBlocked || blocked.PreviousStageID != workitem.StagePlanning {
+		t.Fatalf("blocked = %#v", blocked)
+	}
+	unblocked, err := runtime.RunWorkItemWorkflowAction(ctx, app.RunWorkItemWorkflowActionRequest{
+		WorkItemID: item.ID,
+		ActionID:   workitem.WorkflowActionUnblock,
+		Actor:      "human",
+	})
+	if err != nil {
+		t.Fatalf("run unblock action: %v", err)
+	}
+	if unblocked.StageID != workitem.StagePlanning || unblocked.PreviousStageID != "" {
+		t.Fatalf("unblocked = %#v", unblocked)
+	}
 	attached, err := runtime.AddWorkItemAttachment(ctx, app.AddWorkItemAttachmentRequest{
 		WorkItemID: item.ID,
 		Kind:       workitem.AttachmentKindURL,

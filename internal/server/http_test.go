@@ -1614,6 +1614,19 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	if moved.StageID != workitem.StagePlanning {
 		t.Fatalf("moved = %#v", moved)
 	}
+	blocked := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/actions/"+workitem.WorkflowActionReportBlocked, protocol.RunWorkItemWorkflowActionRequest{
+		Reason: "Waiting for credentials.",
+		Actor:  "agent",
+	}, http.StatusOK)
+	if blocked.StageID != workitem.StageBlocked || blocked.PreviousStageID != workitem.StagePlanning {
+		t.Fatalf("blocked = %#v", blocked)
+	}
+	unblocked := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/actions/"+workitem.WorkflowActionUnblock, protocol.RunWorkItemWorkflowActionRequest{
+		Actor: "human",
+	}, http.StatusOK)
+	if unblocked.StageID != workitem.StagePlanning || unblocked.PreviousStageID != "" {
+		t.Fatalf("unblocked = %#v", unblocked)
+	}
 	bound := postJSON[protocol.WorkItem](t, handler, "/v1/work-items/"+item.ID+"/bind-worktree", protocol.BindWorkItemWorktreeRequest{
 		Branch:       "whisk/app-1-route-workflow",
 		WorktreePath: t.TempDir(),

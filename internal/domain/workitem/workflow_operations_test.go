@@ -187,6 +187,149 @@ func TestMoveWorkItemRequiresBlockingGatesToPass(t *testing.T) {
 	}
 }
 
+func TestApplyWorkflowActionRunsBlockedLifecycle(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	project := mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+	if _, err := state.StartPlanning(StartPlanning{
+		ID:           "run_plan",
+		HistoryID:    "hist_plan",
+		RunHistoryID: "hist_run_plan",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now,
+	}); err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+
+	blocked, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   WorkflowActionReportBlocked,
+		Reason:     "Waiting for credentials.",
+		Actor:      "agent",
+		Now:        now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("report blocked action: %v", err)
+	}
+	if blocked.StageID != StageBlocked || blocked.PreviousStageID != StagePlanning || blocked.RunState != RunStateAwaitingInput {
+		t.Fatalf("blocked = %#v", blocked)
+	}
+	events := state.ListWorkflowEvents(item.ID)
+	if len(events) == 0 || events[len(events)-1].Type != WorkflowEventBlocked || events[len(events)-1].Message != "Waiting for credentials." {
+		t.Fatalf("events = %#v", events)
+	}
+
+	unblocked, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   WorkflowActionUnblock,
+		Actor:      "human",
+		Now:        now.Add(2 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("unblock action: %v", err)
+	}
+	if unblocked.StageID != StagePlanning || unblocked.PreviousStageID != "" {
+		t.Fatalf("unblocked = %#v", unblocked)
+	}
+	events = state.ListWorkflowEvents(item.ID)
+	if len(events) == 0 || events[len(events)-1].Type != WorkflowEventUnblocked {
+		t.Fatalf("events = %#v", events)
+	}
+	_ = project
+}
+
+func TestApplyWorkflowActionRunsCustomNoInputTransition(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	definition := WorkflowDefinition{
+		ID:      "custom-actions",
+		Version: 1,
+		Stages:  []string{StageBacklog, StageReady, StageDone},
+		Actions: []WorkflowActionDefinition{
+			{ID: "triage", From: []string{StageBacklog}, To: StageReady},
+			{ID: "ship", From: []string{StageReady}, To: StageDone},
+		},
+	}
+	if _, err := state.ImportWorkflowDefinition(ImportWorkflowDefinition{Definition: definition, Source: "test", Now: now}); err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project := mustProject(t, state, "proj_01", "One")
+	if _, err := state.SetProjectWorkflowDefinition(SetProjectWorkflowDefinition{ProjectID: project.ID, ID: definition.ID, Version: definition.Version, Now: now}); err != nil {
+		t.Fatalf("set workflow: %v", err)
+	}
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+
+	ready, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   "triage",
+		Actor:      "human",
+		Now:        now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("triage action: %v", err)
+	}
+	if ready.StageID != StageReady {
+		t.Fatalf("ready = %#v", ready)
+	}
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   "missing",
+		Actor:      "human",
+		Now:        now.Add(2 * time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "workflow action missing not found") {
+		t.Fatalf("expected missing action error, got %v", err)
+	}
+}
+
+func TestApplyWorkflowActionRejectsUnavailableInputAndInvalidRun(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	project := mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   WorkflowActionApprovePlan,
+		Actor:      "human",
+		Now:        now,
+	}); err == nil || !strings.Contains(err.Error(), "cannot start from backlog") {
+		t.Fatalf("expected unavailable action error, got %v", err)
+	}
+	if _, err := state.StartPlanning(StartPlanning{
+		ID:           "run_plan",
+		HistoryID:    "hist_plan",
+		RunHistoryID: "hist_run_plan",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now.Add(time.Minute),
+	}); err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   WorkflowActionSubmitDraftPlan,
+		Actor:      "agent",
+		Now:        now.Add(2 * time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "requires artifact input") {
+		t.Fatalf("expected input requirement error, got %v", err)
+	}
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   WorkflowActionReportBlocked,
+		RunID:      "missing-run",
+		Actor:      "agent",
+		Now:        now.Add(3 * time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "work item run missing-run not found") {
+		t.Fatalf("expected missing run error, got %v", err)
+	}
+	stored, ok := state.GetWorkItem(item.ID)
+	if !ok || stored.StageID != StagePlanning {
+		t.Fatalf("stored = %#v, ok = %v", stored, ok)
+	}
+}
+
 func TestMoveWorkItemAllowsExplicitWorkflowTransition(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)

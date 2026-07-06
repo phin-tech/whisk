@@ -305,6 +305,10 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	if err != nil || len(workflowActions) != 1 || fake.listWorkflowActionsWorkItemID != "wi_02" {
 		t.Fatalf("workflow actions = %#v, id = %q, err = %v", workflowActions, fake.listWorkflowActionsWorkItemID, err)
 	}
+	item, err = service.RunWorkItemWorkflowAction(ctx, protocol.RunWorkItemWorkflowActionRequest{WorkItemID: "wi_02", ActionID: workitem.WorkflowActionReportBlocked, Reason: "blocked"})
+	if err != nil || item.StageID != workitem.StageBlocked || fake.runWorkflowActionReq.Reason != "blocked" {
+		t.Fatalf("run workflow action = %#v, req = %#v, err = %v", item, fake.runWorkflowActionReq, err)
+	}
 	link, err := service.AddWorkItemLink(ctx, protocol.AddWorkItemLinkRequest{
 		SourceWorkItemID: "wi_02",
 		TargetWorkItemID: "wi_01",
@@ -764,6 +768,7 @@ type runtimeClientFake struct {
 	createWorkItemReq               protocol.CreateWorkItemRequest
 	updateWorkItemReq               protocol.UpdateWorkItemRequest
 	moveWorkItemReq                 protocol.MoveWorkItemRequest
+	runWorkflowActionReq            protocol.RunWorkItemWorkflowActionRequest
 	addWorkItemLinkReq              protocol.AddWorkItemLinkRequest
 	listWorkItemLinksID             string
 	readyWorkReq                    protocol.ReadyWorkRequest
@@ -1159,6 +1164,11 @@ func (f *runtimeClientFake) ListWorkItemWorkflowActions(_ context.Context, workI
 		Enabled:   true,
 		InputKind: workitem.WorkflowActionInputRun,
 	}}, nil
+}
+
+func (f *runtimeClientFake) RunWorkItemWorkflowAction(_ context.Context, req protocol.RunWorkItemWorkflowActionRequest) (protocol.WorkItem, error) {
+	f.runWorkflowActionReq = req
+	return protocol.WorkItem{ID: req.WorkItemID, StageID: workitem.StageBlocked}, nil
 }
 
 func (f *runtimeClientFake) AddWorkItemLink(_ context.Context, req protocol.AddWorkItemLinkRequest) (protocol.WorkItemLink, error) {

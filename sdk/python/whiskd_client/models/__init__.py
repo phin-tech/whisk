@@ -136,6 +136,7 @@ from .run_plugin_project_attachment_template_request import (
 from .run_plugin_project_attachment_template_request_values import (
     RunPluginProjectAttachmentTemplateRequestValues,
 )
+from .run_work_item_workflow_action_request import RunWorkItemWorkflowActionRequest
 from .runtime_event import RuntimeEvent
 from .send_mail_request import SendMailRequest
 from .session import Session
@@ -344,6 +345,7 @@ __all__ = (
     "RunPluginProjectAttachmentTemplateRequest",
     "RunPluginProjectAttachmentTemplateRequestValues",
     "RuntimeEvent",
+    "RunWorkItemWorkflowActionRequest",
     "SendMailRequest",
     "Session",
     "SessionPanesType0",

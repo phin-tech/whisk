@@ -692,6 +692,27 @@ func (s *HTTPServer) listWorkItemWorkflowActions(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, actions)
 }
 
+func (s *HTTPServer) runWorkItemWorkflowAction(w http.ResponseWriter, r *http.Request) {
+	var req protocol.RunWorkItemWorkflowActionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.WorkItemID = pathValue(r, "workItemID", req.WorkItemID)
+	req.ActionID = pathValue(r, "actionID", req.ActionID)
+	item, err := s.runtime.RunWorkItemWorkflowAction(r.Context(), app.RunWorkItemWorkflowActionRequest{
+		WorkItemID: req.WorkItemID,
+		ActionID:   req.ActionID,
+		RunID:      req.RunID,
+		Reason:     req.Reason,
+		Actor:      req.Actor,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (s *HTTPServer) listWorkItemLinks(w http.ResponseWriter, r *http.Request) {
 	links, err := s.runtime.ListWorkItemLinks(r.Context(), r.URL.Query().Get("workItemId"))
 	if err != nil {

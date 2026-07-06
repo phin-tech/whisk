@@ -11,7 +11,7 @@ import (
 
 const (
 	// ProtocolVersion is the canonical daemon/client wire protocol version.
-	ProtocolVersion = 30
+	ProtocolVersion = 31
 	// DaemonAPIVersion is the legacy name kept for old clients and tooling.
 	DaemonAPIVersion = ProtocolVersion
 )
@@ -998,6 +998,14 @@ type MoveWorkItemRequest struct {
 	ID      string `json:"id"`
 	StageID string `json:"stageId"`
 	Actor   string `json:"actor,omitempty"`
+}
+
+type RunWorkItemWorkflowActionRequest struct {
+	WorkItemID string `json:"workItemId,omitempty"`
+	ActionID   string `json:"actionId,omitempty"`
+	RunID      string `json:"runId,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+	Actor      string `json:"actor,omitempty"`
 }
 
 type AddWorkItemLinkRequest struct {

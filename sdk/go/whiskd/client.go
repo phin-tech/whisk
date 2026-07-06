@@ -155,6 +155,7 @@ type ResolveAgentPromptRequest = protocol.ResolveAgentPromptRequest
 type RestartPanePTYRequest = protocol.RestartPanePTYRequest
 type RestartedPanePTY = protocol.RestartedPanePTY
 type RunPluginProjectAttachmentTemplateRequest = protocol.RunPluginProjectAttachmentTemplateRequest
+type RunWorkItemWorkflowActionRequest = protocol.RunWorkItemWorkflowActionRequest
 type RuntimeEvent = protocol.RuntimeEvent
 type SendMailRequest = protocol.SendMailRequest
 type SetAgentHookLogSettingsRequest = protocol.SetAgentHookLogSettingsRequest

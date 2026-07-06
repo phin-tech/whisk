@@ -218,3 +218,49 @@ func TestHTTPClientDrivesExplicitWorkflowActions(t *testing.T) {
 		t.Fatalf("cancelled = %#v", cancelled)
 	}
 }
+
+func TestHTTPClientRunsGenericWorkflowActionBlockedLifecycle(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	handler := server.NewHTTP(runtime)
+	httpServer := httptest.NewServer(handler)
+	defer httpServer.Close()
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx := context.Background()
+
+	project, err := daemon.CreateProject(ctx, protocol.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	item, err := daemon.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{ProjectID: project.ID, Title: "Task", Actor: "human"})
+	if err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := daemon.StartPlanning(ctx, protocol.StartPlanningRequest{WorkItemID: item.ID, Actor: "agent"}); err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+
+	blocked, err := daemon.RunWorkItemWorkflowAction(ctx, protocol.RunWorkItemWorkflowActionRequest{
+		WorkItemID: item.ID,
+		ActionID:   workitem.WorkflowActionReportBlocked,
+		Reason:     "Waiting for credentials.",
+		Actor:      "agent",
+	})
+	if err != nil {
+		t.Fatalf("run report_blocked: %v", err)
+	}
+	if blocked.StageID != workitem.StageBlocked || blocked.PreviousStageID != workitem.StagePlanning {
+		t.Fatalf("blocked = %#v", blocked)
+	}
+
+	unblocked, err := daemon.RunWorkItemWorkflowAction(ctx, protocol.RunWorkItemWorkflowActionRequest{
+		WorkItemID: item.ID,
+		ActionID:   workitem.WorkflowActionUnblock,
+		Actor:      "human",
+	})
+	if err != nil {
+		t.Fatalf("run unblock: %v", err)
+	}
+	if unblocked.StageID != workitem.StagePlanning || unblocked.PreviousStageID != "" {
+		t.Fatalf("unblocked = %#v", unblocked)
+	}
+}

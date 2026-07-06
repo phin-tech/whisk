@@ -185,6 +185,13 @@ func (c *HTTPClient) ListWorkItemWorkflowActions(ctx context.Context, workItemID
 	return actions, err
 }
 
+func (c *HTTPClient) RunWorkItemWorkflowAction(ctx context.Context, req protocol.RunWorkItemWorkflowActionRequest) (protocol.WorkItem, error) {
+	var item protocol.WorkItem
+	path := "/v1/work-items/" + url.PathEscape(req.WorkItemID) + "/actions/" + url.PathEscape(req.ActionID)
+	err := c.post(ctx, path, req, &item)
+	return item, err
+}
+
 func (c *HTTPClient) AddWorkItemLink(ctx context.Context, req protocol.AddWorkItemLinkRequest) (protocol.WorkItemLink, error) {
 	var link protocol.WorkItemLink
 	err := c.post(ctx, "/v1/work-item-links", req, &link)
