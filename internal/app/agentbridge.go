@@ -167,10 +167,13 @@ func (r *Runtime) submitAgentBridgeDraftPlanFromHook(ctx context.Context, bridge
 	run, runOK := r.workItems.GetRun(bridge.RunID)
 	var item workitem.WorkItem
 	itemOK := false
+	var submitAction workitem.WorkflowActionDefinition
+	submitActionOK := false
 	alreadySubmitted := false
 	if runOK {
 		item, itemOK = r.workItems.GetWorkItem(run.WorkItemID)
 		if itemOK {
+			submitAction, submitActionOK = r.enabledWorkflowActionForHook(item.ID, workitem.WorkflowActionSubmitDraftPlan)
 			for _, artifact := range r.workItems.ListArtifacts(item.ID) {
 				if artifact.RunID == run.ID &&
 					artifact.Kind == workitem.ArtifactKindPlan &&
@@ -184,9 +187,12 @@ func (r *Runtime) submitAgentBridgeDraftPlanFromHook(ctx context.Context, bridge
 	}
 	r.mu.Unlock()
 	if !runOK || !itemOK ||
+		!submitActionOK ||
 		run.PromptTemplateID != workitem.PromptTemplatePlan ||
 		run.Status != workitem.RunStateRunning ||
-		item.StageID != workitem.StagePlanning {
+		submitAction.CreatesArtifact == nil ||
+		submitAction.CreatesArtifact.Kind != workitem.ArtifactKindPlan ||
+		submitAction.CreatesArtifact.Status != workitem.ArtifactStatusDraft {
 		return false, nil
 	}
 	if alreadySubmitted {
@@ -223,14 +229,20 @@ func (r *Runtime) completeAgentBridgeExecutionFromHook(ctx context.Context, brid
 	run, runOK := r.workItems.GetRun(bridge.RunID)
 	var item workitem.WorkItem
 	itemOK := false
+	var completeAction workitem.WorkflowActionDefinition
+	completeActionOK := false
 	if runOK {
 		item, itemOK = r.workItems.GetWorkItem(run.WorkItemID)
+		if itemOK {
+			completeAction, completeActionOK = r.enabledWorkflowActionForHook(item.ID, workitem.WorkflowActionCompleteExecution)
+		}
 	}
 	r.mu.Unlock()
 	if !runOK || !itemOK ||
+		!completeActionOK ||
 		run.PromptTemplateID != workitem.PromptTemplateImplement ||
 		run.Status != workitem.RunStateRunning ||
-		item.StageID != workitem.StageExecution {
+		!completeAction.CompletesRun {
 		return false, nil
 	}
 	if _, err := r.CompleteExecution(ctx, CompleteExecutionRequest{
@@ -241,6 +253,19 @@ func (r *Runtime) completeAgentBridgeExecutionFromHook(ctx context.Context, brid
 		return false, err
 	}
 	return true, nil
+}
+
+func (r *Runtime) enabledWorkflowActionForHook(workItemID string, actionID string) (workitem.WorkflowActionDefinition, bool) {
+	actions, err := r.workItems.ListWorkflowActionAvailability(workItemID)
+	if err != nil {
+		return workitem.WorkflowActionDefinition{}, false
+	}
+	for _, availability := range actions {
+		if availability.Action.ID == actionID && availability.Enabled {
+			return availability.Action, true
+		}
+	}
+	return workitem.WorkflowActionDefinition{}, false
 }
 
 func isSuccessfulAgentCompletionHook(req AgentBridgeHookRequest) bool {

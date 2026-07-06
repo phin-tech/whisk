@@ -422,6 +422,225 @@ func launchPlanningAgentBridge(t *testing.T) (*app.Runtime, string, string) {
 	return runtime, bridgeID, token
 }
 
+func customAgentBridgeWorkflowDefinition() workitem.WorkflowDefinition {
+	return workitem.WorkflowDefinition{
+		ID:      "custom-agent-bridge",
+		Version: 1,
+		Stages:  []string{"todo", "design", "readyish", "build", "reviewing", "shipped"},
+		Actions: []workitem.WorkflowActionDefinition{
+			{
+				ID:   workitem.WorkflowActionStartPlanning,
+				From: []string{"todo"},
+				To:   "design",
+				CreatesRun: &workitem.WorkflowRunEffect{
+					Phase:            "planning",
+					Preset:           workitem.RunPresetReader,
+					PromptTemplateID: workitem.PromptTemplatePlan,
+					WorkingDir:       "projectRoot",
+				},
+			},
+			{
+				ID:   workitem.WorkflowActionSubmitDraftPlan,
+				From: []string{"design"},
+				To:   "design",
+				CreatesArtifact: &workitem.WorkflowArtifactEffect{
+					Kind:   workitem.ArtifactKindPlan,
+					Status: workitem.ArtifactStatusDraft,
+				},
+			},
+			{
+				ID:   workitem.WorkflowActionApprovePlan,
+				From: []string{"design"},
+				To:   "readyish",
+				Requires: []workitem.WorkflowArtifactRequirement{{
+					Kind:   workitem.ArtifactKindPlan,
+					Status: workitem.ArtifactStatusDraft,
+				}},
+				UpdatesArtifact: &workitem.WorkflowArtifactEffect{
+					Kind:   workitem.ArtifactKindPlan,
+					Status: workitem.ArtifactStatusApproved,
+				},
+				RequiresHuman: true,
+			},
+			{
+				ID:   workitem.WorkflowActionStartExecution,
+				From: []string{"readyish"},
+				To:   "build",
+				Requires: []workitem.WorkflowArtifactRequirement{{
+					Kind:   workitem.ArtifactKindPlan,
+					Status: workitem.ArtifactStatusApproved,
+				}},
+				CreatesRun: &workitem.WorkflowRunEffect{
+					Phase:                 "execution",
+					Preset:                workitem.RunPresetWriter,
+					PromptTemplateID:      workitem.PromptTemplateImplement,
+					WorkingDir:            "worktree",
+					AutoProvisionWorktree: true,
+				},
+			},
+			{
+				ID:           workitem.WorkflowActionCompleteExecution,
+				From:         []string{"build"},
+				To:           "reviewing",
+				CompletesRun: true,
+				CreatesGates: []string{"review"},
+			},
+			{
+				ID:                           workitem.WorkflowActionApproveDone,
+				From:                         []string{"reviewing"},
+				To:                           "shipped",
+				RequiresPassingBlockingGates: true,
+				RequiresHuman:                true,
+			},
+		},
+		Questions: workitem.WorkflowQuestionPolicy{
+			Enabled:      true,
+			SetsRunState: workitem.RunStateAwaitingInput,
+			AnswerClearsAwaitingInputWhenNoOpenQuestionsRemain: true,
+		},
+		Gates: []workitem.WorkflowGateDefinition{{
+			ID:       "review",
+			Phase:    "reviewing",
+			Blocking: true,
+		}},
+	}
+}
+
+func launchCustomPlanningAgentBridge(t *testing.T) (*app.Runtime, string, string) {
+	t.Helper()
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	nextID := 0
+	ptyBackend := newMemoryPTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: &memoryWorkItemStore{},
+		PTYBackend:    ptyBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(ctx) })
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	definition := customAgentBridgeWorkflowDefinition()
+	imported, err := runtime.ImportWorkflowDefinition(ctx, app.ImportWorkflowDefinitionRequest{Definition: definition, Source: "test"})
+	if err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project, err = runtime.SetProjectWorkflowDefinition(ctx, app.SetProjectWorkflowDefinitionRequest{
+		ProjectID: project.ID,
+		ID:        imported.ID,
+		Version:   imported.Version,
+	})
+	if err != nil {
+		t.Fatalf("set workflow: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Plan first"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	if item.StageID != "todo" {
+		t.Fatalf("item stage = %q, want todo", item.StageID)
+	}
+	if _, err := runtime.StartPlanning(ctx, app.StartPlanningRequest{
+		WorkItemID:     item.ID,
+		Launch:         true,
+		AgentProfileID: "claude-plan",
+		Actor:          "agent",
+	}); err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	if len(ptyBackend.spawns) != 1 {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	env := ptyBackend.spawns[0].Env
+	bridgeID, token := env["WHISK_AGENT_BRIDGE_ID"], env["WHISK_AGENT_BRIDGE_TOKEN"]
+	if bridgeID == "" || token == "" {
+		t.Fatalf("missing bridge credentials: env = %#v", env)
+	}
+	return runtime, bridgeID, token
+}
+
+func launchCustomExecutionAgentBridge(t *testing.T) (*app.Runtime, string, string) {
+	t.Helper()
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	nextID := 0
+	ptyBackend := newMemoryPTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: &memoryWorkItemStore{},
+		PTYBackend:    ptyBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(ctx) })
+
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	definition := customAgentBridgeWorkflowDefinition()
+	imported, err := runtime.ImportWorkflowDefinition(ctx, app.ImportWorkflowDefinitionRequest{Definition: definition, Source: "test"})
+	if err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project, err = runtime.SetProjectWorkflowDefinition(ctx, app.SetProjectWorkflowDefinitionRequest{
+		ProjectID: project.ID,
+		ID:        imported.ID,
+		Version:   imported.Version,
+	})
+	if err != nil {
+		t.Fatalf("set workflow: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Auto review"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	planningRun, err := runtime.StartPlanning(ctx, app.StartPlanningRequest{WorkItemID: item.ID, Actor: "agent"})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	draft, err := runtime.SubmitDraftPlan(ctx, app.SubmitDraftPlanRequest{
+		WorkItemID: item.ID,
+		RunID:      planningRun.ID,
+		Body:       "Implement it.",
+		Actor:      "agent",
+	})
+	if err != nil {
+		t.Fatalf("submit draft plan: %v", err)
+	}
+	if _, err := runtime.ApprovePlan(ctx, app.ApprovePlanRequest{WorkItemID: item.ID, ArtifactID: draft.ID, Actor: "human"}); err != nil {
+		t.Fatalf("approve plan: %v", err)
+	}
+	if _, err := runtime.StartExecution(ctx, app.StartExecutionRequest{
+		WorkItemID:     item.ID,
+		Launch:         true,
+		AgentProfileID: "claude",
+		Actor:          "agent",
+	}); err != nil {
+		t.Fatalf("start execution: %v", err)
+	}
+	if len(ptyBackend.spawns) != 1 {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+	env := ptyBackend.spawns[0].Env
+	bridgeID, token := env["WHISK_AGENT_BRIDGE_ID"], env["WHISK_AGENT_BRIDGE_TOKEN"]
+	if bridgeID == "" || token == "" {
+		t.Fatalf("missing bridge credentials: env = %#v", env)
+	}
+	return runtime, bridgeID, token
+}
+
 func TestRuntimeExitPlanModeHookSubmitsDraftPlanForReview(t *testing.T) {
 	runtime, bridgeID, token := launchPlanningAgentBridge(t)
 	ctx := context.Background()
@@ -495,6 +714,53 @@ func TestRuntimeExitPlanModeHookSubmitsDraftPlanForReview(t *testing.T) {
 	}
 	if executionResp.Output != nil {
 		t.Fatalf("execution response = %#v", executionResp.Output)
+	}
+}
+
+func TestRuntimeExitPlanModeHookSubmitsDraftPlanForCustomPlanningStage(t *testing.T) {
+	runtime, bridgeID, token := launchCustomPlanningAgentBridge(t)
+	ctx := context.Background()
+	planBody := "## Plan\nDo it."
+
+	resp, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+		BridgeID:  bridgeID,
+		Token:     token,
+		Provider:  "claude",
+		EventName: "PreToolUse",
+		ToolName:  "ExitPlanMode",
+		ToolInput: map[string]any{"plan": planBody},
+	})
+	if err != nil {
+		t.Fatalf("hook: %v", err)
+	}
+	hookSpecific, ok := resp.Output["hookSpecificOutput"].(map[string]any)
+	if !ok {
+		t.Fatalf("response = %#v", resp.Output)
+	}
+	reason, _ := hookSpecific["permissionDecisionReason"].(string)
+	if hookSpecific["permissionDecision"] != "deny" || !strings.Contains(reason, "submitted") {
+		t.Fatalf("hookSpecificOutput = %#v", hookSpecific)
+	}
+
+	items, err := runtime.ListWorkItems(ctx, "")
+	if err != nil {
+		t.Fatalf("list work items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].StageID != "design" {
+		t.Fatalf("item stage = %q, want design", items[0].StageID)
+	}
+	artifacts, err := runtime.ListArtifacts(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("list artifacts: %v", err)
+	}
+	if len(artifacts) != 1 ||
+		artifacts[0].Kind != workitem.ArtifactKindPlan ||
+		artifacts[0].Status != workitem.ArtifactStatusDraft ||
+		artifacts[0].Body != planBody {
+		t.Fatalf("artifacts = %#v", artifacts)
 	}
 }
 
@@ -763,6 +1029,44 @@ func TestRuntimeAgentBridgeStopCompletesExecutionRun(t *testing.T) {
 	}
 	if items[0].StageID != workitem.StageReview {
 		t.Fatalf("item stage = %q, want review", items[0].StageID)
+	}
+	runs, err := runtime.ListWorkItemRuns(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("list runs: %v", err)
+	}
+	run, ok := executionRun(runs)
+	if !ok || run.Status != workitem.RunStateCompleted {
+		t.Fatalf("runs = %#v", runs)
+	}
+}
+
+func TestRuntimeAgentBridgeStopCompletesCustomExecutionStage(t *testing.T) {
+	runtime, bridgeID, token := launchCustomExecutionAgentBridge(t)
+	ctx := context.Background()
+
+	if _, err := runtime.HandleAgentBridgeHook(ctx, app.AgentBridgeHookRequest{
+		BridgeID:  bridgeID,
+		Token:     token,
+		Provider:  "claude",
+		EventName: "Stop",
+		RawPayload: map[string]any{
+			"hook_event_name":        "Stop",
+			"last_assistant_message": "Implemented and tested.",
+			"stop_hook_active":       false,
+		},
+	}); err != nil {
+		t.Fatalf("stop hook: %v", err)
+	}
+
+	items, err := runtime.ListWorkItems(ctx, "")
+	if err != nil {
+		t.Fatalf("list work items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].StageID != "reviewing" {
+		t.Fatalf("item stage = %q, want reviewing", items[0].StageID)
 	}
 	runs, err := runtime.ListWorkItemRuns(ctx, items[0].ID)
 	if err != nil {
