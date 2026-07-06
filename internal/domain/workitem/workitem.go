@@ -3591,6 +3591,7 @@ func (s *State) workflowActionAvailabilityForTransition(item WorkItem, stageID s
 	if err != nil {
 		return WorkflowActionAvailability{}, false, err
 	}
+	candidates := []WorkflowActionAvailability{}
 	for _, action := range definition.Actions {
 		if !workflowActionCanStartFrom(action, item.StageID) {
 			continue
@@ -3598,9 +3599,24 @@ func (s *State) workflowActionAvailabilityForTransition(item WorkItem, stageID s
 		if workflowActionTargetStage(action, item) != stageID {
 			continue
 		}
-		return s.workflowActionAvailability(item, action), true, nil
+		candidates = append(candidates, s.workflowActionAvailability(item, action))
 	}
-	return WorkflowActionAvailability{}, false, nil
+	if len(candidates) == 0 {
+		return WorkflowActionAvailability{}, false, nil
+	}
+	if len(candidates) > 1 {
+		ids := make([]string, 0, len(candidates))
+		for _, candidate := range candidates {
+			ids = append(ids, candidate.Action.ID)
+		}
+		return WorkflowActionAvailability{}, false, fmt.Errorf(
+			"ambiguous workflow action from %s to %s: %s",
+			item.StageID,
+			stageID,
+			strings.Join(ids, ", "),
+		)
+	}
+	return candidates[0], true, nil
 }
 
 func (s *State) workflowActionAvailability(item WorkItem, action WorkflowActionDefinition) WorkflowActionAvailability {
