@@ -14,11 +14,14 @@ def _get_kwargs(
     pty_id: str,
     *,
     from_: int | Unset = UNSET,
+    snapshot: bool | Unset = UNSET,
 ) -> dict[str, Any]:
 
     params: dict[str, Any] = {}
 
     params["from"] = from_
+
+    params["snapshot"] = snapshot
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -62,11 +65,13 @@ def sync_detailed(
     *,
     client: AuthenticatedClient,
     from_: int | Unset = UNSET,
+    snapshot: bool | Unset = UNSET,
 ) -> Response[ErrorResponse | OutputSnapshot]:
     """
     Args:
         pty_id (str):
         from_ (int | Unset):
+        snapshot (bool | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -79,6 +84,7 @@ def sync_detailed(
     kwargs = _get_kwargs(
         pty_id=pty_id,
         from_=from_,
+        snapshot=snapshot,
     )
 
     response = client.get_httpx_client().request(
@@ -93,11 +99,13 @@ def sync(
     *,
     client: AuthenticatedClient,
     from_: int | Unset = UNSET,
+    snapshot: bool | Unset = UNSET,
 ) -> ErrorResponse | OutputSnapshot | None:
     """
     Args:
         pty_id (str):
         from_ (int | Unset):
+        snapshot (bool | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -111,6 +119,7 @@ def sync(
         pty_id=pty_id,
         client=client,
         from_=from_,
+        snapshot=snapshot,
     ).parsed
 
 
@@ -119,11 +128,13 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
     from_: int | Unset = UNSET,
+    snapshot: bool | Unset = UNSET,
 ) -> Response[ErrorResponse | OutputSnapshot]:
     """
     Args:
         pty_id (str):
         from_ (int | Unset):
+        snapshot (bool | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -136,6 +147,7 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         pty_id=pty_id,
         from_=from_,
+        snapshot=snapshot,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -148,11 +160,13 @@ async def asyncio(
     *,
     client: AuthenticatedClient,
     from_: int | Unset = UNSET,
+    snapshot: bool | Unset = UNSET,
 ) -> ErrorResponse | OutputSnapshot | None:
     """
     Args:
         pty_id (str):
         from_ (int | Unset):
+        snapshot (bool | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -167,5 +181,6 @@ async def asyncio(
             pty_id=pty_id,
             client=client,
             from_=from_,
+            snapshot=snapshot,
         )
     ).parsed

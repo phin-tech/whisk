@@ -158,6 +158,9 @@ from .started_pane_pty import StartedPanePTY
 from .status_event import StatusEvent
 from .submit_draft_plan_request import SubmitDraftPlanRequest
 from .submit_review_feedback_request import SubmitReviewFeedbackRequest
+from .terminal_cursor import TerminalCursor
+from .terminal_modes import TerminalModes
+from .terminal_snapshot import TerminalSnapshot
 from .transition_rule import TransitionRule
 from .ui_contribution_plugin import UIContributionPlugin
 from .ui_contribution_scope import UIContributionScope
@@ -357,6 +360,9 @@ __all__ = (
     "StatusEvent",
     "SubmitDraftPlanRequest",
     "SubmitReviewFeedbackRequest",
+    "TerminalCursor",
+    "TerminalModes",
+    "TerminalSnapshot",
     "TransitionRule",
     "UIContributionPlugin",
     "UIContributionScope",

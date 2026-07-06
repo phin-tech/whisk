@@ -18,6 +18,7 @@ import (
 	"github.com/phin-tech/whisk/internal/controlauth"
 	"github.com/phin-tech/whisk/internal/domain/agentbridge"
 	"github.com/phin-tech/whisk/internal/domain/session"
+	"github.com/phin-tech/whisk/internal/domain/terminal"
 	"github.com/phin-tech/whisk/internal/protocol"
 	"github.com/phin-tech/whisk/internal/ptytrace"
 )
@@ -1031,17 +1032,29 @@ func (s *HTTPServer) output(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid from offset"))
 		return
 	}
+	includeTerminalSnapshot, err := boolQuery(r, "snapshot")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	snapshot, err := s.runtime.PTYOutput(r.Context(), ptyID, fromOffset)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, protocol.OutputSnapshot{
+	response := protocol.OutputSnapshot{
 		PtyID:        snapshot.Record.ID,
 		Offset:       snapshot.Offset + uint64(len(snapshot.OutputBytes)),
 		Output:       string(snapshot.OutputBytes),
 		OutputBase64: base64.StdEncoding.EncodeToString(snapshot.OutputBytes),
-	})
+	}
+	if includeTerminalSnapshot {
+		if terminalSnapshot, err := s.runtime.TerminalSnapshot(r.Context(), ptyID); err == nil {
+			dto := terminalSnapshotFromDomain(terminalSnapshot)
+			response.TerminalSnapshot = &dto
+		}
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
@@ -1049,6 +1062,11 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 	fromOffset, err := strconv.ParseUint(r.URL.Query().Get("from"), 10, 64)
 	if err != nil && r.URL.Query().Get("from") != "" {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid from offset"))
+		return
+	}
+	includeTerminalSnapshot, err := boolQuery(r, "snapshot")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	binaryOutput := r.URL.Query().Get("binary") == "1"
@@ -1067,9 +1085,18 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	var terminalSnapshotFrame *protocol.TerminalSnapshot
+	attachFromOffset := fromOffset
+	if includeTerminalSnapshot {
+		if terminalSnapshot, err := s.runtime.TerminalSnapshot(ctx, ptyID); err == nil {
+			dto := terminalSnapshotFromDomain(terminalSnapshot)
+			terminalSnapshotFrame = &dto
+			attachFromOffset = terminalSnapshot.Offset
+		}
+	}
 	attach, err := s.runtime.AttachPTY(ctx, app.AttachPTYRequest{
 		PtyID:            ptyID,
-		ReplayFromOffset: fromOffset,
+		ReplayFromOffset: attachFromOffset,
 	})
 	if err != nil {
 		_ = writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{Type: "error", PtyID: ptyID, Message: err.Error()})
@@ -1078,6 +1105,11 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 	defer attach.Close()
 	go s.readPTYStreamInput(ctx, cancel, conn, ptyID)
 
+	if terminalSnapshotFrame != nil {
+		if err := writePTYStreamFrame(ctx, conn, protocol.PTYStreamFrame{Type: "snapshot", PtyID: ptyID, TerminalSnapshot: terminalSnapshotFrame}); err != nil {
+			return
+		}
+	}
 	if len(attach.ReplayBytes) > 0 {
 		if err := writePTYOutputFrame(ctx, conn, ptyID, attach.ReplayOffset, attach.ReplayBytes, binaryOutput); err != nil {
 			return
@@ -1127,6 +1159,68 @@ func (s *HTTPServer) attachPTY(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func boolQuery(r *http.Request, name string) (bool, error) {
+	raw := r.URL.Query().Get(name)
+	if raw == "" {
+		return false, nil
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("invalid %s", name)
+	}
+	return value, nil
+}
+
+func terminalSnapshotFromDomain(snapshot terminal.Snapshot) protocol.TerminalSnapshot {
+	return protocol.TerminalSnapshot{
+		Offset:                  snapshot.Offset,
+		Cols:                    snapshot.Cols,
+		Rows:                    snapshot.Rows,
+		Cursor:                  protocol.TerminalCursor{X: snapshot.Cursor.X, Y: snapshot.Cursor.Y},
+		Title:                   snapshot.Title,
+		WorkingDirectory:        snapshot.WorkingDirectory,
+		ScrollbackAnsi:          snapshot.ScrollbackAnsi,
+		RehydrateBeforeViewport: snapshot.RehydrateBeforeViewport,
+		ViewportAnsi:            snapshot.ViewportAnsi,
+		RehydrateSequences:      snapshot.RehydrateSequences,
+		Modes: protocol.TerminalModes{
+			ApplicationCursor: snapshot.Modes.ApplicationCursor,
+			CursorVisible:     snapshot.Modes.CursorVisible,
+			AltScreen:         snapshot.Modes.AltScreen,
+			SaveCursor:        snapshot.Modes.SaveCursor,
+			AltScreenSave:     snapshot.Modes.AltScreenSave,
+			BracketedPaste:    snapshot.Modes.BracketedPaste,
+			MouseTracking:     protocol.TerminalMouseTrackingMode(snapshot.Modes.MouseTracking),
+			MouseEncoding:     protocol.TerminalMouseEncodingMode(snapshot.Modes.MouseEncoding),
+		},
+		MouseTrackingModes: terminalMouseTrackingModesFromDomain(snapshot.MouseTrackingModes),
+		MouseEncodingModes: terminalMouseEncodingModesFromDomain(snapshot.MouseEncodingModes),
+		Truncated:          snapshot.Truncated,
+	}
+}
+
+func terminalMouseTrackingModesFromDomain(modes []terminal.MouseTrackingMode) []protocol.TerminalMouseTrackingMode {
+	if len(modes) == 0 {
+		return nil
+	}
+	out := make([]protocol.TerminalMouseTrackingMode, len(modes))
+	for i, mode := range modes {
+		out[i] = protocol.TerminalMouseTrackingMode(mode)
+	}
+	return out
+}
+
+func terminalMouseEncodingModesFromDomain(modes []terminal.MouseEncodingMode) []protocol.TerminalMouseEncodingMode {
+	if len(modes) == 0 {
+		return nil
+	}
+	out := make([]protocol.TerminalMouseEncodingMode, len(modes))
+	for i, mode := range modes {
+		out[i] = protocol.TerminalMouseEncodingMode(mode)
+	}
+	return out
 }
 
 func (s *HTTPServer) ptyOutputSegmentsForEvent(ctx context.Context, ptyID string, nextOffset uint64, event app.PTYEvent) ([]ptyOutputSegment, uint64, error) {

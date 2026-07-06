@@ -117,7 +117,7 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/ptys/{ptyID}/resize", OperationID: "resizePTY", Tag: "ptys", Request: ResizePTYRequest{}, Status: 204},
 	{Method: "POST", Path: "/v1/ptys/{ptyID}/kill", OperationID: "killPTY", Tag: "ptys", Request: KillPTYRequest{}, Response: PTYInfo{}},
 	{Method: "DELETE", Path: "/v1/ptys/{ptyID}", OperationID: "deletePTY", Tag: "ptys", Status: 204},
-	{Method: "GET", Path: "/v1/ptys/{ptyID}/output", OperationID: "getPTYOutput", Tag: "ptys", Response: OutputSnapshot{}, Query: []APIQueryParam{{Name: "from", Type: "integer"}}},
+	{Method: "GET", Path: "/v1/ptys/{ptyID}/output", OperationID: "getPTYOutput", Tag: "ptys", Response: OutputSnapshot{}, Query: []APIQueryParam{{Name: "from", Type: "integer"}, {Name: "snapshot", Type: "boolean"}}},
 
 	{Method: "GET", Path: "/v1/events/next", OperationID: "nextEvent", Tag: "events", Response: NextEventResponse{}, Query: []APIQueryParam{{Name: "timeoutMs", Type: "integer"}, {Name: "afterSeq", Type: "integer"}}},
 

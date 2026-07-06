@@ -417,6 +417,9 @@ func (c *HTTPClient) ResizePTY(ctx context.Context, req protocol.ResizePTYReques
 
 func (c *HTTPClient) Output(ctx context.Context, req protocol.OutputRequest) (protocol.OutputSnapshot, error) {
 	query := url.Values{"from": {strconv.FormatUint(req.FromOffset, 10)}}
+	if req.Snapshot {
+		query.Set("snapshot", "true")
+	}
 	path := "/v1/ptys/" + url.PathEscape(req.PtyID) + "/output"
 	var snapshot protocol.OutputSnapshot
 	err := c.get(ctx, path, query, &snapshot)

@@ -1669,6 +1669,7 @@ export class OnboardingStatus {
 export class OutputRequest {
     "ptyId": string;
     "fromOffset": number;
+    "snapshot"?: boolean;
 
     /** Creates a new OutputRequest instance. */
     constructor($$source: Partial<OutputRequest> = {}) {
@@ -1696,6 +1697,7 @@ export class OutputSnapshot {
     "offset": number;
     "output": string;
     "outputBase64": string;
+    "terminalSnapshot"?: TerminalSnapshot | null;
 
     /** Creates a new OutputSnapshot instance. */
     constructor($$source: Partial<OutputSnapshot> = {}) {
@@ -1719,7 +1721,11 @@ export class OutputSnapshot {
      * Creates a new OutputSnapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): OutputSnapshot {
+        const $$createField4_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("terminalSnapshot" in $$parsedSource) {
+            $$parsedSource["terminalSnapshot"] = $$createField4_0($$parsedSource["terminalSnapshot"]);
+        }
         return new OutputSnapshot($$parsedSource as Partial<OutputSnapshot>);
     }
 }
@@ -2033,13 +2039,13 @@ export class PluginStatus {
      * Creates a new PluginStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): PluginStatus {
-        const $$createField9_0 = $$createType16;
-        const $$createField10_0 = $$createType18;
-        const $$createField11_0 = $$createType20;
-        const $$createField12_0 = $$createType22;
-        const $$createField13_0 = $$createType24;
-        const $$createField14_0 = $$createType26;
-        const $$createField15_0 = $$createType28;
+        const $$createField9_0 = $$createType18;
+        const $$createField10_0 = $$createType20;
+        const $$createField11_0 = $$createType22;
+        const $$createField12_0 = $$createType24;
+        const $$createField13_0 = $$createType26;
+        const $$createField14_0 = $$createType28;
+        const $$createField15_0 = $$createType30;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("resolvers" in $$parsedSource) {
             $$parsedSource["resolvers"] = $$createField9_0($$parsedSource["resolvers"]);
@@ -2185,9 +2191,9 @@ export class PluginUIPanel {
      * Creates a new PluginUIPanel instance from a string or object.
      */
     static createFrom($$source: any = {}): PluginUIPanel {
-        const $$createField4_0 = $$createType30;
-        const $$createField5_0 = $$createType32;
-        const $$createField6_0 = $$createType33;
+        const $$createField4_0 = $$createType32;
+        const $$createField5_0 = $$createType34;
+        const $$createField6_0 = $$createType35;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("read" in $$parsedSource) {
             $$parsedSource["read"] = $$createField4_0($$parsedSource["read"]);
@@ -2293,7 +2299,7 @@ export class ProjectAttachmentTemplate {
      * Creates a new ProjectAttachmentTemplate instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectAttachmentTemplate {
-        const $$createField4_0 = $$createType35;
+        const $$createField4_0 = $$createType37;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("fields" in $$parsedSource) {
             $$parsedSource["fields"] = $$createField4_0($$parsedSource["fields"]);
@@ -2322,7 +2328,7 @@ export class ProjectContext {
      * Creates a new ProjectContext instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectContext {
-        const $$createField1_0 = $$createType37;
+        const $$createField1_0 = $$createType39;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField1_0($$parsedSource["items"]);
@@ -2395,10 +2401,10 @@ export class ProjectDetail {
      * Creates a new ProjectDetail instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectDetail {
-        const $$createField0_0 = $$createType38;
-        const $$createField1_0 = $$createType40;
-        const $$createField2_0 = $$createType41;
-        const $$createField3_0 = $$createType43;
+        const $$createField0_0 = $$createType40;
+        const $$createField1_0 = $$createType42;
+        const $$createField2_0 = $$createType43;
+        const $$createField3_0 = $$createType45;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("project" in $$parsedSource) {
             $$parsedSource["project"] = $$createField0_0($$parsedSource["project"]);
@@ -2613,9 +2619,9 @@ export class ReportStatusResponse {
      * Creates a new ReportStatusResponse instance from a string or object.
      */
     static createFrom($$source: any = {}): ReportStatusResponse {
-        const $$createField0_0 = $$createType44;
-        const $$createField1_0 = $$createType45;
-        const $$createField2_0 = $$createType46;
+        const $$createField0_0 = $$createType46;
+        const $$createField1_0 = $$createType47;
+        const $$createField2_0 = $$createType48;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("event" in $$parsedSource) {
             $$parsedSource["event"] = $$createField0_0($$parsedSource["event"]);
@@ -2785,7 +2791,7 @@ export class RunPluginProjectAttachmentTemplateRequest {
      * Creates a new RunPluginProjectAttachmentTemplateRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): RunPluginProjectAttachmentTemplateRequest {
-        const $$createField1_0 = $$createType47;
+        const $$createField1_0 = $$createType49;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("values" in $$parsedSource) {
             $$parsedSource["values"] = $$createField1_0($$parsedSource["values"]);
@@ -3114,9 +3120,9 @@ export class StartPTYOptions {
      * Creates a new StartPTYOptions instance from a string or object.
      */
     static createFrom($$source: any = {}): StartPTYOptions {
-        const $$createField3_0 = $$createType47;
+        const $$createField3_0 = $$createType49;
         const $$createField4_0 = $$createType6;
-        const $$createField6_0 = $$createType49;
+        const $$createField6_0 = $$createType51;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("env" in $$parsedSource) {
             $$parsedSource["env"] = $$createField3_0($$parsedSource["env"]);
@@ -3244,7 +3250,7 @@ export class StartedHTTPForward {
      * Creates a new StartedHTTPForward instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedHTTPForward {
-        const $$createField2_0 = $$createType50;
+        const $$createField2_0 = $$createType52;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("forward" in $$parsedSource) {
             $$parsedSource["forward"] = $$createField2_0($$parsedSource["forward"]);
@@ -3340,6 +3346,162 @@ export class SubmitReviewFeedbackRequest {
     }
 }
 
+export class TerminalCursor {
+    "x": number;
+    "y": number;
+
+    /** Creates a new TerminalCursor instance. */
+    constructor($$source: Partial<TerminalCursor> = {}) {
+        if (!("x" in $$source)) {
+            this["x"] = 0;
+        }
+        if (!("y" in $$source)) {
+            this["y"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TerminalCursor instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TerminalCursor {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TerminalCursor($$parsedSource as Partial<TerminalCursor>);
+    }
+}
+
+export class TerminalModes {
+    "applicationCursor": boolean;
+    "cursorVisible": boolean;
+    "altScreen": boolean;
+    "saveCursor"?: boolean;
+    "altScreenSave"?: boolean;
+    "bracketedPaste": boolean;
+    "mouseTracking"?: TerminalMouseTrackingMode;
+    "mouseEncoding"?: TerminalMouseEncodingMode;
+
+    /** Creates a new TerminalModes instance. */
+    constructor($$source: Partial<TerminalModes> = {}) {
+        if (!("applicationCursor" in $$source)) {
+            this["applicationCursor"] = false;
+        }
+        if (!("cursorVisible" in $$source)) {
+            this["cursorVisible"] = false;
+        }
+        if (!("altScreen" in $$source)) {
+            this["altScreen"] = false;
+        }
+        if (!("bracketedPaste" in $$source)) {
+            this["bracketedPaste"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TerminalModes instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TerminalModes {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TerminalModes($$parsedSource as Partial<TerminalModes>);
+    }
+}
+
+export enum TerminalMouseEncodingMode {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    TerminalMouseEncodingNone = "",
+    TerminalMouseEncodingSGR = "sgr",
+    TerminalMouseEncodingSGRPixel = "sgrPixel",
+};
+
+export enum TerminalMouseTrackingMode {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    TerminalMouseTrackingNone = "",
+    TerminalMouseTrackingNormal = "normal",
+    TerminalMouseTrackingButton = "button",
+    TerminalMouseTrackingAny = "any",
+};
+
+export class TerminalSnapshot {
+    "offset": number;
+    "cols": number;
+    "rows": number;
+    "cursor": TerminalCursor;
+    "title"?: string;
+    "workingDirectory"?: string;
+    "scrollbackAnsi": string;
+    "rehydrateBeforeViewport"?: string;
+    "viewportAnsi": string;
+    "rehydrateSequences": string;
+    "modes": TerminalModes;
+    "mouseTrackingModes"?: TerminalMouseTrackingMode[];
+    "mouseEncodingModes"?: TerminalMouseEncodingMode[];
+    "truncated"?: boolean;
+
+    /** Creates a new TerminalSnapshot instance. */
+    constructor($$source: Partial<TerminalSnapshot> = {}) {
+        if (!("offset" in $$source)) {
+            this["offset"] = 0;
+        }
+        if (!("cols" in $$source)) {
+            this["cols"] = 0;
+        }
+        if (!("rows" in $$source)) {
+            this["rows"] = 0;
+        }
+        if (!("cursor" in $$source)) {
+            this["cursor"] = (new TerminalCursor());
+        }
+        if (!("scrollbackAnsi" in $$source)) {
+            this["scrollbackAnsi"] = "";
+        }
+        if (!("viewportAnsi" in $$source)) {
+            this["viewportAnsi"] = "";
+        }
+        if (!("rehydrateSequences" in $$source)) {
+            this["rehydrateSequences"] = "";
+        }
+        if (!("modes" in $$source)) {
+            this["modes"] = (new TerminalModes());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TerminalSnapshot instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TerminalSnapshot {
+        const $$createField3_0 = $$createType53;
+        const $$createField10_0 = $$createType54;
+        const $$createField11_0 = $$createType55;
+        const $$createField12_0 = $$createType56;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("cursor" in $$parsedSource) {
+            $$parsedSource["cursor"] = $$createField3_0($$parsedSource["cursor"]);
+        }
+        if ("modes" in $$parsedSource) {
+            $$parsedSource["modes"] = $$createField10_0($$parsedSource["modes"]);
+        }
+        if ("mouseTrackingModes" in $$parsedSource) {
+            $$parsedSource["mouseTrackingModes"] = $$createField11_0($$parsedSource["mouseTrackingModes"]);
+        }
+        if ("mouseEncodingModes" in $$parsedSource) {
+            $$parsedSource["mouseEncodingModes"] = $$createField12_0($$parsedSource["mouseEncodingModes"]);
+        }
+        return new TerminalSnapshot($$parsedSource as Partial<TerminalSnapshot>);
+    }
+}
+
 export class UIContributionPlugin {
     "pluginId": string;
     "name": string;
@@ -3378,11 +3540,11 @@ export class UIContributionPlugin {
      * Creates a new UIContributionPlugin instance from a string or object.
      */
     static createFrom($$source: any = {}): UIContributionPlugin {
-        const $$createField6_0 = $$createType16;
-        const $$createField7_0 = $$createType28;
-        const $$createField8_0 = $$createType22;
-        const $$createField9_0 = $$createType24;
-        const $$createField10_0 = $$createType26;
+        const $$createField6_0 = $$createType18;
+        const $$createField7_0 = $$createType30;
+        const $$createField8_0 = $$createType24;
+        const $$createField9_0 = $$createType26;
+        const $$createField10_0 = $$createType28;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("resolvers" in $$parsedSource) {
             $$parsedSource["resolvers"] = $$createField6_0($$parsedSource["resolvers"]);
@@ -3445,8 +3607,8 @@ export class UIContributionsResponse {
      * Creates a new UIContributionsResponse instance from a string or object.
      */
     static createFrom($$source: any = {}): UIContributionsResponse {
-        const $$createField0_0 = $$createType51;
-        const $$createField1_0 = $$createType53;
+        const $$createField0_0 = $$createType57;
+        const $$createField1_0 = $$createType59;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("scope" in $$parsedSource) {
             $$parsedSource["scope"] = $$createField0_0($$parsedSource["scope"]);
@@ -3514,7 +3676,7 @@ export class UpdateProjectRequest {
      * Creates a new UpdateProjectRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): UpdateProjectRequest {
-        const $$createField4_0 = $$createType47;
+        const $$createField4_0 = $$createType49;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("defaultPhaseAgents" in $$parsedSource) {
             $$parsedSource["defaultPhaseAgents"] = $$createField4_0($$parsedSource["defaultPhaseAgents"]);
@@ -3625,7 +3787,7 @@ export class UsageResolverReadModel {
      * Creates a new UsageResolverReadModel instance from a string or object.
      */
     static createFrom($$source: any = {}): UsageResolverReadModel {
-        const $$createField13_0 = $$createType55;
+        const $$createField13_0 = $$createType61;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("result" in $$parsedSource) {
             $$parsedSource["result"] = $$createField13_0($$parsedSource["result"]);
@@ -3653,8 +3815,8 @@ export class UsageResolverResult {
      * Creates a new UsageResolverResult instance from a string or object.
      */
     static createFrom($$source: any = {}): UsageResolverResult {
-        const $$createField1_0 = $$createType57;
-        const $$createField3_0 = $$createType47;
+        const $$createField1_0 = $$createType63;
+        const $$createField3_0 = $$createType49;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("metrics" in $$parsedSource) {
             $$parsedSource["metrics"] = $$createField1_0($$parsedSource["metrics"]);
@@ -3836,7 +3998,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType58;
+        const $$createField2_0 = $$createType64;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -3886,47 +4048,53 @@ const $$createType11 = workitem$0.WorkflowDefinition.createFrom;
 const $$createType12 = RuntimeEvent.createFrom;
 const $$createType13 = onboarding$0.Item.createFrom;
 const $$createType14 = $Create.Array($$createType13);
-const $$createType15 = PluginResolver.createFrom;
-const $$createType16 = $Create.Array($$createType15);
-const $$createType17 = PluginUsageResolver.createFrom;
+const $$createType15 = TerminalSnapshot.createFrom;
+const $$createType16 = $Create.Nullable($$createType15);
+const $$createType17 = PluginResolver.createFrom;
 const $$createType18 = $Create.Array($$createType17);
-const $$createType19 = ProjectAttachmentTemplate.createFrom;
+const $$createType19 = PluginUsageResolver.createFrom;
 const $$createType20 = $Create.Array($$createType19);
-const $$createType21 = PluginUIPanel.createFrom;
+const $$createType21 = ProjectAttachmentTemplate.createFrom;
 const $$createType22 = $Create.Array($$createType21);
-const $$createType23 = PluginUICommand.createFrom;
+const $$createType23 = PluginUIPanel.createFrom;
 const $$createType24 = $Create.Array($$createType23);
-const $$createType25 = PluginReviewAction.createFrom;
+const $$createType25 = PluginUICommand.createFrom;
 const $$createType26 = $Create.Array($$createType25);
-const $$createType27 = PluginPermissions.createFrom;
-const $$createType28 = $Create.Nullable($$createType27);
-const $$createType29 = PluginUICommandRef.createFrom;
+const $$createType27 = PluginReviewAction.createFrom;
+const $$createType28 = $Create.Array($$createType27);
+const $$createType29 = PluginPermissions.createFrom;
 const $$createType30 = $Create.Nullable($$createType29);
-const $$createType31 = PluginUIPanelEntry.createFrom;
+const $$createType31 = PluginUICommandRef.createFrom;
 const $$createType32 = $Create.Nullable($$createType31);
-const $$createType33 = $Create.Array($$createType29);
-const $$createType34 = PluginTemplateField.createFrom;
-const $$createType35 = $Create.Array($$createType34);
-const $$createType36 = ProjectContextItem.createFrom;
+const $$createType33 = PluginUIPanelEntry.createFrom;
+const $$createType34 = $Create.Nullable($$createType33);
+const $$createType35 = $Create.Array($$createType31);
+const $$createType36 = PluginTemplateField.createFrom;
 const $$createType37 = $Create.Array($$createType36);
-const $$createType38 = workitem$0.Project.createFrom;
-const $$createType39 = workitem$0.WorkItem.createFrom;
-const $$createType40 = $Create.Array($$createType39);
-const $$createType41 = $Create.Array($$createType10);
-const $$createType42 = workitem$0.WorkItemRun.createFrom;
-const $$createType43 = $Create.Array($$createType42);
-const $$createType44 = workitem$0.StatusEvent.createFrom;
-const $$createType45 = $Create.Nullable($$createType42);
-const $$createType46 = $Create.Nullable($$createType39);
-const $$createType47 = $Create.Map($Create.Any, $Create.Any);
-const $$createType48 = StartPTYAgentBridgeOptions.createFrom;
-const $$createType49 = $Create.Nullable($$createType48);
-const $$createType50 = HTTPForward.createFrom;
-const $$createType51 = UIContributionScope.createFrom;
-const $$createType52 = UIContributionPlugin.createFrom;
-const $$createType53 = $Create.Array($$createType52);
-const $$createType54 = UsageResolverResult.createFrom;
-const $$createType55 = $Create.Nullable($$createType54);
-const $$createType56 = UsageResolverMetric.createFrom;
-const $$createType57 = $Create.Array($$createType56);
-const $$createType58 = WorktrunkBinary.createFrom;
+const $$createType38 = ProjectContextItem.createFrom;
+const $$createType39 = $Create.Array($$createType38);
+const $$createType40 = workitem$0.Project.createFrom;
+const $$createType41 = workitem$0.WorkItem.createFrom;
+const $$createType42 = $Create.Array($$createType41);
+const $$createType43 = $Create.Array($$createType10);
+const $$createType44 = workitem$0.WorkItemRun.createFrom;
+const $$createType45 = $Create.Array($$createType44);
+const $$createType46 = workitem$0.StatusEvent.createFrom;
+const $$createType47 = $Create.Nullable($$createType44);
+const $$createType48 = $Create.Nullable($$createType41);
+const $$createType49 = $Create.Map($Create.Any, $Create.Any);
+const $$createType50 = StartPTYAgentBridgeOptions.createFrom;
+const $$createType51 = $Create.Nullable($$createType50);
+const $$createType52 = HTTPForward.createFrom;
+const $$createType53 = TerminalCursor.createFrom;
+const $$createType54 = TerminalModes.createFrom;
+const $$createType55 = $Create.Array($Create.Any);
+const $$createType56 = $Create.Array($Create.Any);
+const $$createType57 = UIContributionScope.createFrom;
+const $$createType58 = UIContributionPlugin.createFrom;
+const $$createType59 = $Create.Array($$createType58);
+const $$createType60 = UsageResolverResult.createFrom;
+const $$createType61 = $Create.Nullable($$createType60);
+const $$createType62 = UsageResolverMetric.createFrom;
+const $$createType63 = $Create.Array($$createType62);
+const $$createType64 = WorktrunkBinary.createFrom;
