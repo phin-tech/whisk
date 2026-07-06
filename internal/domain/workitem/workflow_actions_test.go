@@ -55,6 +55,9 @@ func TestWorkflowDefinitionValidationRejectsInvalidDefinitions(t *testing.T) {
 		{name: "bad run prompt", edit: func(def *WorkflowDefinition) {
 			def.Actions[0].CreatesRun = &WorkflowRunEffect{Preset: RunPresetReader, PromptTemplateID: "bad"}
 		}, want: "unsupported prompt template bad"},
+		{name: "bad run working dir", edit: func(def *WorkflowDefinition) {
+			def.Actions[0].CreatesRun = &WorkflowRunEffect{Preset: RunPresetReader, PromptTemplateID: PromptTemplatePlan, WorkingDir: "somewhere"}
+		}, want: "unsupported workflow working dir somewhere"},
 		{name: "missing gate id", edit: func(def *WorkflowDefinition) { def.Gates[0].ID = "" }, want: "workflow gate id required"},
 		{name: "bad gate phase", edit: func(def *WorkflowDefinition) { def.Gates[0].Phase = "missing" }, want: "unknown stage missing"},
 	}
@@ -264,7 +267,37 @@ func TestReviewFeedbackCreatesArtifactAndResumesExecution(t *testing.T) {
 	now := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
 	mustProject(t, state, "proj_01", "One")
 	item := mustWorkItem(t, state, "wi_01", "proj_01")
-	mustApprovedPlan(t, state, item.ID, now)
+	planning, err := state.StartPlanning(StartPlanning{
+		ID:           "run_plan",
+		HistoryID:    "hist_plan",
+		RunHistoryID: "run_hist_plan",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	draft, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "plan_01",
+		WorkItemID: item.ID,
+		RunID:      planning.ID,
+		Title:      "Plan",
+		Body:       "Do it.",
+		Actor:      "agent",
+		Now:        now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("submit draft plan: %v", err)
+	}
+	if _, err := state.ApprovePlan(ApprovePlan{
+		ArtifactID: draft.ID,
+		WorkItemID: item.ID,
+		Actor:      "human",
+		Now:        now.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("approve plan: %v", err)
+	}
 	run, err := state.StartExecution(StartExecution{
 		ID:           "run_exec",
 		HistoryID:    "hist_exec",
@@ -272,28 +305,39 @@ func TestReviewFeedbackCreatesArtifactAndResumesExecution(t *testing.T) {
 		WorkItemID:   item.ID,
 		SessionID:    "sess_01",
 		PTYID:        "pty_01",
-		Now:          now,
+		Now:          now.Add(3 * time.Minute),
 	})
 	if err != nil {
 		t.Fatalf("start execution: %v", err)
 	}
-	if _, err := state.CompleteExecution(CompleteExecution{RunID: run.ID, Actor: "agent", Now: now.Add(time.Minute)}); err != nil {
+	if _, err := state.CompleteExecution(CompleteExecution{RunID: run.ID, Actor: "agent", Now: now.Add(4 * time.Minute)}); err != nil {
 		t.Fatalf("complete execution: %v", err)
 	}
 
 	feedback, err := state.SubmitReviewFeedback(SubmitReviewFeedback{
 		ID:         "feedback_01",
 		WorkItemID: item.ID,
-		RunID:      run.ID,
+		RunID:      planning.ID,
 		Body:       "Fix the missing validation.",
 		Actor:      "human",
-		Now:        now.Add(2 * time.Minute),
+		Now:        now.Add(5 * time.Minute),
 	})
 	if err != nil {
 		t.Fatalf("submit feedback: %v", err)
 	}
 	if feedback.Kind != ArtifactKindFeedback || feedback.Status != ArtifactStatusApproved {
 		t.Fatalf("feedback = %#v", feedback)
+	}
+	if feedback.RunID != run.ID {
+		t.Fatalf("feedback run id = %q, want execution run %q", feedback.RunID, run.ID)
+	}
+	storedPlanning, ok := state.GetRun(planning.ID)
+	if !ok || storedPlanning.Status == RunStateRunning {
+		t.Fatalf("planning run was resumed: %#v, ok = %v", storedPlanning, ok)
+	}
+	storedExecution, ok := state.GetRun(run.ID)
+	if !ok || storedExecution.Status != RunStateRunning {
+		t.Fatalf("execution run = %#v, ok = %v", storedExecution, ok)
 	}
 	item, _ = state.GetWorkItem(item.ID)
 	if item.StageID != StageExecution {

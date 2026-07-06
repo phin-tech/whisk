@@ -58,6 +58,12 @@ func TestWorkflowDefinitionValidationRejectsUnknownStagesAndRequirements(t *test
 	if err := ValidateWorkflowDefinition(definition); err == nil || !strings.Contains(err.Error(), "unsupported artifact kind") {
 		t.Fatalf("expected artifact kind error, got %v", err)
 	}
+
+	definition = DefaultWorkflowDefinition()
+	definition.Questions.SetsRunState = "blocked"
+	if err := ValidateWorkflowDefinition(definition); err == nil || !strings.Contains(err.Error(), "unsupported question run state blocked") {
+		t.Fatalf("expected question run state error, got %v", err)
+	}
 }
 
 func TestWorkflowDefinitionValidationAcceptsCustomKanbanStages(t *testing.T) {
