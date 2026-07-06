@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/app"
 	"github.com/phin-tech/whisk/internal/domain/session"
+	"github.com/phin-tech/whisk/internal/domain/terminal"
 )
 
 func TestRuntimeCreateSessionAttachAndReplayOutput(t *testing.T) {
@@ -353,6 +355,115 @@ func TestRuntimeTeesPTYOutputAndExitToTerminalHistory(t *testing.T) {
 	}
 }
 
+func TestRuntimeTracksTerminalSnapshotFromPTYOutput(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ptyBackend := newAttachableMemoryPTYBackend()
+	history := newMemoryTerminalHistoryStore()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend:           ptyBackend,
+		TerminalHistoryStore: history,
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Snapshot",
+		RootDir:    t.TempDir(),
+		InitialPTY: &app.StartPTYOptions{Cols: 40, Rows: 10},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	ptyBackend.output(created.MainPtyID, 0, []byte("hello snapshot\r\n"))
+	history.waitForOutput(t, ctx)
+
+	snapshot, err := runtime.TerminalSnapshot(ctx, created.MainPtyID)
+	if err != nil {
+		t.Fatalf("terminal snapshot: %v", err)
+	}
+	if snapshot.Offset != uint64(len("hello snapshot\r\n")) ||
+		snapshot.Cols != 40 ||
+		snapshot.Rows != 10 ||
+		!strings.Contains(snapshot.ViewportAnsi, "hello snapshot") {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+}
+
+func TestRuntimeResizesTrackedTerminalSnapshot(t *testing.T) {
+	ctx := context.Background()
+	ptyBackend := newAttachableMemoryPTYBackend()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend: ptyBackend,
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Snapshot resize",
+		RootDir:    t.TempDir(),
+		InitialPTY: &app.StartPTYOptions{Cols: 40, Rows: 10},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if err := runtime.ResizePTY(ctx, created.MainPtyID, app.PTYSize{Cols: 100, Rows: 32}); err != nil {
+		t.Fatalf("resize pty: %v", err)
+	}
+
+	snapshot, err := runtime.TerminalSnapshot(ctx, created.MainPtyID)
+	if err != nil {
+		t.Fatalf("terminal snapshot: %v", err)
+	}
+	if snapshot.Cols != 100 || snapshot.Rows != 32 {
+		t.Fatalf("snapshot size = %dx%d", snapshot.Cols, snapshot.Rows)
+	}
+}
+
+func TestRuntimeWritesTerminalCheckpointWhenHistoryRequestsIt(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ptyBackend := newAttachableMemoryPTYBackend()
+	history := newMemoryTerminalHistoryStore()
+	history.setAppendResult(app.TerminalHistoryAppendResult{
+		AppendedOffset:   0,
+		AppendedBytes:    len("checkpoint me"),
+		LogPayloadBytes:  5 * 1024 * 1024,
+		CheckpointNeeded: true,
+	})
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend:           ptyBackend,
+		TerminalHistoryStore: history,
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Checkpoint",
+		RootDir:    t.TempDir(),
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	ptyBackend.output(created.MainPtyID, 0, []byte("checkpoint me"))
+	checkpoint := history.waitForCheckpoint(t, ctx)
+
+	if checkpoint.PTYID != created.MainPtyID ||
+		checkpoint.Offset != uint64(len("checkpoint me")) ||
+		checkpoint.Cols != 80 ||
+		checkpoint.Rows != 24 ||
+		len(checkpoint.TerminalSnapshot) == 0 {
+		t.Fatalf("checkpoint = %#v", checkpoint)
+	}
+	var snapshot terminal.Snapshot
+	if err := json.Unmarshal(checkpoint.TerminalSnapshot, &snapshot); err != nil {
+		t.Fatalf("unmarshal terminal snapshot: %v", err)
+	}
+	if snapshot.Offset != checkpoint.Offset || !strings.Contains(snapshot.ViewportAnsi, "checkpoint me") {
+		t.Fatalf("checkpoint snapshot = %#v", snapshot)
+	}
+}
+
 func TestRuntimePrunesTerminalHistoryOnPTYDeleteAndDaemonClear(t *testing.T) {
 	ctx := context.Background()
 	ptyBackend := newAttachableMemoryPTYBackend()
@@ -490,20 +601,24 @@ type recordingEventSink struct {
 }
 
 type memoryTerminalHistoryStore struct {
-	mu         sync.Mutex
-	registered []app.TerminalHistoryPTYMeta
-	outputs    []app.TerminalHistoryOutput
-	exits      []app.TerminalHistoryExit
-	deleted    []string
-	clear      bool
-	outputCh   chan app.TerminalHistoryOutput
-	exitCh     chan app.TerminalHistoryExit
+	mu           sync.Mutex
+	registered   []app.TerminalHistoryPTYMeta
+	outputs      []app.TerminalHistoryOutput
+	exits        []app.TerminalHistoryExit
+	checkpoints  []app.TerminalHistoryCheckpoint
+	deleted      []string
+	clear        bool
+	appendResult app.TerminalHistoryAppendResult
+	outputCh     chan app.TerminalHistoryOutput
+	exitCh       chan app.TerminalHistoryExit
+	checkpointCh chan app.TerminalHistoryCheckpoint
 }
 
 func newMemoryTerminalHistoryStore() *memoryTerminalHistoryStore {
 	return &memoryTerminalHistoryStore{
-		outputCh: make(chan app.TerminalHistoryOutput, 8),
-		exitCh:   make(chan app.TerminalHistoryExit, 8),
+		outputCh:     make(chan app.TerminalHistoryOutput, 8),
+		exitCh:       make(chan app.TerminalHistoryExit, 8),
+		checkpointCh: make(chan app.TerminalHistoryCheckpoint, 8),
 	}
 }
 
@@ -521,6 +636,9 @@ func (s *memoryTerminalHistoryStore) AppendPTYOutput(_ context.Context, event ap
 	event.Bytes = append([]byte(nil), event.Bytes...)
 	s.outputs = append(s.outputs, event)
 	s.outputCh <- event
+	if s.appendResult.CheckpointNeeded || s.appendResult.AppendedBytes != 0 || s.appendResult.LogPayloadBytes != 0 {
+		return s.appendResult, nil
+	}
 	return app.TerminalHistoryAppendResult{
 		AppendedOffset:  event.Offset,
 		AppendedBytes:   len(event.Bytes),
@@ -530,6 +648,10 @@ func (s *memoryTerminalHistoryStore) AppendPTYOutput(_ context.Context, event ap
 
 func (s *memoryTerminalHistoryStore) WriteCheckpoint(_ context.Context, checkpoint app.TerminalHistoryCheckpoint) (app.TerminalHistoryCheckpoint, error) {
 	checkpoint.TerminalSnapshot = append(checkpoint.TerminalSnapshot[:0:0], checkpoint.TerminalSnapshot...)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.checkpoints = append(s.checkpoints, checkpoint)
+	s.checkpointCh <- checkpoint
 	return checkpoint, nil
 }
 
@@ -572,6 +694,12 @@ func (s *memoryTerminalHistoryStore) registeredPTYs() []app.TerminalHistoryPTYMe
 	return out
 }
 
+func (s *memoryTerminalHistoryStore) setAppendResult(result app.TerminalHistoryAppendResult) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.appendResult = result
+}
+
 func (s *memoryTerminalHistoryStore) deletedPTYs() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -603,6 +731,17 @@ func (s *memoryTerminalHistoryStore) waitForExit(t *testing.T, ctx context.Conte
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for terminal history exit")
 		return app.TerminalHistoryExit{}
+	}
+}
+
+func (s *memoryTerminalHistoryStore) waitForCheckpoint(t *testing.T, ctx context.Context) app.TerminalHistoryCheckpoint {
+	t.Helper()
+	select {
+	case checkpoint := <-s.checkpointCh:
+		return checkpoint
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for terminal history checkpoint")
+		return app.TerminalHistoryCheckpoint{}
 	}
 }
 

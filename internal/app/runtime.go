@@ -18,6 +18,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/httpforward"
 	"github.com/phin-tech/whisk/internal/domain/mailbox"
 	"github.com/phin-tech/whisk/internal/domain/session"
+	"github.com/phin-tech/whisk/internal/domain/terminal"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
 
@@ -182,6 +183,7 @@ type Runtime struct {
 	usageResolverResults       map[string]UsageResolverReadModel
 	ptyMeta                    map[string]ptyMetadata
 	ptyLastInputAt             map[string]time.Time
+	terminalStates             map[string]*terminal.State
 	forwards                   *httpforward.State
 	workItems                  *workitem.State
 	agentBridges               agentbridge.State
@@ -577,6 +579,7 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		usageResolverResults:       map[string]UsageResolverReadModel{},
 		ptyMeta:                    map[string]ptyMetadata{},
 		ptyLastInputAt:             map[string]time.Time{},
+		terminalStates:             map[string]*terminal.State{},
 		forwards:                   httpforward.NewState(),
 		workItems:                  workItems,
 		agentBridges:               agentBridges,
@@ -1144,6 +1147,7 @@ func (r *Runtime) DeletePTY(ctx context.Context, req DeletePTYRequest) error {
 	r.mu.Lock()
 	delete(r.ptyMeta, req.PTYID)
 	delete(r.ptyLastInputAt, req.PTYID)
+	delete(r.terminalStates, req.PTYID)
 	r.mu.Unlock()
 	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged, PtyID: req.PTYID})
 	return nil
@@ -1376,7 +1380,11 @@ func (r *Runtime) ResizePTY(ctx context.Context, ptyID string, size PTYSize) err
 	if size.Rows <= 0 {
 		return fmt.Errorf("pty rows must be positive")
 	}
-	return r.ptys.Resize(ctx, ptyID, size)
+	if err := r.ptys.Resize(ctx, ptyID, size); err != nil {
+		return err
+	}
+	r.resizeTerminalState(ptyID, size)
+	return nil
 }
 
 func terminalInput(data []byte) []byte {
@@ -1397,6 +1405,19 @@ func (r *Runtime) AttachPTY(ctx context.Context, req AttachPTYRequest) (*PTYAtta
 
 func (r *Runtime) PTYOutput(ctx context.Context, ptyID string, fromOffset uint64) (PTYOutputSnapshot, error) {
 	return r.ptys.Output(ctx, ptyID, fromOffset)
+}
+
+func (r *Runtime) TerminalSnapshot(_ context.Context, ptyID string) (terminal.Snapshot, error) {
+	if ptyID == "" {
+		return terminal.Snapshot{}, fmt.Errorf("pty id required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state, ok := r.terminalStates[ptyID]
+	if !ok {
+		return terminal.Snapshot{}, fmt.Errorf("terminal snapshot for pty %s not found", ptyID)
+	}
+	return state.Snapshot(), nil
 }
 
 func (r *Runtime) ListPTYHistory(ctx context.Context) ([]PTYHistorySummary, error) {
@@ -1445,6 +1466,7 @@ func (r *Runtime) ClearDaemon(ctx context.Context) (ClearDaemonResult, error) {
 	r.browserResources = domainbrowser.NewState()
 	r.ptyMeta = map[string]ptyMetadata{}
 	r.ptyLastInputAt = map[string]time.Time{}
+	r.terminalStates = map[string]*terminal.State{}
 	r.mu.Unlock()
 
 	result := ClearDaemonResult{
@@ -1558,7 +1580,11 @@ func (r *Runtime) registerPTYStores(ctx context.Context, record PTYRecord, sessi
 	if err := r.registerPTYTranscript(ctx, record, sessionID, windowID, paneID); err != nil {
 		return err
 	}
-	return r.registerPTYHistory(ctx, record, sessionID, windowID, paneID)
+	if err := r.registerPTYHistory(ctx, record, sessionID, windowID, paneID); err != nil {
+		return err
+	}
+	r.registerTerminalState(record)
+	return nil
 }
 
 func (r *Runtime) registerPTYTranscript(ctx context.Context, record PTYRecord, sessionID string, windowID string, paneID string) error {
@@ -1679,13 +1705,68 @@ func (r *Runtime) appendPTYTranscriptOutput(ctx context.Context, ptyID string, o
 }
 
 func (r *Runtime) appendPTYHistoryOutput(ctx context.Context, ptyID string, offset uint64, data []byte) {
-	if r.terminalHistoryStore == nil || len(data) == 0 {
+	if len(data) == 0 {
 		return
 	}
-	_, _ = r.terminalHistoryStore.AppendPTYOutput(ctx, TerminalHistoryOutput{
+	terminalWriteErr := r.writeTerminalOutput(ptyID, offset, data)
+	if r.terminalHistoryStore == nil {
+		return
+	}
+	result, err := r.terminalHistoryStore.AppendPTYOutput(ctx, TerminalHistoryOutput{
 		PTYID:  ptyID,
 		Offset: offset,
 		Bytes:  append([]byte(nil), data...),
+	})
+	if err != nil || !result.CheckpointNeeded || terminalWriteErr != nil {
+		return
+	}
+	r.writeTerminalCheckpoint(ctx, ptyID)
+}
+
+func (r *Runtime) registerTerminalState(record PTYRecord) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.terminalStates[record.ID] = terminal.New(record.Cols, record.Rows, terminal.Options{})
+}
+
+func (r *Runtime) resizeTerminalState(ptyID string, size PTYSize) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state, ok := r.terminalStates[ptyID]
+	if !ok {
+		return
+	}
+	state.Resize(size.Cols, size.Rows)
+}
+
+func (r *Runtime) writeTerminalOutput(ptyID string, offset uint64, data []byte) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state, ok := r.terminalStates[ptyID]
+	if !ok {
+		return fmt.Errorf("terminal state for pty %s not found", ptyID)
+	}
+	return state.Write(offset, data)
+}
+
+func (r *Runtime) writeTerminalCheckpoint(ctx context.Context, ptyID string) {
+	if r.terminalHistoryStore == nil {
+		return
+	}
+	snapshot, err := r.TerminalSnapshot(ctx, ptyID)
+	if err != nil {
+		return
+	}
+	payload, err := json.Marshal(snapshot)
+	if err != nil {
+		return
+	}
+	_, _ = r.terminalHistoryStore.WriteCheckpoint(ctx, TerminalHistoryCheckpoint{
+		PTYID:            ptyID,
+		Offset:           snapshot.Offset,
+		Cols:             snapshot.Cols,
+		Rows:             snapshot.Rows,
+		TerminalSnapshot: payload,
 	})
 }
 
