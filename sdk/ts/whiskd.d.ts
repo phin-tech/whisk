@@ -2437,6 +2437,7 @@ export interface components {
             output: string;
             outputBase64: string;
             ptyId: string;
+            terminalSnapshot?: components["schemas"]["TerminalSnapshot"] | null;
         };
         PTYHistory: {
             /** Format: date-time */
@@ -2962,6 +2963,41 @@ export interface components {
             body: string;
             runId?: string;
             workItemId: string;
+        };
+        TerminalCursor: {
+            /** Format: int64 */
+            x: number;
+            /** Format: int64 */
+            y: number;
+        };
+        TerminalModes: {
+            altScreen: boolean;
+            altScreenSave?: boolean;
+            applicationCursor: boolean;
+            bracketedPaste: boolean;
+            cursorVisible: boolean;
+            mouseEncoding?: string;
+            mouseTracking?: string;
+            saveCursor?: boolean;
+        };
+        TerminalSnapshot: {
+            /** Format: int64 */
+            cols: number;
+            cursor: components["schemas"]["TerminalCursor"];
+            modes: components["schemas"]["TerminalModes"];
+            mouseEncodingModes?: string[];
+            mouseTrackingModes?: string[];
+            /** Format: int64 */
+            offset: number;
+            rehydrateBeforeViewport?: string;
+            rehydrateSequences: string;
+            /** Format: int64 */
+            rows: number;
+            scrollbackAnsi: string;
+            title?: string;
+            truncated?: boolean;
+            viewportAnsi: string;
+            workingDirectory?: string;
         };
         TransitionRule: {
             fromStageId: string;
@@ -5326,6 +5362,7 @@ export interface operations {
         parameters: {
             query?: {
                 from?: number;
+                snapshot?: boolean;
             };
             header?: never;
             path: {

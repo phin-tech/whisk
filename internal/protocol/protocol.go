@@ -11,7 +11,7 @@ import (
 
 const (
 	// ProtocolVersion is the canonical daemon/client wire protocol version.
-	ProtocolVersion = 29
+	ProtocolVersion = 30
 	// DaemonAPIVersion is the legacy name kept for old clients and tooling.
 	DaemonAPIVersion = ProtocolVersion
 )
@@ -184,23 +184,76 @@ type ResizePTYRequest struct {
 type OutputRequest struct {
 	PtyID      string `json:"ptyId"`
 	FromOffset uint64 `json:"fromOffset"`
+	Snapshot   bool   `json:"snapshot,omitempty"`
 }
 
 type OutputSnapshot struct {
-	PtyID        string `json:"ptyId"`
-	Offset       uint64 `json:"offset"`
-	Output       string `json:"output"`
-	OutputBase64 string `json:"outputBase64"`
+	PtyID            string            `json:"ptyId"`
+	Offset           uint64            `json:"offset"`
+	Output           string            `json:"output"`
+	OutputBase64     string            `json:"outputBase64"`
+	TerminalSnapshot *TerminalSnapshot `json:"terminalSnapshot,omitempty"`
 }
 
 type PTYStreamFrame struct {
-	Type         string `json:"type"`
-	PtyID        string `json:"ptyId"`
-	Data         string `json:"data,omitempty"`
-	Offset       uint64 `json:"offset,omitempty"`
-	OutputBase64 string `json:"outputBase64,omitempty"`
-	Code         *int   `json:"code,omitempty"`
-	Message      string `json:"message,omitempty"`
+	Type             string            `json:"type"`
+	PtyID            string            `json:"ptyId"`
+	Data             string            `json:"data,omitempty"`
+	Offset           uint64            `json:"offset,omitempty"`
+	OutputBase64     string            `json:"outputBase64,omitempty"`
+	TerminalSnapshot *TerminalSnapshot `json:"terminalSnapshot,omitempty"`
+	Code             *int              `json:"code,omitempty"`
+	Message          string            `json:"message,omitempty"`
+}
+
+type TerminalMouseTrackingMode string
+
+const (
+	TerminalMouseTrackingNone   TerminalMouseTrackingMode = ""
+	TerminalMouseTrackingNormal TerminalMouseTrackingMode = "normal"
+	TerminalMouseTrackingButton TerminalMouseTrackingMode = "button"
+	TerminalMouseTrackingAny    TerminalMouseTrackingMode = "any"
+)
+
+type TerminalMouseEncodingMode string
+
+const (
+	TerminalMouseEncodingNone     TerminalMouseEncodingMode = ""
+	TerminalMouseEncodingSGR      TerminalMouseEncodingMode = "sgr"
+	TerminalMouseEncodingSGRPixel TerminalMouseEncodingMode = "sgrPixel"
+)
+
+type TerminalCursor struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+type TerminalModes struct {
+	ApplicationCursor bool                      `json:"applicationCursor"`
+	CursorVisible     bool                      `json:"cursorVisible"`
+	AltScreen         bool                      `json:"altScreen"`
+	SaveCursor        bool                      `json:"saveCursor,omitempty"`
+	AltScreenSave     bool                      `json:"altScreenSave,omitempty"`
+	BracketedPaste    bool                      `json:"bracketedPaste"`
+	MouseTracking     TerminalMouseTrackingMode `json:"mouseTracking,omitempty"`
+	MouseEncoding     TerminalMouseEncodingMode `json:"mouseEncoding,omitempty"`
+}
+
+type TerminalSnapshot struct {
+	Offset                  uint64                      `json:"offset"`
+	Cols                    int                         `json:"cols"`
+	Rows                    int                         `json:"rows"`
+	Cursor                  TerminalCursor              `json:"cursor"`
+	Title                   string                      `json:"title,omitempty"`
+	WorkingDirectory        string                      `json:"workingDirectory,omitempty"`
+	ScrollbackAnsi          string                      `json:"scrollbackAnsi"`
+	RehydrateBeforeViewport string                      `json:"rehydrateBeforeViewport,omitempty"`
+	ViewportAnsi            string                      `json:"viewportAnsi"`
+	RehydrateSequences      string                      `json:"rehydrateSequences"`
+	Modes                   TerminalModes               `json:"modes"`
+	MouseTrackingModes      []TerminalMouseTrackingMode `json:"mouseTrackingModes,omitempty"`
+	MouseEncodingModes      []TerminalMouseEncodingMode `json:"mouseEncodingModes,omitempty"`
+	Truncated               bool                        `json:"truncated,omitempty"`
 }
 
 type PTYInfo struct {

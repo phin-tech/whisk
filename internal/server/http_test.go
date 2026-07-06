@@ -687,6 +687,82 @@ func TestHTTPServerAttachesPTYWebSocketOutputStream(t *testing.T) {
 	}
 }
 
+func TestHTTPServerPTYOutputIncludesTerminalSnapshotWhenRequested(t *testing.T) {
+	backend := newFakePTYBackend()
+	eventBus := newFakeEventBus()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: eventBus})
+	handler := server.NewHTTP(runtime)
+
+	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    t.TempDir(),
+		InitialPTY: &protocol.StartPTYOptions{Cols: 40, Rows: 10},
+	}, http.StatusCreated)
+	backend.waitForSubscriber(t)
+	postNoContent(t, handler, "/v1/ptys/"+created.MainPtyID+"/write", protocol.WritePTYRequest{Data: "snapshot bytes"})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	waitRuntimeEvent(t, ctx, eventBus, app.EventPTYOutput, created.MainPtyID)
+
+	raw := getJSON[protocol.OutputSnapshot](t, handler, "/v1/ptys/"+created.MainPtyID+"/output?from=0", http.StatusOK)
+	if raw.TerminalSnapshot != nil {
+		t.Fatalf("raw fallback snapshot = %#v, want nil terminal snapshot", raw.TerminalSnapshot)
+	}
+
+	snapshot := getJSON[protocol.OutputSnapshot](t, handler, "/v1/ptys/"+created.MainPtyID+"/output?from=0&snapshot=true", http.StatusOK)
+	if snapshot.Output != "snapshot bytes" ||
+		snapshot.OutputBase64 != "c25hcHNob3QgYnl0ZXM=" ||
+		snapshot.Offset != uint64(len("snapshot bytes")) ||
+		snapshot.TerminalSnapshot == nil ||
+		snapshot.TerminalSnapshot.Offset != uint64(len("snapshot bytes")) ||
+		snapshot.TerminalSnapshot.Cols != 40 ||
+		snapshot.TerminalSnapshot.Rows != 10 ||
+		!strings.Contains(snapshot.TerminalSnapshot.ViewportAnsi, "snapshot bytes") {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+}
+
+func TestHTTPServerAttachPTYWebSocketSendsSnapshotFrameWhenRequested(t *testing.T) {
+	backend := newFakePTYBackend()
+	eventBus := newFakeEventBus()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: eventBus})
+	handler := server.NewHTTP(runtime)
+	httpServer := httptest.NewServer(handler)
+	defer httpServer.Close()
+
+	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:       "Whisk",
+		RootDir:    t.TempDir(),
+		InitialPTY: &protocol.StartPTYOptions{Cols: 80, Rows: 24},
+	}, http.StatusCreated)
+	backend.waitForSubscriber(t)
+	postNoContent(t, handler, "/v1/ptys/"+created.MainPtyID+"/write", protocol.WritePTYRequest{Data: "hello"})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	waitRuntimeEvent(t, ctx, eventBus, app.EventPTYOutput, created.MainPtyID)
+
+	conn, _, err := websocket.Dial(ctx, strings.Replace(httpServer.URL, "http", "ws", 1)+"/v1/ptys/"+created.MainPtyID+"/attach?from=0&snapshot=1", nil)
+	if err != nil {
+		t.Fatalf("dial attach: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	snapshot := readPTYStreamFrame(t, ctx, conn)
+	if snapshot.Type != "snapshot" ||
+		snapshot.PtyID != created.MainPtyID ||
+		snapshot.TerminalSnapshot == nil ||
+		snapshot.TerminalSnapshot.Offset != uint64(len("hello")) ||
+		!strings.Contains(snapshot.TerminalSnapshot.ViewportAnsi, "hello") {
+		t.Fatalf("snapshot frame = %#v", snapshot)
+	}
+
+	postNoContent(t, handler, "/v1/ptys/"+created.MainPtyID+"/write", protocol.WritePTYRequest{Data: "!"})
+	live := readPTYStreamFrame(t, ctx, conn)
+	if live.Type != "output" || live.PtyID != created.MainPtyID || live.Offset != uint64(len("hello")) || live.OutputBase64 != "IQ==" {
+		t.Fatalf("live frame = %#v", live)
+	}
+}
+
 func TestHTTPServerAttachesPTYWebSocketBinaryOutputStream(t *testing.T) {
 	backend := newFakePTYBackend()
 	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: newFakeEventBus()})
@@ -2218,6 +2294,21 @@ func (f *pluginRegistryFake) ResolveProjectAttachmentProvider(string) app.Projec
 
 func newFakeEventBus() *fakeEventBus {
 	return &fakeEventBus{ch: make(chan app.RuntimeEvent, 64)}
+}
+
+func waitRuntimeEvent(t *testing.T, ctx context.Context, bus *fakeEventBus, eventType app.RuntimeEventType, ptyID string) app.RuntimeEvent {
+	t.Helper()
+	for {
+		select {
+		case event := <-bus.ch:
+			if event.Type == eventType && (ptyID == "" || event.PtyID == ptyID) {
+				return event
+			}
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for runtime event %s %s", eventType, ptyID)
+			return app.RuntimeEvent{}
+		}
+	}
 }
 
 func (b *fakeEventBus) Publish(_ context.Context, event app.RuntimeEvent) error {

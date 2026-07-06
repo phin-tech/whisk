@@ -34,6 +34,22 @@ func TestNextEventRouteIncludesCursorAndResponseEnvelope(t *testing.T) {
 	}
 }
 
+func TestPTYOutputRouteIncludesSnapshotQuery(t *testing.T) {
+	route, ok := routeByOperationID("getPTYOutput")
+	if !ok {
+		t.Fatalf("getPTYOutput route missing")
+	}
+	if _, ok := route.Response.(OutputSnapshot); !ok {
+		t.Fatalf("getPTYOutput response = %T, want OutputSnapshot", route.Response)
+	}
+	if !hasQueryParam(route, "from", "integer") {
+		t.Fatalf("getPTYOutput route missing from query: %#v", route.Query)
+	}
+	if !hasQueryParam(route, "snapshot", "boolean") {
+		t.Fatalf("getPTYOutput route missing snapshot query: %#v", route.Query)
+	}
+}
+
 func TestDetectedAgentsRouteUsesAgentsTagAndReadModel(t *testing.T) {
 	route, ok := routeByOperationID("listDetectedAgents")
 	if !ok {

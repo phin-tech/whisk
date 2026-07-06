@@ -347,6 +347,32 @@ func TestHTTPClientDrivesDaemonRuntime(t *testing.T) {
 	}
 }
 
+func TestHTTPClientOutputCanRequestTerminalSnapshot(t *testing.T) {
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/ptys/pty_01/output" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("from") != "7" || r.URL.Query().Get("snapshot") != "true" {
+			t.Fatalf("query = %s", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"ptyId":"pty_01","offset":9,"output":"ok","outputBase64":"b2s=","terminalSnapshot":{"offset":7,"cols":80,"rows":24,"cursor":{"x":2,"y":3},"scrollbackAnsi":"","viewportAnsi":"ready","rehydrateSequences":"\u001b[4;3H","modes":{"applicationCursor":false,"cursorVisible":true,"altScreen":false,"bracketedPaste":false}}}`)
+	}))
+	t.Cleanup(httpServer.Close)
+
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	snapshot, err := daemon.Output(context.Background(), protocol.OutputRequest{PtyID: "pty_01", FromOffset: 7, Snapshot: true})
+	if err != nil {
+		t.Fatalf("output: %v", err)
+	}
+	if snapshot.TerminalSnapshot == nil ||
+		snapshot.TerminalSnapshot.Offset != 7 ||
+		snapshot.TerminalSnapshot.Cursor.X != 2 ||
+		snapshot.TerminalSnapshot.Cursor.Y != 3 {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+}
+
 func TestHTTPClientDrivesPluginAPI(t *testing.T) {
 	used := 1.0
 	limit := 10.0
