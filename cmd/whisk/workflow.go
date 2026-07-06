@@ -14,9 +14,13 @@ import (
 
 func runWorkflow(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: whisk workflow <start-planning|submit-plan|approve-plan|start-execution|complete-execution|feedback|approve-done|artifacts|events>")
+		return fmt.Errorf("usage: whisk workflow <actions|run-action|start-planning|submit-plan|approve-plan|start-execution|complete-execution|feedback|approve-done|artifacts|events>")
 	}
 	switch args[0] {
+	case "actions":
+		return runWorkflowActions(args[1:])
+	case "run-action":
+		return runWorkflowRunAction(args[1:])
 	case "start-planning":
 		return runWorkflowStartPlanning(args[1:])
 	case "submit-plan":
@@ -36,8 +40,66 @@ func runWorkflow(args []string) error {
 	case "events":
 		return runWorkflowEvents(args[1:])
 	default:
-		return fmt.Errorf("usage: whisk workflow <start-planning|submit-plan|approve-plan|start-execution|complete-execution|feedback|approve-done|artifacts|events>")
+		return fmt.Errorf("usage: whisk workflow <actions|run-action|start-planning|submit-plan|approve-plan|start-execution|complete-execution|feedback|approve-done|artifacts|events>")
 	}
+}
+
+func runWorkflowActions(args []string) error {
+	flags := workflowFlagSet("workflow actions")
+	baseURL, outputJSON, workItemID, _ := workflowCommonFlags(flags)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 || *workItemID == "" {
+		return fmt.Errorf("usage: whisk workflow actions [-work-item id] [-json] [-url url]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	actions, err := client.NewHTTP(*baseURL, nil).ListWorkItemWorkflowActions(ctx, *workItemID)
+	if err != nil {
+		return err
+	}
+	if *outputJSON {
+		return printJSON(actions)
+	}
+	for _, action := range actions {
+		fmt.Printf("%s\t%t\t%s\t%s\n", action.Action.ID, action.Enabled, action.InputKind, action.Reason)
+	}
+	return nil
+}
+
+func runWorkflowRunAction(args []string) error {
+	flags := workflowFlagSet("workflow run-action")
+	baseURL, outputJSON, workItemID, actor := workflowCommonFlags(flags)
+	actionID := flags.String("action", "", "workflow action id")
+	runID := flags.String("run", envOrDefault("WHISK_RUN_ID", ""), "run id")
+	reason := flags.String("reason", "", "action reason")
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		*actionID = args[0]
+		args = args[1:]
+	}
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *actionID == "" && flags.NArg() == 1 {
+		*actionID = flags.Arg(0)
+	}
+	if flags.NArg() > 1 || *workItemID == "" || *actionID == "" {
+		return fmt.Errorf("usage: whisk workflow run-action <action-id> [-work-item id] [-run id] [-reason text] [-actor actor] [-json] [-url url]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	item, err := client.NewHTTP(*baseURL, nil).RunWorkItemWorkflowAction(ctx, protocol.RunWorkItemWorkflowActionRequest{
+		WorkItemID: *workItemID,
+		ActionID:   *actionID,
+		RunID:      *runID,
+		Reason:     *reason,
+		Actor:      *actor,
+	})
+	if err != nil {
+		return err
+	}
+	return printMaybeJSON(item, *outputJSON)
 }
 
 func runWorkflowStartPlanning(args []string) error {
