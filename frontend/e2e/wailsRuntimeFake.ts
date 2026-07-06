@@ -195,7 +195,7 @@ function seedState() {
       interactiveAgentShell: true,
     },
     attachments: [],
-    nextWorkItemNumber: 7,
+    nextWorkItemNumber: 8,
     createdAt: now,
     updatedAt: now,
   };
@@ -206,6 +206,7 @@ function seedState() {
     workItem({ id: "wi_review", number: 4, title: "Review design token sweep", stageId: "review", runState: "awaiting_input" }),
     workItem({ id: "wi_done", number: 5, title: "Ship Wails bridge contract", stageId: "done", runState: "completed" }),
     workItem({ id: "wi_dependency", number: 6, title: "Map dependency graph", stageId: "ready", runState: "idle" }),
+    workItem({ id: "wi_orphaned", number: 7, title: "Recover orphaned workflow card", stageId: "legacy_review", runState: "idle" }),
   ];
   if (seedLargeWorkBoard) {
     for (let index = 1; index <= 360; index += 1) {
