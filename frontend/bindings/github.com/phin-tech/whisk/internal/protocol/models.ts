@@ -1434,6 +1434,25 @@ export class ListAgentPromptsRequest {
     }
 }
 
+export class ListSkillsRequest {
+    "projectId"?: string;
+    "sessionId"?: string;
+
+    /** Creates a new ListSkillsRequest instance. */
+    constructor($$source: Partial<ListSkillsRequest> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ListSkillsRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ListSkillsRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ListSkillsRequest($$parsedSource as Partial<ListSkillsRequest>);
+    }
+}
+
 export class ListStatusEventsRequest {
     "projectId"?: string;
     "workItemId"?: string;
@@ -2947,6 +2966,151 @@ export class SetSessionRootDirRequest {
     }
 }
 
+export class Skill {
+    "id": string;
+    "name": string;
+    "description"?: string;
+    "providers": string[];
+    "sourceKind": string;
+    "sourceLabel": string;
+    "rootPath": string;
+    "directoryPath": string;
+    "skillFilePath": string;
+    "fileCount": number;
+    "updatedAt": time$0.Time;
+
+    /** Creates a new Skill instance. */
+    constructor($$source: Partial<Skill> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("providers" in $$source)) {
+            this["providers"] = [];
+        }
+        if (!("sourceKind" in $$source)) {
+            this["sourceKind"] = "";
+        }
+        if (!("sourceLabel" in $$source)) {
+            this["sourceLabel"] = "";
+        }
+        if (!("rootPath" in $$source)) {
+            this["rootPath"] = "";
+        }
+        if (!("directoryPath" in $$source)) {
+            this["directoryPath"] = "";
+        }
+        if (!("skillFilePath" in $$source)) {
+            this["skillFilePath"] = "";
+        }
+        if (!("fileCount" in $$source)) {
+            this["fileCount"] = 0;
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Skill instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Skill {
+        const $$createField3_0 = $$createType6;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("providers" in $$parsedSource) {
+            $$parsedSource["providers"] = $$createField3_0($$parsedSource["providers"]);
+        }
+        return new Skill($$parsedSource as Partial<Skill>);
+    }
+}
+
+export class SkillCatalog {
+    "skills": Skill[];
+    "sources": SkillSource[];
+    "scannedAt": time$0.Time;
+
+    /** Creates a new SkillCatalog instance. */
+    constructor($$source: Partial<SkillCatalog> = {}) {
+        if (!("skills" in $$source)) {
+            this["skills"] = [];
+        }
+        if (!("sources" in $$source)) {
+            this["sources"] = [];
+        }
+        if (!("scannedAt" in $$source)) {
+            this["scannedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SkillCatalog instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SkillCatalog {
+        const $$createField0_0 = $$createType51;
+        const $$createField1_0 = $$createType53;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("skills" in $$parsedSource) {
+            $$parsedSource["skills"] = $$createField0_0($$parsedSource["skills"]);
+        }
+        if ("sources" in $$parsedSource) {
+            $$parsedSource["sources"] = $$createField1_0($$parsedSource["sources"]);
+        }
+        return new SkillCatalog($$parsedSource as Partial<SkillCatalog>);
+    }
+}
+
+export class SkillSource {
+    "id": string;
+    "label": string;
+    "path": string;
+    "kind": string;
+    "providers": string[];
+    "exists": boolean;
+    "skippedReason"?: string;
+
+    /** Creates a new SkillSource instance. */
+    constructor($$source: Partial<SkillSource> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("providers" in $$source)) {
+            this["providers"] = [];
+        }
+        if (!("exists" in $$source)) {
+            this["exists"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SkillSource instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SkillSource {
+        const $$createField4_0 = $$createType6;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("providers" in $$parsedSource) {
+            $$parsedSource["providers"] = $$createField4_0($$parsedSource["providers"]);
+        }
+        return new SkillSource($$parsedSource as Partial<SkillSource>);
+    }
+}
+
 export class SplitPaneRequest {
     "sessionId": string;
     "windowId": string;
@@ -3122,7 +3286,7 @@ export class StartPTYOptions {
     static createFrom($$source: any = {}): StartPTYOptions {
         const $$createField3_0 = $$createType49;
         const $$createField4_0 = $$createType6;
-        const $$createField6_0 = $$createType51;
+        const $$createField6_0 = $$createType55;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("env" in $$parsedSource) {
             $$parsedSource["env"] = $$createField3_0($$parsedSource["env"]);
@@ -3250,7 +3414,7 @@ export class StartedHTTPForward {
      * Creates a new StartedHTTPForward instance from a string or object.
      */
     static createFrom($$source: any = {}): StartedHTTPForward {
-        const $$createField2_0 = $$createType52;
+        const $$createField2_0 = $$createType56;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("forward" in $$parsedSource) {
             $$parsedSource["forward"] = $$createField2_0($$parsedSource["forward"]);
@@ -3481,10 +3645,10 @@ export class TerminalSnapshot {
      * Creates a new TerminalSnapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): TerminalSnapshot {
-        const $$createField3_0 = $$createType53;
-        const $$createField10_0 = $$createType54;
-        const $$createField11_0 = $$createType55;
-        const $$createField12_0 = $$createType56;
+        const $$createField3_0 = $$createType57;
+        const $$createField10_0 = $$createType58;
+        const $$createField11_0 = $$createType59;
+        const $$createField12_0 = $$createType60;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("cursor" in $$parsedSource) {
             $$parsedSource["cursor"] = $$createField3_0($$parsedSource["cursor"]);
@@ -3607,8 +3771,8 @@ export class UIContributionsResponse {
      * Creates a new UIContributionsResponse instance from a string or object.
      */
     static createFrom($$source: any = {}): UIContributionsResponse {
-        const $$createField0_0 = $$createType57;
-        const $$createField1_0 = $$createType59;
+        const $$createField0_0 = $$createType61;
+        const $$createField1_0 = $$createType63;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("scope" in $$parsedSource) {
             $$parsedSource["scope"] = $$createField0_0($$parsedSource["scope"]);
@@ -3787,7 +3951,7 @@ export class UsageResolverReadModel {
      * Creates a new UsageResolverReadModel instance from a string or object.
      */
     static createFrom($$source: any = {}): UsageResolverReadModel {
-        const $$createField13_0 = $$createType61;
+        const $$createField13_0 = $$createType65;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("result" in $$parsedSource) {
             $$parsedSource["result"] = $$createField13_0($$parsedSource["result"]);
@@ -3815,7 +3979,7 @@ export class UsageResolverResult {
      * Creates a new UsageResolverResult instance from a string or object.
      */
     static createFrom($$source: any = {}): UsageResolverResult {
-        const $$createField1_0 = $$createType63;
+        const $$createField1_0 = $$createType67;
         const $$createField3_0 = $$createType49;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("metrics" in $$parsedSource) {
@@ -3998,7 +4162,7 @@ export class WorktrunkStatus {
      * Creates a new WorktrunkStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): WorktrunkStatus {
-        const $$createField2_0 = $$createType64;
+        const $$createField2_0 = $$createType68;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("binary" in $$parsedSource) {
             $$parsedSource["binary"] = $$createField2_0($$parsedSource["binary"]);
@@ -4083,18 +4247,22 @@ const $$createType46 = workitem$0.StatusEvent.createFrom;
 const $$createType47 = $Create.Nullable($$createType44);
 const $$createType48 = $Create.Nullable($$createType41);
 const $$createType49 = $Create.Map($Create.Any, $Create.Any);
-const $$createType50 = StartPTYAgentBridgeOptions.createFrom;
-const $$createType51 = $Create.Nullable($$createType50);
-const $$createType52 = HTTPForward.createFrom;
-const $$createType53 = TerminalCursor.createFrom;
-const $$createType54 = TerminalModes.createFrom;
-const $$createType55 = $Create.Array($Create.Any);
-const $$createType56 = $Create.Array($Create.Any);
-const $$createType57 = UIContributionScope.createFrom;
-const $$createType58 = UIContributionPlugin.createFrom;
-const $$createType59 = $Create.Array($$createType58);
-const $$createType60 = UsageResolverResult.createFrom;
-const $$createType61 = $Create.Nullable($$createType60);
-const $$createType62 = UsageResolverMetric.createFrom;
+const $$createType50 = Skill.createFrom;
+const $$createType51 = $Create.Array($$createType50);
+const $$createType52 = SkillSource.createFrom;
+const $$createType53 = $Create.Array($$createType52);
+const $$createType54 = StartPTYAgentBridgeOptions.createFrom;
+const $$createType55 = $Create.Nullable($$createType54);
+const $$createType56 = HTTPForward.createFrom;
+const $$createType57 = TerminalCursor.createFrom;
+const $$createType58 = TerminalModes.createFrom;
+const $$createType59 = $Create.Array($Create.Any);
+const $$createType60 = $Create.Array($Create.Any);
+const $$createType61 = UIContributionScope.createFrom;
+const $$createType62 = UIContributionPlugin.createFrom;
 const $$createType63 = $Create.Array($$createType62);
-const $$createType64 = WorktrunkBinary.createFrom;
+const $$createType64 = UsageResolverResult.createFrom;
+const $$createType65 = $Create.Nullable($$createType64);
+const $$createType66 = UsageResolverMetric.createFrom;
+const $$createType67 = $Create.Array($$createType66);
+const $$createType68 = WorktrunkBinary.createFrom;

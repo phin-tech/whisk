@@ -48,6 +48,7 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 		promptTemplates: []protocol.PromptTemplate{{ID: "implement", Name: "Implement"}},
 		agentProfiles:   []protocol.AgentProfile{{ID: "claude", Provider: "claude", Label: "Claude", Source: "builtin", Launchable: true}},
 		detectedAgents:  []protocol.DetectedAgent{{ProfileID: "claude", DetectCommand: "claude", Path: "/usr/local/bin/claude"}},
+		skills:          protocol.SkillCatalog{Skills: []protocol.Skill{{ID: "skill_01", Name: "whisk"}}},
 		workItems:       []protocol.WorkItem{{ID: "wi_01", ProjectID: "proj_01", Number: 1, Title: "Task"}},
 		workItemLinks: []protocol.WorkItemLink{{
 			ID:               "link_01",
@@ -273,6 +274,14 @@ func TestServiceDelegatesToRuntimeClient(t *testing.T) {
 	detectedAgents, err := service.ListDetectedAgents(ctx)
 	if err != nil || len(detectedAgents) != 1 || detectedAgents[0].ProfileID != "claude" || detectedAgents[0].DetectCommand != "claude" {
 		t.Fatalf("list detected agents = %#v, err = %v", detectedAgents, err)
+	}
+	skills, err := service.ListSkills(ctx, protocol.ListSkillsRequest{ProjectID: "proj_01"})
+	if err != nil || len(skills.Skills) != 1 || skills.Skills[0].Name != "whisk" || fake.listSkillsReq.ProjectID != "proj_01" {
+		t.Fatalf("list skills = %#v, req = %#v, err = %v", skills, fake.listSkillsReq, err)
+	}
+	rescannedSkills, err := service.RescanSkills(ctx, protocol.ListSkillsRequest{SessionID: "sess_01"})
+	if err != nil || len(rescannedSkills.Skills) != 1 || fake.rescanSkillsReq.SessionID != "sess_01" {
+		t.Fatalf("rescan skills = %#v, req = %#v, err = %v", rescannedSkills, fake.rescanSkillsReq, err)
 	}
 	items, err := service.ListWorkItems(ctx, "proj_01")
 	if err != nil || len(items) != 1 || items[0].ID != "wi_01" || fake.listWorkItemsProjectID != "proj_01" {
@@ -781,6 +790,9 @@ type runtimeClientFake struct {
 	checkAgentHookReq               protocol.AgentHookIntegrationRequest
 	installAgentHookReq             protocol.AgentHookIntegrationRequest
 	removeAgentHookReq              protocol.AgentHookIntegrationRequest
+	skills                          protocol.SkillCatalog
+	listSkillsReq                   protocol.ListSkillsRequest
+	rescanSkillsReq                 protocol.ListSkillsRequest
 	setAgentHookLogReq              protocol.SetAgentHookLogSettingsRequest
 	clearAgentHookLogCalled         bool
 	openAgentHookLogCalled          bool
@@ -1097,6 +1109,16 @@ func (f *runtimeClientFake) ListAgentProfiles(context.Context) ([]protocol.Agent
 
 func (f *runtimeClientFake) ListDetectedAgents(context.Context) ([]protocol.DetectedAgent, error) {
 	return f.detectedAgents, nil
+}
+
+func (f *runtimeClientFake) ListSkills(_ context.Context, req protocol.ListSkillsRequest) (protocol.SkillCatalog, error) {
+	f.listSkillsReq = req
+	return f.skills, nil
+}
+
+func (f *runtimeClientFake) RescanSkills(_ context.Context, req protocol.ListSkillsRequest) (protocol.SkillCatalog, error) {
+	f.rescanSkillsReq = req
+	return f.skills, nil
 }
 
 func (f *runtimeClientFake) ListPromptTemplates(context.Context) ([]protocol.PromptTemplate, error) {

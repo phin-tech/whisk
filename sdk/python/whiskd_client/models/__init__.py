@@ -69,6 +69,7 @@ from .kill_pty_request import KillPTYRequest
 from .launch_execution_request import LaunchExecutionRequest
 from .launch_work_item_run_request import LaunchWorkItemRunRequest
 from .layout_node import LayoutNode
+from .list_skills_request import ListSkillsRequest
 from .list_worktrees_request import ListWorktreesRequest
 from .mail_address import MailAddress
 from .mail_message import MailMessage
@@ -145,6 +146,9 @@ from .set_pane_working_dir_request import SetPaneWorkingDirRequest
 from .set_project_workflow_definition_request import SetProjectWorkflowDefinitionRequest
 from .set_session_project_request import SetSessionProjectRequest
 from .set_session_root_dir_request import SetSessionRootDirRequest
+from .skill import Skill
+from .skill_catalog import SkillCatalog
+from .skill_source import SkillSource
 from .split_pane_request import SplitPaneRequest
 from .split_pane_result import SplitPaneResult
 from .start_execution_request import StartExecutionRequest
@@ -277,6 +281,7 @@ __all__ = (
     "LaunchExecutionRequest",
     "LaunchWorkItemRunRequest",
     "LayoutNode",
+    "ListSkillsRequest",
     "ListWorktreesRequest",
     "MailAddress",
     "MailMessage",
@@ -347,6 +352,9 @@ __all__ = (
     "SetProjectWorkflowDefinitionRequest",
     "SetSessionProjectRequest",
     "SetSessionRootDirRequest",
+    "Skill",
+    "SkillCatalog",
+    "SkillSource",
     "SplitPaneRequest",
     "SplitPaneResult",
     "StartedPanePTY",

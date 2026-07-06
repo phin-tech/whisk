@@ -18,6 +18,7 @@ import (
 	"github.com/phin-tech/whisk/internal/domain/httpforward"
 	"github.com/phin-tech/whisk/internal/domain/mailbox"
 	"github.com/phin-tech/whisk/internal/domain/session"
+	domainskills "github.com/phin-tech/whisk/internal/domain/skills"
 	"github.com/phin-tech/whisk/internal/domain/terminal"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 )
@@ -149,6 +150,10 @@ type RuntimeConfig struct {
 	DaemonAPIVersion           int
 	OnboardingSkillDir         string
 	OnboardingStatePath        string
+	SkillHomeDir               string
+	BundledSkillDir            string
+	SkillSources               []domainskills.Source
+	SkillNow                   func() time.Time
 	AgentHookPaths             *agenthooks.Paths
 	AgentHookLogPaths          *agenthooklog.Paths
 	AgentBridgeApprovalTimeout time.Duration
@@ -175,6 +180,10 @@ type Runtime struct {
 	daemonAPIVersion           int
 	onboardingSkillDir         string
 	onboardingStatePath        string
+	skillHomeDir               string
+	bundledSkillDir            string
+	skillSources               []domainskills.Source
+	skillNow                   func() time.Time
 	agentHookPaths             *agenthooks.Paths
 	agentHookLogPaths          *agenthooklog.Paths
 	agentHookLogEnabled        bool
@@ -573,6 +582,10 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		daemonAPIVersion:           config.DaemonAPIVersion,
 		onboardingSkillDir:         config.OnboardingSkillDir,
 		onboardingStatePath:        config.OnboardingStatePath,
+		skillHomeDir:               config.SkillHomeDir,
+		bundledSkillDir:            config.BundledSkillDir,
+		skillSources:               append([]domainskills.Source(nil), config.SkillSources...),
+		skillNow:                   config.SkillNow,
 		agentHookPaths:             config.AgentHookPaths,
 		agentHookLogPaths:          config.AgentHookLogPaths,
 		agentHookLogEnabled:        true,
@@ -593,6 +606,9 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 	}
 	if r.ids == nil {
 		r.ids = r.generatedID
+	}
+	if r.skillNow == nil {
+		r.skillNow = func() time.Time { return time.Now().UTC() }
 	}
 	if r.browserTargets == nil {
 		if targetBackend, ok := r.browserProbe.(BrowserTargetBackend); ok {

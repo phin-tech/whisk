@@ -154,6 +154,36 @@ func TestBrowserResourceRoutesUseBrowserTagAndReadModels(t *testing.T) {
 	}
 }
 
+func TestSkillsRoutesUseSkillsTagAndReadModels(t *testing.T) {
+	list, ok := routeByOperationID("listSkills")
+	if !ok {
+		t.Fatalf("listSkills route missing")
+	}
+	if list.Method != "GET" || list.Path != "/v1/skills" || list.Tag != "skills" {
+		t.Fatalf("listSkills route = %#v", list)
+	}
+	if _, ok := list.Response.(SkillCatalog); !ok {
+		t.Fatalf("listSkills response = %T, want SkillCatalog", list.Response)
+	}
+	if !hasQueryParam(list, "projectId", "string") || !hasQueryParam(list, "sessionId", "string") {
+		t.Fatalf("listSkills query = %#v", list.Query)
+	}
+
+	rescan, ok := routeByOperationID("rescanSkills")
+	if !ok {
+		t.Fatalf("rescanSkills route missing")
+	}
+	if rescan.Method != "POST" || rescan.Path != "/v1/skills/rescan" || rescan.Tag != "skills" {
+		t.Fatalf("rescanSkills route = %#v", rescan)
+	}
+	if _, ok := rescan.Request.(ListSkillsRequest); !ok {
+		t.Fatalf("rescanSkills request = %T, want ListSkillsRequest", rescan.Request)
+	}
+	if _, ok := rescan.Response.(SkillCatalog); !ok {
+		t.Fatalf("rescanSkills response = %T, want SkillCatalog", rescan.Response)
+	}
+}
+
 func TestAPIRoutesDoNotExposePTYBookmarks(t *testing.T) {
 	for _, route := range APIRoutes {
 		if route.OperationID == "addPTYBookmark" || route.OperationID == "listPTYBookmarks" || route.OperationID == "removePTYBookmark" {

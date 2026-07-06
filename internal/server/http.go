@@ -112,6 +112,8 @@ func NewHTTP(runtime *app.Runtime, optionFns ...HTTPOption) http.Handler {
 	mux.HandleFunc("POST /v1/daemon/clear", server.clearDaemon)
 	mux.HandleFunc("GET /v1/onboarding", server.onboardingStatus)
 	mux.HandleFunc("POST /v1/onboarding/apply", server.applyOnboarding)
+	mux.HandleFunc("GET /v1/skills", server.listSkills)
+	mux.HandleFunc("POST /v1/skills/rescan", server.rescanSkills)
 	mux.HandleFunc("POST /v1/agent-bridges/{bridgeID}/hooks", server.agentBridgeHook)
 	mux.HandleFunc("POST /v1/agent-hook-events", server.recordAgentHookEvent)
 	mux.HandleFunc("GET /v1/agent-bridge-approvals", server.listAgentBridgeApprovals)

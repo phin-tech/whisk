@@ -47,6 +47,41 @@ type OnboardingApplyRequest struct {
 	ItemIDs []string `json:"itemIds"`
 }
 
+type ListSkillsRequest struct {
+	ProjectID string `json:"projectId,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
+}
+
+type Skill struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Description   string    `json:"description,omitempty"`
+	Providers     []string  `json:"providers"`
+	SourceKind    string    `json:"sourceKind"`
+	SourceLabel   string    `json:"sourceLabel"`
+	RootPath      string    `json:"rootPath"`
+	DirectoryPath string    `json:"directoryPath"`
+	SkillFilePath string    `json:"skillFilePath"`
+	FileCount     int       `json:"fileCount"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+type SkillSource struct {
+	ID            string   `json:"id"`
+	Label         string   `json:"label"`
+	Path          string   `json:"path"`
+	Kind          string   `json:"kind"`
+	Providers     []string `json:"providers"`
+	Exists        bool     `json:"exists"`
+	SkippedReason string   `json:"skippedReason,omitempty"`
+}
+
+type SkillCatalog struct {
+	Skills    []Skill       `json:"skills"`
+	Sources   []SkillSource `json:"sources"`
+	ScannedAt time.Time     `json:"scannedAt"`
+}
+
 type ClearDaemonRequest struct{}
 
 type ClearDaemonResponse struct {

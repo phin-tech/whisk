@@ -36,6 +36,7 @@ var (
 	apiPromptList               = []PromptTemplate(nil)
 	apiAgentProfileList         = []AgentProfile(nil)
 	apiDetectedAgentList        = []DetectedAgent(nil)
+	apiSkillCatalog             = SkillCatalog{}
 	apiWorkItemList             = []WorkItem(nil)
 	apiWorkItemLinkList         = []WorkItemLink(nil)
 	apiRunList                  = []WorkItemRun(nil)
@@ -62,6 +63,8 @@ var APIRoutes = []APIRoute{
 	{Method: "POST", Path: "/v1/daemon/clear", OperationID: "clearDaemon", Tag: "system", Summary: "Clear daemon-owned runtime state", Request: ClearDaemonRequest{}, Response: ClearDaemonResponse{}},
 	{Method: "GET", Path: "/v1/onboarding", OperationID: "getOnboarding", Tag: "system", Summary: "Get local onboarding status", Response: OnboardingStatus{}},
 	{Method: "POST", Path: "/v1/onboarding/apply", OperationID: "applyOnboarding", Tag: "system", Summary: "Apply selected local onboarding items", Request: OnboardingApplyRequest{}, Response: OnboardingStatus{}},
+	{Method: "GET", Path: "/v1/skills", OperationID: "listSkills", Tag: "skills", Summary: "List daemon-discovered agent skills", Response: apiSkillCatalog, Query: []APIQueryParam{{Name: "projectId", Type: "string"}, {Name: "sessionId", Type: "string"}}},
+	{Method: "POST", Path: "/v1/skills/rescan", OperationID: "rescanSkills", Tag: "skills", Summary: "Rescan daemon-discovered agent skills", Request: ListSkillsRequest{}, Response: apiSkillCatalog},
 	{Method: "POST", Path: "/v1/agent-bridges/{bridgeID}/hooks", OperationID: "agentBridgeHook", Tag: "agent-bridges", Summary: "Handle provider hook callback for a daemon-owned agent bridge", Request: AgentBridgeHookRequest{}, Response: AgentBridgeHookResponse{}},
 	{Method: "POST", Path: "/v1/agent-hook-events", OperationID: "recordAgentHookEvent", Tag: "agent-bridges", Summary: "Record a passive provider hook event", Request: AgentBridgeHookRequest{}, Response: AgentBridgeEvent{}, Status: 201},
 	{Method: "GET", Path: "/v1/agent-bridge-approvals", OperationID: "listAgentBridgeApprovals", Tag: "agent-bridges", Summary: "List pending or resolved daemon-owned agent bridge approvals", Response: apiAgentBridgeApprovalList, Query: []APIQueryParam{{Name: "status", Type: "string"}}},
