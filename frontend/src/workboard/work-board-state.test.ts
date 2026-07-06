@@ -251,6 +251,43 @@ describe("work-board-state", () => {
     expect(card?.canExecute).toBe(false);
   });
 
+  it("keeps orphaned-stage work items visible in an unassigned stage view", () => {
+    const orphaned = workItem({
+      id: "item-orphaned",
+      number: 9,
+      title: "Recover stale workflow item",
+      stageId: "legacy_review",
+    });
+
+    const view = deriveWorkBoardView({
+      projects: [project()],
+      activeProjectId: "project-1",
+      workItems: [orphaned],
+      workItemRuns: [],
+      artifacts: [],
+      questions: [],
+      gateReports: [],
+      workflowDefinitions: [],
+    });
+
+    expect(view.stageViews.map((stageView) => stageView.stage.id)).toEqual([
+      "backlog",
+      "ready",
+      "execution",
+      "review",
+      "done",
+      "__unassigned__",
+    ]);
+    const unassigned = view.stageViews.at(-1);
+    expect(unassigned).toMatchObject({
+      key: "stage:__unassigned__",
+      stage: { id: "__unassigned__", name: "Unassigned", kind: "unassigned" },
+      count: 1,
+      collapsed: false,
+    });
+    expect(unassigned?.cards[0].item).toBe(orphaned);
+  });
+
   it("allows execution only for ready items with approved plans and no active run", () => {
     const item = workItem({ id: "item-ready", stageId: "ready" });
 

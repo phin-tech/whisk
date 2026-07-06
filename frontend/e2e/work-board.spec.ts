@@ -20,6 +20,14 @@ test("renders seeded work cards and opens the detail modal", async ({ page }) =>
   await expect(dialog).toBeHidden();
 });
 
+test("renders orphaned-stage work cards in an unassigned column", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Work" }).click();
+
+  const unassignedList = page.getByLabel("Work items in Unassigned");
+  await expect(unassignedList.getByRole("button", { name: /Recover orphaned workflow card/ })).toBeVisible();
+});
+
 test("adds a blocker link from the detail dependency section", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Work" }).click();

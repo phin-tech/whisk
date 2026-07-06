@@ -72,6 +72,12 @@ export type WorkBoardStateInput = {
   detailItemId?: string;
 };
 
+const UNASSIGNED_STAGE = {
+  id: "__unassigned__",
+  name: "Unassigned",
+  kind: "unassigned",
+} as WorkflowStage;
+
 export function deriveWorkBoardView(input: WorkBoardStateInput): WorkBoardView {
   const activeProject = input.projects.find((project) => project.id === input.activeProjectId) ?? null;
   const stages = activeProject?.workflow?.stages ?? [];
@@ -79,6 +85,7 @@ export function deriveWorkBoardView(input: WorkBoardStateInput): WorkBoardView {
   const filteredWorkItems = filterWorkItems(input.workItems, filters);
   const boardStages = filters.stageId ? stages.filter((stage) => stage.id === filters.stageId) : stages;
   const itemsByStage = groupWorkItemsByStage(filteredWorkItems, stages);
+  const knownStageIds = new Set(stages.map((stage) => stage.id));
   const runsByItem = groupRunsByItem(input.workItemRuns);
   const artifactsByItem = groupRecordsByItem(input.artifacts);
   const questionsByItem = groupRecordsByItem(input.questions);
@@ -106,6 +113,32 @@ export function deriveWorkBoardView(input: WorkBoardStateInput): WorkBoardView {
       cards,
     };
   });
+  const orphanedItems = activeProject
+    ? Object.entries(itemsByStage)
+        .filter(([stageId]) => !knownStageIds.has(stageId))
+        .flatMap(([, items]) => items)
+    : [];
+  if (orphanedItems.length > 0) {
+    const cards = orphanedItems.map((item) =>
+      deriveWorkBoardCardView(item, {
+        stage: UNASSIGNED_STAGE,
+        stages,
+        runs: runsByItem[item.id] ?? [],
+        artifacts: artifactsByItem[item.id] ?? [],
+        questions: questionsByItem[item.id] ?? [],
+        gates: gatesByItem[item.id] ?? [],
+      }),
+    );
+    stageViews.push({
+      key: `stage:${UNASSIGNED_STAGE.id}`,
+      stage: UNASSIGNED_STAGE,
+      collapsed: collapsedStageIds.has(UNASSIGNED_STAGE.id),
+      count: cards.length,
+      hasAttention: hasStageAttention(cards),
+      attentionClass: stageAttentionClass(cards),
+      cards,
+    });
+  }
 
   return {
     activeProject,
