@@ -3,8 +3,10 @@ package server_test
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,6 +49,26 @@ func TestHTTPServerSkillRoutes(t *testing.T) {
 	if len(rescanned.Skills) != len(catalog.Skills) {
 		t.Fatalf("rescanned = %#v, catalog = %#v", rescanned, catalog)
 	}
+}
+
+func TestHTTPServerSkillRoutesRejectBadInputs(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{SkillHomeDir: t.TempDir()})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	handler := server.NewHTTP(runtime)
+
+	getJSON[map[string]any](t, handler, "/v1/skills?projectId=missing", http.StatusBadRequest)
+
+	req, err := http.NewRequest(http.MethodPost, "/v1/skills/rescan", strings.NewReader("{"))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("malformed rescan status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	postJSON[map[string]any](t, handler, "/v1/skills/rescan", protocol.ListSkillsRequest{SessionID: "missing"}, http.StatusBadRequest)
 }
 
 func writeSkillFile(t *testing.T, path string, body string) {
