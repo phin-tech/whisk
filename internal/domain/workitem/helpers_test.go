@@ -66,6 +66,28 @@ func TestMetadataValidationHelpers(t *testing.T) {
 	}
 }
 
+func mustProjectWithWorkflow(t *testing.T, state *State, id string, definition WorkflowDefinition, now time.Time) Project {
+	t.Helper()
+	project := mustProject(t, state, id, "Project "+id)
+	if _, err := state.ImportWorkflowDefinition(ImportWorkflowDefinition{
+		Definition: definition,
+		Source:     "test",
+		Now:        now,
+	}); err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project, err := state.SetProjectWorkflowDefinition(SetProjectWorkflowDefinition{
+		ProjectID: project.ID,
+		ID:        definition.ID,
+		Version:   definition.Version,
+		Now:       now,
+	})
+	if err != nil {
+		t.Fatalf("set workflow: %v", err)
+	}
+	return project
+}
+
 func TestValidateAttachmentNormalizesAndRejectsInvalidInputs(t *testing.T) {
 	file, err := validateAttachment(Attachment{ID: "att_01", Kind: AttachmentKindFile, Path: "docs/../README.md"})
 	if err != nil {

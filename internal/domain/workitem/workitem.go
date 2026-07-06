@@ -791,6 +791,7 @@ type MarkStatusEventRead struct {
 
 type ReadyWorkInput struct {
 	ProjectID string
+	Projects  []Project
 	WorkItems []WorkItem
 	Links     []WorkItemLink
 }
@@ -1338,6 +1339,10 @@ func (s *State) ListWorkItemLinks(workItemID string) []WorkItemLink {
 }
 
 func BuildReadyWorkExplanation(input ReadyWorkInput) ReadyWorkExplanation {
+	projectsByID := map[string]Project{}
+	for _, project := range input.Projects {
+		projectsByID[project.ID] = project
+	}
 	itemsByID := map[string]WorkItem{}
 	for _, item := range input.WorkItems {
 		if input.ProjectID != "" && item.ProjectID != input.ProjectID {
@@ -1361,7 +1366,7 @@ func BuildReadyWorkExplanation(input ReadyWorkInput) ReadyWorkExplanation {
 		if input.ProjectID != "" && item.ProjectID != input.ProjectID {
 			continue
 		}
-		if !readyWorkCandidate(item) {
+		if !readyWorkCandidate(item, projectsByID) {
 			continue
 		}
 
@@ -1375,7 +1380,7 @@ func BuildReadyWorkExplanation(input ReadyWorkInput) ReadyWorkExplanation {
 				parentID = &parent
 			case WorkItemLinkBlocks:
 				blocker, ok := itemsByID[link.TargetWorkItemID]
-				if ok && workItemDone(blocker) {
+				if ok && workItemDone(blocker, projectsByID) {
 					resolved = append(resolved, link.TargetWorkItemID)
 					continue
 				}
@@ -1420,10 +1425,18 @@ func BuildReadyWorkExplanation(input ReadyWorkInput) ReadyWorkExplanation {
 	return explanation
 }
 
-func readyWorkCandidate(item WorkItem) bool {
-	switch item.StageID {
-	case StagePlanning, StageExecution, StageBlocked, StageDone:
-		return false
+func readyWorkCandidate(item WorkItem, projectsByID map[string]Project) bool {
+	if kind, ok := stageKindForItem(item, projectsByID); ok {
+		switch kind {
+		case StageKindBacklog, StageKindReady:
+		default:
+			return false
+		}
+	} else {
+		switch item.StageID {
+		case StagePlanning, StageExecution, StageBlocked, StageReview, StageDone:
+			return false
+		}
 	}
 	switch item.RunState {
 	case RunStateQueued, RunStateRunning, RunStateAwaitingInput:
@@ -1432,8 +1445,23 @@ func readyWorkCandidate(item WorkItem) bool {
 	return true
 }
 
-func workItemDone(item WorkItem) bool {
+func workItemDone(item WorkItem, projectsByID map[string]Project) bool {
+	if kind, ok := stageKindForItem(item, projectsByID); ok {
+		return kind == StageKindDone
+	}
 	return item.StageID == StageDone
+}
+
+func stageKindForItem(item WorkItem, projectsByID map[string]Project) (string, bool) {
+	project, ok := projectsByID[item.ProjectID]
+	if !ok {
+		return "", false
+	}
+	stage, ok := project.stage(item.StageID)
+	if !ok {
+		return "", false
+	}
+	return stage.Kind, true
 }
 
 func readyBlockerInfo(id string, blocker WorkItem, ok bool) ReadyBlockerInfo {
@@ -2985,8 +3013,11 @@ func (s *State) ReportStatus(req ReportStatus) (StatusEvent, error) {
 			}
 			item := s.items[run.WorkItemID]
 			item.RunState = RunStateCompleted
-			if reviewStageID := reviewStageID(s.projects[item.ProjectID]); reviewStageID != "" {
+			project := s.projects[item.ProjectID]
+			if reviewStageID := reviewStageID(project); reviewStageID != "" {
 				item.StageID = reviewStageID
+			} else if doneStageID := doneStageID(project); doneStageID != "" {
+				item.StageID = doneStageID
 			}
 			item.UpdatedAt = req.Now
 			s.items[item.ID] = item
@@ -3042,6 +3073,15 @@ func (p Project) hasStage(stageID string) bool {
 func reviewStageID(project Project) string {
 	for _, stage := range project.Workflow.Stages {
 		if stage.Kind == StageKindReview {
+			return stage.ID
+		}
+	}
+	return ""
+}
+
+func doneStageID(project Project) string {
+	for _, stage := range project.Workflow.Stages {
+		if stage.Kind == StageKindDone {
 			return stage.ID
 		}
 	}
@@ -3276,15 +3316,22 @@ func stagesForWorkflowDefinition(definition WorkflowDefinition) []WorkflowStage 
 		defaults[stage.ID] = stage
 	}
 	stages := make([]WorkflowStage, 0, len(definition.Stages))
-	for _, id := range definition.Stages {
+	for index, id := range definition.Stages {
 		if stage, ok := defaults[id]; ok {
 			stages = append(stages, stage)
 			continue
 		}
+		kind := StageKindActive
+		switch {
+		case index == len(definition.Stages)-1:
+			kind = StageKindDone
+		case index == 0:
+			kind = StageKindBacklog
+		}
 		stages = append(stages, WorkflowStage{
 			ID:   id,
 			Name: stageNameFromID(id),
-			Kind: StageKindActive,
+			Kind: kind,
 		})
 	}
 	return stages

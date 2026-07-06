@@ -176,6 +176,58 @@ func TestBuildReadyWorkExplanationHonorsBlockingLinks(t *testing.T) {
 	}
 }
 
+func TestBuildReadyWorkExplanationUsesCustomWorkflowStageKinds(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	project := mustProjectWithWorkflow(t, state, "proj_custom", WorkflowDefinition{
+		ID:      "triage-build-shipped",
+		Version: 1,
+		Stages:  []string{"triage", "build", "shipped"},
+		Actions: []WorkflowActionDefinition{
+			{ID: "start_build", From: []string{"triage"}, To: "build"},
+			{ID: "ship", From: []string{"build"}, To: "shipped"},
+		},
+	}, now)
+	blocked := mustWorkItem(t, state, "wi_blocked", project.ID)
+	blocker := mustWorkItem(t, state, "wi_blocker", project.ID)
+	active := mustWorkItem(t, state, "wi_active", project.ID)
+
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{WorkItemID: blocker.ID, ActionID: "start_build", Now: now.Add(time.Minute)}); err != nil {
+		t.Fatalf("start blocker: %v", err)
+	}
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{WorkItemID: blocker.ID, ActionID: "ship", Now: now.Add(2 * time.Minute)}); err != nil {
+		t.Fatalf("ship blocker: %v", err)
+	}
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{WorkItemID: active.ID, ActionID: "start_build", Now: now.Add(3 * time.Minute)}); err != nil {
+		t.Fatalf("start active: %v", err)
+	}
+	if _, err := state.AddWorkItemLink(AddWorkItemLink{
+		ID:               "link_custom",
+		SourceWorkItemID: blocked.ID,
+		TargetWorkItemID: blocker.ID,
+		Type:             WorkItemLinkBlocks,
+		Now:              now.Add(4 * time.Minute),
+	}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+
+	explanation := BuildReadyWorkExplanation(ReadyWorkInput{
+		ProjectID: project.ID,
+		Projects:  state.ListProjects(),
+		WorkItems: state.ListWorkItems(project.ID),
+		Links:     state.ListWorkItemLinks(""),
+	})
+	if len(explanation.Ready) != 1 || explanation.Ready[0].WorkItem.ID != blocked.ID {
+		t.Fatalf("ready = %#v", explanation.Ready)
+	}
+	if len(explanation.Ready[0].ResolvedBlockers) != 1 || explanation.Ready[0].ResolvedBlockers[0] != blocker.ID {
+		t.Fatalf("resolved blockers = %#v", explanation.Ready[0].ResolvedBlockers)
+	}
+	if len(explanation.Blocked) != 0 {
+		t.Fatalf("blocked = %#v", explanation.Blocked)
+	}
+}
+
 func TestBuildReadyWorkExplanationTreatsParentChildAsHierarchyOnly(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 25, 12, 0, 0, 0, time.UTC)

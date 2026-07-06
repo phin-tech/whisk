@@ -414,6 +414,51 @@ func TestReportStatusQuestionBlockedAndDoneTransitionRunAndWorkItem(t *testing.T
 	}
 }
 
+func TestReportStatusDoneMovesCustomWorkflowToTerminalStageWhenNoReviewStage(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	project := mustProjectWithWorkflow(t, state, "proj_custom", WorkflowDefinition{
+		ID:      "triage-build-shipped",
+		Version: 1,
+		Stages:  []string{"triage", "build", "shipped"},
+		Actions: []WorkflowActionDefinition{
+			{ID: "start_build", From: []string{"triage"}, To: "build"},
+			{ID: "ship", From: []string{"build"}, To: "shipped"},
+		},
+	}, now)
+	item := mustWorkItem(t, state, "wi_custom", project.ID)
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{WorkItemID: item.ID, ActionID: "start_build", Now: now.Add(time.Minute)}); err != nil {
+		t.Fatalf("start build: %v", err)
+	}
+	run, err := state.StartRun(StartRun{
+		ID:           "run_custom",
+		HistoryID:    "hist_run_custom",
+		RunHistoryID: "run_hist_custom",
+		WorkItemID:   item.ID,
+		Now:          now.Add(2 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+
+	if _, err := state.ReportStatus(ReportStatus{
+		ID:           "status_custom_done",
+		RunHistoryID: "run_hist_custom_done",
+		Kind:         StatusKindDone,
+		Actor:        "agent",
+		ProjectID:    project.ID,
+		WorkItemID:   item.ID,
+		RunID:        run.ID,
+		Now:          now.Add(3 * time.Minute),
+	}); err != nil {
+		t.Fatalf("report done: %v", err)
+	}
+	updated, _ := state.GetWorkItem(item.ID)
+	if updated.StageID != "shipped" || updated.RunState != RunStateCompleted {
+		t.Fatalf("updated item = %#v", updated)
+	}
+}
+
 func TestGateCompletionBranchesAndApproveDoneBlocking(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
