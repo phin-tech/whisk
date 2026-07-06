@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -10,8 +11,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/phin-tech/whisk/internal/app"
+	"github.com/phin-tech/whisk/internal/client"
 	"github.com/phin-tech/whisk/internal/domain/workitem"
 	"github.com/phin-tech/whisk/internal/protocol"
+	whiskserver "github.com/phin-tech/whisk/internal/server"
 )
 
 func TestRunProjectCreatePrintsJSONContract(t *testing.T) {
@@ -575,6 +579,21 @@ func TestRunWorkflowActionCommandsUseDaemonAPIAndEnvDefaults(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(protocol.WorkItem{ID: "wi_env", StageID: workitem.StageReady})
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/work-items/wi_env/start-execution":
 			_ = json.NewEncoder(w).Encode(protocol.WorkItemRun{ID: "run_exec", WorkItemID: "wi_env", PromptTemplateID: workitem.PromptTemplateImplement})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/work-items/wi_env/workflow-actions":
+			_ = json.NewEncoder(w).Encode([]protocol.WorkflowActionAvailability{{
+				Action:    workitem.WorkflowActionDefinition{ID: "ship", From: []string{"doing"}, To: "done"},
+				Enabled:   true,
+				InputKind: workitem.WorkflowActionInputNone,
+			}})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/work-items/wi_env/actions/ship":
+			var req protocol.RunWorkItemWorkflowActionRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode generic action: %v", err)
+			}
+			if req.WorkItemID != "wi_env" || req.ActionID != "ship" || req.RunID != "run_env" || req.Reason != "Shipped." || req.Actor != "agent" {
+				t.Fatalf("generic action request = %#v", req)
+			}
+			_ = json.NewEncoder(w).Encode(protocol.WorkItem{ID: "wi_env", StageID: "done"})
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/questions":
 			var req protocol.AskQuestionRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -652,6 +671,8 @@ func TestRunWorkflowActionCommandsUseDaemonAPIAndEnvDefaults(t *testing.T) {
 		{"workflow", "submit-plan", "-body", "Do it.", "-json"},
 		{"workflow", "approve-plan", "-artifact", "artifact_plan", "-json"},
 		{"workflow", "start-execution", "-json"},
+		{"workflow", "actions", "-json"},
+		{"workflow", "run-action", "-action", "ship", "-reason", "Shipped.", "-json"},
 		{"question", "ask", "-prompt", "Which key?", "-json"},
 		{"question", "list", "-json"},
 		{"question", "answer", "question_01", "-answer", "Staging.", "-json"},
@@ -669,6 +690,8 @@ func TestRunWorkflowActionCommandsUseDaemonAPIAndEnvDefaults(t *testing.T) {
 	}
 	if requests["POST /v1/work-items/wi_env/start-planning"] != 1 ||
 		requests["POST /v1/questions"] != 1 ||
+		requests["GET /v1/work-items/wi_env/workflow-actions"] != 1 ||
+		requests["POST /v1/work-items/wi_env/actions/ship"] != 1 ||
 		requests["GET /v1/questions"] != 1 ||
 		requests["POST /v1/work-items/wi_env/review-feedback"] != 1 ||
 		requests["GET /v1/artifacts"] != 1 ||
@@ -676,6 +699,98 @@ func TestRunWorkflowActionCommandsUseDaemonAPIAndEnvDefaults(t *testing.T) {
 		requests["GET /v1/gate-reports"] != 1 ||
 		requests["POST /v1/work-items/wi_env/approve-done"] != 1 {
 		t.Fatalf("requests = %#v", requests)
+	}
+}
+
+func TestRunWorkflowGenericActionDrivesCustomWorkflowLifecycle(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	httpServer := httptest.NewServer(whiskserver.NewHTTP(runtime))
+	defer httpServer.Close()
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx := context.Background()
+
+	project, err := daemon.CreateProject(ctx, protocol.CreateProjectRequest{Name: "Custom Flow", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	record, err := daemon.ImportWorkflowDefinition(ctx, protocol.ImportWorkflowDefinitionRequest{
+		Source: "test",
+		Definition: workitem.WorkflowDefinition{
+			ID:      "todo-doing-done",
+			Version: 1,
+			Stages:  []string{"todo", "doing", "done"},
+			Actions: []workitem.WorkflowActionDefinition{
+				{ID: "triage", From: []string{"todo"}, To: "doing"},
+				{ID: "ship", From: []string{"doing"}, To: "done"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project, err = daemon.SetProjectWorkflowDefinition(ctx, project.ID, protocol.SetProjectWorkflowDefinitionRequest{
+		ID:      record.ID,
+		Version: record.Version,
+	})
+	if err != nil {
+		t.Fatalf("set workflow: %v", err)
+	}
+	item, err := daemon.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{
+		ProjectID: project.ID,
+		Title:     "Ship through custom action",
+		Actor:     "human",
+	})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	if item.StageID != "todo" {
+		t.Fatalf("initial item = %#v", item)
+	}
+	t.Setenv("WHISKD_URL", httpServer.URL)
+	t.Setenv("WHISK_WORK_ITEM_ID", item.ID)
+	t.Setenv("WHISK_ACTOR", "human")
+
+	actionsOutput, err := captureStdout(func() error {
+		return run([]string{"workflow", "actions", "-json"})
+	})
+	if err != nil {
+		t.Fatalf("list actions: %v", err)
+	}
+	var actions []protocol.WorkflowActionAvailability
+	if err := json.Unmarshal([]byte(actionsOutput), &actions); err != nil {
+		t.Fatalf("actions JSON %q: %v", actionsOutput, err)
+	}
+	if got := workflowActionByID(actions, "triage"); got == nil || !got.Enabled || got.InputKind != workitem.WorkflowActionInputNone {
+		t.Fatalf("actions = %#v", actions)
+	}
+
+	doingOutput, err := captureStdout(func() error {
+		return run([]string{"workflow", "run-action", "triage", "-json"})
+	})
+	if err != nil {
+		t.Fatalf("run triage: %v", err)
+	}
+	var doing protocol.WorkItem
+	if err := json.Unmarshal([]byte(doingOutput), &doing); err != nil {
+		t.Fatalf("triage JSON %q: %v", doingOutput, err)
+	}
+	if doing.StageID != "doing" {
+		t.Fatalf("doing item = %#v", doing)
+	}
+
+	doneOutput, err := captureStdout(func() error {
+		return run([]string{"workflow", "run-action", "ship", "-json"})
+	})
+	if err != nil {
+		t.Fatalf("run ship: %v", err)
+	}
+	var done protocol.WorkItem
+	if err := json.Unmarshal([]byte(doneOutput), &done); err != nil {
+		t.Fatalf("ship JSON %q: %v", doneOutput, err)
+	}
+	if done.StageID != "done" {
+		t.Fatalf("done item = %#v", done)
 	}
 }
 
@@ -719,4 +834,13 @@ func captureStdout(fn func() error) (string, error) {
 		runErr = err
 	}
 	return buf.String(), runErr
+}
+
+func workflowActionByID(actions []protocol.WorkflowActionAvailability, id string) *protocol.WorkflowActionAvailability {
+	for i := range actions {
+		if actions[i].Action.ID == id {
+			return &actions[i]
+		}
+	}
+	return nil
 }
