@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/phin-tech/whisk/internal/app"
 )
 
 const (
@@ -23,11 +25,13 @@ const (
 	// write a new terminal checkpoint and truncate the generation log.
 	MaxOutputLogBytes uint64 = 5 * 1024 * 1024
 
-	StatusRunning = "running"
-	StatusExited  = "exited"
+	StatusRunning = app.TerminalHistoryStatusRunning
+	StatusExited  = app.TerminalHistoryStatusExited
 )
 
 var errUnsupportedVersion = errors.New("unsupported terminal history version")
+
+var _ app.TerminalHistoryStore = (*FileStore)(nil)
 
 // FileStore stores daemon-owned terminal restore records on disk.
 type FileStore struct {
@@ -35,48 +39,10 @@ type FileStore struct {
 	now  func() time.Time
 }
 
-// PTYMeta is the durable ownership and display metadata for one PTY.
-type PTYMeta struct {
-	PTYID          string
-	SessionID      string
-	WindowID       string
-	PaneID         string
-	OriginWindowID string
-	OriginPaneID   string
-	WorkingDir     string
-	Cols           int
-	Rows           int
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	Status         string
-	ExitCode       *int
-}
-
-// Checkpoint is a versioned terminal snapshot at a raw PTY byte offset.
-type Checkpoint struct {
-	PTYID            string
-	Generation       uint64
-	Offset           uint64
-	Cols             int
-	Rows             int
-	CreatedAt        time.Time
-	TerminalSnapshot json.RawMessage
-}
-
-// AppendResult reports the durable append-log state after an output append.
-type AppendResult struct {
-	AppendedOffset   uint64
-	AppendedBytes    int
-	LogPayloadBytes  uint64
-	CheckpointNeeded bool
-}
-
-// RestoredPTY is a restorable checkpoint plus matching generation log bytes.
-type RestoredPTY struct {
-	Meta       PTYMeta
-	Checkpoint Checkpoint
-	LogBytes   []byte
-}
+type PTYMeta = app.TerminalHistoryPTYMeta
+type Checkpoint = app.TerminalHistoryCheckpoint
+type AppendResult = app.TerminalHistoryAppendResult
+type RestoredPTY = app.TerminalHistoryRestoredPTY
 
 type metaFileV1 struct {
 	Version        int       `json:"version"`
@@ -150,9 +116,18 @@ func (s *FileStore) RegisterPTY(ctx context.Context, meta PTYMeta) error {
 }
 
 func (s *FileStore) AppendOutput(ctx context.Context, ptyID string, offset uint64, data []byte) (AppendResult, error) {
+	return s.AppendPTYOutput(ctx, app.TerminalHistoryOutput{
+		PTYID:  ptyID,
+		Offset: offset,
+		Bytes:  data,
+	})
+}
+
+func (s *FileStore) AppendPTYOutput(ctx context.Context, event app.TerminalHistoryOutput) (AppendResult, error) {
 	if err := ctx.Err(); err != nil {
 		return AppendResult{}, err
 	}
+	ptyID := event.PTYID
 	if err := validatePTYID(ptyID); err != nil {
 		return AppendResult{}, err
 	}
@@ -163,7 +138,7 @@ func (s *FileStore) AppendOutput(ctx context.Context, ptyID string, offset uint6
 	if err != nil {
 		return AppendResult{}, err
 	}
-	result, err := appendOutputAtOffset(s.outputLogPath(ptyID), header, headerBytes, payloadBytes, offset, data)
+	result, err := appendOutputAtOffset(s.outputLogPath(ptyID), header, headerBytes, payloadBytes, event.Offset, event.Bytes)
 	if err != nil {
 		return AppendResult{}, err
 	}
@@ -214,10 +189,25 @@ func (s *FileStore) WriteCheckpoint(ctx context.Context, checkpoint Checkpoint) 
 	return checkpoint, nil
 }
 
+func (s *FileStore) ReadCheckpoint(ctx context.Context, ptyID string) (Checkpoint, error) {
+	if err := ctx.Err(); err != nil {
+		return Checkpoint{}, err
+	}
+	if err := validatePTYID(ptyID); err != nil {
+		return Checkpoint{}, err
+	}
+	return s.readCheckpoint(ptyID)
+}
+
 func (s *FileStore) MarkExit(ctx context.Context, ptyID string, code *int) error {
+	return s.MarkPTYExit(ctx, app.TerminalHistoryExit{PTYID: ptyID, Code: code})
+}
+
+func (s *FileStore) MarkPTYExit(ctx context.Context, event app.TerminalHistoryExit) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	ptyID := event.PTYID
 	if err := validatePTYID(ptyID); err != nil {
 		return err
 	}
@@ -226,7 +216,7 @@ func (s *FileStore) MarkExit(ctx context.Context, ptyID string, code *int) error
 		return err
 	}
 	meta.Status = StatusExited
-	meta.ExitCode = cloneIntPointer(code)
+	meta.ExitCode = cloneIntPointer(event.Code)
 	meta.UpdatedAt = s.now()
 	return s.writeMeta(meta)
 }
@@ -273,6 +263,9 @@ func (s *FileStore) ListRestorable(ctx context.Context) ([]RestoredPTY, error) {
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
+		if !out[i].Meta.CreatedAt.Equal(out[j].Meta.CreatedAt) {
+			return out[i].Meta.CreatedAt.Before(out[j].Meta.CreatedAt)
+		}
 		return out[i].Meta.PTYID < out[j].Meta.PTYID
 	})
 	return out, nil

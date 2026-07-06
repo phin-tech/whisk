@@ -22,6 +22,7 @@ import (
 	"github.com/phin-tech/whisk/internal/adapters/plugins"
 	"github.com/phin-tech/whisk/internal/adapters/pty/native"
 	"github.com/phin-tech/whisk/internal/adapters/sessionstore"
+	"github.com/phin-tech/whisk/internal/adapters/terminalhistory"
 	"github.com/phin-tech/whisk/internal/adapters/transcriptstore"
 	"github.com/phin-tech/whisk/internal/adapters/workitemstore"
 	"github.com/phin-tech/whisk/internal/adapters/worktrunk"
@@ -103,6 +104,10 @@ func serveDaemon(addr string) (err error) {
 	if err != nil {
 		return err
 	}
+	terminalHistory, err := terminalhistory.NewFileStore("")
+	if err != nil {
+		return err
+	}
 	workItems, err := workitemstore.NewSQLiteStore("")
 	if err != nil {
 		return err
@@ -121,18 +126,19 @@ func serveDaemon(addr string) (err error) {
 		return err
 	}
 	runtime, err := app.NewRuntimeWithError(app.RuntimeConfig{
-		PTYBackend:       native.NewBackend(),
-		BrowserProbe:     adapterbrowser.NewCDPProbe(nil),
-		Worktrees:        worktrunk.NewBackendWithOptions(nil, worktrunk.BackendOptions{OverridePath: envOrDefault("WHISK_WORKTRUNK_PATH", "/opt/homebrew/bin/wt")}),
-		Plugins:          pluginManager,
-		EventSink:        eventBus,
-		SessionStore:     store,
-		TranscriptStore:  transcripts,
-		WorkItemStore:    workItems,
-		MailboxStore:     mailboxStore,
-		DaemonURL:        "http://" + addr,
-		CLIPath:          whiskCLIPath(),
-		DaemonAPIVersion: protocol.DaemonAPIVersion,
+		PTYBackend:           native.NewBackend(),
+		BrowserProbe:         adapterbrowser.NewCDPProbe(nil),
+		Worktrees:            worktrunk.NewBackendWithOptions(nil, worktrunk.BackendOptions{OverridePath: envOrDefault("WHISK_WORKTRUNK_PATH", "/opt/homebrew/bin/wt")}),
+		Plugins:              pluginManager,
+		EventSink:            eventBus,
+		SessionStore:         store,
+		TranscriptStore:      transcripts,
+		TerminalHistoryStore: terminalHistory,
+		WorkItemStore:        workItems,
+		MailboxStore:         mailboxStore,
+		DaemonURL:            "http://" + addr,
+		CLIPath:              whiskCLIPath(),
+		DaemonAPIVersion:     protocol.DaemonAPIVersion,
 	})
 	if err != nil {
 		return err

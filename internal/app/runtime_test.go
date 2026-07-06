@@ -301,6 +301,101 @@ func TestRuntimePublishesSessionPTYAndOutputEvents(t *testing.T) {
 	}
 }
 
+func TestRuntimeTeesPTYOutputAndExitToTerminalHistory(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ptyBackend := newAttachableMemoryPTYBackend()
+	history := newMemoryTerminalHistoryStore()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend:           ptyBackend,
+		TerminalHistoryStore: history,
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "History",
+		RootDir:    t.TempDir(),
+		InitialPTY: &app.StartPTYOptions{Cols: 90, Rows: 30},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	registered := history.registeredPTYs()
+	if len(registered) != 1 ||
+		registered[0].PTYID != created.MainPtyID ||
+		registered[0].SessionID != created.Session.ID ||
+		registered[0].WindowID != created.WindowID ||
+		registered[0].PaneID != created.PaneID ||
+		registered[0].OriginWindowID != created.WindowID ||
+		registered[0].OriginPaneID != created.PaneID ||
+		registered[0].Cols != 90 ||
+		registered[0].Rows != 30 ||
+		registered[0].Status != app.TerminalHistoryStatusRunning {
+		t.Fatalf("registered history = %#v", registered)
+	}
+
+	ptyBackend.output(created.MainPtyID, 0, []byte("restore"))
+	first := history.waitForOutput(t, ctx)
+	if first.PTYID != created.MainPtyID || first.Offset != 0 || string(first.Bytes) != "restore" {
+		t.Fatalf("first output = %#v", first)
+	}
+	ptyBackend.output(created.MainPtyID, 7, []byte("-bytes"))
+	second := history.waitForOutput(t, ctx)
+	if second.PTYID != created.MainPtyID || second.Offset != 7 || string(second.Bytes) != "-bytes" {
+		t.Fatalf("second output = %#v", second)
+	}
+
+	ptyBackend.exit(created.MainPtyID, 42)
+	exited := history.waitForExit(t, ctx)
+	if exited.PTYID != created.MainPtyID || exited.Code == nil || *exited.Code != 42 {
+		t.Fatalf("exit = %#v", exited)
+	}
+}
+
+func TestRuntimePrunesTerminalHistoryOnPTYDeleteAndDaemonClear(t *testing.T) {
+	ctx := context.Background()
+	ptyBackend := newAttachableMemoryPTYBackend()
+	history := newMemoryTerminalHistoryStore()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend:           ptyBackend,
+		TerminalHistoryStore: history,
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Delete history",
+		RootDir:    t.TempDir(),
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := runtime.KillPTY(ctx, app.KillPTYRequest{PTYID: created.MainPtyID}); err != nil {
+		t.Fatalf("kill pty: %v", err)
+	}
+	if err := runtime.DeletePTY(ctx, app.DeletePTYRequest{PTYID: created.MainPtyID}); err != nil {
+		t.Fatalf("delete pty: %v", err)
+	}
+	if got := history.deletedPTYs(); len(got) != 1 || got[0] != created.MainPtyID {
+		t.Fatalf("deleted histories = %#v", got)
+	}
+
+	if _, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Clear history",
+		RootDir:    t.TempDir(),
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	}); err != nil {
+		t.Fatalf("create session before clear: %v", err)
+	}
+	if _, err := runtime.ClearDaemon(ctx); err != nil {
+		t.Fatalf("clear daemon: %v", err)
+	}
+	if !history.cleared() {
+		t.Fatalf("terminal history was not cleared")
+	}
+}
+
 func TestRuntimeNextEventRequiresEventSource(t *testing.T) {
 	ctx := context.Background()
 	runtime := app.NewRuntime(app.RuntimeConfig{})
@@ -392,6 +487,131 @@ type recordingEventSink struct {
 	events   []app.RuntimeEvent
 	ch       chan app.RuntimeEvent
 	afterSeq uint64
+}
+
+type memoryTerminalHistoryStore struct {
+	mu         sync.Mutex
+	registered []app.TerminalHistoryPTYMeta
+	outputs    []app.TerminalHistoryOutput
+	exits      []app.TerminalHistoryExit
+	deleted    []string
+	clear      bool
+	outputCh   chan app.TerminalHistoryOutput
+	exitCh     chan app.TerminalHistoryExit
+}
+
+func newMemoryTerminalHistoryStore() *memoryTerminalHistoryStore {
+	return &memoryTerminalHistoryStore{
+		outputCh: make(chan app.TerminalHistoryOutput, 8),
+		exitCh:   make(chan app.TerminalHistoryExit, 8),
+	}
+}
+
+func (s *memoryTerminalHistoryStore) RegisterPTY(_ context.Context, meta app.TerminalHistoryPTYMeta) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	meta.ExitCode = cloneTestIntPtr(meta.ExitCode)
+	s.registered = append(s.registered, meta)
+	return nil
+}
+
+func (s *memoryTerminalHistoryStore) AppendPTYOutput(_ context.Context, event app.TerminalHistoryOutput) (app.TerminalHistoryAppendResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	event.Bytes = append([]byte(nil), event.Bytes...)
+	s.outputs = append(s.outputs, event)
+	s.outputCh <- event
+	return app.TerminalHistoryAppendResult{
+		AppendedOffset:  event.Offset,
+		AppendedBytes:   len(event.Bytes),
+		LogPayloadBytes: uint64(len(event.Bytes)),
+	}, nil
+}
+
+func (s *memoryTerminalHistoryStore) WriteCheckpoint(_ context.Context, checkpoint app.TerminalHistoryCheckpoint) (app.TerminalHistoryCheckpoint, error) {
+	checkpoint.TerminalSnapshot = append(checkpoint.TerminalSnapshot[:0:0], checkpoint.TerminalSnapshot...)
+	return checkpoint, nil
+}
+
+func (s *memoryTerminalHistoryStore) ReadCheckpoint(context.Context, string) (app.TerminalHistoryCheckpoint, error) {
+	return app.TerminalHistoryCheckpoint{}, nil
+}
+
+func (s *memoryTerminalHistoryStore) MarkPTYExit(_ context.Context, event app.TerminalHistoryExit) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	event.Code = cloneTestIntPtr(event.Code)
+	s.exits = append(s.exits, event)
+	s.exitCh <- event
+	return nil
+}
+
+func (s *memoryTerminalHistoryStore) ListRestorable(context.Context) ([]app.TerminalHistoryRestoredPTY, error) {
+	return nil, nil
+}
+
+func (s *memoryTerminalHistoryStore) DeletePTY(_ context.Context, ptyID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deleted = append(s.deleted, ptyID)
+	return nil
+}
+
+func (s *memoryTerminalHistoryStore) Clear(context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clear = true
+	return nil
+}
+
+func (s *memoryTerminalHistoryStore) registeredPTYs() []app.TerminalHistoryPTYMeta {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]app.TerminalHistoryPTYMeta, len(s.registered))
+	copy(out, s.registered)
+	return out
+}
+
+func (s *memoryTerminalHistoryStore) deletedPTYs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.deleted...)
+}
+
+func (s *memoryTerminalHistoryStore) cleared() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.clear
+}
+
+func (s *memoryTerminalHistoryStore) waitForOutput(t *testing.T, ctx context.Context) app.TerminalHistoryOutput {
+	t.Helper()
+	select {
+	case output := <-s.outputCh:
+		return output
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for terminal history output")
+		return app.TerminalHistoryOutput{}
+	}
+}
+
+func (s *memoryTerminalHistoryStore) waitForExit(t *testing.T, ctx context.Context) app.TerminalHistoryExit {
+	t.Helper()
+	select {
+	case exit := <-s.exitCh:
+		return exit
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for terminal history exit")
+		return app.TerminalHistoryExit{}
+	}
+}
+
+func cloneTestIntPtr(in *int) *int {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 func newRecordingEventSink() *recordingEventSink {

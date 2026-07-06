@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -139,6 +140,7 @@ type RuntimeConfig struct {
 	EventSink                  EventSink
 	SessionStore               SessionStore
 	TranscriptStore            TranscriptStore
+	TerminalHistoryStore       TerminalHistoryStore
 	WorkItemStore              WorkItemStore
 	MailboxStore               MailboxStore
 	DaemonURL                  string
@@ -164,6 +166,7 @@ type Runtime struct {
 	state                      *session.State
 	sessionStore               SessionStore
 	transcriptStore            TranscriptStore
+	terminalHistoryStore       TerminalHistoryStore
 	workItemStore              WorkItemStore
 	mailboxStore               MailboxStore
 	daemonURL                  string
@@ -273,6 +276,17 @@ type TranscriptStore interface {
 	ReadPTYHistory(ctx context.Context, ptyID string) (PTYHistory, error)
 }
 
+type TerminalHistoryStore interface {
+	RegisterPTY(ctx context.Context, meta TerminalHistoryPTYMeta) error
+	AppendPTYOutput(ctx context.Context, event TerminalHistoryOutput) (TerminalHistoryAppendResult, error)
+	WriteCheckpoint(ctx context.Context, checkpoint TerminalHistoryCheckpoint) (TerminalHistoryCheckpoint, error)
+	ReadCheckpoint(ctx context.Context, ptyID string) (TerminalHistoryCheckpoint, error)
+	MarkPTYExit(ctx context.Context, event TerminalHistoryExit) error
+	ListRestorable(ctx context.Context) ([]TerminalHistoryRestoredPTY, error)
+	DeletePTY(ctx context.Context, ptyID string) error
+	Clear(ctx context.Context) error
+}
+
 type WorkItemStore interface {
 	LoadWorkItems(ctx context.Context) (workitem.Snapshot, error)
 	SaveWorkItems(ctx context.Context, snapshot workitem.Snapshot) error
@@ -319,6 +333,61 @@ type PTYHistorySummary struct {
 type PTYHistory struct {
 	PTYHistorySummary
 	Output string
+}
+
+const (
+	TerminalHistoryStatusRunning = "running"
+	TerminalHistoryStatusExited  = "exited"
+)
+
+type TerminalHistoryPTYMeta struct {
+	PTYID          string
+	SessionID      string
+	WindowID       string
+	PaneID         string
+	OriginWindowID string
+	OriginPaneID   string
+	WorkingDir     string
+	Cols           int
+	Rows           int
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Status         string
+	ExitCode       *int
+}
+
+type TerminalHistoryOutput struct {
+	PTYID  string
+	Offset uint64
+	Bytes  []byte
+}
+
+type TerminalHistoryAppendResult struct {
+	AppendedOffset   uint64
+	AppendedBytes    int
+	LogPayloadBytes  uint64
+	CheckpointNeeded bool
+}
+
+type TerminalHistoryCheckpoint struct {
+	PTYID            string
+	Generation       uint64
+	Offset           uint64
+	Cols             int
+	Rows             int
+	CreatedAt        time.Time
+	TerminalSnapshot json.RawMessage
+}
+
+type TerminalHistoryExit struct {
+	PTYID string
+	Code  *int
+}
+
+type TerminalHistoryRestoredPTY struct {
+	Meta       TerminalHistoryPTYMeta
+	Checkpoint TerminalHistoryCheckpoint
+	LogBytes   []byte
 }
 
 type CreateSessionRequest struct {
@@ -494,6 +563,7 @@ func NewRuntimeWithError(config RuntimeConfig) (*Runtime, error) {
 		state:                      state,
 		sessionStore:               config.SessionStore,
 		transcriptStore:            config.TranscriptStore,
+		terminalHistoryStore:       config.TerminalHistoryStore,
 		workItemStore:              config.WorkItemStore,
 		mailboxStore:               config.MailboxStore,
 		daemonURL:                  config.DaemonURL,
@@ -576,7 +646,7 @@ func (r *Runtime) CreateSession(ctx context.Context, req CreateSessionRequest) (
 		if err != nil {
 			return CreatedSession{}, err
 		}
-		if err := r.registerPTYTranscript(ctx, record, sessionID, windowID, paneID); err != nil {
+		if err := r.registerPTYStores(ctx, record, sessionID, windowID, paneID); err != nil {
 			_, _ = r.ptys.Kill(ctx, record.ID)
 			return CreatedSession{}, err
 		}
@@ -716,7 +786,7 @@ func (r *Runtime) SplitPane(ctx context.Context, req SplitPaneRequest) (SplitPan
 		if err != nil {
 			return SplitPaneResult{}, err
 		}
-		if err := r.registerPTYTranscript(ctx, record, req.SessionID, req.WindowID, newPaneID); err != nil {
+		if err := r.registerPTYStores(ctx, record, req.SessionID, req.WindowID, newPaneID); err != nil {
 			_, _ = r.ptys.Kill(ctx, record.ID)
 			return SplitPaneResult{}, err
 		}
@@ -885,7 +955,7 @@ func (r *Runtime) StartPanePTY(ctx context.Context, req StartPanePTYRequest) (St
 	if err != nil {
 		return StartedPanePTY{}, err
 	}
-	if err := r.registerPTYTranscript(ctx, record, req.SessionID, pane.WindowID, req.PaneID); err != nil {
+	if err := r.registerPTYStores(ctx, record, req.SessionID, pane.WindowID, req.PaneID); err != nil {
 		_, _ = r.ptys.Kill(ctx, record.ID)
 		return StartedPanePTY{}, err
 	}
@@ -993,7 +1063,7 @@ func (r *Runtime) RestartPanePTY(ctx context.Context, req RestartPanePTYRequest)
 	if err != nil {
 		return RestartedPanePTY{}, err
 	}
-	if err := r.registerPTYTranscript(ctx, record, req.SessionID, pane.WindowID, req.PaneID); err != nil {
+	if err := r.registerPTYStores(ctx, record, req.SessionID, pane.WindowID, req.PaneID); err != nil {
 		_, _ = r.ptys.Kill(ctx, record.ID)
 		return RestartedPanePTY{}, err
 	}
@@ -1065,6 +1135,11 @@ func (r *Runtime) DeletePTY(ctx context.Context, req DeletePTYRequest) error {
 	}
 	if err := r.ptys.Delete(ctx, req.PTYID); err != nil {
 		return err
+	}
+	if r.terminalHistoryStore != nil {
+		if err := r.terminalHistoryStore.DeletePTY(ctx, req.PTYID); err != nil {
+			return err
+		}
 	}
 	r.mu.Lock()
 	delete(r.ptyMeta, req.PTYID)
@@ -1403,6 +1478,11 @@ func (r *Runtime) ClearDaemon(ctx context.Context) (ClearDaemonResult, error) {
 			return ClearDaemonResult{}, err
 		}
 	}
+	if r.terminalHistoryStore != nil {
+		if err := r.terminalHistoryStore.Clear(ctx); err != nil {
+			return ClearDaemonResult{}, err
+		}
+	}
 	r.publish(ctx, RuntimeEvent{Type: EventSessionChanged})
 	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
 	r.publish(ctx, RuntimeEvent{Type: EventPTYChanged})
@@ -1474,6 +1554,13 @@ func (r *Runtime) persistWorkItems(ctx context.Context) error {
 	return r.workItemStore.SaveWorkItems(ctx, r.workItems.Snapshot())
 }
 
+func (r *Runtime) registerPTYStores(ctx context.Context, record PTYRecord, sessionID string, windowID string, paneID string) error {
+	if err := r.registerPTYTranscript(ctx, record, sessionID, windowID, paneID); err != nil {
+		return err
+	}
+	return r.registerPTYHistory(ctx, record, sessionID, windowID, paneID)
+}
+
 func (r *Runtime) registerPTYTranscript(ctx context.Context, record PTYRecord, sessionID string, windowID string, paneID string) error {
 	if r.transcriptStore == nil {
 		return nil
@@ -1486,6 +1573,24 @@ func (r *Runtime) registerPTYTranscript(ctx context.Context, record PTYRecord, s
 		WorkingDir: record.WorkingDir,
 		Cols:       record.Cols,
 		Rows:       record.Rows,
+	})
+}
+
+func (r *Runtime) registerPTYHistory(ctx context.Context, record PTYRecord, sessionID string, windowID string, paneID string) error {
+	if r.terminalHistoryStore == nil {
+		return nil
+	}
+	return r.terminalHistoryStore.RegisterPTY(ctx, TerminalHistoryPTYMeta{
+		PTYID:          record.ID,
+		SessionID:      sessionID,
+		WindowID:       windowID,
+		PaneID:         paneID,
+		OriginWindowID: windowID,
+		OriginPaneID:   paneID,
+		WorkingDir:     record.WorkingDir,
+		Cols:           record.Cols,
+		Rows:           record.Rows,
+		Status:         TerminalHistoryStatusRunning,
 	})
 }
 
@@ -1573,11 +1678,32 @@ func (r *Runtime) appendPTYTranscriptOutput(ctx context.Context, ptyID string, o
 	})
 }
 
+func (r *Runtime) appendPTYHistoryOutput(ctx context.Context, ptyID string, offset uint64, data []byte) {
+	if r.terminalHistoryStore == nil || len(data) == 0 {
+		return
+	}
+	_, _ = r.terminalHistoryStore.AppendPTYOutput(ctx, TerminalHistoryOutput{
+		PTYID:  ptyID,
+		Offset: offset,
+		Bytes:  append([]byte(nil), data...),
+	})
+}
+
 func (r *Runtime) markPTYTranscriptExit(ctx context.Context, ptyID string, code *int) {
 	if r.transcriptStore == nil {
 		return
 	}
 	_ = r.transcriptStore.MarkPTYExit(ctx, PTYTranscriptExit{
+		PTYID: ptyID,
+		Code:  cloneIntPtr(code),
+	})
+}
+
+func (r *Runtime) markPTYHistoryExit(ctx context.Context, ptyID string, code *int) {
+	if r.terminalHistoryStore == nil {
+		return
+	}
+	_ = r.terminalHistoryStore.MarkPTYExit(ctx, TerminalHistoryExit{
 		PTYID: ptyID,
 		Code:  cloneIntPtr(code),
 	})
@@ -1715,6 +1841,7 @@ func (r *Runtime) watchPTYOutput(ptyID string) {
 		defer attach.Close()
 		if len(attach.ReplayBytes) > 0 {
 			r.appendPTYTranscriptOutput(r.watchCtx, ptyID, attach.ReplayOffset, attach.ReplayBytes)
+			r.appendPTYHistoryOutput(r.watchCtx, ptyID, attach.ReplayOffset, attach.ReplayBytes)
 		}
 		for {
 			select {
@@ -1725,9 +1852,11 @@ func (r *Runtime) watchPTYOutput(ptyID string) {
 				switch event.Kind {
 				case PTYOutput:
 					r.appendPTYTranscriptOutput(r.watchCtx, ptyID, event.Offset, event.Bytes)
+					r.appendPTYHistoryOutput(r.watchCtx, ptyID, event.Offset, event.Bytes)
 					r.publish(r.watchCtx, RuntimeEvent{Type: EventPTYOutput, PtyID: ptyID, Offset: event.Offset + uint64(len(event.Bytes))})
 				case PTYExit:
 					r.markPTYTranscriptExit(r.watchCtx, ptyID, event.Code)
+					r.markPTYHistoryExit(r.watchCtx, ptyID, event.Code)
 					r.markPTYExited(ptyID, event.Code)
 					_ = r.cancelRunsLinkedToClosedTerminals(r.watchCtx, nil, []string{ptyID})
 					r.publish(r.watchCtx, RuntimeEvent{Type: EventPTYChanged, PtyID: ptyID})
