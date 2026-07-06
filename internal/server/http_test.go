@@ -1788,6 +1788,23 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	if launchExecution.Status != workitem.RunStateRunning || launchExecution.PTYID == "" {
 		t.Fatalf("launch execution = %#v", launchExecution)
 	}
+	dependencyWorkflow := workitem.WorkflowDefinition{
+		ID:      "dependency-workflow",
+		Version: 1,
+		Stages:  []string{workitem.StageBacklog, workitem.StageReady, workitem.StageDone},
+		Actions: []workitem.WorkflowActionDefinition{
+			{ID: "ready", From: []string{workitem.StageBacklog}, To: workitem.StageReady},
+			{ID: "done", From: []string{workitem.StageReady}, To: workitem.StageDone},
+		},
+	}
+	dependencyRecord := postJSON[protocol.WorkflowDefinitionRecord](t, handler, "/v1/workflow-definitions/import", protocol.ImportWorkflowDefinitionRequest{
+		Definition: dependencyWorkflow,
+		Source:     "test",
+	}, http.StatusCreated)
+	project = postJSON[protocol.Project](t, handler, "/v1/projects/"+project.ID+"/workflow-definition", protocol.SetProjectWorkflowDefinitionRequest{
+		ID:      dependencyRecord.ID,
+		Version: dependencyRecord.Version,
+	}, http.StatusOK)
 	blockedItem := postJSON[protocol.WorkItem](t, handler, "/v1/work-items", protocol.CreateWorkItemRequest{
 		ProjectID: project.ID,
 		Title:     "Blocked by dependency",

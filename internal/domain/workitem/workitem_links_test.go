@@ -217,15 +217,13 @@ func TestBuildReadyWorkExplanationTreatsParentChildAsHierarchyOnly(t *testing.T)
 
 func mustMoveWorkItem(t *testing.T, state *State, id string, stageID string, now time.Time) WorkItem {
 	t.Helper()
-	item, err := state.MoveWorkItem(MoveWorkItem{
-		ID:        id,
-		HistoryID: "hist_move_" + id + "_" + stageID,
-		StageID:   stageID,
-		Now:       now,
-	})
-	if err != nil {
-		t.Fatalf("move %s to %s: %v", id, stageID, err)
+	item, ok := state.items[id]
+	if !ok {
+		t.Fatalf("work item %s not found", id)
 	}
+	item.StageID = stageID
+	item.UpdatedAt = now
+	state.items[id] = item
 	return item
 }
 

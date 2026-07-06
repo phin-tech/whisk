@@ -81,6 +81,161 @@ func TestWorkflowActionAvailabilityReflectsCurrentItemState(t *testing.T) {
 	}
 }
 
+func TestMoveWorkItemRejectsUndefinedWorkflowTransition(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	project := mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+
+	if _, err := state.MoveWorkItem(MoveWorkItem{
+		ID:        item.ID,
+		HistoryID: "hist_move_01",
+		StageID:   StageReview,
+		Actor:     "agent",
+		Now:       now,
+	}); err == nil || !strings.Contains(err.Error(), "workflow action from backlog to review not found") {
+		t.Fatalf("expected missing workflow action error, got %v", err)
+	}
+	stored, ok := state.GetWorkItem(item.ID)
+	if !ok || stored.StageID != StageBacklog {
+		t.Fatalf("stored item = %#v, ok = %v", stored, ok)
+	}
+}
+
+func TestMoveWorkItemRejectsWorkflowActionRequirements(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	project := mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+	item.StageID = StageReady
+	state.items[item.ID] = item
+	if _, err := state.BindWorktree(BindWorktree{
+		ID:           item.ID,
+		HistoryID:    "hist_bind_01",
+		Branch:       "whisk/proj-01-1-task",
+		Base:         "main",
+		WorktreePath: "/repo/proj_01/.worktrees/task",
+		Actor:        "human",
+		Now:          now,
+	}); err != nil {
+		t.Fatalf("bind worktree: %v", err)
+	}
+
+	if _, err := state.MoveWorkItem(MoveWorkItem{
+		ID:        item.ID,
+		HistoryID: "hist_move_01",
+		StageID:   StageExecution,
+		Actor:     "agent",
+		Now:       now.Add(time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "approved plan required") {
+		t.Fatalf("expected approved plan requirement, got %v", err)
+	}
+	stored, ok := state.GetWorkItem(item.ID)
+	if !ok || stored.StageID != StageReady {
+		t.Fatalf("stored item = %#v, ok = %v", stored, ok)
+	}
+}
+
+func TestMoveWorkItemRequiresBlockingGatesToPass(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	project := mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+	item.StageID = StageReview
+	state.items[item.ID] = item
+	state.gateReports["gate_01"] = GateReport{
+		ID:         "gate_01",
+		ProjectID:  project.ID,
+		WorkItemID: item.ID,
+		Name:       "Review",
+		Blocking:   true,
+		Status:     GateStatusPending,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+
+	if _, err := state.MoveWorkItem(MoveWorkItem{
+		ID:        item.ID,
+		HistoryID: "hist_move_01",
+		StageID:   StageDone,
+		Actor:     "agent",
+		Now:       now.Add(time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "blocking gates must pass or be overridden") {
+		t.Fatalf("expected blocking gate requirement, got %v", err)
+	}
+	if _, err := state.CompleteGate(CompleteGate{
+		ID:             "gate_01",
+		Status:         GateStatusOverridden,
+		OverrideReason: "Manual review passed.",
+		Actor:          "human",
+		Now:            now.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("override gate: %v", err)
+	}
+	moved, err := state.MoveWorkItem(MoveWorkItem{
+		ID:        item.ID,
+		HistoryID: "hist_move_02",
+		StageID:   StageDone,
+		Actor:     "agent",
+		Now:       now.Add(3 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("move after gate override: %v", err)
+	}
+	if moved.StageID != StageDone {
+		t.Fatalf("moved = %#v", moved)
+	}
+}
+
+func TestMoveWorkItemAllowsExplicitWorkflowTransition(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	definition := WorkflowDefinition{
+		ID:      "simple",
+		Version: 1,
+		Stages:  []string{StageBacklog, StageDone},
+		Actions: []WorkflowActionDefinition{{ID: "finish", From: []string{StageBacklog}, To: StageDone}},
+	}
+	if _, err := state.ImportWorkflowDefinition(ImportWorkflowDefinition{
+		Definition: definition,
+		Source:     "test",
+		Now:        now,
+	}); err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project, err := state.CreateProject(CreateProject{
+		ID:      "proj_01",
+		Name:    "One",
+		RootDir: "/repo/proj_01",
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	if _, err := state.SetProjectWorkflowDefinition(SetProjectWorkflowDefinition{
+		ProjectID: project.ID,
+		ID:        definition.ID,
+		Version:   definition.Version,
+		Now:       now,
+	}); err != nil {
+		t.Fatalf("set project workflow: %v", err)
+	}
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+
+	moved, err := state.MoveWorkItem(MoveWorkItem{
+		ID:        item.ID,
+		HistoryID: "hist_move_01",
+		StageID:   StageDone,
+		Actor:     "human",
+		Now:       now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	if moved.StageID != StageDone || moved.History[len(moved.History)-1].Type != HistoryStageMoved {
+		t.Fatalf("moved = %#v", moved)
+	}
+}
+
 func TestWorkflowDefinitionValidationReportListsMultipleErrors(t *testing.T) {
 	definition := DefaultWorkflowDefinition()
 	definition.ID = ""
