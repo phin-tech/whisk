@@ -106,7 +106,7 @@ func TestStartRunUsesReadyAndReviewStageDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit plan: %v", err)
 	}
-	ready, err := state.ApprovePlan(ApprovePlan{ArtifactID: draft.ID, WorkItemID: item.ID, Now: now})
+	ready, err := state.ApprovePlan(ApprovePlan{ArtifactID: draft.ID, WorkItemID: item.ID, Actor: "human", Now: now})
 	if err != nil {
 		t.Fatalf("approve plan: %v", err)
 	}
@@ -487,10 +487,10 @@ func TestGateCompletionBranchesAndApproveDoneBlocking(t *testing.T) {
 	if len(gates) != 1 || !gates[0].Blocking {
 		t.Fatalf("gates = %#v", gates)
 	}
-	if _, err := state.ApproveDone(ApproveDone{WorkItemID: item.ID, Now: now}); err == nil || !strings.Contains(err.Error(), "blocking gates") {
+	if _, err := state.ApproveDone(ApproveDone{WorkItemID: item.ID, Actor: "human", Now: now}); err == nil || !strings.Contains(err.Error(), "blocking gates") {
 		t.Fatalf("expected blocking gate error, got %v", err)
 	}
-	failed, err := state.CompleteGate(CompleteGate{ID: gates[0].ID, Status: GateStatusFailed, Now: now})
+	failed, err := state.CompleteGate(CompleteGate{ID: gates[0].ID, Status: GateStatusFailed, Actor: "human", Now: now})
 	if err != nil {
 		t.Fatalf("complete failed gate: %v", err)
 	}
@@ -504,6 +504,7 @@ func TestGateCompletionBranchesAndApproveDoneBlocking(t *testing.T) {
 		ID:             gates[0].ID,
 		Status:         GateStatusOverridden,
 		OverrideReason: "Manual approval.",
+		Actor:          "human",
 		Now:            now,
 	})
 	if err != nil {
@@ -512,7 +513,7 @@ func TestGateCompletionBranchesAndApproveDoneBlocking(t *testing.T) {
 	if overridden.Status != GateStatusOverridden || overridden.OverrideReason != "Manual approval." {
 		t.Fatalf("overridden = %#v", overridden)
 	}
-	done, err := state.ApproveDone(ApproveDone{WorkItemID: item.ID, Reason: "override accepted", Now: now})
+	done, err := state.ApproveDone(ApproveDone{WorkItemID: item.ID, Actor: "human", Reason: "override accepted", Now: now})
 	if err != nil {
 		t.Fatalf("approve done: %v", err)
 	}

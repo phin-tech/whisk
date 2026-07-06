@@ -2012,6 +2012,11 @@ func (s *State) MoveWorkItem(req MoveWorkItem) (WorkItem, error) {
 	if !availability.Enabled {
 		return WorkItem{}, fmt.Errorf("%s", availability.Reason)
 	}
+	if availability.Action.RequiresHuman {
+		if err := requireHumanActor(req.Actor, fmt.Sprintf("workflow action %s", availability.Action.ID)); err != nil {
+			return WorkItem{}, err
+		}
+	}
 	item.StageID = req.StageID
 	item.UpdatedAt = req.Now
 	if err := appendHistory(&item, HistoryEvent{
@@ -2043,6 +2048,11 @@ func (s *State) ApplyWorkflowAction(req ApplyWorkflowAction) (WorkItem, error) {
 	availability := s.workflowActionAvailability(item, action)
 	if !availability.Enabled {
 		return WorkItem{}, fmt.Errorf("%s", availability.Reason)
+	}
+	if action.RequiresHuman {
+		if err := requireHumanActor(req.Actor, fmt.Sprintf("workflow action %s", action.ID)); err != nil {
+			return WorkItem{}, err
+		}
 	}
 	if input := workflowActionInputKind(action); input != WorkflowActionInputNone {
 		return WorkItem{}, fmt.Errorf("workflow action %s requires %s input", action.ID, input)
@@ -2411,6 +2421,11 @@ func (s *State) ApprovePlan(req ApprovePlan) (WorkItem, error) {
 	if err != nil {
 		return WorkItem{}, err
 	}
+	if action.RequiresHuman {
+		if err := requireHumanActor(req.Actor, fmt.Sprintf("workflow action %s", action.ID)); err != nil {
+			return WorkItem{}, err
+		}
+	}
 	if action.UpdatesArtifact == nil {
 		return WorkItem{}, fmt.Errorf("workflow action %s does not update an artifact", action.ID)
 	}
@@ -2731,6 +2746,9 @@ func (s *State) CompleteGate(req CompleteGate) (GateReport, error) {
 	default:
 		return GateReport{}, fmt.Errorf("unsupported gate status %s", req.Status)
 	}
+	if err := requireHumanActor(req.Actor, "gate completion"); err != nil {
+		return GateReport{}, err
+	}
 	gate.Status = req.Status
 	gate.OverrideReason = strings.TrimSpace(req.OverrideReason)
 	gate.UpdatedAt = req.Now
@@ -2747,6 +2765,11 @@ func (s *State) ApproveDone(req ApproveDone) (WorkItem, error) {
 	action, err := s.workflowActionForItem(item, WorkflowActionApproveDone)
 	if err != nil {
 		return WorkItem{}, err
+	}
+	if action.RequiresHuman {
+		if err := requireHumanActor(req.Actor, fmt.Sprintf("workflow action %s", action.ID)); err != nil {
+			return WorkItem{}, err
+		}
 	}
 	if action.RequiresPassingBlockingGates {
 		for _, gate := range s.gateReports {
@@ -3625,6 +3648,29 @@ func workflowArtifactRequirementReason(requirement WorkflowArtifactRequirement) 
 		return "approved plan required"
 	}
 	return fmt.Sprintf("%s %s artifact required", requirement.Status, requirement.Kind)
+}
+
+func requireHumanActor(actor, operation string) error {
+	if humanActor(actor) {
+		return nil
+	}
+	return fmt.Errorf("%s requires human actor", operation)
+}
+
+func humanActor(actor string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(actor))
+	switch {
+	case normalized == "":
+		return false
+	case normalized == "agent" || strings.HasPrefix(normalized, "agent:"):
+		return false
+	case normalized == "plugin" || strings.HasPrefix(normalized, "plugin:"):
+		return false
+	case normalized == "daemon" || normalized == "runtime":
+		return false
+	default:
+		return true
+	}
 }
 
 func (s *State) backfillProjectWorkflowDefinition(project Project) Project {

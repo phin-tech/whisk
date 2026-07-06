@@ -241,7 +241,7 @@ func TestWorkflowActionsEnforcePlanExecutionReviewAndDoneRules(t *testing.T) {
 	if _, err := state.CompleteGate(CompleteGate{
 		ID:     gates[0].ID,
 		Status: GateStatusPassed,
-		Actor:  "agent",
+		Actor:  "human",
 		Now:    now.Add(10 * time.Minute),
 	}); err != nil {
 		t.Fatalf("complete gate: %v", err)

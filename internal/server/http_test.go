@@ -1750,9 +1750,10 @@ func TestHTTPServerWorkItemWorkflowRoutes(t *testing.T) {
 	if len(artifacts) != 2 {
 		t.Fatalf("artifacts = %#v", artifacts)
 	}
+	assertStatus(t, handler, http.MethodPost, "/v1/gate-reports/"+gates[0].ID+"/complete", `{"status":"passed","actor":"agent:codex"}`, http.StatusBadRequest)
 	passed := postJSON[protocol.GateReport](t, handler, "/v1/gate-reports/"+gates[0].ID+"/complete", protocol.CompleteGateRequest{
 		Status: workitem.GateStatusPassed,
-		Actor:  "agent",
+		Actor:  "human",
 	}, http.StatusOK)
 	if passed.Status != workitem.GateStatusPassed {
 		t.Fatalf("passed = %#v", passed)
