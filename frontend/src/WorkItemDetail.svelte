@@ -87,6 +87,12 @@
   export let onAskQuestion: (request: { workItemId: string; runId: string; prompt: string }) => void;
   export let onAnswerQuestion: (questionId: string, answer: string) => void;
   export let onCompleteGate: (request: { id: string; status: string; overrideReason: string }) => void;
+  export let onRunWorkflowAction: (request: {
+    workItemId: string;
+    actionId: string;
+    runId?: string;
+    reason?: string;
+  }) => void;
   export let onApproveDone: (workItemId: string, reason: string) => void;
 
   // Modal-local input state, keyed per item so switching items resets cleanly.
@@ -350,16 +356,18 @@
     if (!supportedWorkflowAction(availability.action.id)) {
       if (availability.inputKind === "artifact" || availability.inputKind === "artifact_selection") return "use the artifact form";
       if (availability.inputKind === "gate") return "use the gate form";
-      return "not wired in the UI";
+      if (availability.inputKind !== "none") return "not wired in the UI";
     }
     if (availability.action.id === "complete_execution" && !detailLatestRun) return "no run";
     return workflowActionEffect(availability);
   }
 
   function canRunWorkflowAction(availability: WorkflowActionAvailability) {
-    return availability.enabled &&
-      supportedWorkflowAction(availability.action.id) &&
-      !(availability.action.id === "complete_execution" && !detailLatestRun);
+    if (!availability.enabled) return false;
+    if (supportedWorkflowAction(availability.action.id)) {
+      return !(availability.action.id === "complete_execution" && !detailLatestRun);
+    }
+    return availability.inputKind === "none";
   }
 
   function runWorkflowAction(availability: WorkflowActionAvailability) {
@@ -379,6 +387,12 @@
         approveDone();
         break;
       default:
+        onRunWorkflowAction({
+          workItemId: item.id,
+          actionId: availability.action.id,
+          runId: detailLatestRun?.id ?? "",
+          reason: "",
+        });
         break;
     }
   }

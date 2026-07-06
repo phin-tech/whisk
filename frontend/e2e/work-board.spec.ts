@@ -96,6 +96,30 @@ test("runs a daemon-provided workflow action from the detail menu", async ({ pag
   expect(calls[0].args[0]).toMatchObject({ workItemId: "wi_backlog" });
 });
 
+test("runs a custom no-input workflow action from the detail menu", async ({ page }) => {
+  await page.goto("/?e2eCustomWorkflowAction=1");
+  await page.getByRole("button", { name: "Work" }).click();
+  await page.getByRole("button", { name: /Capture app launch smoke/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Work item editor" });
+  await expect(dialog).toBeVisible();
+
+  await dialog.locator("aside").getByRole("button", { name: "More actions" }).click();
+  const customAction = page.getByRole("menuitem", { name: /Escalate/ });
+  await expect(customAction).toBeEnabled();
+  await customAction.click();
+
+  await expect(dialog.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+  const calls = await page.evaluate(() =>
+    window.__WHISK_E2E__.calls().filter((call) => call.method.endsWith(".RunWorkItemWorkflowAction")),
+  );
+  expect(calls).toHaveLength(1);
+  expect(calls[0].args[0]).toMatchObject({
+    workItemId: "wi_backlog",
+    actionId: "escalate",
+  });
+});
+
 test("virtualizes large WorkBoard columns and opens a scrolled card", async ({ page }) => {
   await page.goto("/?e2eLargeWorkBoard=1");
   await page.getByRole("button", { name: "Work" }).click();

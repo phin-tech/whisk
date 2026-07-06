@@ -107,6 +107,7 @@
     ResolveAgentBridgeApproval,
     ResolveAgentPrompt,
     ReadPTYHistory,
+    RunWorkItemWorkflowAction,
     RunPluginProjectAttachmentTemplate,
     SaveAppSettings,
     SetAgentHookLogSettings,
@@ -2374,6 +2375,24 @@
     }
   }
 
+  async function runWorkItemWorkflowAction(request: {
+    workItemId: string;
+    actionId: string;
+    runId?: string;
+    reason?: string;
+  }) {
+    error = "";
+    loadingWork = true;
+    try {
+      await RunWorkItemWorkflowAction({ ...request, actor: "human" });
+      await refreshWorkState();
+    } catch (err) {
+      error = `Workflow action failed: ${backendError(err)}`;
+    } finally {
+      loadingWork = false;
+    }
+  }
+
   async function approveDone(workItemId: string, reason: string) {
     error = "";
     loadingWork = true;
@@ -2842,6 +2861,7 @@
           onAskQuestion={askQuestion}
           onAnswerQuestion={answerQuestion}
           onCompleteGate={completeGate}
+          onRunWorkflowAction={runWorkItemWorkflowAction}
           onApproveDone={approveDone}
           onFocusPane={(paneId) => (activePaneId = paneId)}
           onPtyInput={(ptyId) => refreshOutput(ptyId).catch((err) => {
