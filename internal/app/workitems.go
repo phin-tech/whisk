@@ -837,6 +837,7 @@ func (r *Runtime) AddWorkItemLink(ctx context.Context, req AddWorkItemLinkReques
 func (r *Runtime) ReadyWork(_ context.Context, req ReadyWorkRequest) (workitem.ReadyWorkExplanation, error) {
 	return workitem.BuildReadyWorkExplanation(workitem.ReadyWorkInput{
 		ProjectID: req.ProjectID,
+		Projects:  r.workItems.ListProjects(),
 		WorkItems: r.workItems.ListWorkItems(req.ProjectID),
 		Links:     r.workItems.ListWorkItemLinks(""),
 	}), nil
