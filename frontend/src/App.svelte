@@ -33,6 +33,8 @@
     WorkflowMigrationPlan,
     WorkflowValidationReport,
     ReadyWorkExplanation,
+    UIContributionScope,
+    UIContributionsResponse,
   } from "../bindings/github.com/phin-tech/whisk/internal/protocol/models";
   import type { DaemonStatus } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/models";
   import {
@@ -125,6 +127,7 @@
     ValidateWorkflowDefinitionFile,
     WritePTY,
     ListPlugins,
+    ListUIContributions,
     OnboardingStatus as LoadOnboardingStatus,
     ListRegistryPlugins,
     InstallPlugin,
@@ -185,6 +188,13 @@
     releaseSingleFlight,
   } from "./daemonLink";
   import { sessionSplitCommands } from "./sessionCommands";
+  import {
+    derivePluginCommandDescriptors,
+    derivePluginCommandJumpTargets,
+    derivePluginUIContributionScope,
+    pluginUIContributionScopeKey,
+    type PluginCommandDescriptor,
+  } from "./pluginUI";
   import { activeWindow, closePaneRequest, closePaneTarget, firstPaneId, isStalePTYError, killPTYRequest, runtimeRefreshTargets, visiblePtyIds } from "./sessionView";
   import {
     normalizeStartupView,
@@ -228,6 +238,7 @@
   let agentPrompts: AgentPrompt[] = [];
   let agentBridgeEvents: AgentBridgeEvent[] = [];
   let plugins: PluginStatus[] = [];
+  let uiContributions: UIContributionsResponse | null = null;
   let registryPlugins: RegistryPlugin[] = [];
   let installingPluginId = "";
   let agentHookIntegrations: AgentHookIntegration[] = [];
@@ -246,6 +257,11 @@
   let navigationStack: MainView[] = [];
   let jumpTargets: JumpTarget[] = [];
   let recentTargetIds: string[] = [];
+  let currentUIContributionScope: UIContributionScope = {};
+  let uiContributionScopeKey = "";
+  let uiContributionRequestKey = "";
+  let pluginCommandDescriptors: PluginCommandDescriptor[] = [];
+  let pluginCommandTargets: JumpTarget[] = [];
 
   function emptyReadyWorkExplanation(): ReadyWorkExplanation {
     return { ready: [], blocked: [], summary: { totalReady: 0, totalBlocked: 0, cycleCount: 0 } };
@@ -364,6 +380,21 @@
       ? (plugin.projectAttachmentTemplates ?? []).map((template) => ({ ...template, pluginId: plugin.id }))
       : [],
   );
+  $: currentUIContributionScope = derivePluginUIContributionScope({
+    activeProjectId,
+    openWorkItemId: workBoardOpenItemId,
+    activeSessionId,
+    activePaneId,
+    activePtyId,
+  });
+  $: pluginCommandDescriptors = derivePluginCommandDescriptors(uiContributions);
+  $: pluginCommandTargets = derivePluginCommandJumpTargets(uiContributions);
+  $: if (runtimeReadModelsLoaded) {
+    const scope = currentUIContributionScope;
+    void refreshUIContributionsForScope(scope).catch((err) => {
+      error = `Load plugin UI contributions failed: ${backendError(err)}`;
+    });
+  }
   $: commands = [
     {
       id: "palette.open",
@@ -425,6 +456,11 @@
       enabled: () => Boolean(activePtyId),
       run: jumpToBottom,
     },
+    ...pluginCommandDescriptors.map((descriptor) => ({
+      id: descriptor.id,
+      title: descriptor.title,
+      run: () => activatePluginCommand(descriptor),
+    })),
     // Session-switch commands mirror the native Sessions menu (Cmd 1..0). They are gated on the
     // session count so only reachable slots appear in the palette.
     ...Array.from({ length: 10 }, (_, i) => ({
@@ -435,17 +471,20 @@
       run: () => selectSessionByIndex(i),
     })),
   ] satisfies Command[];
-  $: jumpTargets = deriveJumpTargets({
-    sessions,
-    activeSessionId,
-    activePaneId,
-    ptys,
-    projects,
-    activeProjectId,
-    workItems,
-    workItemRuns,
-    openWorkItemId: workBoardOpenItemId,
-  });
+  $: jumpTargets = [
+    ...deriveJumpTargets({
+      sessions,
+      activeSessionId,
+      activePaneId,
+      ptys,
+      projects,
+      activeProjectId,
+      workItems,
+      workItemRuns,
+      openWorkItemId: workBoardOpenItemId,
+    }),
+    ...pluginCommandTargets,
+  ];
   $: if (activeSession && (!activePaneId || !activeSession.panes[activePaneId])) {
     activePaneId = firstPaneId(activeSession);
   }
@@ -1202,6 +1241,23 @@
     plugins = await ListPlugins();
   }
 
+  async function refreshUIContributionsForScope(scope: UIContributionScope, force = false) {
+    const key = pluginUIContributionScopeKey(scope);
+    if (!force && uiContributionScopeKey === key) return;
+    uiContributionScopeKey = key;
+    uiContributionRequestKey = key;
+    try {
+      const next = await ListUIContributions(scope);
+      if (uiContributionRequestKey === key) uiContributions = next;
+    } catch (err) {
+      if (uiContributionRequestKey === key) {
+        uiContributionScopeKey = "";
+        uiContributions = null;
+      }
+      throw err;
+    }
+  }
+
   async function refreshOnboarding(openIfNeeded = false) {
     onboardingStatus = await LoadOnboardingStatus();
     if (openIfNeeded && onboardingStatus.shouldShow) {
@@ -1227,6 +1283,7 @@
     error = "";
     try {
       plugins = await RescanPlugins();
+      await refreshUIContributionsForScope(currentUIContributionScope, true);
     } catch (err) {
       error = `Rescan plugins failed: ${backendError(err)}`;
     }
@@ -1237,6 +1294,7 @@
     try {
       const status = trusted ? await TrustPlugin(pluginId) : await UntrustPlugin(pluginId);
       plugins = plugins.map((plugin) => (plugin.id === pluginId ? status : plugin));
+      await refreshUIContributionsForScope(currentUIContributionScope, true);
     } catch (err) {
       error = `Update plugin trust failed: ${backendError(err)}`;
     }
@@ -1258,7 +1316,11 @@
       await InstallPlugin(registry, pluginId);
       // Installed plugins land untrusted; refresh both the discovered set and
       // the registry so install state and trust toggles reflect the new plugin.
-      await Promise.all([refreshPlugins(), refreshRegistryPlugins()]);
+      await Promise.all([
+        refreshPlugins(),
+        refreshRegistryPlugins(),
+        refreshUIContributionsForScope(currentUIContributionScope, true),
+      ]);
     } catch (err) {
       error = `Install plugin failed: ${backendError(err)}`;
     } finally {
@@ -1407,7 +1469,13 @@
       !hasActivePTYStream(targets.outputPtyId)
     ) await refreshOutput(targets.outputPtyId);
     if (targets.statusEvents) await refreshStatusEvents();
-    if (targets.plugins) await Promise.all([refreshPlugins(), refreshRegistryPlugins()]);
+    if (targets.plugins) {
+      await Promise.all([
+        refreshPlugins(),
+        refreshRegistryPlugins(),
+        refreshUIContributionsForScope(currentUIContributionScope, true),
+      ]);
+    }
     if (targets.agentBridgeApprovals) await refreshStatusEvents();
     if (targets.agentHookEvents) await refreshStatusEvents();
     if (targets.work) {
@@ -1508,6 +1576,26 @@
     }
   }
 
+  function activatePluginCommand(descriptor: PluginCommandDescriptor) {
+    focusPluginContributionScope(descriptor.contributionScope);
+    error = `Plugin command execution needs the daemon run endpoint: ${descriptor.title}`;
+  }
+
+  function focusPluginContributionScope(scope: UIContributionScope) {
+    if (scope.workItemId && scope.projectId) {
+      selectProject(scope.projectId);
+      activeSidebar = "work";
+      navigateTo("work", { openItemId: scope.workItemId });
+      return;
+    }
+    if (scope.projectId) {
+      selectProject(scope.projectId);
+      return;
+    }
+    if (scope.sessionId && scope.paneId && selectPaneTarget(scope.sessionId, scope.paneId)) return;
+    if (scope.ptyId) selectPtyTarget(scope.ptyId, scope.sessionId, scope.paneId);
+  }
+
   async function jumpToTarget(target: JumpTarget) {
     jumpPaletteOpen = false;
     const payload = target.payload;
@@ -1546,6 +1634,13 @@
       } else if (payload.ptyId) {
         activated = selectPtyTarget(payload.ptyId, payload.sessionId);
       }
+    } else if (payload.kind === "plugin-command") {
+      const descriptor = pluginCommandDescriptors.find(
+        (candidate) => candidate.pluginId === payload.pluginId && candidate.commandId === payload.commandId,
+      );
+      if (!descriptor) return;
+      activatePluginCommand(descriptor);
+      activated = true;
     }
 
     if (activated) recordJumpRecent(target.id);
