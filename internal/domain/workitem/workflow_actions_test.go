@@ -301,6 +301,58 @@ func TestReviewFeedbackCreatesArtifactAndResumesExecution(t *testing.T) {
 	}
 }
 
+func TestReviewFeedbackRejectsUnknownRunIDWithoutMutatingState(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
+	mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", "proj_01")
+	mustApprovedPlan(t, state, item.ID, now)
+	run, err := state.StartExecution(StartExecution{
+		ID:           "run_exec",
+		HistoryID:    "hist_exec",
+		RunHistoryID: "run_hist_exec",
+		WorkItemID:   item.ID,
+		SessionID:    "sess_01",
+		PTYID:        "pty_01",
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start execution: %v", err)
+	}
+	if _, err := state.CompleteExecution(CompleteExecution{RunID: run.ID, Actor: "agent", Now: now.Add(time.Minute)}); err != nil {
+		t.Fatalf("complete execution: %v", err)
+	}
+
+	_, err = state.SubmitReviewFeedback(SubmitReviewFeedback{
+		ID:         "feedback_01",
+		WorkItemID: item.ID,
+		RunID:      "missing_run",
+		Body:       "Fix the missing validation.",
+		Actor:      "human",
+		Now:        now.Add(2 * time.Minute),
+	})
+	if err == nil || !strings.Contains(err.Error(), "work item run missing_run not found") {
+		t.Fatalf("expected missing run error, got %v", err)
+	}
+	if _, ok := state.GetRun(""); ok {
+		t.Fatalf("phantom empty run was created")
+	}
+	if _, ok := state.GetRun("missing_run"); ok {
+		t.Fatalf("missing run was created")
+	}
+	storedRun, ok := state.GetRun(run.ID)
+	if !ok || storedRun.Status != RunStateCompleted {
+		t.Fatalf("stored run = %#v, ok = %v", storedRun, ok)
+	}
+	item, ok = state.GetWorkItem(item.ID)
+	if !ok || item.StageID != StageReview || item.RunState != RunStateCompleted {
+		t.Fatalf("item = %#v, ok = %v", item, ok)
+	}
+	if artifacts := state.ListArtifacts(item.ID); len(artifacts) != 1 {
+		t.Fatalf("artifacts = %#v", artifacts)
+	}
+}
+
 func TestMetadataValidationAndRoundTrip(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
