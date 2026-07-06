@@ -1153,6 +1153,131 @@ func TestRuntimeLaunchExecutionCreatesAndBindsWorktreeWhenMissing(t *testing.T) 
 	}
 }
 
+func TestRuntimeLaunchExecutionHonorsWorkflowProjectRootRunEffect(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	ctx := context.Background()
+	root := t.TempDir()
+	worktreeBackend := &worktreeBackendFake{
+		created: app.CreatedWorktree{Path: filepath.Join(root, ".worktrees", "ignored")},
+	}
+	store := &memoryWorkItemStore{}
+	ptyBackend := newMemoryPTYBackend()
+	nextID := 0
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		IDGenerator: func() string {
+			nextID++
+			return fmt.Sprintf("id_%02d", nextID)
+		},
+		WorkItemStore: store,
+		PTYBackend:    ptyBackend,
+		Worktrees:     worktreeBackend,
+		DaemonURL:     "http://127.0.0.1:8787",
+		CLIPath:       "/usr/local/bin/whisk",
+	})
+	project, err := runtime.CreateProject(ctx, app.CreateProjectRequest{Name: "App", RootDir: root})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	definition := workitem.WorkflowDefinition{
+		ID:      "runtime-project-root-execution",
+		Version: 1,
+		Stages:  []string{workitem.StageBacklog, workitem.StagePlanning, workitem.StageReady, workitem.StageExecution},
+		Actions: []workitem.WorkflowActionDefinition{
+			{
+				ID:   workitem.WorkflowActionStartPlanning,
+				From: []string{workitem.StageBacklog},
+				To:   workitem.StagePlanning,
+				CreatesRun: &workitem.WorkflowRunEffect{
+					Phase:            "planning",
+					Preset:           workitem.RunPresetReader,
+					PromptTemplateID: workitem.PromptTemplatePlan,
+					WorkingDir:       "projectRoot",
+				},
+			},
+			{
+				ID:              workitem.WorkflowActionSubmitDraftPlan,
+				From:            []string{workitem.StagePlanning},
+				To:              workitem.StagePlanning,
+				CreatesArtifact: &workitem.WorkflowArtifactEffect{Kind: workitem.ArtifactKindPlan, Status: workitem.ArtifactStatusDraft},
+			},
+			{
+				ID:              workitem.WorkflowActionApprovePlan,
+				From:            []string{workitem.StagePlanning},
+				To:              workitem.StageReady,
+				RequiresHuman:   true,
+				UpdatesArtifact: &workitem.WorkflowArtifactEffect{Kind: workitem.ArtifactKindPlan, Status: workitem.ArtifactStatusApproved},
+			},
+			{
+				ID:   workitem.WorkflowActionStartExecution,
+				From: []string{workitem.StageReady},
+				To:   workitem.StageExecution,
+				Requires: []workitem.WorkflowArtifactRequirement{
+					{Kind: workitem.ArtifactKindPlan, Status: workitem.ArtifactStatusApproved},
+				},
+				CreatesRun: &workitem.WorkflowRunEffect{
+					Phase:                 "execution",
+					Preset:                workitem.RunPresetWriter,
+					PromptTemplateID:      workitem.PromptTemplateImplement,
+					WorkingDir:            "projectRoot",
+					AutoProvisionWorktree: false,
+				},
+			},
+		},
+	}
+	if _, err := runtime.ImportWorkflowDefinition(ctx, app.ImportWorkflowDefinitionRequest{Definition: definition, Source: "test"}); err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	if _, err := runtime.SetProjectWorkflowDefinition(ctx, app.SetProjectWorkflowDefinitionRequest{
+		ProjectID: project.ID,
+		ID:        definition.ID,
+		Version:   definition.Version,
+	}); err != nil {
+		t.Fatalf("set project workflow: %v", err)
+	}
+	item, err := runtime.CreateWorkItem(ctx, app.CreateWorkItemRequest{ProjectID: project.ID, Title: "Launch execution"})
+	if err != nil {
+		t.Fatalf("create work item: %v", err)
+	}
+	planning, err := runtime.StartPlanning(ctx, app.StartPlanningRequest{WorkItemID: item.ID, Actor: "agent"})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	draft, err := runtime.SubmitDraftPlan(ctx, app.SubmitDraftPlanRequest{
+		WorkItemID: item.ID,
+		RunID:      planning.ID,
+		Body:       "Implement it.",
+		Actor:      "agent",
+	})
+	if err != nil {
+		t.Fatalf("submit draft plan: %v", err)
+	}
+	if _, err := runtime.ApprovePlan(ctx, app.ApprovePlanRequest{ArtifactID: draft.ID, WorkItemID: item.ID, Actor: "human"}); err != nil {
+		t.Fatalf("approve plan: %v", err)
+	}
+
+	run, err := runtime.LaunchExecution(ctx, app.LaunchExecutionRequest{
+		WorkItemID:     item.ID,
+		AgentProfileID: "codex",
+		Actor:          "agent",
+	})
+	if err != nil {
+		t.Fatalf("launch execution: %v", err)
+	}
+	if run.Status != workitem.RunStateRunning {
+		t.Fatalf("run = %#v", run)
+	}
+	if worktreeBackend.createReq != (app.CreateWorktreeRequest{}) {
+		t.Fatalf("worktree should not be auto-provisioned: %#v", worktreeBackend.createReq)
+	}
+	updated := findWorkItem(t, ctx, runtime, item.ID)
+	if updated.Worktree != nil {
+		t.Fatalf("worktree should remain unbound: %#v", updated.Worktree)
+	}
+	if len(ptyBackend.spawns) != 1 || ptyBackend.spawns[0].WorkingDir != root {
+		t.Fatalf("spawns = %#v", ptyBackend.spawns)
+	}
+}
+
 func TestRuntimeCloseLinkedRunSessionCancelsActiveRun(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 	ctx := context.Background()

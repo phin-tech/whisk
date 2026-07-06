@@ -118,6 +118,12 @@ const (
 	PromptTemplateImplement = "implement"
 	PromptTemplateReview    = "review"
 
+	WorkflowRunWorkingDirProjectRoot = "projectRoot"
+	WorkflowRunWorkingDirWorktree    = "worktree"
+
+	RunMetadataWorkflowWorkingDir            = "whisk.workflow/working_dir"
+	RunMetadataWorkflowAutoProvisionWorktree = "whisk.workflow/auto_provision_worktree"
+
 	WorkItemLinkBlocks      = "blocks"
 	WorkItemLinkParentChild = "parent-child"
 	WorkItemLinkRelated     = "related"
@@ -2358,8 +2364,10 @@ func (s *State) StartPlanning(req StartPlanning) (WorkItemRun, error) {
 	if err != nil {
 		return WorkItemRun{}, err
 	}
+	run = withWorkflowRunEffectMetadata(run, *runEffect)
+	s.runs[run.ID] = run
 	s.recordWorkflowEvent(WorkflowEventPlanningStarted, item.ProjectID, item.ID, run.ID, req.Actor, "", req.Now)
-	return run, nil
+	return cloneRun(run), nil
 }
 
 func (s *State) SubmitDraftPlan(req SubmitDraftPlan) (Artifact, error) {
@@ -2474,14 +2482,38 @@ func (s *State) StartExecution(req StartExecution) (WorkItemRun, error) {
 	if err != nil {
 		return WorkItemRun{}, err
 	}
+	run = withWorkflowRunEffectMetadata(run, *runEffect)
+	s.runs[run.ID] = run
 	s.recordWorkflowEvent(WorkflowEventExecutionStarted, item.ProjectID, item.ID, run.ID, req.Actor, "", req.Now)
-	return run, nil
+	return cloneRun(run), nil
+}
+
+func withWorkflowRunEffectMetadata(run WorkItemRun, effect WorkflowRunEffect) WorkItemRun {
+	if run.Metadata == nil {
+		run.Metadata = map[string]MetadataValue{}
+	}
+	workingDir := strings.TrimSpace(effect.WorkingDir)
+	if workingDir != "" {
+		run.Metadata[RunMetadataWorkflowWorkingDir] = MetadataValue{Type: MetadataTypeString, String: workingDir}
+	}
+	run.Metadata[RunMetadataWorkflowAutoProvisionWorktree] = MetadataValue{
+		Type: MetadataTypeBool,
+		Bool: effect.AutoProvisionWorktree,
+	}
+	return run
 }
 
 func (s *State) AskQuestion(req AskQuestion) (Question, error) {
 	item, ok := s.items[req.WorkItemID]
 	if !ok {
 		return Question{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	definition, err := s.workflowDefinitionForItem(item)
+	if err != nil {
+		return Question{}, err
+	}
+	if !definition.Questions.Enabled {
+		return Question{}, fmt.Errorf("workflow questions are disabled")
 	}
 	prompt := strings.TrimSpace(req.Prompt)
 	if prompt == "" {
@@ -2511,7 +2543,12 @@ func (s *State) AskQuestion(req AskQuestion) (Question, error) {
 		if !ok {
 			return Question{}, fmt.Errorf("work item run %s not found", question.RunID)
 		}
-		run.Status = RunStateAwaitingInput
+		if run.WorkItemID != item.ID {
+			return Question{}, fmt.Errorf("work item run %s does not belong to work item %s", question.RunID, item.ID)
+		}
+		if definition.Questions.SetsRunState != "" {
+			run.Status = definition.Questions.SetsRunState
+		}
 		run.UpdatedAt = req.Now
 		if question.SessionID == "" {
 			question.SessionID = run.SessionID
@@ -2520,7 +2557,15 @@ func (s *State) AskQuestion(req AskQuestion) (Question, error) {
 			question.PTYID = run.PTYID
 		}
 		s.runs[run.ID] = run
-		item.RunState = RunStateAwaitingInput
+		if definition.Questions.MoveToBlocked {
+			if item.StageID != StageBlocked {
+				item.PreviousStageID = item.StageID
+			}
+			item.StageID = StageBlocked
+		}
+		if definition.Questions.SetsRunState != "" {
+			item.RunState = definition.Questions.SetsRunState
+		}
 		item.UpdatedAt = req.Now
 		s.items[item.ID] = item
 	}
@@ -2547,13 +2592,17 @@ func (s *State) AnswerQuestion(req AnswerQuestion) (Question, error) {
 	question.AnsweredAt = &req.Now
 	question.UpdatedAt = req.Now
 	s.questions[question.ID] = question
-	if question.RunID != "" && !s.hasOpenQuestionForRun(question.RunID) {
+	item := s.items[question.WorkItemID]
+	definition, err := s.workflowDefinitionForItem(item)
+	if err != nil {
+		return Question{}, err
+	}
+	if question.RunID != "" && definition.Questions.AnswerClearsAwaitingInputWhenNoOpenQuestionsRemain && !s.hasOpenQuestionForRun(question.RunID) {
 		run := s.runs[question.RunID]
 		if run.Status == RunStateAwaitingInput {
 			run.Status = RunStateRunning
 			run.UpdatedAt = req.Now
 			s.runs[run.ID] = run
-			item := s.items[run.WorkItemID]
 			item.RunState = RunStateRunning
 			item.UpdatedAt = req.Now
 			s.items[item.ID] = item
@@ -2699,15 +2748,24 @@ func (s *State) SubmitReviewFeedback(req SubmitReviewFeedback) (Artifact, error)
 	var run WorkItemRun
 	runOK := false
 	if artifact.RunID != "" {
-		var ok bool
-		run, ok = s.runs[artifact.RunID]
+		requestedRun, ok := s.runs[artifact.RunID]
 		if !ok {
 			return Artifact{}, fmt.Errorf("work item run %s not found", artifact.RunID)
 		}
-		if run.WorkItemID != item.ID {
+		if requestedRun.WorkItemID != item.ID {
 			return Artifact{}, fmt.Errorf("work item run %s does not belong to work item %s", artifact.RunID, item.ID)
 		}
+		run = requestedRun
 		runOK = true
+	}
+	if action.ResumesRun == WorkflowResumesRunExistingExecution {
+		executionRun, ok := s.latestExecutionRun(item.ID)
+		if !ok {
+			return Artifact{}, fmt.Errorf("existing execution run not found")
+		}
+		run = executionRun
+		runOK = true
+		artifact.RunID = executionRun.ID
 	}
 	if artifact.ID == "" {
 		return Artifact{}, fmt.Errorf("artifact id required")
@@ -3648,6 +3706,21 @@ func workflowArtifactRequirementReason(requirement WorkflowArtifactRequirement) 
 		return "approved plan required"
 	}
 	return fmt.Sprintf("%s %s artifact required", requirement.Status, requirement.Kind)
+}
+
+func (s *State) latestExecutionRun(workItemID string) (WorkItemRun, bool) {
+	var latest WorkItemRun
+	found := false
+	for _, run := range s.runs {
+		if run.WorkItemID != workItemID || run.PromptTemplateID != PromptTemplateImplement {
+			continue
+		}
+		if !found || run.CreatedAt.After(latest.CreatedAt) || (run.CreatedAt.Equal(latest.CreatedAt) && run.ID > latest.ID) {
+			latest = run
+			found = true
+		}
+	}
+	return latest, found
 }
 
 func requireHumanActor(actor, operation string) error {

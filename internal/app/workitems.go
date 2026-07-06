@@ -1473,9 +1473,9 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 	if err != nil {
 		return "", "", err
 	}
-	workingDir := project.RootDir
-	if item.Worktree != nil && item.Worktree.WorktreePath != "" {
-		workingDir = item.Worktree.WorktreePath
+	workingDir, err := workflowRunWorkingDir(project, item, run, r.worktrees != nil)
+	if err != nil {
+		return "", "", err
 	}
 	profileID := resolveAgentProfileID(req.AgentProfileID, project.Preferences.DefaultPhaseAgents, run.Preset)
 	launch, err := agents.BuildLaunch(agents.LaunchRequest{
@@ -1541,7 +1541,10 @@ func (r *Runtime) launchWorkItemRun(ctx context.Context, run workitem.WorkItemRu
 }
 
 func (r *Runtime) ensureExecutionWorktree(ctx context.Context, project workitem.Project, item workitem.WorkItem, run workitem.WorkItemRun, overridePath string, actor string) (workitem.WorkItem, error) {
-	if item.Worktree != nil || run.PromptTemplateID != workitem.PromptTemplateImplement || r.worktrees == nil {
+	if item.Worktree != nil || r.worktrees == nil {
+		return item, nil
+	}
+	if workflowRunWorkingDirMode(run) != workitem.WorkflowRunWorkingDirWorktree || !workflowRunAutoProvisionWorktree(run) {
 		return item, nil
 	}
 	branch := defaultWorktreeBranch(project, item)
@@ -1567,6 +1570,42 @@ func (r *Runtime) ensureExecutionWorktree(ctx context.Context, project workitem.
 		Actor:        actor,
 		Now:          time.Now().UTC(),
 	})
+}
+
+func workflowRunWorkingDir(project workitem.Project, item workitem.WorkItem, run workitem.WorkItemRun, worktreeBackendAvailable bool) (string, error) {
+	switch workflowRunWorkingDirMode(run) {
+	case "", workitem.WorkflowRunWorkingDirProjectRoot:
+		return project.RootDir, nil
+	case workitem.WorkflowRunWorkingDirWorktree:
+		if item.Worktree != nil && strings.TrimSpace(item.Worktree.WorktreePath) != "" {
+			return item.Worktree.WorktreePath, nil
+		}
+		if worktreeBackendAvailable {
+			return "", fmt.Errorf("workflow run %s requires worktree", run.ID)
+		}
+		return project.RootDir, nil
+	default:
+		return "", fmt.Errorf("workflow run %s has unsupported working dir %q", run.ID, workflowRunWorkingDirMode(run))
+	}
+}
+
+func workflowRunWorkingDirMode(run workitem.WorkItemRun) string {
+	value, ok := run.Metadata[workitem.RunMetadataWorkflowWorkingDir]
+	if ok && value.Type == workitem.MetadataTypeString {
+		return strings.TrimSpace(value.String)
+	}
+	if run.PromptTemplateID == workitem.PromptTemplateImplement {
+		return workitem.WorkflowRunWorkingDirWorktree
+	}
+	return workitem.WorkflowRunWorkingDirProjectRoot
+}
+
+func workflowRunAutoProvisionWorktree(run workitem.WorkItemRun) bool {
+	value, ok := run.Metadata[workitem.RunMetadataWorkflowAutoProvisionWorktree]
+	if ok && value.Type == workitem.MetadataTypeBool {
+		return value.Bool
+	}
+	return run.PromptTemplateID == workitem.PromptTemplateImplement
 }
 
 func agentStartPTYOptions(launch agents.Launch, env map[string]string, useInteractiveShell bool) *StartPTYOptions {

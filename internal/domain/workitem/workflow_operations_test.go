@@ -193,6 +193,205 @@ func TestHumanWorkflowActionsRejectAgentActors(t *testing.T) {
 	}
 }
 
+func TestQuestionPolicyControlsRunStateTransitions(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	definition := WorkflowDefinition{
+		ID:      "question-policy",
+		Version: 1,
+		Stages:  []string{StageBacklog, StagePlanning},
+		Actions: []WorkflowActionDefinition{{
+			ID:   WorkflowActionStartPlanning,
+			From: []string{StageBacklog},
+			To:   StagePlanning,
+			CreatesRun: &WorkflowRunEffect{
+				Phase:            "planning",
+				Preset:           RunPresetReader,
+				PromptTemplateID: PromptTemplatePlan,
+				WorkingDir:       "projectRoot",
+			},
+		}},
+		Questions: WorkflowQuestionPolicy{
+			Enabled:      true,
+			SetsRunState: RunStateRunning,
+			AnswerClearsAwaitingInputWhenNoOpenQuestionsRemain: false,
+		},
+	}
+	if _, err := state.ImportWorkflowDefinition(ImportWorkflowDefinition{Definition: definition, Source: "test", Now: now}); err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project := mustProject(t, state, "proj_questions", "Questions")
+	if _, err := state.SetProjectWorkflowDefinition(SetProjectWorkflowDefinition{
+		ProjectID: project.ID,
+		ID:        definition.ID,
+		Version:   definition.Version,
+		Now:       now,
+	}); err != nil {
+		t.Fatalf("set workflow: %v", err)
+	}
+	item := mustWorkItem(t, state, "wi_questions", project.ID)
+	run, err := state.StartPlanning(StartPlanning{
+		ID:           "run_question",
+		HistoryID:    "hist_question",
+		RunHistoryID: "run_hist_question",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+
+	question, err := state.AskQuestion(AskQuestion{
+		ID:         "question_01",
+		WorkItemID: item.ID,
+		RunID:      run.ID,
+		Prompt:     "Which endpoint?",
+		Actor:      "agent",
+		Now:        now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("ask question: %v", err)
+	}
+	storedRun, ok := state.GetRun(run.ID)
+	if !ok || storedRun.Status != RunStateRunning {
+		t.Fatalf("run after ask = %#v, ok = %v", storedRun, ok)
+	}
+	storedItem, ok := state.GetWorkItem(item.ID)
+	if !ok || storedItem.RunState != RunStateRunning {
+		t.Fatalf("item after ask = %#v, ok = %v", storedItem, ok)
+	}
+	if _, err := state.AnswerQuestion(AnswerQuestion{
+		ID:     question.ID,
+		Answer: "Use v2.",
+		Actor:  "human",
+		Now:    now.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("answer question: %v", err)
+	}
+	storedRun, ok = state.GetRun(run.ID)
+	if !ok || storedRun.Status != RunStateRunning {
+		t.Fatalf("run after answer = %#v, ok = %v", storedRun, ok)
+	}
+}
+
+func TestWorkflowRunEffectsArePersistedOnRuns(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	definition := WorkflowDefinition{
+		ID:      "run-effect-metadata",
+		Version: 1,
+		Stages:  []string{StageBacklog, StagePlanning, StageReady, StageExecution},
+		Actions: []WorkflowActionDefinition{
+			{
+				ID:   WorkflowActionStartPlanning,
+				From: []string{StageBacklog},
+				To:   StagePlanning,
+				CreatesRun: &WorkflowRunEffect{
+					Phase:            "planning",
+					Preset:           RunPresetReader,
+					PromptTemplateID: PromptTemplatePlan,
+					WorkingDir:       "projectRoot",
+				},
+			},
+			{
+				ID:              WorkflowActionSubmitDraftPlan,
+				From:            []string{StagePlanning},
+				To:              StagePlanning,
+				CreatesArtifact: &WorkflowArtifactEffect{Kind: ArtifactKindPlan, Status: ArtifactStatusDraft},
+			},
+			{
+				ID:              WorkflowActionApprovePlan,
+				From:            []string{StagePlanning},
+				To:              StageReady,
+				RequiresHuman:   true,
+				UpdatesArtifact: &WorkflowArtifactEffect{Kind: ArtifactKindPlan, Status: ArtifactStatusApproved},
+			},
+			{
+				ID:   WorkflowActionStartExecution,
+				From: []string{StageReady},
+				To:   StageExecution,
+				Requires: []WorkflowArtifactRequirement{
+					{Kind: ArtifactKindPlan, Status: ArtifactStatusApproved},
+				},
+				CreatesRun: &WorkflowRunEffect{
+					Phase:                 "execution",
+					Preset:                RunPresetWriter,
+					PromptTemplateID:      PromptTemplateImplement,
+					WorkingDir:            "projectRoot",
+					AutoProvisionWorktree: false,
+				},
+			},
+		},
+	}
+	if _, err := state.ImportWorkflowDefinition(ImportWorkflowDefinition{Definition: definition, Source: "test", Now: now}); err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project := mustProject(t, state, "proj_run_effect", "Run effect")
+	if _, err := state.SetProjectWorkflowDefinition(SetProjectWorkflowDefinition{
+		ProjectID: project.ID,
+		ID:        definition.ID,
+		Version:   definition.Version,
+		Now:       now,
+	}); err != nil {
+		t.Fatalf("set workflow: %v", err)
+	}
+	item := mustWorkItem(t, state, "wi_run_effect", project.ID)
+
+	planning, err := state.StartPlanning(StartPlanning{
+		ID:           "run_plan",
+		HistoryID:    "hist_plan",
+		RunHistoryID: "run_hist_plan",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	if value := planning.Metadata[RunMetadataWorkflowWorkingDir]; value.Type != MetadataTypeString || value.String != "projectRoot" {
+		t.Fatalf("planning working dir metadata = %#v", planning.Metadata)
+	}
+
+	draft, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "artifact_plan",
+		WorkItemID: item.ID,
+		RunID:      planning.ID,
+		Title:      "Plan",
+		Body:       "Implement it.",
+		Actor:      "agent",
+		Now:        now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("submit draft: %v", err)
+	}
+	if _, err := state.ApprovePlan(ApprovePlan{
+		WorkItemID: item.ID,
+		ArtifactID: draft.ID,
+		Actor:      "human",
+		Now:        now.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("approve plan: %v", err)
+	}
+	execution, err := state.StartExecution(StartExecution{
+		ID:           "run_execution",
+		HistoryID:    "hist_execution",
+		RunHistoryID: "run_hist_execution",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now.Add(3 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("start execution: %v", err)
+	}
+	if value := execution.Metadata[RunMetadataWorkflowWorkingDir]; value.Type != MetadataTypeString || value.String != "projectRoot" {
+		t.Fatalf("execution working dir metadata = %#v", execution.Metadata)
+	}
+	if value := execution.Metadata[RunMetadataWorkflowAutoProvisionWorktree]; value.Type != MetadataTypeBool || value.Bool {
+		t.Fatalf("execution auto provision metadata = %#v", execution.Metadata)
+	}
+}
+
 func TestMoveWorkItemRejectsUndefinedWorkflowTransition(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)

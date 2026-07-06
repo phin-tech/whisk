@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -22,6 +23,8 @@ const (
 	WorkflowActionApproveDone          = "approve_done"
 	WorkflowActionReportBlocked        = "report_blocked"
 	WorkflowActionUnblock              = "unblock"
+
+	WorkflowResumesRunExistingExecution = "existing_execution"
 
 	WorkflowActionInputNone              = "none"
 	WorkflowActionInputRun               = "run"
@@ -268,6 +271,9 @@ func ValidateWorkflowDefinitionReport(definition WorkflowDefinition) WorkflowVal
 			default:
 				addError(actionPath+".createsRun.promptTemplateId", "unsupported prompt template %s", action.CreatesRun.PromptTemplateID)
 			}
+			if err := validateWorkflowRunWorkingDir(action.CreatesRun.WorkingDir); err != nil {
+				addError(actionPath+".createsRun.workingDir", "%s", err.Error())
+			}
 		}
 	}
 	gates := map[string]struct{}{}
@@ -292,8 +298,29 @@ func ValidateWorkflowDefinitionReport(definition WorkflowDefinition) WorkflowVal
 			}
 		}
 	}
+	if err := validateWorkflowQuestionRunState(definition.Questions.SetsRunState); err != nil {
+		addError("questions.setsRunState", "%s", err.Error())
+	}
 	report.Valid = len(report.Errors) == 0
 	return report
+}
+
+func validateWorkflowQuestionRunState(state string) error {
+	switch strings.TrimSpace(state) {
+	case "", RunStateAwaitingInput, RunStateRunning:
+		return nil
+	default:
+		return fmt.Errorf("unsupported question run state %s", state)
+	}
+}
+
+func validateWorkflowRunWorkingDir(workingDir string) error {
+	switch strings.TrimSpace(workingDir) {
+	case "", WorkflowRunWorkingDirProjectRoot, WorkflowRunWorkingDirWorktree:
+		return nil
+	default:
+		return fmt.Errorf("unsupported workflow working dir %s", workingDir)
+	}
 }
 
 func workflowDefinitionIdentity(definition WorkflowDefinition) string {
