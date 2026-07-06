@@ -107,8 +107,13 @@
                   <div class="flex min-w-0 items-center gap-2">
                     <span
                       class="h-2 w-2 shrink-0 rounded-full {row.running
-                        ? 'bg-green'
+                        ? row.statusTone === 'waiting'
+                          ? 'bg-amber'
+                          : row.statusTone === 'working'
+                            ? 'bg-blue'
+                            : 'bg-green'
                         : 'bg-text-muted'}"
+                      title={row.agentLabel ? `${row.agentLabel}: ${row.status}` : row.status}
                     ></span>
                     <span class="min-w-0 flex-1 truncate font-medium text-text-primary">
                       {row.title}

@@ -390,6 +390,58 @@ func TestRuntimeTracksTerminalSnapshotFromPTYOutput(t *testing.T) {
 	}
 }
 
+func TestRuntimeListPTYsIncludesTerminalMetadataAndAdvisoryStatus(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ptyBackend := newAttachableMemoryPTYBackend()
+	sink := newRecordingEventSink()
+	runtime := app.NewRuntime(app.RuntimeConfig{
+		PTYBackend: ptyBackend,
+		EventSink:  sink,
+	})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+
+	created, err := runtime.CreateSession(ctx, app.CreateSessionRequest{
+		Name:       "Status",
+		RootDir:    t.TempDir(),
+		InitialPTY: &app.StartPTYOptions{Cols: 80, Rows: 24},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	sink.waitFor(t, ctx, app.EventSessionChanged, "")
+	sink.waitFor(t, ctx, app.EventPTYChanged, created.MainPtyID)
+
+	title := "Codex waiting for approval"
+	cwd := "file://localhost/tmp/whisk-status"
+	data := []byte("\x1b]0;" + title + "\x07\x1b]7;" + cwd + "\x07")
+	ptyBackend.output(created.MainPtyID, 0, data)
+	sink.waitFor(t, ctx, app.EventPTYChanged, created.MainPtyID)
+
+	ptys, err := runtime.ListPTYs(ctx)
+	if err != nil {
+		t.Fatalf("list ptys: %v", err)
+	}
+	if len(ptys) != 1 {
+		t.Fatalf("ptys = %#v", ptys)
+	}
+	pty := ptys[0]
+	if pty.Title != title || pty.TerminalWorkingDirectory != cwd {
+		t.Fatalf("terminal metadata = title %q cwd %q", pty.Title, pty.TerminalWorkingDirectory)
+	}
+	if pty.AgentStatus == nil {
+		t.Fatalf("missing advisory agent status: %#v", pty)
+	}
+	if pty.AgentStatus.Agent != "codex" ||
+		pty.AgentStatus.Label != "Codex" ||
+		pty.AgentStatus.State != "waiting" ||
+		pty.AgentStatus.Source != "osc-title" ||
+		pty.AgentStatus.Confidence != "fallback" ||
+		!pty.AgentStatus.Advisory {
+		t.Fatalf("agent status = %#v", pty.AgentStatus)
+	}
+}
+
 func TestRuntimeResizesTrackedTerminalSnapshot(t *testing.T) {
 	ctx := context.Background()
 	ptyBackend := newAttachableMemoryPTYBackend()

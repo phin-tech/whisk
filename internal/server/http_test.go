@@ -221,6 +221,47 @@ func TestHTTPServerSessionAndPTYFlow(t *testing.T) {
 
 }
 
+func TestHTTPServerListPTYsIncludesTerminalMetadataAndAdvisoryStatus(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	backend := newFakePTYBackend()
+	eventBus := newFakeEventBus()
+	runtime := app.NewRuntime(app.RuntimeConfig{PTYBackend: backend, EventSink: eventBus})
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	handler := server.NewHTTP(runtime)
+
+	created := postJSON[protocol.CreatedSession](t, handler, "/v1/sessions", protocol.CreateSessionRequest{
+		Name:       "Status",
+		RootDir:    t.TempDir(),
+		InitialPTY: &protocol.StartPTYOptions{Cols: 80, Rows: 24},
+	}, http.StatusCreated)
+	if created.PTYID == nil || created.MainPtyID == "" {
+		t.Fatalf("created session = %#v", created)
+	}
+	backend.waitForSubscriber(t)
+	waitRuntimeEvent(t, ctx, eventBus, app.EventSessionChanged, "")
+	waitRuntimeEvent(t, ctx, eventBus, app.EventPTYChanged, created.MainPtyID)
+
+	postNoContent(t, handler, "/v1/ptys/"+created.MainPtyID+"/write", protocol.WritePTYRequest{
+		Data: "\x1b]0;Codex waiting for approval\x07\x1b]7;file://localhost/tmp/whisk-status\x07",
+	})
+	waitRuntimeEvent(t, ctx, eventBus, app.EventPTYChanged, created.MainPtyID)
+
+	ptys := getJSON[[]protocol.PTYInfo](t, handler, "/v1/ptys", http.StatusOK)
+	if len(ptys) != 1 {
+		t.Fatalf("ptys = %#v", ptys)
+	}
+	pty := ptys[0]
+	if pty.Title != "Codex waiting for approval" ||
+		pty.TerminalWorkingDirectory != "file://localhost/tmp/whisk-status" ||
+		pty.AgentStatus == nil ||
+		pty.AgentStatus.Agent != "codex" ||
+		pty.AgentStatus.State != "waiting" ||
+		!pty.AgentStatus.Advisory {
+		t.Fatalf("pty info = %#v", pty)
+	}
+}
+
 func TestHTTPServerListsDetectedAgents(t *testing.T) {
 	binDir := t.TempDir()
 	writeExecutable(t, filepath.Join(binDir, "claude"))

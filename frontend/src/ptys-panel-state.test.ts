@@ -79,7 +79,10 @@ describe("derivePtyLiveRows", () => {
         detail: "/repo / 80x24",
         running: true,
         status: "running",
+        statusTone: "running",
         canDelete: false,
+        agentLabel: "",
+        agentTitle: "",
       },
       {
         kind: "live",
@@ -90,7 +93,46 @@ describe("derivePtyLiveRows", () => {
         detail: "/repo / 80x24",
         running: false,
         status: "killed",
+        statusTone: "exited",
         canDelete: true,
+        agentLabel: "",
+        agentTitle: "",
+      },
+    ]);
+  });
+
+  it("prefers advisory agent status and terminal cwd for live PTY rows", () => {
+    expect(
+      derivePtyLiveRows([
+        pty({
+          title: "Codex waiting for approval",
+          terminalWorkingDirectory: "file://localhost/repo/task",
+          agentStatus: {
+            agent: "codex",
+            label: "Codex",
+            state: "waiting",
+            source: "osc-title",
+            confidence: "fallback",
+            title: "Codex waiting for approval",
+            prompt: "",
+            advisory: true,
+          },
+        } as Partial<PTYInfo>),
+      ]),
+    ).toEqual([
+      {
+        kind: "live",
+        key: "live:pty_01",
+        id: "pty_01",
+        title: "Codex waiting for approval",
+        subtitle: "sess_01 / pane_01",
+        detail: "file://localhost/repo/task / 80x24",
+        running: true,
+        status: "waiting",
+        statusTone: "waiting",
+        canDelete: false,
+        agentLabel: "Codex",
+        agentTitle: "Codex waiting for approval",
       },
     ]);
   });

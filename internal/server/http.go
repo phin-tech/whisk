@@ -697,18 +697,37 @@ func (s *HTTPServer) deletePTY(w http.ResponseWriter, r *http.Request) {
 
 func toProtocolPTYInfo(pty app.PTYInfo) protocol.PTYInfo {
 	return protocol.PTYInfo{
-		ID:             pty.ID,
-		WorkingDir:     pty.WorkingDir,
-		Cols:           pty.Cols,
-		Rows:           pty.Rows,
-		Running:        pty.Running,
-		Status:         string(pty.Status),
-		ExitCode:       pty.ExitCode,
-		SessionID:      pty.SessionID,
-		WindowID:       pty.WindowID,
-		PaneID:         pty.PaneID,
-		OriginWindowID: pty.OriginWindowID,
-		OriginPaneID:   pty.OriginPaneID,
+		ID:                       pty.ID,
+		WorkingDir:               pty.WorkingDir,
+		Cols:                     pty.Cols,
+		Rows:                     pty.Rows,
+		Running:                  pty.Running,
+		Status:                   string(pty.Status),
+		ExitCode:                 pty.ExitCode,
+		SessionID:                pty.SessionID,
+		WindowID:                 pty.WindowID,
+		PaneID:                   pty.PaneID,
+		OriginWindowID:           pty.OriginWindowID,
+		OriginPaneID:             pty.OriginPaneID,
+		Title:                    pty.Title,
+		TerminalWorkingDirectory: pty.TerminalWorkingDirectory,
+		AgentStatus:              toProtocolAgentStatus(pty.AgentStatus),
+	}
+}
+
+func toProtocolAgentStatus(status *app.AgentStatus) *protocol.AgentStatus {
+	if status == nil {
+		return nil
+	}
+	return &protocol.AgentStatus{
+		Agent:      string(status.Agent),
+		Label:      status.Label,
+		State:      string(status.State),
+		Source:     string(status.Source),
+		Confidence: string(status.Confidence),
+		Title:      status.Title,
+		Prompt:     status.Prompt,
+		Advisory:   status.Advisory,
 	}
 }
 
