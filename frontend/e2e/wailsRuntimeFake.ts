@@ -38,6 +38,8 @@ const seedLargeWorkBoard =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eLargeWorkBoard");
 const seedStaleRun =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eStaleRun");
+const seedCustomWorkflowAction =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eCustomWorkflowAction");
 const longPTYOutput = Array.from(
   { length: 90 },
   (_, index) => `scrollback line ${String(index).padStart(2, "0")}\n`,
@@ -165,22 +167,43 @@ function seedState() {
     },
     gates: [],
   };
+  const customWorkflowDefinition = {
+    id: "custom-action-e2e",
+    version: 1,
+    stages: ["backlog", "done"],
+    actions: [
+      { id: "escalate", from: ["backlog"], to: "done" },
+    ],
+    questions: {
+      enabled: false,
+      moveToBlocked: false,
+      setsRunState: "",
+      answerClearsAwaitingInputWhenNoOpenQuestionsRemain: false,
+    },
+    gates: [],
+  };
+  const activeWorkflowDefinition = seedCustomWorkflowAction ? customWorkflowDefinition : workflowDefinition;
   const workflow = {
     id: "default",
     templateId: "default",
-    definitionId: workflowDefinition.id,
-    definitionVersion: workflowDefinition.version,
-    definitionHash: "e2e-workflow",
-    name: "Plan Execute Review",
-    stages: [
-      { id: "backlog", name: "Backlog", kind: "backlog" },
-      { id: "planning", name: "Planning", kind: "planning" },
-      { id: "ready", name: "Ready", kind: "ready", provisionWorktree: true },
-      { id: "execution", name: "Execution", kind: "execution", provisionWorktree: true },
-      { id: "blocked", name: "Blocked", kind: "blocked" },
-      { id: "review", name: "Review", kind: "review" },
-      { id: "done", name: "Done", kind: "done" },
-    ],
+    definitionId: activeWorkflowDefinition.id,
+    definitionVersion: activeWorkflowDefinition.version,
+    definitionHash: seedCustomWorkflowAction ? "e2e-custom-action-workflow" : "e2e-workflow",
+    name: seedCustomWorkflowAction ? "Custom Action E2E" : "Plan Execute Review",
+    stages: seedCustomWorkflowAction
+      ? [
+          { id: "backlog", name: "Backlog", kind: "backlog" },
+          { id: "done", name: "Done", kind: "done" },
+        ]
+      : [
+          { id: "backlog", name: "Backlog", kind: "backlog" },
+          { id: "planning", name: "Planning", kind: "planning" },
+          { id: "ready", name: "Ready", kind: "ready", provisionWorktree: true },
+          { id: "execution", name: "Execution", kind: "execution", provisionWorktree: true },
+          { id: "blocked", name: "Blocked", kind: "blocked" },
+          { id: "review", name: "Review", kind: "review" },
+          { id: "done", name: "Done", kind: "done" },
+        ],
     transitionRules: [],
   };
   const project = {
@@ -259,6 +282,16 @@ function seedState() {
         sourcePath: "/tmp/whisk-e2e/lean-review.json",
         contentHash: "e2e-lean-workflow",
         definition: leanWorkflowDefinition,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: customWorkflowDefinition.id,
+        version: customWorkflowDefinition.version,
+        source: "file",
+        sourcePath: "/tmp/whisk-e2e/custom-action.json",
+        contentHash: "e2e-custom-action-workflow",
+        definition: customWorkflowDefinition,
         createdAt: now,
         updatedAt: now,
       },
@@ -441,8 +474,8 @@ function seedState() {
   function workItem(input: { id: string; number: number; title: string; stageId: string; runState: string }): WorkItem {
     return {
       projectId: "proj_01",
-      workflowId: workflowDefinition.id,
-      workflowVersion: 1,
+      workflowId: workflow.definitionId,
+      workflowVersion: workflow.definitionVersion,
       bodyMarkdown: `Seeded body for ${input.title}.`,
       worktree:
         input.stageId === "execution"
@@ -918,6 +951,25 @@ function dispatch(methodName: string, args: unknown[]) {
         item.id === req.id || item.id === req.workItemId ? { ...item, stageId: req.stageId } : item,
       );
       return clone(state.workItems.find((item) => item.id === req.id || item.id === req.workItemId));
+    }
+    case "RunWorkItemWorkflowAction": {
+      const req = args[0] as any;
+      const item = state.workItems.find((candidate) => candidate.id === req.workItemId);
+      if (!item) throw new Error("work item not found");
+      const record = workflowDefinitionForItem(item);
+      const action = record?.definition.actions.find((candidate: any) => candidate.id === req.actionId);
+      if (!action) throw new Error("workflow action not found");
+      const targetStage = action.to === "$previousStage" ? item.stageId : action.to;
+      state.workItems = state.workItems.map((candidate) =>
+        candidate.id === item.id
+          ? {
+              ...candidate,
+              stageId: targetStage,
+              runState: targetStage === "done" ? "completed" : candidate.runState,
+            }
+          : candidate,
+      );
+      return clone(state.workItems.find((candidate) => candidate.id === item.id));
     }
     case "StartPlanning": {
       const req = args[0] as any;

@@ -175,6 +175,12 @@
   }) => void;
   export let onAnswerQuestion: (questionId: string, answer: string) => void;
   export let onCompleteGate: (request: { id: string; status: string; overrideReason: string }) => void;
+  export let onRunWorkflowAction: (request: {
+    workItemId: string;
+    actionId: string;
+    runId?: string;
+    reason?: string;
+  }) => void;
   export let onApproveDone: (workItemId: string, reason: string) => void;
   export let onFocusPane: (paneId: string) => void;
   export let onPtyInput: (ptyId: string) => void;
@@ -261,6 +267,7 @@
     {onAskQuestion}
     {onAnswerQuestion}
     {onCompleteGate}
+    {onRunWorkflowAction}
     {onApproveDone}
   />
 {:else if activeSession}
