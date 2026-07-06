@@ -350,11 +350,14 @@ const (
 	WorkflowEventDraftPlanSubmitted      = workitem.WorkflowEventDraftPlanSubmitted
 	WorkflowEventExecutionCompleted      = workitem.WorkflowEventExecutionCompleted
 	WorkflowEventExecutionStarted        = workitem.WorkflowEventExecutionStarted
+	WorkflowEventGateCompleted           = workitem.WorkflowEventGateCompleted
 	WorkflowEventPlanApproved            = workitem.WorkflowEventPlanApproved
 	WorkflowEventPlanningStarted         = workitem.WorkflowEventPlanningStarted
 	WorkflowEventQuestionAnswered        = workitem.WorkflowEventQuestionAnswered
 	WorkflowEventQuestionAsked           = workitem.WorkflowEventQuestionAsked
 	WorkflowEventReviewFeedbackAdded     = workitem.WorkflowEventReviewFeedbackAdded
+	WorkflowEventRunCancelled            = workitem.WorkflowEventRunCancelled
+	WorkflowEventRunFailed               = workitem.WorkflowEventRunFailed
 	WorkflowEventUnblocked               = workitem.WorkflowEventUnblocked
 	WorkflowPlanExecuteReview            = workitem.WorkflowPlanExecuteReview
 )

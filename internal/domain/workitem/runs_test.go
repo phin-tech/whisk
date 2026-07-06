@@ -521,6 +521,131 @@ func TestGateCompletionBranchesAndApproveDoneBlocking(t *testing.T) {
 	}
 }
 
+func TestWorkflowAuditEventsCoverGateCompletionRunFailureAndCancellation(t *testing.T) {
+	t.Run("gate completion", func(t *testing.T) {
+		state := NewState()
+		now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+		mustProject(t, state, "proj_01", "One")
+		item := mustWorkItem(t, state, "wi_01", "proj_01")
+		run, err := state.StartRun(StartRun{
+			ID:               "run_01",
+			HistoryID:        "hist_run_01",
+			RunHistoryID:     "run_hist_01",
+			WorkItemID:       item.ID,
+			Preset:           RunPresetWriter,
+			PromptTemplateID: PromptTemplateImplement,
+			Now:              now,
+		})
+		if err != nil {
+			t.Fatalf("start run: %v", err)
+		}
+		if _, err := state.CompleteExecution(CompleteExecution{
+			RunID:   run.ID,
+			Message: "ready",
+			Actor:   "agent",
+			Now:     now.Add(time.Minute),
+		}); err != nil {
+			t.Fatalf("complete execution: %v", err)
+		}
+		gates := state.ListGateReports(item.ID)
+		if len(gates) != 1 {
+			t.Fatalf("gates = %#v", gates)
+		}
+		before := state.ListWorkflowEvents(item.ID)
+
+		if _, err := state.CompleteGate(CompleteGate{
+			ID:     gates[0].ID,
+			Status: GateStatusPassed,
+			Actor:  "human",
+			Now:    now.Add(2 * time.Minute),
+		}); err != nil {
+			t.Fatalf("complete gate: %v", err)
+		}
+
+		events := state.ListWorkflowEvents(item.ID)
+		if len(events) != len(before)+1 {
+			t.Fatalf("events = %#v, before = %#v", events, before)
+		}
+		got := events[len(events)-1]
+		if got.Type != "gate_completed" || got.RunID != run.ID || got.Actor != "human" || got.Message != GateStatusPassed {
+			t.Fatalf("gate event = %#v", got)
+		}
+	})
+
+	t.Run("run failure", func(t *testing.T) {
+		state := NewState()
+		now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+		mustProject(t, state, "proj_01", "One")
+		item := mustWorkItem(t, state, "wi_01", "proj_01")
+		run, err := state.StartRun(StartRun{
+			ID:           "run_01",
+			HistoryID:    "hist_run_01",
+			RunHistoryID: "run_hist_01",
+			WorkItemID:   item.ID,
+			Now:          now,
+		})
+		if err != nil {
+			t.Fatalf("start run: %v", err)
+		}
+		before := state.ListWorkflowEvents(item.ID)
+
+		if _, err := state.FailRun(FailRun{
+			ID:           run.ID,
+			RunHistoryID: "run_hist_failed_01",
+			Message:      "launch failed",
+			Actor:        "agent",
+			Now:          now.Add(time.Minute),
+		}); err != nil {
+			t.Fatalf("fail run: %v", err)
+		}
+
+		events := state.ListWorkflowEvents(item.ID)
+		if len(events) != len(before)+1 {
+			t.Fatalf("events = %#v, before = %#v", events, before)
+		}
+		got := events[len(events)-1]
+		if got.Type != "run_failed" || got.RunID != run.ID || got.Actor != "agent" || got.Message != "launch failed" {
+			t.Fatalf("failure event = %#v", got)
+		}
+	})
+
+	t.Run("run cancellation", func(t *testing.T) {
+		state := NewState()
+		now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+		mustProject(t, state, "proj_01", "One")
+		item := mustWorkItem(t, state, "wi_01", "proj_01")
+		run, err := state.StartRun(StartRun{
+			ID:           "run_01",
+			HistoryID:    "hist_run_01",
+			RunHistoryID: "run_hist_01",
+			WorkItemID:   item.ID,
+			Now:          now,
+		})
+		if err != nil {
+			t.Fatalf("start run: %v", err)
+		}
+		before := state.ListWorkflowEvents(item.ID)
+
+		if _, err := state.CancelRun(CancelRun{
+			ID:           run.ID,
+			RunHistoryID: "run_hist_cancel_01",
+			Actor:        "agent",
+			Now:          now.Add(time.Minute),
+		}); err != nil {
+			t.Fatalf("cancel run: %v", err)
+		}
+
+		events := state.ListWorkflowEvents(item.ID)
+		if len(events) != len(before)+1 {
+			t.Fatalf("events = %#v, before = %#v", events, before)
+		}
+		got := events[len(events)-1]
+		if got.Type != "run_cancelled" || got.RunID != run.ID || got.Actor != "agent" || got.Message != "cancelled work item run" {
+			t.Fatalf("cancellation event = %#v", got)
+		}
+	})
+}
+
 func TestReportStatusStoresSessionScopedEventsWithoutMutatingWorkItems(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)

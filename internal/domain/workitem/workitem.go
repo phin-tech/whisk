@@ -96,6 +96,9 @@ const (
 	WorkflowEventUnblocked           = "unblocked"
 	WorkflowEventExecutionCompleted  = "execution_completed"
 	WorkflowEventReviewFeedbackAdded = "review_feedback_added"
+	WorkflowEventGateCompleted       = "gate_completed"
+	WorkflowEventRunFailed           = "run_failed"
+	WorkflowEventRunCancelled        = "run_cancelled"
 	WorkflowEventDoneApproved        = "done_approved"
 
 	HistoryCreated          = "created"
@@ -2731,6 +2734,7 @@ func (s *State) CompleteGate(req CompleteGate) (GateReport, error) {
 	gate.OverrideReason = strings.TrimSpace(req.OverrideReason)
 	gate.UpdatedAt = req.Now
 	s.gateReports[gate.ID] = gate
+	s.recordWorkflowEvent(WorkflowEventGateCompleted, gate.ProjectID, gate.WorkItemID, gate.RunID, req.Actor, gate.Status, req.Now)
 	return cloneGateReport(gate), nil
 }
 
@@ -2841,6 +2845,7 @@ func (s *State) CancelRun(req CancelRun) (WorkItemRun, error) {
 	item.UpdatedAt = req.Now
 	s.items[item.ID] = item
 	s.runs[run.ID] = run
+	s.recordWorkflowEvent(WorkflowEventRunCancelled, item.ProjectID, item.ID, run.ID, req.Actor, "cancelled work item run", req.Now)
 	return cloneRun(run), nil
 }
 
@@ -2948,6 +2953,7 @@ func (s *State) FailRun(req FailRun) (WorkItemRun, error) {
 	item.UpdatedAt = req.Now
 	s.items[item.ID] = item
 	s.runs[run.ID] = run
+	s.recordWorkflowEvent(WorkflowEventRunFailed, item.ProjectID, item.ID, run.ID, req.Actor, message, req.Now)
 	return cloneRun(run), nil
 }
 
