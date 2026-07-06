@@ -1,6 +1,7 @@
-export type TerminalStreamState<Stream = unknown> = {
+export type TerminalStreamState<Stream = unknown, Snapshot = unknown> = {
   outputChunks: Record<string, Uint8Array[]>;
   outputChunkStartOffsets: Record<string, number[]>;
+  terminalSnapshots: Record<string, Snapshot>;
   offsets: Record<string, number>;
   bottomJumpRevisions: Record<string, number>;
   ptyStreams: Record<string, Stream>;
@@ -19,11 +20,11 @@ export type TerminalStreamPtyReadModel = {
   id?: string | null;
 };
 
-export type TerminalStreamCleanup<Stream = unknown> = {
+export type TerminalStreamCleanup<Stream = unknown, Snapshot = unknown> = {
   removedPtyIds: string[];
   streamsToClose: Stream[];
   reconnectTimersToClear: number[];
-  nextState: TerminalStreamState<Stream>;
+  nextState: TerminalStreamState<Stream, Snapshot>;
 };
 
 export function terminalStreamHasLivePty(ptyId: string, livePtyIds: Iterable<string>) {
@@ -31,10 +32,10 @@ export function terminalStreamHasLivePty(ptyId: string, livePtyIds: Iterable<str
   return Boolean(normalized) && normalizedPtyIdSet(livePtyIds).has(normalized);
 }
 
-export function terminalStreamCleanupForLivePtys<Stream>(
-  state: TerminalStreamState<Stream>,
+export function terminalStreamCleanupForLivePtys<Stream, Snapshot>(
+  state: TerminalStreamState<Stream, Snapshot>,
   livePtyIds: Iterable<string>,
-): TerminalStreamCleanup<Stream> {
+): TerminalStreamCleanup<Stream, Snapshot> {
   const live = normalizedPtyIdSet(livePtyIds);
   const removedPtyIds = terminalStreamRemovedPtyIds(state, live);
   return {
@@ -51,14 +52,15 @@ export function terminalStreamCleanupForLivePtys<Stream>(
   };
 }
 
-export function retainPtyState<Stream>(
-  state: TerminalStreamState<Stream>,
+export function retainPtyState<Stream, Snapshot>(
+  state: TerminalStreamState<Stream, Snapshot>,
   livePtyIds: Iterable<string>,
-): TerminalStreamState<Stream> {
+): TerminalStreamState<Stream, Snapshot> {
   const live = normalizedPtyIdSet(livePtyIds);
   return {
     outputChunks: retainRecord(state.outputChunks, live),
     outputChunkStartOffsets: retainRecord(state.outputChunkStartOffsets, live),
+    terminalSnapshots: retainRecord(state.terminalSnapshots, live),
     offsets: retainRecord(state.offsets, live),
     bottomJumpRevisions: retainRecord(state.bottomJumpRevisions, live),
     ptyStreams: retainRecord(state.ptyStreams, live),
@@ -70,10 +72,10 @@ export function retainPtyState<Stream>(
   };
 }
 
-export function dropPtyState<Stream>(
-  state: TerminalStreamState<Stream>,
+export function dropPtyState<Stream, Snapshot>(
+  state: TerminalStreamState<Stream, Snapshot>,
   ptyId: string,
-): TerminalStreamState<Stream> {
+): TerminalStreamState<Stream, Snapshot> {
   const dropped = normalizedPtyId(ptyId);
   return retainPtyState(
     state,
@@ -81,27 +83,28 @@ export function dropPtyState<Stream>(
   );
 }
 
-export function retainPtyStateFromReadModel<Stream>(
-  state: TerminalStreamState<Stream>,
+export function retainPtyStateFromReadModel<Stream, Snapshot>(
+  state: TerminalStreamState<Stream, Snapshot>,
   readModel: TerminalStreamReadModel | null | undefined,
-): TerminalStreamState<Stream> {
+): TerminalStreamState<Stream, Snapshot> {
   const livePtyIds = livePtyIdsFromReadModel(readModel);
   if (livePtyIds === null) return state;
   return retainPtyState(state, livePtyIds);
 }
 
-export function terminalStreamRemovedPtyIds<Stream>(
-  state: TerminalStreamState<Stream>,
+export function terminalStreamRemovedPtyIds<Stream, Snapshot>(
+  state: TerminalStreamState<Stream, Snapshot>,
   livePtyIds: Iterable<string>,
 ) {
   const live = normalizedPtyIdSet(livePtyIds);
   return terminalStreamPtyIds(state).filter((ptyId) => !live.has(ptyId));
 }
 
-export function terminalStreamPtyIds<Stream>(state: TerminalStreamState<Stream>) {
+export function terminalStreamPtyIds<Stream, Snapshot>(state: TerminalStreamState<Stream, Snapshot>) {
   const ids = new Set<string>();
   addRecordKeys(ids, state.outputChunks);
   addRecordKeys(ids, state.outputChunkStartOffsets);
+  addRecordKeys(ids, state.terminalSnapshots);
   addRecordKeys(ids, state.offsets);
   addRecordKeys(ids, state.bottomJumpRevisions);
   addRecordKeys(ids, state.ptyStreams);
@@ -113,10 +116,11 @@ export function terminalStreamPtyIds<Stream>(state: TerminalStreamState<Stream>)
   return [...ids].sort();
 }
 
-export function terminalStreamSizes<Stream>(state: TerminalStreamState<Stream>) {
+export function terminalStreamSizes<Stream, Snapshot>(state: TerminalStreamState<Stream, Snapshot>) {
   return {
     outputChunks: Object.keys(state.outputChunks).length,
     outputChunkStartOffsets: Object.keys(state.outputChunkStartOffsets).length,
+    terminalSnapshots: Object.keys(state.terminalSnapshots).length,
     offsets: Object.keys(state.offsets).length,
     bottomJumpRevisions: Object.keys(state.bottomJumpRevisions).length,
     ptyStreams: Object.keys(state.ptyStreams).length,

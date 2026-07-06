@@ -9,11 +9,12 @@
   import "@xterm/xterm/css/xterm.css";
   import type { Pane } from "../bindings/github.com/phin-tech/whisk/internal/domain/session/models";
   import { ResizePTY } from "../bindings/github.com/phin-tech/whisk/internal/wailsapp/service";
-  import { terminalInputRefreshDelays, terminalInputShouldRefreshOutput } from "./ptyStream";
+  import { terminalInputRefreshDelays, terminalInputShouldRefreshOutput, type TerminalSnapshot } from "./ptyStream";
   import Button from "./ui/Button.svelte";
   import IconButton from "./ui/IconButton.svelte";
 
   export let pane: Pane;
+  export let terminalSnapshot: TerminalSnapshot | null = null;
   export let outputChunks: Uint8Array[] = [];
   export let chunkStartOffsets: number[] = [];
   export let jumpRevision = 0;
@@ -38,6 +39,7 @@
   let copiedPtyId = "";
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
   let renderedPtyId = "";
+  let appliedSnapshotKey = "";
   let appliedJumpRevision = 0;
   let appliedBottomRevision = 0;
   let scrollToReplayStart = false;
@@ -47,6 +49,8 @@
   type TerminalOperation =
     | { kind: "write"; bytes: Uint8Array }
     | { kind: "scroll-top" };
+
+  const encoder = new TextEncoder();
 
   function cssToken(name: string, fallback: string) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -106,6 +110,7 @@
     terminal.reset();
     writtenChunks = 0;
     renderedPtyId = nextPtyId;
+    appliedSnapshotKey = "";
   }
 
   function enqueueTerminalOperation(operation: TerminalOperation) {
@@ -137,8 +142,30 @@
     enqueueTerminalOperation({ kind: "write", bytes });
   }
 
+  function enqueueWriteText(text: string | undefined) {
+    if (!text) return;
+    enqueueWrite(encoder.encode(text));
+  }
+
   function writeOutputChunk(chunk: Uint8Array, _chunkStartOffset: number | undefined) {
     enqueueWrite(chunk);
+  }
+
+  function snapshotKey(nextPtyId: string, snapshot: TerminalSnapshot | null) {
+    if (!snapshot) return "";
+    return `${nextPtyId}:${snapshot.offset}:${snapshot.cols}:${snapshot.rows}:${snapshot.truncated ? 1 : 0}`;
+  }
+
+  function applyTerminalSnapshot(nextPtyId: string, snapshot: TerminalSnapshot | null) {
+    if (!terminal || !snapshot) return;
+    const key = snapshotKey(nextPtyId, snapshot);
+    if (renderedPtyId === nextPtyId && appliedSnapshotKey === key) return;
+    resetRenderedTerminal(nextPtyId);
+    appliedSnapshotKey = key;
+    enqueueWriteText(snapshot.rehydrateBeforeViewport);
+    enqueueWriteText(snapshot.scrollbackAnsi);
+    enqueueWriteText(snapshot.viewportAnsi);
+    enqueueWriteText(snapshot.rehydrateSequences);
   }
 
   function replayOutputChunks(nextPtyId: string, chunks: Uint8Array[], starts: number[]) {
@@ -160,8 +187,15 @@
     resetRenderedTerminal(nextPtyId);
   }
 
-  function replayAndMaybeScroll(nextPtyId: string, chunks: Uint8Array[], starts: number[], nextJumpRevision: number) {
+  function replayAndMaybeScroll(
+    nextPtyId: string,
+    snapshot: TerminalSnapshot | null,
+    chunks: Uint8Array[],
+    starts: number[],
+    nextJumpRevision: number,
+  ) {
     applyJumpRevision(nextPtyId, nextJumpRevision);
+    applyTerminalSnapshot(nextPtyId, snapshot);
     replayOutputChunks(nextPtyId, chunks, starts);
     if (scrollToReplayStart && chunks.length > 0) {
       enqueueTerminalOperation({ kind: "scroll-top" });
@@ -204,7 +238,7 @@
         })
         .catch(console.error);
     });
-    replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, jumpRevision);
+    replayAndMaybeScroll(pane.currentPtyId ?? "", terminalSnapshot, outputChunks, chunkStartOffsets, jumpRevision);
     return () => {
       resizeObserver.disconnect();
       pendingTerminalOperations = [];
@@ -212,7 +246,7 @@
     };
   });
 
-  $: if (terminal) replayAndMaybeScroll(pane.currentPtyId ?? "", outputChunks, chunkStartOffsets, jumpRevision);
+  $: if (terminal) replayAndMaybeScroll(pane.currentPtyId ?? "", terminalSnapshot, outputChunks, chunkStartOffsets, jumpRevision);
   $: if (terminal) applyBottomRevision(bottomRevision);
   $: if (focused && terminal) terminal.focus();
 </script>

@@ -70,6 +70,17 @@ describe("App notification refresh", () => {
     expect(source).toContain("reconnectBackoffDelayMs");
   });
 
+  it("requests and applies daemon terminal snapshots before output deltas", () => {
+    expect(source).toContain("let terminalSnapshots");
+    expect(source).toContain("function applyPTYTerminalSnapshot");
+    expect(source).toMatch(/const snapshot = await Output\(\{[\s\S]*snapshot: true/);
+    expect(source).toContain("ptySnapshotFromTextFrame(frame)");
+    expect(source).toContain("outputChunks = {");
+    expect(source).toContain("[ptyId]: []");
+    expect(source).toContain("terminalSnapshots = { ...terminalSnapshots, [ptyId]: snapshot }");
+    expect(source).toContain("ptyAttachWebSocketURL(address, ptyId, offsets[ptyId] ?? 0, daemonControlToken, true, true)");
+  });
+
   it("guards stale PTY async continuations before recreating stream state", () => {
     expect(source).toContain("terminalStreamHasLivePty");
     expect(source).toContain("function canRefreshPTYOutput(ptyId: string)");

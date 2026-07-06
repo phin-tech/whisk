@@ -5,8 +5,26 @@ export type PTYStreamFrame = {
   offset?: number;
   output?: string;
   outputBase64?: string;
+  terminalSnapshot?: TerminalSnapshot | null;
   code?: number | null;
   message?: string;
+};
+
+export type TerminalSnapshot = {
+  offset: number;
+  cols: number;
+  rows: number;
+  cursor?: { x: number; y: number };
+  title?: string;
+  workingDirectory?: string;
+  scrollbackAnsi: string;
+  rehydrateBeforeViewport?: string;
+  viewportAnsi: string;
+  rehydrateSequences: string;
+  modes?: unknown;
+  mouseTrackingModes?: string[];
+  mouseEncodingModes?: string[];
+  truncated?: boolean;
 };
 
 export type PTYOutputChunk = {
@@ -19,6 +37,11 @@ export type PTYStreamOutputChunk = PTYOutputChunk & {
   ptyId: string;
 };
 
+export type PTYStreamSnapshot = {
+  ptyId: string;
+  snapshot: TerminalSnapshot;
+};
+
 export const PTY_BINARY_OUTPUT_FRAME_KIND = 0x01;
 export const PTY_BINARY_OUTPUT_FRAME_HEADER_BYTES = 9;
 
@@ -28,11 +51,13 @@ export function ptyAttachWebSocketURL(
   fromOffset: number,
   controlToken = "",
   binaryOutput = true,
+  snapshot = false,
 ) {
   const url = new URL(`/v1/ptys/${encodeURIComponent(ptyId)}/attach`, daemonAddress);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.searchParams.set("from", String(Math.max(0, fromOffset)));
   if (binaryOutput) url.searchParams.set("binary", "1");
+  if (snapshot) url.searchParams.set("snapshot", "1");
   if (controlToken) url.searchParams.set("access_token", controlToken);
   return url.toString();
 }
@@ -56,6 +81,8 @@ export function writePTYInputOverSocket(
 }
 
 export function nextPTYStreamOffset(currentOffset: number, frame: PTYStreamFrame) {
+  const snapshot = ptySnapshotFromTextFrame(frame);
+  if (snapshot) return Math.max(currentOffset, snapshot.snapshot.offset);
   const chunk = ptyOutputChunkFromTextFrame(frame);
   const nextChunk = chunk && ptyOutputChunkAfterOffset(chunk, currentOffset);
   return nextChunk?.nextOffset ?? currentOffset;
@@ -133,6 +160,16 @@ export function ptyOutputChunkFromTextFrame(frame: PTYStreamFrame): PTYStreamOut
     startOffset,
     nextOffset: startOffset + bytes.length,
     bytes,
+  };
+}
+
+export function ptySnapshotFromTextFrame(frame: PTYStreamFrame): PTYStreamSnapshot | null {
+  if (frame.type !== "snapshot" || !frame.ptyId || !frame.terminalSnapshot) return null;
+  const offset = frame.terminalSnapshot.offset;
+  if (typeof offset !== "number" || !Number.isFinite(offset)) return null;
+  return {
+    ptyId: frame.ptyId,
+    snapshot: frame.terminalSnapshot,
   };
 }
 
