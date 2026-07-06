@@ -1067,7 +1067,7 @@ func TestHTTPClientEnsureCompatibleReturnsTypedError(t *testing.T) {
 	if !errors.As(err, &compatibilityErr) {
 		t.Fatalf("expected CompatibilityError, got %T", err)
 	}
-	for _, want := range []string{httpServer.URL, "whisk daemon restart"} {
+	for _, want := range []string{httpServer.URL, "whisk daemon start"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error %q missing %q", err.Error(), want)
 		}

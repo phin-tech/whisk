@@ -78,7 +78,7 @@ type CompatibilityError struct {
 
 func (e *CompatibilityError) Error() string {
 	return fmt.Sprintf(
-		"daemon protocol %s is not supported by this app (client protocol %d; supported daemon protocols: %s; daemon supports previous client protocols: %s). Upgrade Whisk, run `whisk daemon restart`, or use a matching CLI/app build.",
+		"daemon protocol %s is not supported by this app (client protocol %d; supported daemon protocols: %s; daemon supports previous client protocols: %s). Upgrade Whisk, run `whisk daemon start`, or use a matching CLI/app build.",
 		protocolVersionLabel(e.Decision.DaemonProtocolVersion),
 		e.Decision.ClientProtocolVersion,
 		formatProtocolVersions(e.Decision.SupportedDaemonProtocolVersions),

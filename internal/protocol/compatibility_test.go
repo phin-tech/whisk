@@ -128,7 +128,7 @@ func TestEnsureCompatibleReturnsTypedActionableError(t *testing.T) {
 		"supported daemon protocols",
 		"daemon supports previous client protocols",
 		"Upgrade Whisk",
-		"whisk daemon restart",
+		"whisk daemon start",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error %q missing %q", err.Error(), want)
