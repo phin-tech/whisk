@@ -103,6 +103,7 @@ export {
     RestartPanePTYRequest,
     RestartedPanePTY,
     RunPluginProjectAttachmentTemplateRequest,
+    RunWorkItemWorkflowActionRequest,
     RuntimeEvent,
     SetAgentHookLogSettingsRequest,
     SetPaneWorkingDirRequest,

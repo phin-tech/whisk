@@ -2869,6 +2869,28 @@ export class RunPluginProjectAttachmentTemplateRequest {
     }
 }
 
+export class RunWorkItemWorkflowActionRequest {
+    "workItemId"?: string;
+    "actionId"?: string;
+    "runId"?: string;
+    "reason"?: string;
+    "actor"?: string;
+
+    /** Creates a new RunWorkItemWorkflowActionRequest instance. */
+    constructor($$source: Partial<RunWorkItemWorkflowActionRequest> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RunWorkItemWorkflowActionRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RunWorkItemWorkflowActionRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RunWorkItemWorkflowActionRequest($$parsedSource as Partial<RunWorkItemWorkflowActionRequest>);
+    }
+}
+
 export class RuntimeEvent {
     "type": string;
     "seq": number;

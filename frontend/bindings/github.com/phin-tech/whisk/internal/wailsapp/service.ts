@@ -599,6 +599,12 @@ export function RunPluginProjectAttachmentTemplate(pluginID: string, templateID:
     });
 }
 
+export function RunWorkItemWorkflowAction(req: protocol$0.RunWorkItemWorkflowActionRequest): $CancellablePromise<protocol$0.WorkItem> {
+    return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.RunWorkItemWorkflowAction", req).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
 export function SaveAppSettings(settings: appsettings$0.Settings): $CancellablePromise<appsettings$0.Settings> {
     return $Call.ByName("github.com/phin-tech/whisk/internal/wailsapp.Service.SaveAppSettings", settings).then(($result: any) => {
         return $$createType64($result);

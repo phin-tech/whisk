@@ -555,6 +555,15 @@ type MoveWorkItem struct {
 	Now       time.Time
 }
 
+type ApplyWorkflowAction struct {
+	WorkItemID string
+	ActionID   string
+	RunID      string
+	Reason     string
+	Actor      string
+	Now        time.Time
+}
+
 type BindWorktree struct {
 	ID           string
 	HistoryID    string
@@ -1984,6 +1993,72 @@ func (s *State) MoveWorkItem(req MoveWorkItem) (WorkItem, error) {
 		return WorkItem{}, err
 	}
 	s.items[item.ID] = item
+	return cloneWorkItem(item), nil
+}
+
+func (s *State) ApplyWorkflowAction(req ApplyWorkflowAction) (WorkItem, error) {
+	item, ok := s.items[req.WorkItemID]
+	if !ok {
+		return WorkItem{}, fmt.Errorf("work item %s not found", req.WorkItemID)
+	}
+	action, err := s.workflowActionForItem(item, req.ActionID)
+	if err != nil {
+		return WorkItem{}, err
+	}
+	if !workflowActionCanStartFrom(action, item.StageID) {
+		return WorkItem{}, fmt.Errorf("workflow action %s cannot start from %s", action.ID, item.StageID)
+	}
+	availability := s.workflowActionAvailability(item, action)
+	if !availability.Enabled {
+		return WorkItem{}, fmt.Errorf("%s", availability.Reason)
+	}
+	if input := workflowActionInputKind(action); input != WorkflowActionInputNone {
+		return WorkItem{}, fmt.Errorf("workflow action %s requires %s input", action.ID, input)
+	}
+	project := s.projects[item.ProjectID]
+	target := workflowActionTargetStage(action, item)
+	if target == "" {
+		return WorkItem{}, fmt.Errorf("workflow action %s target stage required", action.ID)
+	}
+	stage, ok := project.stage(target)
+	if !ok {
+		return WorkItem{}, fmt.Errorf("stage %s not found", target)
+	}
+	if stage.ProvisionWorktree && item.Worktree == nil {
+		return WorkItem{}, fmt.Errorf("stage %s requires worktree", target)
+	}
+	if action.SideStage && item.StageID != target {
+		item.PreviousStageID = item.StageID
+	}
+	item.StageID = target
+	if action.To == "$previousStage" || stage.Kind != StageKindBlocked {
+		item.PreviousStageID = ""
+	}
+	if stage.Kind == StageKindBlocked {
+		item.RunState = RunStateAwaitingInput
+	}
+	item.UpdatedAt = req.Now
+	if req.RunID != "" {
+		run, ok := s.runs[req.RunID]
+		if !ok {
+			return WorkItem{}, fmt.Errorf("work item run %s not found", req.RunID)
+		}
+		if run.WorkItemID != item.ID {
+			return WorkItem{}, fmt.Errorf("work item run %s does not belong to work item %s", req.RunID, item.ID)
+		}
+		if stage.Kind == StageKindBlocked {
+			run.Status = RunStateAwaitingInput
+			run.UpdatedAt = req.Now
+			s.runs[run.ID] = run
+		}
+	}
+	s.items[item.ID] = item
+	switch action.ID {
+	case WorkflowActionReportBlocked:
+		s.recordWorkflowEvent(WorkflowEventBlocked, item.ProjectID, item.ID, req.RunID, req.Actor, req.Reason, req.Now)
+	case WorkflowActionUnblock:
+		s.recordWorkflowEvent(WorkflowEventUnblocked, item.ProjectID, item.ID, "", req.Actor, "", req.Now)
+	}
 	return cloneWorkItem(item), nil
 }
 

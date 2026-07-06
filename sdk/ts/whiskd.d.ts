@@ -1457,6 +1457,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/work-items/{workItemID}/actions/{actionID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["runWorkItemWorkflowAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/work-items/{workItemID}/approve-done": {
         parameters: {
             query?: never;
@@ -2846,6 +2862,13 @@ export interface components {
             values?: {
                 [key: string]: string;
             };
+        };
+        RunWorkItemWorkflowActionRequest: {
+            actionId?: string;
+            actor?: string;
+            reason?: string;
+            runId?: string;
+            workItemId?: string;
         };
         RuntimeEvent: {
             /** Format: int64 */
@@ -6563,6 +6586,42 @@ export interface operations {
         responses: {
             /** @description success */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            /** @description error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    runWorkItemWorkflowAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemID: string;
+                actionID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunWorkItemWorkflowActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

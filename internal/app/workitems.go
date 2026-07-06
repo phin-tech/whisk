@@ -160,6 +160,14 @@ type MoveWorkItemRequest struct {
 	Actor   string
 }
 
+type RunWorkItemWorkflowActionRequest struct {
+	WorkItemID string
+	ActionID   string
+	RunID      string
+	Reason     string
+	Actor      string
+}
+
 type AddWorkItemLinkRequest struct {
 	SourceWorkItemID string
 	TargetWorkItemID string
@@ -773,6 +781,25 @@ func (r *Runtime) MoveWorkItem(ctx context.Context, req MoveWorkItemRequest) (wo
 		StageID:   req.StageID,
 		Actor:     req.Actor,
 		Now:       time.Now().UTC(),
+	})
+	if err != nil {
+		return workitem.WorkItem{}, err
+	}
+	if err := r.persistWorkItems(ctx); err != nil {
+		return workitem.WorkItem{}, err
+	}
+	r.publish(ctx, RuntimeEvent{Type: EventWorkItemsChanged})
+	return item, nil
+}
+
+func (r *Runtime) RunWorkItemWorkflowAction(ctx context.Context, req RunWorkItemWorkflowActionRequest) (workitem.WorkItem, error) {
+	item, err := r.workItems.ApplyWorkflowAction(workitem.ApplyWorkflowAction{
+		WorkItemID: req.WorkItemID,
+		ActionID:   req.ActionID,
+		RunID:      req.RunID,
+		Reason:     req.Reason,
+		Actor:      req.Actor,
+		Now:        time.Now().UTC(),
 	})
 	if err != nil {
 		return workitem.WorkItem{}, err

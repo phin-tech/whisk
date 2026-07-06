@@ -859,6 +859,10 @@ func (s *Service) ListWorkItemWorkflowActions(ctx context.Context, workItemID st
 	return s.client.ListWorkItemWorkflowActions(ctx, workItemID)
 }
 
+func (s *Service) RunWorkItemWorkflowAction(ctx context.Context, req protocol.RunWorkItemWorkflowActionRequest) (protocol.WorkItem, error) {
+	return s.client.RunWorkItemWorkflowAction(ctx, req)
+}
+
 func (s *Service) AddWorkItemLink(ctx context.Context, req protocol.AddWorkItemLinkRequest) (protocol.WorkItemLink, error) {
 	return s.client.AddWorkItemLink(ctx, req)
 }

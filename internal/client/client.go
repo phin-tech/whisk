@@ -99,6 +99,7 @@ type RuntimeClient interface {
 	UpdateWorkItem(ctx context.Context, req protocol.UpdateWorkItemRequest) (protocol.WorkItem, error)
 	MoveWorkItem(ctx context.Context, req protocol.MoveWorkItemRequest) (protocol.WorkItem, error)
 	ListWorkItemWorkflowActions(ctx context.Context, workItemID string) ([]protocol.WorkflowActionAvailability, error)
+	RunWorkItemWorkflowAction(ctx context.Context, req protocol.RunWorkItemWorkflowActionRequest) (protocol.WorkItem, error)
 	AddWorkItemLink(ctx context.Context, req protocol.AddWorkItemLinkRequest) (protocol.WorkItemLink, error)
 	ListWorkItemLinks(ctx context.Context, workItemID string) ([]protocol.WorkItemLink, error)
 	ReadyWork(ctx context.Context, req protocol.ReadyWorkRequest) (protocol.ReadyWorkExplanation, error)
