@@ -690,6 +690,53 @@ func TestMoveWorkItemAllowsExplicitWorkflowTransition(t *testing.T) {
 	}
 }
 
+func TestMoveWorkItemRejectsAmbiguousWorkflowTransition(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	definition := WorkflowDefinition{
+		ID:      "ambiguous",
+		Version: 1,
+		Stages:  []string{StageBacklog, StageDone},
+		Actions: []WorkflowActionDefinition{
+			{ID: "archive", From: []string{StageBacklog}, To: StageDone},
+			{ID: "ship", From: []string{StageBacklog}, To: StageDone},
+		},
+	}
+	if _, err := state.ImportWorkflowDefinition(ImportWorkflowDefinition{
+		Definition: definition,
+		Source:     "test",
+		Now:        now,
+	}); err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project := mustProject(t, state, "proj_ambiguous", "Ambiguous")
+	if _, err := state.SetProjectWorkflowDefinition(SetProjectWorkflowDefinition{
+		ProjectID: project.ID,
+		ID:        definition.ID,
+		Version:   definition.Version,
+		Now:       now,
+	}); err != nil {
+		t.Fatalf("set project workflow: %v", err)
+	}
+	item := mustWorkItem(t, state, "wi_ambiguous", project.ID)
+
+	if _, err := state.MoveWorkItem(MoveWorkItem{
+		ID:        item.ID,
+		HistoryID: "hist_move_ambiguous",
+		StageID:   StageDone,
+		Actor:     "human",
+		Now:       now.Add(time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "ambiguous workflow action from backlog to done") ||
+		!strings.Contains(err.Error(), "archive") ||
+		!strings.Contains(err.Error(), "ship") {
+		t.Fatalf("expected ambiguous transition error naming candidates, got %v", err)
+	}
+	stored, ok := state.GetWorkItem(item.ID)
+	if !ok || stored.StageID != StageBacklog {
+		t.Fatalf("stored after ambiguous move = %#v, ok = %v", stored, ok)
+	}
+}
+
 func TestWorkflowDefinitionValidationReportListsMultipleErrors(t *testing.T) {
 	definition := DefaultWorkflowDefinition()
 	definition.ID = ""
