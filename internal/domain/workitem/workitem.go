@@ -2677,6 +2677,19 @@ func (s *State) SubmitReviewFeedback(req SubmitReviewFeedback) (Artifact, error)
 		CreatedAt:  req.Now,
 		UpdatedAt:  req.Now,
 	}
+	var run WorkItemRun
+	runOK := false
+	if artifact.RunID != "" {
+		var ok bool
+		run, ok = s.runs[artifact.RunID]
+		if !ok {
+			return Artifact{}, fmt.Errorf("work item run %s not found", artifact.RunID)
+		}
+		if run.WorkItemID != item.ID {
+			return Artifact{}, fmt.Errorf("work item run %s does not belong to work item %s", artifact.RunID, item.ID)
+		}
+		runOK = true
+	}
 	if artifact.ID == "" {
 		return Artifact{}, fmt.Errorf("artifact id required")
 	}
@@ -2690,8 +2703,7 @@ func (s *State) SubmitReviewFeedback(req SubmitReviewFeedback) (Artifact, error)
 	item.RunState = RunStateRunning
 	item.UpdatedAt = req.Now
 	s.items[item.ID] = item
-	if artifact.RunID != "" {
-		run := s.runs[artifact.RunID]
+	if runOK {
 		run.Status = RunStateRunning
 		run.UpdatedAt = req.Now
 		s.runs[run.ID] = run
