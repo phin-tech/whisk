@@ -140,29 +140,23 @@ func BuildLaunch(req LaunchRequest) (Launch, error) {
 		return Launch{}, err
 	}
 	args := append([]string(nil), profile.Args...)
+	env := mergeEnv(profile.Env, req.Env)
 	switch profile.Provider {
 	case ProviderClaude:
 		if req.SystemPrompt != "" {
 			args = append(args, "--append-system-prompt", req.SystemPrompt)
 		}
-		// Pass the prompt as a positional arg so Claude Code auto-runs the first
-		// turn on launch — same "just go" behavior as --print, but it stays in the
-		// interactive session instead of printing and exiting. No typing into the
-		// TUI means no readiness/paste/Enter races to fight.
-		if req.Prompt != "" {
-			args = append(args, req.Prompt)
-		}
 	case ProviderCodex:
 		if req.SystemPrompt != "" {
 			args = append(args, "-c", "instructions="+req.SystemPrompt)
 		}
-		if req.Prompt != "" {
-			args = append(args, req.Prompt)
-		}
 	}
-	stdin := req.Prompt
-	if profile.Provider == ProviderCodex || profile.Provider == ProviderClaude {
-		stdin = ""
+	stdin := ""
+	if req.Prompt != "" {
+		args, env, stdin, err = applyPromptInjection(profile, args, env, req.Prompt)
+		if err != nil {
+			return Launch{}, err
+		}
 	}
 	return Launch{
 		ProfileID:  profile.ID,
@@ -170,9 +164,48 @@ func BuildLaunch(req LaunchRequest) (Launch, error) {
 		Command:    profile.Command,
 		Args:       args,
 		WorkingDir: req.WorkingDir,
-		Env:        mergeEnv(profile.Env, req.Env),
+		Env:        env,
 		Stdin:      stdin,
 	}, nil
+}
+
+func applyPromptInjection(profile Profile, args []string, env map[string]string, prompt string) ([]string, map[string]string, string, error) {
+	switch promptInjectionMode(profile) {
+	case PromptInjectionArgv:
+		return append(args, prompt), env, "", nil
+	case PromptInjectionFlagPrompt, PromptInjectionFlagPromptInteractive:
+		if profile.DraftPromptFlag == "" {
+			return nil, nil, "", fmt.Errorf("profile %q prompt injection %q requires draft prompt flag", profile.ID, profile.PromptInjectionMode)
+		}
+		args = append(args, profile.DraftPromptFlag)
+		if profile.DraftPromptEnvVar != "" {
+			return append(args, profile.DraftPromptEnvVar), mergeEnv(env, map[string]string{profile.DraftPromptEnvVar: prompt}), "", nil
+		}
+		return append(args, prompt), env, "", nil
+	case PromptInjectionFlagInteractive:
+		if profile.DraftPromptFlag == "" {
+			return nil, nil, "", fmt.Errorf("profile %q prompt injection %q requires draft prompt flag", profile.ID, profile.PromptInjectionMode)
+		}
+		args = append(args, profile.DraftPromptFlag)
+		if profile.DraftPromptEnvVar != "" {
+			return args, mergeEnv(env, map[string]string{profile.DraftPromptEnvVar: prompt}), "", nil
+		}
+		return args, env, prompt, nil
+	case PromptInjectionStdinAfterStart:
+		return args, env, prompt, nil
+	default:
+		return nil, nil, "", fmt.Errorf("profile %q prompt injection mode %q is unsupported", profile.ID, profile.PromptInjectionMode)
+	}
+}
+
+func promptInjectionMode(profile Profile) PromptInjectionMode {
+	if profile.PromptInjectionMode != "" {
+		return profile.PromptInjectionMode
+	}
+	if profile.Provider == ProviderCodex || profile.Provider == ProviderClaude {
+		return PromptInjectionArgv
+	}
+	return PromptInjectionStdinAfterStart
 }
 
 func containsArg(args []string, target string) bool {

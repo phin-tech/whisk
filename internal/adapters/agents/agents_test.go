@@ -139,6 +139,83 @@ func TestPromptCaptureLaunchEchoesPromptThroughCat(t *testing.T) {
 	}
 }
 
+func TestInlineProfileUsesFlagPromptInjection(t *testing.T) {
+	launch, err := BuildLaunch(LaunchRequest{
+		Profile: &Profile{
+			ID:                  "flagger",
+			Provider:            ProviderShell,
+			Command:             "flag-agent",
+			Args:                []string{"--model", "fast"},
+			PromptInjectionMode: PromptInjectionFlagPrompt,
+			DraftPromptFlag:     "--prompt",
+		},
+		Prompt: "Draft this",
+	})
+	if err != nil {
+		t.Fatalf("BuildLaunch error: %v", err)
+	}
+	if !reflect.DeepEqual(launch.Args, []string{"--model", "fast", "--prompt", "Draft this"}) || launch.Stdin != "" {
+		t.Fatalf("launch = %#v", launch)
+	}
+}
+
+func TestInlineProfileUsesPromptEnvVarWhenConfigured(t *testing.T) {
+	launch, err := BuildLaunch(LaunchRequest{
+		Profile: &Profile{
+			ID:                  "env-prompt",
+			Provider:            ProviderShell,
+			Command:             "env-agent",
+			Env:                 map[string]string{"BASE": "1"},
+			PromptInjectionMode: PromptInjectionFlagPrompt,
+			DraftPromptFlag:     "--prompt-env",
+			DraftPromptEnvVar:   "AGENT_PROMPT",
+		},
+		Prompt: "Use env",
+		Env:    map[string]string{"EXTRA": "2"},
+	})
+	if err != nil {
+		t.Fatalf("BuildLaunch error: %v", err)
+	}
+	if !reflect.DeepEqual(launch.Args, []string{"--prompt-env", "AGENT_PROMPT"}) || launch.Stdin != "" {
+		t.Fatalf("launch args/stdin = %#v", launch)
+	}
+	if !reflect.DeepEqual(launch.Env, map[string]string{"BASE": "1", "EXTRA": "2", "AGENT_PROMPT": "Use env"}) {
+		t.Fatalf("env = %#v", launch.Env)
+	}
+}
+
+func TestInlineProfileUsesStdinAfterStartPromptInjection(t *testing.T) {
+	launch, err := BuildLaunch(LaunchRequest{
+		Profile: &Profile{
+			ID:                  "stdin-agent",
+			Provider:            ProviderShell,
+			Command:             "stdin-agent",
+			PromptInjectionMode: PromptInjectionStdinAfterStart,
+		},
+		Prompt: "Type after launch",
+	})
+	if err != nil {
+		t.Fatalf("BuildLaunch error: %v", err)
+	}
+	if len(launch.Args) != 0 || launch.Stdin != "Type after launch" {
+		t.Fatalf("launch = %#v", launch)
+	}
+}
+
+func TestInlineProfileRejectsUnsupportedPromptInjection(t *testing.T) {
+	if _, err := BuildLaunch(LaunchRequest{
+		Profile: &Profile{
+			ID:                  "bad",
+			Provider:            ProviderShell,
+			Command:             "bad-agent",
+			PromptInjectionMode: PromptInjectionMode("telepathy"),
+		},
+		Prompt: "Nope",
+	}); err == nil {
+		t.Fatalf("expected unsupported prompt injection error")
+	}
+}
+
 func TestInlineProfileMergesArgsAndEnv(t *testing.T) {
 	launch, err := BuildLaunch(LaunchRequest{
 		Profile: &Profile{
