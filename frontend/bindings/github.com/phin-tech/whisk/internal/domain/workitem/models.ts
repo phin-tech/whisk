@@ -1001,6 +1001,7 @@ export class WorkItemRun {
 export class WorkflowActionAvailability {
     "action": WorkflowActionDefinition;
     "enabled": boolean;
+    "recommended": boolean;
     "reason"?: string;
     "inputKind": string;
 
@@ -1011,6 +1012,9 @@ export class WorkflowActionAvailability {
         }
         if (!("enabled" in $$source)) {
             this["enabled"] = false;
+        }
+        if (!("recommended" in $$source)) {
+            this["recommended"] = false;
         }
         if (!("inputKind" in $$source)) {
             this["inputKind"] = "";

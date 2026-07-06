@@ -3270,6 +3270,7 @@ export interface components {
             enabled: boolean;
             inputKind: string;
             reason?: string;
+            recommended: boolean;
         };
         WorkflowActionDefinition: {
             completesRun?: boolean;

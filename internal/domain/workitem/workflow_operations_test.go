@@ -19,6 +19,12 @@ func TestWorkflowActionAvailabilityReflectsCurrentItemState(t *testing.T) {
 	if got := availabilityByID(actions, WorkflowActionStartPlanning); got == nil || !got.Enabled || got.InputKind != WorkflowActionInputRun {
 		t.Fatalf("start planning availability = %#v", got)
 	}
+	if got := availabilityByID(actions, WorkflowActionStartPlanning); got == nil || !got.Recommended {
+		t.Fatalf("start planning should be recommended, got %#v", got)
+	}
+	if got := recommendedAvailabilityIDs(actions); len(got) != 1 || got[0] != WorkflowActionStartPlanning {
+		t.Fatalf("recommended backlog actions = %#v", got)
+	}
 	if got := availabilityByID(actions, WorkflowActionApprovePlan); got != nil {
 		t.Fatalf("approve plan should not be available from backlog: %#v", got)
 	}
@@ -38,6 +44,9 @@ func TestWorkflowActionAvailabilityReflectsCurrentItemState(t *testing.T) {
 	}
 	if got := availabilityByID(actions, WorkflowActionSubmitDraftPlan); got == nil || !got.Enabled || got.InputKind != WorkflowActionInputArtifact {
 		t.Fatalf("submit draft availability = %#v", got)
+	}
+	if got := recommendedAvailabilityIDs(actions); len(got) != 1 || got[0] != WorkflowActionSubmitDraftPlan {
+		t.Fatalf("recommended planning actions = %#v", got)
 	}
 	if got := availabilityByID(actions, WorkflowActionApprovePlan); got == nil || got.Enabled || !strings.Contains(got.Reason, "plan draft") {
 		t.Fatalf("approve plan without draft = %#v", got)
@@ -63,6 +72,9 @@ func TestWorkflowActionAvailabilityReflectsCurrentItemState(t *testing.T) {
 	if got := availabilityByID(actions, WorkflowActionApprovePlan); got == nil || !got.Enabled || got.InputKind != WorkflowActionInputArtifactSelection {
 		t.Fatalf("approve plan with draft = %#v", got)
 	}
+	if got := recommendedAvailabilityIDs(actions); len(got) != 1 || got[0] != WorkflowActionApprovePlan {
+		t.Fatalf("recommended draft actions = %#v", got)
+	}
 
 	if _, err := state.ApprovePlan(ApprovePlan{
 		WorkItemID: item.ID,
@@ -78,6 +90,39 @@ func TestWorkflowActionAvailabilityReflectsCurrentItemState(t *testing.T) {
 	}
 	if got := availabilityByID(actions, WorkflowActionStartExecution); got == nil || !got.Enabled || got.InputKind != WorkflowActionInputRun {
 		t.Fatalf("start execution availability = %#v", got)
+	}
+	if got := recommendedAvailabilityIDs(actions); len(got) != 1 || got[0] != WorkflowActionStartExecution {
+		t.Fatalf("recommended ready actions = %#v", got)
+	}
+
+	run, err := state.StartExecution(StartExecution{
+		ID:           "run_exec_01",
+		HistoryID:    "hist_run_exec_01",
+		RunHistoryID: "run_hist_exec_01",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now.Add(3 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("start execution: %v", err)
+	}
+	if _, err := state.CompleteExecution(CompleteExecution{
+		RunID:   run.ID,
+		Message: "ready for review",
+		Actor:   "agent",
+		Now:     now.Add(4 * time.Minute),
+	}); err != nil {
+		t.Fatalf("complete execution: %v", err)
+	}
+	actions, err = state.ListWorkflowActionAvailability(item.ID)
+	if err != nil {
+		t.Fatalf("list review actions: %v", err)
+	}
+	if got := availabilityByID(actions, WorkflowActionApproveDone); got == nil || got.Enabled || got.Recommended || !strings.Contains(got.Reason, "blocking gates") {
+		t.Fatalf("approve done with blocking gate = %#v", got)
+	}
+	if got := recommendedAvailabilityIDs(actions); len(got) != 1 || got[0] != WorkflowActionSubmitReviewFeedback {
+		t.Fatalf("recommended review actions = %#v", got)
 	}
 }
 
@@ -499,6 +544,16 @@ func availabilityByID(actions []WorkflowActionAvailability, id string) *Workflow
 		}
 	}
 	return nil
+}
+
+func recommendedAvailabilityIDs(actions []WorkflowActionAvailability) []string {
+	out := []string{}
+	for _, action := range actions {
+		if action.Recommended {
+			out = append(out, action.Action.ID)
+		}
+	}
+	return out
 }
 
 func containsWorkflowValidationError(errors []WorkflowValidationError, message string) bool {

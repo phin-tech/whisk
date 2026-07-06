@@ -101,10 +101,11 @@ type WorkflowGateDefinition struct {
 }
 
 type WorkflowActionAvailability struct {
-	Action    WorkflowActionDefinition `json:"action"`
-	Enabled   bool                     `json:"enabled"`
-	Reason    string                   `json:"reason,omitempty"`
-	InputKind string                   `json:"inputKind"`
+	Action      WorkflowActionDefinition `json:"action"`
+	Enabled     bool                     `json:"enabled"`
+	Recommended bool                     `json:"recommended"`
+	Reason      string                   `json:"reason,omitempty"`
+	InputKind   string                   `json:"inputKind"`
 }
 
 type WorkflowValidationReport struct {

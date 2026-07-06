@@ -334,6 +334,12 @@ describe("WorkItemDetail", () => {
     expect(detailSource).toContain("onAddWorkItemLink({");
     expect(detailSource).toContain('type: "blocks"');
   });
+
+  it("feeds daemon workflow action availability into the next-step banner", () => {
+    expect(detailSource).toContain("export let workflowActions");
+    expect(detailSource).toContain("workflowActions,");
+    expect(detailSource).toContain("deriveNextStep({");
+  });
 });
 
 describe("App work item dependencies", () => {

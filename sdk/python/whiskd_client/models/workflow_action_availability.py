@@ -22,12 +22,14 @@ class WorkflowActionAvailability:
         action (WorkflowActionDefinition):
         enabled (bool):
         input_kind (str):
+        recommended (bool):
         reason (str | Unset):
     """
 
     action: WorkflowActionDefinition
     enabled: bool
     input_kind: str
+    recommended: bool
     reason: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -38,6 +40,8 @@ class WorkflowActionAvailability:
 
         input_kind = self.input_kind
 
+        recommended = self.recommended
+
         reason = self.reason
 
         field_dict: dict[str, Any] = {}
@@ -47,6 +51,7 @@ class WorkflowActionAvailability:
                 "action": action,
                 "enabled": enabled,
                 "inputKind": input_kind,
+                "recommended": recommended,
             }
         )
         if reason is not UNSET:
@@ -65,12 +70,15 @@ class WorkflowActionAvailability:
 
         input_kind = d.pop("inputKind")
 
+        recommended = d.pop("recommended")
+
         reason = d.pop("reason", UNSET)
 
         workflow_action_availability = cls(
             action=action,
             enabled=enabled,
             input_kind=input_kind,
+            recommended=recommended,
             reason=reason,
         )
 
