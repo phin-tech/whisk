@@ -126,6 +126,73 @@ func TestWorkflowActionAvailabilityReflectsCurrentItemState(t *testing.T) {
 	}
 }
 
+func TestHumanWorkflowActionsRejectAgentActors(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	item, gate := mustReviewWorkItemWithPendingGate(t, state, now)
+
+	if _, err := state.CompleteGate(CompleteGate{
+		ID:     gate.ID,
+		Status: GateStatusPassed,
+		Actor:  "agent:codex",
+		Now:    now.Add(time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "requires human actor") {
+		t.Fatalf("expected agent gate denial, got %v", err)
+	}
+	gates := state.ListGateReports(item.ID)
+	if len(gates) != 1 || gates[0].Status != GateStatusPending {
+		t.Fatalf("gate mutated after denied agent completion: %#v", gates)
+	}
+
+	if _, err := state.CompleteGate(CompleteGate{
+		ID:     gate.ID,
+		Status: GateStatusPassed,
+		Actor:  "human",
+		Now:    now.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("human complete gate: %v", err)
+	}
+	if _, err := state.ApproveDone(ApproveDone{
+		WorkItemID: item.ID,
+		Actor:      "agent:codex",
+		Now:        now.Add(3 * time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "requires human actor") {
+		t.Fatalf("expected agent approve done denial, got %v", err)
+	}
+	if stored, ok := state.GetWorkItem(item.ID); !ok || stored.StageID != StageReview {
+		t.Fatalf("item mutated after denied approve done: %#v, ok = %v", stored, ok)
+	}
+	if _, err := state.MoveWorkItem(MoveWorkItem{
+		ID:        item.ID,
+		HistoryID: "hist_move_done",
+		StageID:   StageDone,
+		Actor:     "agent:codex",
+		Now:       now.Add(4 * time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "requires human actor") {
+		t.Fatalf("expected agent direct move denial, got %v", err)
+	}
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   WorkflowActionApproveDone,
+		Actor:      "agent:codex",
+		Now:        now.Add(5 * time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "requires human actor") {
+		t.Fatalf("expected agent workflow action denial, got %v", err)
+	}
+
+	done, err := state.ApproveDone(ApproveDone{
+		WorkItemID: item.ID,
+		Actor:      "human",
+		Now:        now.Add(6 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("human approve done: %v", err)
+	}
+	if done.StageID != StageDone {
+		t.Fatalf("done = %#v", done)
+	}
+}
+
 func TestMoveWorkItemRejectsUndefinedWorkflowTransition(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
@@ -221,7 +288,7 @@ func TestMoveWorkItemRequiresBlockingGatesToPass(t *testing.T) {
 		ID:        item.ID,
 		HistoryID: "hist_move_02",
 		StageID:   StageDone,
-		Actor:     "agent",
+		Actor:     "human",
 		Now:       now.Add(3 * time.Minute),
 	})
 	if err != nil {
@@ -554,6 +621,68 @@ func recommendedAvailabilityIDs(actions []WorkflowActionAvailability) []string {
 		}
 	}
 	return out
+}
+
+func mustReviewWorkItemWithPendingGate(t *testing.T, state *State, now time.Time) (WorkItem, GateReport) {
+	t.Helper()
+	project := mustProject(t, state, "proj_review_gate", "Review Gate")
+	item := mustWorkItem(t, state, "wi_review_gate", project.ID)
+	planningRun, err := state.StartPlanning(StartPlanning{
+		ID:           "run_review_plan",
+		HistoryID:    "hist_review_plan",
+		RunHistoryID: "run_hist_review_plan",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+	draft, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "artifact_review_plan",
+		WorkItemID: item.ID,
+		RunID:      planningRun.ID,
+		Title:      "Plan",
+		Body:       "Do it.",
+		Actor:      "agent",
+		Now:        now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("submit draft: %v", err)
+	}
+	if _, err := state.ApprovePlan(ApprovePlan{
+		WorkItemID: item.ID,
+		ArtifactID: draft.ID,
+		Actor:      "human",
+		Now:        now.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatalf("approve plan: %v", err)
+	}
+	executionRun, err := state.StartExecution(StartExecution{
+		ID:           "run_review_exec",
+		HistoryID:    "hist_review_exec",
+		RunHistoryID: "run_hist_review_exec",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now.Add(3 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("start execution: %v", err)
+	}
+	item, err = state.CompleteExecution(CompleteExecution{
+		RunID:   executionRun.ID,
+		Actor:   "agent",
+		Message: "ready for review",
+		Now:     now.Add(4 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("complete execution: %v", err)
+	}
+	gates := state.ListGateReports(item.ID)
+	if len(gates) != 1 {
+		t.Fatalf("gates = %#v", gates)
+	}
+	return item, gates[0]
 }
 
 func containsWorkflowValidationError(errors []WorkflowValidationError, message string) bool {

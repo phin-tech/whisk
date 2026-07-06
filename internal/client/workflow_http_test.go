@@ -3,6 +3,7 @@ package client_test
 import (
 	"context"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/phin-tech/whisk/internal/app"
@@ -154,10 +155,17 @@ func TestHTTPClientDrivesExplicitWorkflowActions(t *testing.T) {
 	if len(artifacts) != 2 {
 		t.Fatalf("artifacts = %#v", artifacts)
 	}
+	if _, err := daemon.CompleteGate(ctx, protocol.CompleteGateRequest{
+		ID:     gates[0].ID,
+		Status: workitem.GateStatusPassed,
+		Actor:  "agent:codex",
+	}); err == nil || !strings.Contains(err.Error(), "requires human actor") {
+		t.Fatalf("expected agent gate denial, got %v", err)
+	}
 	passed, err := daemon.CompleteGate(ctx, protocol.CompleteGateRequest{
 		ID:     gates[0].ID,
 		Status: workitem.GateStatusPassed,
-		Actor:  "agent",
+		Actor:  "human",
 	})
 	if err != nil {
 		t.Fatalf("complete gate: %v", err)
