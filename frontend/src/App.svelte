@@ -2273,7 +2273,7 @@
     error = "";
     loadingWork = true;
     try {
-      await ApprovePlan({ workItemId, artifactId });
+      await ApprovePlan({ workItemId, artifactId, actor: "human" });
       await refreshWorkState();
     } catch (err) {
       error = `Approve plan failed: ${backendError(err)}`;
@@ -2366,7 +2366,7 @@
     error = "";
     loadingWork = true;
     try {
-      await CompleteGate(request);
+      await CompleteGate({ ...request, actor: "human" });
       await refreshWorkState();
     } catch (err) {
       error = `Complete gate failed: ${backendError(err)}`;

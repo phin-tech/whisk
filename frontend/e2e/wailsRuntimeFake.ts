@@ -42,6 +42,8 @@ const seedCustomWorkflowAction =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eCustomWorkflowAction");
 const seedArtifactSelectionAction =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eArtifactSelectionAction");
+const seedHumanActorActions =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eHumanActorActions");
 const longPTYOutput = Array.from(
   { length: 90 },
   (_, index) => `scrollback line ${String(index).padStart(2, "0")}\n`,
@@ -268,7 +270,7 @@ function seedState() {
       id: "wi_backlog",
       number: 1,
       title: "Capture app launch smoke",
-      stageId: seedArtifactSelectionAction ? "planning" : "backlog",
+      stageId: seedArtifactSelectionAction || seedHumanActorActions ? "planning" : "backlog",
       runState: "idle",
     }),
     workItem({ id: "wi_ready", number: 2, title: "Polish WorkBoard cards", stageId: "ready", runState: "queued" }),
@@ -477,6 +479,20 @@ function seedState() {
               kind: "plan",
               title: "Draft plan",
               body: "Accept this plan through a generic workflow action.",
+              status: "draft",
+              createdAt: now,
+              updatedAt: now,
+            },
+          ]
+        : []),
+      ...(seedHumanActorActions
+        ? [
+            {
+              id: "artifact_backlog_draft_plan",
+              workItemId: "wi_backlog",
+              kind: "plan",
+              title: "Draft plan",
+              body: "Approve this plan from the desktop UI.",
               status: "draft",
               createdAt: now,
               updatedAt: now,
@@ -1042,6 +1058,18 @@ function dispatch(methodName: string, args: unknown[]) {
       );
       return clone(state.workItems.find((candidate) => candidate.id === item.id));
     }
+    case "ApprovePlan": {
+      const req = args[0] as any;
+      const artifact = state.artifacts.find((candidate: any) => candidate.id === req.artifactId);
+      if (!artifact) throw new Error("artifact not found");
+      state.artifacts = state.artifacts.map((candidate: any) =>
+        candidate.id === artifact.id ? { ...candidate, status: "approved", updatedAt: state.now } : candidate,
+      );
+      state.workItems = state.workItems.map((item) =>
+        item.id === req.workItemId ? { ...item, stageId: "ready", runState: "idle", updatedAt: state.now } : item,
+      );
+      return clone(state.workItems.find((item) => item.id === req.workItemId));
+    }
     case "StartPlanning": {
       const req = args[0] as any;
       const item = state.workItems.find((candidate) => candidate.id === req.workItemId);
@@ -1110,6 +1138,22 @@ function dispatch(methodName: string, args: unknown[]) {
         },
       ];
       return clone(state.workItems.find((candidate) => candidate.id === item.id));
+    }
+    case "CompleteGate": {
+      const req = args[0] as any;
+      const gate = state.gates.find((candidate: any) => candidate.id === req.id);
+      if (!gate) throw new Error("gate not found");
+      state.gates = state.gates.map((candidate: any) =>
+        candidate.id === gate.id
+          ? {
+              ...candidate,
+              status: req.status,
+              overrideReason: req.overrideReason ?? "",
+              updatedAt: state.now,
+            }
+          : candidate,
+      );
+      return clone(state.gates.find((candidate: any) => candidate.id === gate.id));
     }
     case "ApproveDone": {
       const req = args[0] as any;
