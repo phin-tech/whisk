@@ -2024,6 +2024,33 @@ func (s *State) MoveWorkItem(req MoveWorkItem) (WorkItem, error) {
 			return WorkItem{}, err
 		}
 	}
+	if availability.InputKind == WorkflowActionInputArtifactSelection {
+		return WorkItem{}, fmt.Errorf("workflow action %s requires %s input", availability.Action.ID, availability.InputKind)
+	}
+	if availability.InputKind == WorkflowActionInputNone {
+		moved, err := s.ApplyWorkflowAction(ApplyWorkflowAction{
+			WorkItemID: item.ID,
+			ActionID:   availability.Action.ID,
+			Actor:      req.Actor,
+			Now:        req.Now,
+		})
+		if err != nil {
+			return WorkItem{}, err
+		}
+		item = s.items[moved.ID]
+		if err := appendHistory(&item, HistoryEvent{
+			ID:      req.HistoryID,
+			Type:    HistoryStageMoved,
+			At:      req.Now,
+			Actor:   req.Actor,
+			Message: "moved work item",
+			StageID: req.StageID,
+		}); err != nil {
+			return WorkItem{}, err
+		}
+		s.items[item.ID] = item
+		return cloneWorkItem(item), nil
+	}
 	item.StageID = req.StageID
 	item.UpdatedAt = req.Now
 	if err := appendHistory(&item, HistoryEvent{

@@ -551,6 +551,77 @@ func TestMoveWorkItemRejectsWorkflowActionRequirements(t *testing.T) {
 	}
 }
 
+func TestMoveWorkItemRejectsArtifactSelectionWorkflowAction(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	definition := WorkflowDefinition{
+		ID:      "direct-move-input",
+		Version: 1,
+		Stages:  []string{StageBacklog, StagePlanning, "accepted"},
+		Actions: []WorkflowActionDefinition{
+			{ID: "enter_planning", From: []string{StageBacklog}, To: StagePlanning},
+			{
+				ID:   WorkflowActionSubmitDraftPlan,
+				From: []string{StagePlanning},
+				To:   StagePlanning,
+				CreatesArtifact: &WorkflowArtifactEffect{
+					Kind:   ArtifactKindPlan,
+					Status: ArtifactStatusDraft,
+				},
+			},
+			{
+				ID:       "accept_plan",
+				From:     []string{StagePlanning},
+				To:       "accepted",
+				Requires: []WorkflowArtifactRequirement{{Kind: ArtifactKindPlan, Status: ArtifactStatusDraft}},
+				UpdatesArtifact: &WorkflowArtifactEffect{
+					Kind:   ArtifactKindPlan,
+					Status: ArtifactStatusApproved,
+				},
+			},
+		},
+	}
+	project := mustProjectWithWorkflow(t, state, "proj_01", definition, now)
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   "enter_planning",
+		Actor:      "human",
+		Now:        now.Add(time.Minute),
+	}); err != nil {
+		t.Fatalf("enter planning: %v", err)
+	}
+	draft, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "artifact_01",
+		WorkItemID: item.ID,
+		Title:      "Plan",
+		Body:       "Ship it.",
+		Actor:      "agent",
+		Now:        now.Add(2 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("submit draft: %v", err)
+	}
+
+	if _, err := state.MoveWorkItem(MoveWorkItem{
+		ID:        item.ID,
+		HistoryID: "hist_move_01",
+		StageID:   "accepted",
+		Actor:     "human",
+		Now:       now.Add(3 * time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "workflow action accept_plan requires artifact_selection input") {
+		t.Fatalf("expected artifact-selection direct move rejection, got %v", err)
+	}
+	stored, ok := state.GetWorkItem(item.ID)
+	if !ok || stored.StageID != StagePlanning {
+		t.Fatalf("stored item = %#v, ok = %v", stored, ok)
+	}
+	artifacts := state.ListArtifacts(item.ID)
+	if len(artifacts) != 1 || artifacts[0].ID != draft.ID || artifacts[0].Status != ArtifactStatusDraft {
+		t.Fatalf("artifacts = %#v", artifacts)
+	}
+}
+
 func TestMoveWorkItemRequiresBlockingGatesToPass(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
@@ -599,6 +670,44 @@ func TestMoveWorkItemRequiresBlockingGatesToPass(t *testing.T) {
 	}
 	if moved.StageID != StageDone {
 		t.Fatalf("moved = %#v", moved)
+	}
+}
+
+func TestMoveWorkItemRunsNoInputWorkflowActionEffects(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	project := mustProject(t, state, "proj_01", "One")
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+	if _, err := state.StartPlanning(StartPlanning{
+		ID:           "run_plan",
+		HistoryID:    "hist_plan",
+		RunHistoryID: "hist_run_plan",
+		WorkItemID:   item.ID,
+		Actor:        "agent",
+		Now:          now,
+	}); err != nil {
+		t.Fatalf("start planning: %v", err)
+	}
+
+	blocked, err := state.MoveWorkItem(MoveWorkItem{
+		ID:        item.ID,
+		HistoryID: "hist_move_blocked",
+		StageID:   StageBlocked,
+		Actor:     "agent",
+		Now:       now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("move blocked: %v", err)
+	}
+	if blocked.StageID != StageBlocked ||
+		blocked.PreviousStageID != StagePlanning ||
+		blocked.RunState != RunStateAwaitingInput ||
+		blocked.History[len(blocked.History)-1].Type != HistoryStageMoved {
+		t.Fatalf("blocked = %#v", blocked)
+	}
+	events := state.ListWorkflowEvents(item.ID)
+	if len(events) == 0 || events[len(events)-1].Type != WorkflowEventBlocked {
+		t.Fatalf("events = %#v", events)
 	}
 }
 
