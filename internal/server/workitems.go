@@ -703,6 +703,7 @@ func (s *HTTPServer) runWorkItemWorkflowAction(w http.ResponseWriter, r *http.Re
 		WorkItemID: req.WorkItemID,
 		ActionID:   req.ActionID,
 		RunID:      req.RunID,
+		ArtifactID: req.ArtifactID,
 		Reason:     req.Reason,
 		Actor:      req.Actor,
 	})

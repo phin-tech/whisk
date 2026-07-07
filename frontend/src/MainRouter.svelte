@@ -179,6 +179,7 @@
     workItemId: string;
     actionId: string;
     runId?: string;
+    artifactId?: string;
     reason?: string;
   }) => void;
   export let onApproveDone: (workItemId: string, reason: string) => void;

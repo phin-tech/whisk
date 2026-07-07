@@ -2873,6 +2873,7 @@ export class RunWorkItemWorkflowActionRequest {
     "workItemId"?: string;
     "actionId"?: string;
     "runId"?: string;
+    "artifactId"?: string;
     "reason"?: string;
     "actor"?: string;
 

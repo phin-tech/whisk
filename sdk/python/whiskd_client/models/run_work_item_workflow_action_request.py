@@ -17,6 +17,7 @@ class RunWorkItemWorkflowActionRequest:
     Attributes:
         action_id (str | Unset):
         actor (str | Unset):
+        artifact_id (str | Unset):
         reason (str | Unset):
         run_id (str | Unset):
         work_item_id (str | Unset):
@@ -24,6 +25,7 @@ class RunWorkItemWorkflowActionRequest:
 
     action_id: str | Unset = UNSET
     actor: str | Unset = UNSET
+    artifact_id: str | Unset = UNSET
     reason: str | Unset = UNSET
     run_id: str | Unset = UNSET
     work_item_id: str | Unset = UNSET
@@ -33,6 +35,8 @@ class RunWorkItemWorkflowActionRequest:
         action_id = self.action_id
 
         actor = self.actor
+
+        artifact_id = self.artifact_id
 
         reason = self.reason
 
@@ -47,6 +51,8 @@ class RunWorkItemWorkflowActionRequest:
             field_dict["actionId"] = action_id
         if actor is not UNSET:
             field_dict["actor"] = actor
+        if artifact_id is not UNSET:
+            field_dict["artifactId"] = artifact_id
         if reason is not UNSET:
             field_dict["reason"] = reason
         if run_id is not UNSET:
@@ -63,6 +69,8 @@ class RunWorkItemWorkflowActionRequest:
 
         actor = d.pop("actor", UNSET)
 
+        artifact_id = d.pop("artifactId", UNSET)
+
         reason = d.pop("reason", UNSET)
 
         run_id = d.pop("runId", UNSET)
@@ -72,6 +80,7 @@ class RunWorkItemWorkflowActionRequest:
         run_work_item_workflow_action_request = cls(
             action_id=action_id,
             actor=actor,
+            artifact_id=artifact_id,
             reason=reason,
             run_id=run_id,
             work_item_id=work_item_id,

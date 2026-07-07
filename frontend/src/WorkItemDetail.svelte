@@ -91,6 +91,7 @@
     workItemId: string;
     actionId: string;
     runId?: string;
+    artifactId?: string;
     reason?: string;
   }) => void;
   export let onApproveDone: (workItemId: string, reason: string) => void;
@@ -103,6 +104,7 @@
   let questionAnswers: Record<string, string> = {};
   let gateOverrideReasons: Record<string, string> = {};
   let doneReasons: Record<string, string> = {};
+  let workflowArtifactSelections: Record<string, string> = {};
   let agentSelections: Record<string, string> = {};
   let blockerSelections: Record<string, string> = {};
 
@@ -145,6 +147,9 @@
     .filter((artifact) => artifact.kind === "plan")
     .sort((a, b) => timestamp(b.updatedAt || b.createdAt) - timestamp(a.updatedAt || a.createdAt));
   $: feedbackArtifacts = detailArtifacts.filter((artifact) => artifact.kind === "feedback");
+  $: workflowArtifactSelectionActions = workflowActions.filter(
+    (availability) => availability.inputKind === "artifact_selection",
+  );
   $: blockingLinks = workItemLinks.filter(
     (link) => link.sourceWorkItemId === item.id && link.type === "blocks",
   );
@@ -344,6 +349,30 @@
     return parts.join(" · ");
   }
 
+  function workflowActionArtifactOptions(availability: WorkflowActionAvailability) {
+    const effect = availability.action.updatesArtifact;
+    if (!effect) return [];
+    const requirement = (availability.action.requires ?? []).find((candidate) => candidate.kind === effect.kind);
+    return detailArtifacts
+      .filter((artifact) => artifact.kind === effect.kind)
+      .filter((artifact) => !requirement || artifact.status === requirement.status)
+      .map((artifact) => ({
+        value: artifact.id,
+        label: `${artifact.title || artifact.kind} · ${artifact.status}`,
+      }));
+  }
+
+  function selectedWorkflowArtifactId(availability: WorkflowActionAvailability) {
+    const options = workflowActionArtifactOptions(availability);
+    const selected = workflowArtifactSelections[availability.action.id] ?? "";
+    if (options.some((option) => option.value === selected)) return selected;
+    return options.length === 1 ? options[0].value : "";
+  }
+
+  function setWorkflowArtifactSelection(actionId: string, value: string) {
+    workflowArtifactSelections = { ...workflowArtifactSelections, [actionId]: value };
+  }
+
   function supportedWorkflowAction(actionId: string) {
     return actionId === "start_planning" ||
       actionId === "start_execution" ||
@@ -354,7 +383,8 @@
   function workflowActionReason(availability: WorkflowActionAvailability) {
     if (!availability.enabled) return availability.reason || "not available";
     if (!supportedWorkflowAction(availability.action.id)) {
-      if (availability.inputKind === "artifact" || availability.inputKind === "artifact_selection") return "use the artifact form";
+      if (availability.inputKind === "artifact") return "use the artifact form";
+      if (availability.inputKind === "artifact_selection" && !selectedWorkflowArtifactId(availability)) return "select an artifact";
       if (availability.inputKind === "gate") return "use the gate form";
       if (availability.inputKind !== "none") return "not wired in the UI";
     }
@@ -366,6 +396,9 @@
     if (!availability.enabled) return false;
     if (supportedWorkflowAction(availability.action.id)) {
       return !(availability.action.id === "complete_execution" && !detailLatestRun);
+    }
+    if (availability.inputKind === "artifact_selection") {
+      return Boolean(selectedWorkflowArtifactId(availability));
     }
     return availability.inputKind === "none";
   }
@@ -387,10 +420,14 @@
         approveDone();
         break;
       default:
+        const artifactId = availability.inputKind === "artifact_selection"
+          ? selectedWorkflowArtifactId(availability)
+          : "";
         onRunWorkflowAction({
           workItemId: item.id,
           actionId: availability.action.id,
           runId: detailLatestRun?.id ?? "",
+          ...(artifactId ? { artifactId } : {}),
           reason: "",
         });
         break;
@@ -945,6 +982,25 @@
                 </IconButton>
               {/snippet}
               <Menu class="min-w-60">
+                {#if workflowArtifactSelectionActions.length > 0}
+                  {#each workflowArtifactSelectionActions as availability (availability.action.id)}
+                    {@const artifactOptions = workflowActionArtifactOptions(availability)}
+                    <div class="px-3 py-1.5">
+                      <SelectField
+                        value={selectedWorkflowArtifactId(availability)}
+                        label={workflowArtifactSelectionActions.length === 1
+                          ? "Workflow artifact"
+                          : `${workflowActionLabel(availability.action.id)} artifact`}
+                        options={artifactOptions}
+                        placeholder="Select artifact"
+                        disabled={loading || artifactOptions.length === 0}
+                        onValueChange={(value) => setWorkflowArtifactSelection(availability.action.id, value)}
+                        class="w-full"
+                      />
+                    </div>
+                  {/each}
+                  <div class="my-1 border-t border-hairline"></div>
+                {/if}
                 {#each workflowActions as availability (availability.action.id)}
                   {@const actionId = availability.action.id}
                   {@const reason = workflowActionReason(availability)}

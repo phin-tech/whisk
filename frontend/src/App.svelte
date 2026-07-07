@@ -2379,6 +2379,7 @@
     workItemId: string;
     actionId: string;
     runId?: string;
+    artifactId?: string;
     reason?: string;
   }) {
     error = "";

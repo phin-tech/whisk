@@ -40,6 +40,8 @@ const seedStaleRun =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eStaleRun");
 const seedCustomWorkflowAction =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eCustomWorkflowAction");
+const seedArtifactSelectionAction =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("e2eArtifactSelectionAction");
 const longPTYOutput = Array.from(
   { length: 90 },
   (_, index) => `scrollback line ${String(index).padStart(2, "0")}\n`,
@@ -182,19 +184,58 @@ function seedState() {
     },
     gates: [],
   };
-  const activeWorkflowDefinition = seedCustomWorkflowAction ? customWorkflowDefinition : workflowDefinition;
+  const artifactSelectionWorkflowDefinition = {
+    id: "artifact-selection-e2e",
+    version: 1,
+    stages: ["planning", "ready"],
+    actions: [
+      {
+        id: "accept_plan",
+        from: ["planning"],
+        to: "ready",
+        requires: [{ kind: "plan", status: "draft" }],
+        updatesArtifact: { kind: "plan", status: "approved" },
+        requiresHuman: true,
+      },
+    ],
+    questions: {
+      enabled: false,
+      moveToBlocked: false,
+      setsRunState: "",
+      answerClearsAwaitingInputWhenNoOpenQuestionsRemain: false,
+    },
+    gates: [],
+  };
+  const activeWorkflowDefinition = seedCustomWorkflowAction
+    ? customWorkflowDefinition
+    : seedArtifactSelectionAction
+      ? artifactSelectionWorkflowDefinition
+      : workflowDefinition;
   const workflow = {
     id: "default",
     templateId: "default",
     definitionId: activeWorkflowDefinition.id,
     definitionVersion: activeWorkflowDefinition.version,
-    definitionHash: seedCustomWorkflowAction ? "e2e-custom-action-workflow" : "e2e-workflow",
-    name: seedCustomWorkflowAction ? "Custom Action E2E" : "Plan Execute Review",
+    definitionHash: seedCustomWorkflowAction
+      ? "e2e-custom-action-workflow"
+      : seedArtifactSelectionAction
+        ? "e2e-artifact-selection-workflow"
+        : "e2e-workflow",
+    name: seedCustomWorkflowAction
+      ? "Custom Action E2E"
+      : seedArtifactSelectionAction
+        ? "Artifact Selection E2E"
+        : "Plan Execute Review",
     stages: seedCustomWorkflowAction
       ? [
           { id: "backlog", name: "Backlog", kind: "backlog" },
           { id: "done", name: "Done", kind: "done" },
         ]
+      : seedArtifactSelectionAction
+        ? [
+            { id: "planning", name: "Planning", kind: "planning" },
+            { id: "ready", name: "Ready", kind: "ready" },
+          ]
       : [
           { id: "backlog", name: "Backlog", kind: "backlog" },
           { id: "planning", name: "Planning", kind: "planning" },
@@ -223,7 +264,13 @@ function seedState() {
     updatedAt: now,
   };
   const workItems: WorkItem[] = [
-    workItem({ id: "wi_backlog", number: 1, title: "Capture app launch smoke", stageId: "backlog", runState: "idle" }),
+    workItem({
+      id: "wi_backlog",
+      number: 1,
+      title: "Capture app launch smoke",
+      stageId: seedArtifactSelectionAction ? "planning" : "backlog",
+      runState: "idle",
+    }),
     workItem({ id: "wi_ready", number: 2, title: "Polish WorkBoard cards", stageId: "ready", runState: "queued" }),
     workItem({ id: "wi_exec", number: 3, title: "Validate terminal reconnect", stageId: "execution", runState: "running" }),
     workItem({ id: "wi_review", number: 4, title: "Review design token sweep", stageId: "review", runState: "awaiting_input" }),
@@ -292,6 +339,16 @@ function seedState() {
         sourcePath: "/tmp/whisk-e2e/custom-action.json",
         contentHash: "e2e-custom-action-workflow",
         definition: customWorkflowDefinition,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: artifactSelectionWorkflowDefinition.id,
+        version: artifactSelectionWorkflowDefinition.version,
+        source: "file",
+        sourcePath: "/tmp/whisk-e2e/artifact-selection.json",
+        contentHash: "e2e-artifact-selection-workflow",
+        definition: artifactSelectionWorkflowDefinition,
         createdAt: now,
         updatedAt: now,
       },
@@ -412,6 +469,20 @@ function seedState() {
         createdAt: now,
         updatedAt: now,
       },
+      ...(seedArtifactSelectionAction
+        ? [
+            {
+              id: "artifact_backlog_draft_plan",
+              workItemId: "wi_backlog",
+              kind: "plan",
+              title: "Draft plan",
+              body: "Accept this plan through a generic workflow action.",
+              status: "draft",
+              createdAt: now,
+              updatedAt: now,
+            },
+          ]
+        : []),
     ],
     questions: [
       {
