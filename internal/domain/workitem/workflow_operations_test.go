@@ -193,6 +193,110 @@ func TestHumanWorkflowActionsRejectAgentActors(t *testing.T) {
 	}
 }
 
+func TestApplyWorkflowActionUpdatesSelectedArtifact(t *testing.T) {
+	state := NewState()
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	definition := WorkflowDefinition{
+		ID:      "generic-artifact-selection",
+		Version: 1,
+		Stages:  []string{StageBacklog, StagePlanning, StageReady},
+		Actions: []WorkflowActionDefinition{
+			{ID: "enter_planning", From: []string{StageBacklog}, To: StagePlanning},
+			{
+				ID:   WorkflowActionSubmitDraftPlan,
+				From: []string{StagePlanning},
+				To:   StagePlanning,
+				CreatesArtifact: &WorkflowArtifactEffect{
+					Kind:   ArtifactKindPlan,
+					Status: ArtifactStatusDraft,
+				},
+			},
+			{
+				ID:       "accept_plan",
+				From:     []string{StagePlanning},
+				To:       StageReady,
+				Requires: []WorkflowArtifactRequirement{{Kind: ArtifactKindPlan, Status: ArtifactStatusDraft}},
+				UpdatesArtifact: &WorkflowArtifactEffect{
+					Kind:   ArtifactKindPlan,
+					Status: ArtifactStatusApproved,
+				},
+				RequiresHuman: true,
+			},
+		},
+	}
+	project := mustProjectWithWorkflow(t, state, "proj_01", definition, now)
+	item := mustWorkItem(t, state, "wi_01", project.ID)
+	other := mustWorkItem(t, state, "wi_02", project.ID)
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{WorkItemID: item.ID, ActionID: "enter_planning", Now: now.Add(time.Minute)}); err != nil {
+		t.Fatalf("enter planning: %v", err)
+	}
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{WorkItemID: other.ID, ActionID: "enter_planning", Now: now.Add(2 * time.Minute)}); err != nil {
+		t.Fatalf("enter other planning: %v", err)
+	}
+	draft, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "artifact_01",
+		WorkItemID: item.ID,
+		Title:      "Plan",
+		Body:       "Ship it.",
+		Actor:      "agent",
+		Now:        now.Add(3 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("submit draft: %v", err)
+	}
+	otherDraft, err := state.SubmitDraftPlan(SubmitDraftPlan{
+		ID:         "artifact_02",
+		WorkItemID: other.ID,
+		Title:      "Other plan",
+		Body:       "Do not use.",
+		Actor:      "agent",
+		Now:        now.Add(4 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("submit other draft: %v", err)
+	}
+
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   "accept_plan",
+		Actor:      "human",
+		Now:        now.Add(5 * time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "artifact id required") {
+		t.Fatalf("expected missing artifact id error, got %v", err)
+	}
+	if _, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   "accept_plan",
+		ArtifactID: otherDraft.ID,
+		Actor:      "human",
+		Now:        now.Add(6 * time.Minute),
+	}); err == nil || !strings.Contains(err.Error(), "plan artifact required") {
+		t.Fatalf("expected foreign artifact error, got %v", err)
+	}
+
+	ready, err := state.ApplyWorkflowAction(ApplyWorkflowAction{
+		WorkItemID: item.ID,
+		ActionID:   "accept_plan",
+		ArtifactID: draft.ID,
+		Actor:      "human",
+		Now:        now.Add(7 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("accept plan: %v", err)
+	}
+	if ready.StageID != StageReady {
+		t.Fatalf("ready = %#v", ready)
+	}
+	artifacts := state.ListArtifacts("")
+	if len(artifacts) != 2 ||
+		artifacts[0].ID != draft.ID ||
+		artifacts[0].Status != ArtifactStatusApproved ||
+		artifacts[1].ID != otherDraft.ID ||
+		artifacts[1].Status != ArtifactStatusDraft {
+		t.Fatalf("artifacts = %#v", artifacts)
+	}
+}
+
 func TestQuestionPolicyControlsRunStateTransitions(t *testing.T) {
 	state := NewState()
 	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)

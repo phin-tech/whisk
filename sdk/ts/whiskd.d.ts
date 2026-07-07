@@ -2866,6 +2866,7 @@ export interface components {
         RunWorkItemWorkflowActionRequest: {
             actionId?: string;
             actor?: string;
+            artifactId?: string;
             reason?: string;
             runId?: string;
             workItemId?: string;

@@ -568,6 +568,7 @@ type ApplyWorkflowAction struct {
 	WorkItemID string
 	ActionID   string
 	RunID      string
+	ArtifactID string
 	Reason     string
 	Actor      string
 	Now        time.Time
@@ -2060,7 +2061,16 @@ func (s *State) ApplyWorkflowAction(req ApplyWorkflowAction) (WorkItem, error) {
 			return WorkItem{}, err
 		}
 	}
-	if input := workflowActionInputKind(action); input != WorkflowActionInputNone {
+	var selectedArtifact *Artifact
+	switch input := workflowActionInputKind(action); input {
+	case WorkflowActionInputNone:
+	case WorkflowActionInputArtifactSelection:
+		artifact, err := s.workflowActionSelectedArtifact(item, action, req.ArtifactID)
+		if err != nil {
+			return WorkItem{}, err
+		}
+		selectedArtifact = &artifact
+	default:
 		return WorkItem{}, fmt.Errorf("workflow action %s requires %s input", action.ID, input)
 	}
 	project := s.projects[item.ProjectID]
@@ -2100,6 +2110,12 @@ func (s *State) ApplyWorkflowAction(req ApplyWorkflowAction) (WorkItem, error) {
 			s.runs[run.ID] = run
 		}
 	}
+	if selectedArtifact != nil {
+		artifact := *selectedArtifact
+		artifact.Status = action.UpdatesArtifact.Status
+		artifact.UpdatedAt = req.Now
+		s.artifacts[artifact.ID] = artifact
+	}
 	s.items[item.ID] = item
 	switch action.ID {
 	case WorkflowActionReportBlocked:
@@ -2108,6 +2124,30 @@ func (s *State) ApplyWorkflowAction(req ApplyWorkflowAction) (WorkItem, error) {
 		s.recordWorkflowEvent(WorkflowEventUnblocked, item.ProjectID, item.ID, "", req.Actor, "", req.Now)
 	}
 	return cloneWorkItem(item), nil
+}
+
+func (s *State) workflowActionSelectedArtifact(item WorkItem, action WorkflowActionDefinition, artifactID string) (Artifact, error) {
+	artifactID = strings.TrimSpace(artifactID)
+	if artifactID == "" {
+		return Artifact{}, fmt.Errorf("artifact id required")
+	}
+	effect := action.UpdatesArtifact
+	if effect == nil {
+		return Artifact{}, fmt.Errorf("workflow action %s does not update an artifact", action.ID)
+	}
+	artifact, ok := s.artifacts[artifactID]
+	if !ok {
+		return Artifact{}, fmt.Errorf("artifact %s not found", artifactID)
+	}
+	if artifact.WorkItemID != item.ID || artifact.Kind != effect.Kind {
+		return Artifact{}, fmt.Errorf("%s artifact required", effect.Kind)
+	}
+	for _, requirement := range action.Requires {
+		if requirement.Kind == artifact.Kind && artifact.Status != requirement.Status {
+			return Artifact{}, fmt.Errorf("%s %s artifact required", requirement.Kind, requirement.Status)
+		}
+	}
+	return cloneArtifact(artifact), nil
 }
 
 func (s *State) BindWorktree(req BindWorktree) (WorkItem, error) {

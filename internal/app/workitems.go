@@ -164,6 +164,7 @@ type RunWorkItemWorkflowActionRequest struct {
 	WorkItemID string
 	ActionID   string
 	RunID      string
+	ArtifactID string
 	Reason     string
 	Actor      string
 }
@@ -797,6 +798,7 @@ func (r *Runtime) RunWorkItemWorkflowAction(ctx context.Context, req RunWorkItem
 		WorkItemID: req.WorkItemID,
 		ActionID:   req.ActionID,
 		RunID:      req.RunID,
+		ArtifactID: req.ArtifactID,
 		Reason:     req.Reason,
 		Actor:      req.Actor,
 		Now:        time.Now().UTC(),

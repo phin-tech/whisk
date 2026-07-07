@@ -9562,6 +9562,9 @@
           "actor": {
             "type": "string"
           },
+          "artifactId": {
+            "type": "string"
+          },
           "reason": {
             "type": "string"
           },

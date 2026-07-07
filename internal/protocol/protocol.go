@@ -1004,6 +1004,7 @@ type RunWorkItemWorkflowActionRequest struct {
 	WorkItemID string `json:"workItemId,omitempty"`
 	ActionID   string `json:"actionId,omitempty"`
 	RunID      string `json:"runId,omitempty"`
+	ArtifactID string `json:"artifactId,omitempty"`
 	Reason     string `json:"reason,omitempty"`
 	Actor      string `json:"actor,omitempty"`
 }
