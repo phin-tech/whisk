@@ -147,6 +147,46 @@ test("runs a custom artifact-selection workflow action from the detail menu", as
   });
 });
 
+test("sends a human actor when approving a plan from the detail view", async ({ page }) => {
+  await page.goto("/?e2eHumanActorActions=1");
+  await page.getByRole("button", { name: "Work" }).click();
+  await page.getByRole("button", { name: /Capture app launch smoke/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Work item editor" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Approve" }).click();
+
+  const calls = await page.evaluate(() =>
+    window.__WHISK_E2E__.calls().filter((call) => call.method.endsWith(".ApprovePlan")),
+  );
+  expect(calls).toHaveLength(1);
+  expect(calls[0].args[0]).toMatchObject({
+    workItemId: "wi_backlog",
+    artifactId: "artifact_backlog_draft_plan",
+    actor: "human",
+  });
+});
+
+test("sends a human actor when completing a gate from the detail view", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Work" }).click();
+  await page.getByRole("button", { name: /Review design token sweep/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Work item editor" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Pass" }).click();
+
+  const calls = await page.evaluate(() =>
+    window.__WHISK_E2E__.calls().filter((call) => call.method.endsWith(".CompleteGate")),
+  );
+  expect(calls).toHaveLength(1);
+  expect(calls[0].args[0]).toMatchObject({
+    id: "gate_01",
+    status: "passed",
+    actor: "human",
+  });
+});
+
 test("virtualizes large WorkBoard columns and opens a scrolled card", async ({ page }) => {
   await page.goto("/?e2eLargeWorkBoard=1");
   await page.getByRole("button", { name: "Work" }).click();
