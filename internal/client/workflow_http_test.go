@@ -364,3 +364,90 @@ func TestHTTPClientRunsGenericWorkflowActionWithArtifactSelection(t *testing.T) 
 		t.Fatalf("artifacts = %#v", artifacts)
 	}
 }
+
+func TestHTTPClientMoveWorkItemRejectsArtifactSelectionWorkflowAction(t *testing.T) {
+	runtime := app.NewRuntime(app.RuntimeConfig{})
+	handler := server.NewHTTP(runtime)
+	httpServer := httptest.NewServer(handler)
+	defer httpServer.Close()
+	daemon := client.NewHTTP(httpServer.URL, httpServer.Client())
+	ctx := context.Background()
+
+	project, err := daemon.CreateProject(ctx, protocol.CreateProjectRequest{Name: "App", RootDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	definition := workitem.WorkflowDefinition{
+		ID:      "direct-move-input",
+		Version: 1,
+		Stages:  []string{workitem.StageBacklog, workitem.StagePlanning, "accepted"},
+		Actions: []workitem.WorkflowActionDefinition{
+			{ID: "enter_planning", From: []string{workitem.StageBacklog}, To: workitem.StagePlanning},
+			{
+				ID:   workitem.WorkflowActionSubmitDraftPlan,
+				From: []string{workitem.StagePlanning},
+				To:   workitem.StagePlanning,
+				CreatesArtifact: &workitem.WorkflowArtifactEffect{
+					Kind:   workitem.ArtifactKindPlan,
+					Status: workitem.ArtifactStatusDraft,
+				},
+			},
+			{
+				ID:       "accept_plan",
+				From:     []string{workitem.StagePlanning},
+				To:       "accepted",
+				Requires: []workitem.WorkflowArtifactRequirement{{Kind: workitem.ArtifactKindPlan, Status: workitem.ArtifactStatusDraft}},
+				UpdatesArtifact: &workitem.WorkflowArtifactEffect{
+					Kind:   workitem.ArtifactKindPlan,
+					Status: workitem.ArtifactStatusApproved,
+				},
+			},
+		},
+	}
+	imported, err := daemon.ImportWorkflowDefinition(ctx, protocol.ImportWorkflowDefinitionRequest{Definition: definition})
+	if err != nil {
+		t.Fatalf("import workflow: %v", err)
+	}
+	project, err = daemon.SetProjectWorkflowDefinition(ctx, project.ID, protocol.SetProjectWorkflowDefinitionRequest{
+		ID:      imported.ID,
+		Version: imported.Version,
+	})
+	if err != nil {
+		t.Fatalf("set workflow: %v", err)
+	}
+	item, err := daemon.CreateWorkItem(ctx, protocol.CreateWorkItemRequest{ProjectID: project.ID, Title: "Task", Actor: "human"})
+	if err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := daemon.RunWorkItemWorkflowAction(ctx, protocol.RunWorkItemWorkflowActionRequest{
+		WorkItemID: item.ID,
+		ActionID:   "enter_planning",
+		Actor:      "human",
+	}); err != nil {
+		t.Fatalf("enter planning: %v", err)
+	}
+	draft, err := daemon.SubmitDraftPlan(ctx, protocol.SubmitDraftPlanRequest{
+		WorkItemID: item.ID,
+		Title:      "Plan",
+		Body:       "Ship it.",
+		Actor:      "agent",
+	})
+	if err != nil {
+		t.Fatalf("submit draft: %v", err)
+	}
+
+	if _, err := daemon.MoveWorkItem(ctx, protocol.MoveWorkItemRequest{
+		ID:      item.ID,
+		StageID: "accepted",
+		Actor:   "human",
+	}); err == nil || !strings.Contains(err.Error(), "workflow action accept_plan requires artifact_selection input") {
+		t.Fatalf("expected artifact-selection direct move rejection, got %v", err)
+	}
+	artifacts, err := daemon.ListArtifacts(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("list artifacts: %v", err)
+	}
+	if len(artifacts) != 1 || artifacts[0].ID != draft.ID || artifacts[0].Status != workitem.ArtifactStatusDraft {
+		t.Fatalf("artifacts = %#v", artifacts)
+	}
+}
